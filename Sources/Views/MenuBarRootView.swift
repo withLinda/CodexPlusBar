@@ -125,10 +125,12 @@ struct MenuBarRootView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         } else {
             ForEach(controller.profiles) { snapshot in
-                MenuBarProfileCard(
+                let isPinned = snapshot.id == storedPinnedProfileID
+
+                MenuBarProfileRow(
                     snapshot: snapshot,
                     referenceDate: currentTime.now,
-                    isPinned: snapshot.id == storedPinnedProfileID,
+                    isPinned: isPinned,
                     openManagerWindow: {
                         openManagerWindow(snapshot.id)
                     },
@@ -138,11 +140,30 @@ struct MenuBarRootView: View {
                     openEmailLink: {
                         openEmailLink(for: snapshot.profile)
                     },
-                    canOpenEmailLink: snapshot.profile.resolvedEmailLinkURL != nil,
                     pinProfile: {
                         setPinnedProfile(snapshot.id)
                     }
                 )
+                .contextMenu {
+                    Button(isPinned ? "Current" : "Show on top") {
+                        setPinnedProfile(snapshot.id)
+                    }
+                    .disabled(isPinned)
+
+                    Button("Copy profile label") {
+                        copyProfileLabel(snapshot.label)
+                    }
+
+                    if snapshot.profile.resolvedEmailLinkURL != nil {
+                        Button("Open email link") {
+                            openEmailLink(for: snapshot.profile)
+                        }
+                    }
+
+                    Button("Open manager") {
+                        openManagerWindow(snapshot.id)
+                    }
+                }
             }
         }
     }
@@ -289,280 +310,24 @@ struct MenuBarStatusLabel: View {
     }
 }
 
-private struct MenuBarProfileCard: View {
+private struct MenuBarProfileRow: View {
     let snapshot: PlusProfileSnapshot
     let referenceDate: Date
     let isPinned: Bool
     let openManagerWindow: () -> Void
     let copyProfileLabel: () -> Void
     let openEmailLink: () -> Void
-    let canOpenEmailLink: Bool
     let pinProfile: () -> Void
 
     var body: some View {
-        CodexCard(tier: snapshot.state == .needsLogin ? .strong : .regular, accent: accentColor) {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .top, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 5) {
-                        HStack(alignment: .center, spacing: 8) {
-                            Button(action: openManagerWindow) {
-                                Text(snapshot.label)
-                                    .font(.codexBodyStrong)
-                                    .foregroundStyle(CodexTheme.primaryText)
-                                    .lineLimit(1)
-                                    .truncationMode(.tail)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-
-                            HStack(spacing: 6) {
-                                MenuBarInlineActionButton(
-                                    symbolName: "doc.on.doc",
-                                    helpText: "Copy profile label",
-                                    action: copyProfileLabel
-                                )
-
-                                MenuBarInlineActionButton(
-                                    symbolName: "arrow.up.forward.square",
-                                    helpText: canOpenEmailLink
-                                        ? "Open email link"
-                                        : "Add an email link in the manager to open it here",
-                                    isDisabled: canOpenEmailLink == false,
-                                    action: openEmailLink
-                                )
-                            }
-                        }
-
-                        if let note = snapshot.note {
-                            Button(action: openManagerWindow) {
-                                Text(note)
-                                    .font(.codexCaption)
-                                    .foregroundStyle(CodexTheme.supportText)
-                                    .lineLimit(1)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                    VStack(alignment: .trailing, spacing: 8) {
-                        CodexStatusBadge(
-                            title: snapshot.state.title,
-                            tone: snapshot.state.tone
-                        )
-
-                        if snapshot.isRefreshing {
-                            ProgressView()
-                                .controlSize(.small)
-                                .tint(CodexTheme.accentOrange)
-                        }
-
-                        MenuBarPinnedProfileButton(
-                            isPinned: isPinned,
-                            action: pinProfile
-                        )
-                    }
-                }
-
-                Button(action: openManagerWindow) {
-                    detailContent
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .contentShape(RoundedRectangle(cornerRadius: CodexTheme.sectionCornerRadius, style: .continuous))
-        .contextMenu {
-            Button(isPinned ? "Current" : "Show on top") {
-                pinProfile()
-            }
-            .disabled(isPinned)
-        }
-    }
-
-    private var accentColor: Color? {
-        guard let remaining = snapshot.usage?.fiveHourRemainingPercent else {
-            return snapshot.state == .ready ? nil : snapshot.state.tone.foregroundColor
-        }
-
-        if remaining <= 20 {
-            return CodexTheme.accentOrange
-        }
-
-        return remaining <= 40 ? CodexTheme.accentYellow : CodexTheme.accentGreen
-    }
-
-    private var emptyMessage: String {
-        switch snapshot.state {
-        case .idle:
-            return "Open the manager to sign in or refresh this profile."
-        case .loading:
-            return "Loading live usage."
-        case .ready:
-            return "Usage is ready."
-        case .needsLogin:
-            return "Sign in again in the manager window."
-        case .failed:
-            return "Refresh this profile in the manager window."
-        }
-    }
-
-    @ViewBuilder
-    private var detailContent: some View {
-        if let usage = snapshot.usage {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 8) {
-                    ProfileMetricPill(
-                        title: "5H",
-                        value: snapshot.fiveHourText,
-                        tone: snapshot.state.tone
-                    )
-
-                    ProfileMetricPill(
-                        title: "7D",
-                        value: snapshot.sevenDayText,
-                        tone: .neutral
-                    )
-                }
-
-                Text(resetSummary(for: usage))
-                    .font(.codexCaption)
-                    .foregroundStyle(CodexTheme.mutedText)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        } else {
-            Text(snapshot.statusMessage ?? emptyMessage)
-                .font(.codexSmall)
-                .foregroundStyle(snapshot.state.tone.foregroundColor)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    private func resetSummary(for usage: PlusProfileUsage) -> String {
-        var parts = ["5H resets in \(usage.primaryWindow.resetDescription(referenceDate: referenceDate))"]
-
-        if let secondaryWindow = usage.secondaryWindow {
-            parts.append("7D resets in \(secondaryWindow.resetDescription(referenceDate: referenceDate))")
-        }
-
-        return parts.joined(separator: " · ")
-    }
-}
-
-private struct MenuBarInlineActionButton: View {
-    let symbolName: String
-    let helpText: String
-    let isDisabled: Bool
-    let action: () -> Void
-
-    init(
-        symbolName: String,
-        helpText: String,
-        isDisabled: Bool = false,
-        action: @escaping () -> Void
-    ) {
-        self.symbolName = symbolName
-        self.helpText = helpText
-        self.isDisabled = isDisabled
-        self.action = action
-    }
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: symbolName)
-                .font(.system(size: 11, weight: .semibold))
-                .frame(width: 28, height: 28)
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(isDisabled ? CodexTheme.quietText : CodexTheme.primaryText)
-        .background(
-            RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .fill(CodexTheme.surfaceFill(for: .subtle))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 9, style: .continuous)
-                        .stroke(CodexTheme.surfaceBorder(for: .subtle), lineWidth: 1)
-                )
-        )
-        .opacity(isDisabled ? 0.52 : 1)
-        .accessibilityLabel(helpText)
-        .help(helpText)
-        .disabled(isDisabled)
-    }
-}
-
-private struct MenuBarPinnedProfileButton: View {
-    let isPinned: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(isPinned ? "Current" : "Show on top") {
-            action()
-        }
-        .buttonStyle(.plain)
-        .font(.codexMicro)
-        .foregroundStyle(foregroundColor)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 5)
-        .background(
-            Capsule(style: .continuous)
-                .fill(backgroundColor)
-                .overlay(
-                    Capsule(style: .continuous)
-                        .stroke(borderColor, lineWidth: 1)
-                )
-        )
-        .help(
-            isPinned
-                ? "This profile already drives the top menu bar summary."
-                : "Show this profile in the top menu bar summary."
-        )
-        .disabled(isPinned)
-    }
-
-    private var foregroundColor: Color {
-        isPinned ? CodexTheme.primaryText : CodexTheme.accentOrange
-    }
-
-    private var backgroundColor: Color {
-        isPinned ? CodexTheme.surfaceFill(for: .subtle) : CodexTheme.accentOrange.opacity(0.10)
-    }
-
-    private var borderColor: Color {
-        isPinned ? CodexTheme.surfaceBorder(for: .subtle) : CodexTheme.accentOrange.opacity(0.24)
-    }
-}
-
-private struct ProfileMetricPill: View {
-    let title: String
-    let value: String
-    let tone: CodexStatusTone
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Text(title)
-                .font(.codexCaption)
-                .foregroundStyle(CodexTheme.supportText)
-
-            Text(value)
-                .font(.codexSmallStrong)
-                .foregroundStyle(tone == .neutral ? CodexTheme.primaryText : tone.foregroundColor)
-                .monospacedDigit()
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(
-            RoundedRectangle(cornerRadius: CodexTheme.fieldCornerRadius, style: .continuous)
-                .fill(CodexTheme.surfaceFill(for: .nested))
-                .overlay {
-                    RoundedRectangle(cornerRadius: CodexTheme.fieldCornerRadius, style: .continuous)
-                        .stroke(CodexTheme.surfaceBorder(for: .nested), lineWidth: 1)
-                }
+        ProfileSummaryRow(
+            snapshot: snapshot,
+            referenceDate: referenceDate,
+            mode: .menuBar(isPinned: isPinned),
+            primaryAction: openManagerWindow,
+            copyAction: copyProfileLabel,
+            emailAction: openEmailLink,
+            pinAction: pinProfile
         )
     }
 }

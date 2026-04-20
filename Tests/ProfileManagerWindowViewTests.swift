@@ -74,6 +74,7 @@ struct ProfileManagerWindowViewTests {
 
         #expect(editableTextFieldCount(in: hostingView) == 2)
     }
+
 }
 
 @MainActor

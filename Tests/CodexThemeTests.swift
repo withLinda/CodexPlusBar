@@ -38,6 +38,16 @@ struct CodexThemeTests {
     }
 
     @Test
+    func progressPaletteUsesExactBoundaryThresholds() {
+        #expect(CodexTheme.progressTextToken(forRemainingPercent: 24).hex == CodexTheme.Palette.accRed.hex)
+        #expect(CodexTheme.progressTextToken(forRemainingPercent: 25).hex == CodexTheme.Palette.accOrange.hex)
+        #expect(CodexTheme.progressTextToken(forRemainingPercent: 49).hex == CodexTheme.Palette.accOrange.hex)
+        #expect(CodexTheme.progressTextToken(forRemainingPercent: 50).hex == CodexTheme.Palette.accYellow.hex)
+        #expect(CodexTheme.progressTextToken(forRemainingPercent: 74).hex == CodexTheme.Palette.accYellow.hex)
+        #expect(CodexTheme.progressTextToken(forRemainingPercent: 75).hex == CodexTheme.Palette.accGreen.hex)
+    }
+
+    @Test
     func expiryPaletteUsesGoldOrangeAndRedThresholds() {
         let referenceDate = Date(timeIntervalSince1970: 1_700_000_000)
         let calm = CodexTheme.expiryEmphasisToken(
@@ -70,5 +80,10 @@ struct CodexThemeTests {
         #expect(CodexTheme.resetEmphasisToken(forRemainingPercent: 82).hex == CodexTheme.Palette.accYellow.hex)
         #expect(CodexTheme.resetEmphasisToken(forRemainingPercent: 44).hex == CodexTheme.Palette.accOrange.hex)
         #expect(CodexTheme.resetEmphasisToken(forRemainingPercent: 12).hex == CodexTheme.Palette.accRed.hex)
+    }
+
+    @Test
+    func resetCountdownPaletteAlwaysUsesAqua() {
+        #expect(CodexTheme.resetCountdownEmphasisToken().hex == CodexTheme.Palette.accAqua.hex)
     }
 }

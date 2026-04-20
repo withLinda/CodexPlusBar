@@ -32,7 +32,7 @@ struct ProfileManagerWindowView: View {
                     header
 
                     if let message = controller.statusMessage {
-                        CodexStatusBanner(
+                        ProfileManagerStatusBanner(
                             title: controller.dashboardStatus.title,
                             message: message,
                             tone: controller.dashboardStatus.tone,
@@ -66,16 +66,16 @@ struct ProfileManagerWindowView: View {
         HStack(alignment: .bottom, spacing: 20) {
             VStack(alignment: .leading, spacing: 8) {
                 Text("CodexPlusBar")
-                    .font(.codexMicro)
+                    .font(ProfileManagerTypography.micro)
                     .foregroundStyle(CodexTheme.supportText)
                     .kerning(1.4)
 
                 Text("Profile Manager")
-                    .font(.codexDisplayTitle)
+                    .font(ProfileManagerTypography.title)
                     .foregroundStyle(CodexTheme.primaryText)
 
                 Text(headerMetaText)
-                    .font(.codexBody)
+                    .font(ProfileManagerTypography.body)
                     .foregroundStyle(CodexTheme.mutedText)
                     .lineLimit(2)
             }
@@ -100,13 +100,13 @@ struct ProfileManagerWindowView: View {
                     Button(action: refreshAll) {
                         Label("Refresh all", systemImage: "arrow.clockwise")
                     }
-                    .buttonStyle(CodexPrimaryButtonStyle())
+                    .buttonStyle(ProfileManagerPrimaryButtonStyle())
                     .disabled(controller.isRefreshing || controller.profiles.isEmpty)
 
                     Button(action: addProfile) {
                         Label("Add profile", systemImage: "plus")
                     }
-                    .buttonStyle(CodexSecondaryButtonStyle())
+                    .buttonStyle(ProfileManagerSecondaryButtonStyle())
                 }
             }
         }
@@ -129,11 +129,11 @@ struct ProfileManagerWindowView: View {
                 HStack(alignment: .center, spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Saved profiles")
-                            .font(.codexBodyStrong)
+                            .font(ProfileManagerTypography.bodyStrong)
                             .foregroundStyle(CodexTheme.primaryText)
 
                         Text("One WebKit store per email account.")
-                            .font(.codexCaption)
+                            .font(ProfileManagerTypography.caption)
                             .foregroundStyle(CodexTheme.mutedText)
                     }
 
@@ -147,7 +147,7 @@ struct ProfileManagerWindowView: View {
 
                 if controller.profiles.isEmpty {
                     Text("Add a profile, then sign in with one email account at a time.")
-                        .font(.codexSmall)
+                        .font(ProfileManagerTypography.small)
                         .foregroundStyle(CodexTheme.mutedText)
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -158,9 +158,12 @@ struct ProfileManagerWindowView: View {
                                 Button {
                                     controller.selectProfile(id: snapshot.id)
                                 } label: {
-                                    SidebarProfileRow(
+                                    ProfileSummaryRow(
                                         snapshot: snapshot,
-                                        isSelected: snapshot.id == controller.selectedProfileID
+                                        referenceDate: currentTime.now,
+                                        mode: .sidebar(
+                                            isSelected: snapshot.id == controller.selectedProfileID
+                                        )
                                     )
                                 }
                                 .buttonStyle(.plain)
@@ -192,11 +195,11 @@ struct ProfileManagerWindowView: View {
             CodexCard(tier: .strong) {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Choose a profile")
-                        .font(.codexBodyStrong)
+                        .font(ProfileManagerTypography.bodyStrong)
                         .foregroundStyle(CodexTheme.primaryText)
 
                     Text("Pick a profile from the left to inspect usage, repair login, or remove it.")
-                        .font(.codexSmall)
+                        .font(ProfileManagerTypography.small)
                         .foregroundStyle(CodexTheme.mutedText)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -242,12 +245,12 @@ struct ProfileManagerWindowView: View {
 
                 if let note = snapshot.note {
                     Text(note)
-                        .font(.codexSmall)
+                        .font(ProfileManagerTypography.small)
                         .foregroundStyle(CodexTheme.supportText)
                 }
 
                 Text(detailSummary(for: snapshot))
-                    .font(.codexSmall)
+                    .font(ProfileManagerTypography.small)
                     .foregroundStyle(CodexTheme.mutedText)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -262,10 +265,11 @@ struct ProfileManagerWindowView: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(title)
-                .font(.codexCaption)
+                .font(ProfileManagerTypography.caption)
                 .foregroundStyle(CodexTheme.supportText)
 
             TextField(placeholder, text: text)
+                .font(ProfileManagerTypography.body)
                 .textFieldStyle(.plain)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 10)
@@ -291,32 +295,27 @@ struct ProfileManagerWindowView: View {
         CodexCard(tier: .regular) {
             VStack(alignment: .leading, spacing: 14) {
                 Text("Usage")
-                    .font(.codexBodyStrong)
+                    .font(ProfileManagerTypography.bodyStrong)
                     .foregroundStyle(CodexTheme.primaryText)
 
-                if let usage = snapshot.usage {
-                    HStack(spacing: 14) {
-                        LargeUsageMetricCard(
-                            title: "5-hour window",
-                            value: snapshot.fiveHourText,
-                            subtitle: "Resets in \(usage.primaryWindow.resetDescription(referenceDate: currentTime.now))",
-                            accent: usage.fiveHourRemainingPercent <= 20
-                                ? CodexTheme.accentOrange
-                                : CodexTheme.accentGreen
+                if let usageSummary = snapshot.usageSummary(referenceDate: currentTime.now) {
+                    HStack(spacing: 12) {
+                        ProfileUsageMetricBlock(
+                            summary: usageSummary.primary,
+                            density: .expanded
                         )
 
-                        LargeUsageMetricCard(
-                            title: "7-day window",
-                            value: snapshot.sevenDayText,
-                            subtitle: usage.secondaryWindow.map {
-                                "Resets in \($0.resetDescription(referenceDate: currentTime.now))"
-                            } ?? "Window unavailable",
-                            accent: CodexTheme.accentAqua
+                        ProfileUsageMetricBlock(
+                            summary: usageSummary.secondary,
+                            density: .expanded
                         )
                     }
+                    .accessibilityElement(children: .contain)
+                    .accessibilityLabel("Usage windows")
+                    .accessibilityValue(usageSummary.accessibilityValue)
                 } else {
                     Text(snapshot.statusMessage ?? "Live usage will appear here after a successful refresh.")
-                        .font(.codexSmall)
+                        .font(ProfileManagerTypography.small)
                         .foregroundStyle(snapshot.state.tone.foregroundColor)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -329,7 +328,7 @@ struct ProfileManagerWindowView: View {
         CodexCard(tier: .regular) {
             VStack(alignment: .leading, spacing: 14) {
                 Text("Actions")
-                    .font(.codexBodyStrong)
+                    .font(ProfileManagerTypography.bodyStrong)
                     .foregroundStyle(CodexTheme.primaryText)
 
                 HStack(spacing: 10) {
@@ -338,20 +337,20 @@ struct ProfileManagerWindowView: View {
                     }) {
                         Label("Refresh profile", systemImage: "arrow.clockwise")
                     }
-                    .buttonStyle(CodexPrimaryButtonStyle())
+                    .buttonStyle(ProfileManagerPrimaryButtonStyle())
                     .disabled(snapshot.isRefreshing)
 
                     Button(action: reloadSelectedWebView) {
                         Label("Reload login view", systemImage: "safari")
                     }
-                    .buttonStyle(CodexSecondaryButtonStyle())
+                    .buttonStyle(ProfileManagerSecondaryButtonStyle())
 
                     Button(action: {
                         clearSession(snapshot.id)
                     }) {
                         Label("Clear session", systemImage: "xmark.circle")
                     }
-                    .buttonStyle(CodexDangerButtonStyle())
+                    .buttonStyle(ProfileManagerDangerButtonStyle())
                 }
 
                 HStack(spacing: 10) {
@@ -359,18 +358,18 @@ struct ProfileManagerWindowView: View {
                         controller.selectProfile(id: snapshot.id)
                         controller.moveSelectedProfileUp()
                     }
-                    .buttonStyle(CodexSecondaryButtonStyle())
+                    .buttonStyle(ProfileManagerSecondaryButtonStyle())
 
                     Button("Move down") {
                         controller.selectProfile(id: snapshot.id)
                         controller.moveSelectedProfileDown()
                     }
-                    .buttonStyle(CodexSecondaryButtonStyle())
+                    .buttonStyle(ProfileManagerSecondaryButtonStyle())
 
                     Button("Remove profile") {
                         removeProfile(snapshot.id)
                     }
-                    .buttonStyle(CodexDangerButtonStyle())
+                    .buttonStyle(ProfileManagerDangerButtonStyle())
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -385,11 +384,11 @@ struct ProfileManagerWindowView: View {
                     HStack(spacing: 12) {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Sign in / repair session")
-                                .font(.codexBodyStrong)
+                                .font(ProfileManagerTypography.bodyStrong)
                                 .foregroundStyle(CodexTheme.primaryText)
 
                             Text(sessionSummaryText(for: snapshot))
-                                .font(.codexSmall)
+                                .font(ProfileManagerTypography.small)
                                 .foregroundStyle(CodexTheme.mutedText)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
@@ -401,7 +400,7 @@ struct ProfileManagerWindowView: View {
                                 isSessionExpanded.toggle()
                             }
                         }
-                        .buttonStyle(CodexSecondaryButtonStyle())
+                        .buttonStyle(ProfileManagerSecondaryButtonStyle())
                     }
 
                     if isSessionExpanded {
@@ -457,11 +456,7 @@ struct ProfileManagerWindowView: View {
 
     private func detailAccent(for snapshot: PlusProfileSnapshot) -> Color? {
         if let remaining = snapshot.usage?.fiveHourRemainingPercent {
-            if remaining <= 20 {
-                return CodexTheme.accentOrange
-            }
-
-            return remaining <= 40 ? CodexTheme.accentYellow : CodexTheme.accentGreen
+            return CodexTheme.usagePercentageColor(forRemainingPercent: remaining)
         }
 
         return snapshot.state == .ready ? nil : snapshot.state.tone.foregroundColor
@@ -547,75 +542,125 @@ struct ProfileManagerWindowView: View {
     }
 }
 
-private struct SidebarProfileRow: View {
-    let snapshot: PlusProfileSnapshot
-    let isSelected: Bool
+private struct ProfileManagerStatusBanner: View {
+    let title: String
+    let message: String
+    let tone: CodexStatusTone
+    let symbolName: String
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(snapshot.label)
-                    .font(.codexSmallStrong)
-                    .foregroundStyle(CodexTheme.primaryText)
-                    .lineLimit(1)
+        HStack(alignment: .top, spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: CodexTheme.Radius.badge, style: .continuous)
+                    .fill(CodexTheme.surfaceFill(for: .subtle))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: CodexTheme.Radius.badge, style: .continuous)
+                            .stroke(tone.borderColor, lineWidth: 1)
+                    )
 
-                Text(snapshot.note ?? snapshot.state.title)
-                    .font(.codexCaption)
-                    .foregroundStyle(CodexTheme.mutedText)
-                    .lineLimit(1)
+                Image(systemName: symbolName)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(tone.foregroundColor)
             }
+            .frame(width: 32, height: 32)
 
-            Spacer(minLength: 0)
+            VStack(alignment: .leading, spacing: CodexTheme.Spacing.micro) {
+                Text(title)
+                    .font(ProfileManagerTypography.smallStrong)
+                    .foregroundStyle(CodexTheme.primaryText)
 
-            Text(snapshot.fiveHourText)
-                .font(.codexSmallStrong)
-                .monospacedDigit()
-                .foregroundStyle(snapshot.state.tone.foregroundColor)
+                Text(message)
+                    .font(ProfileManagerTypography.small)
+                    .foregroundStyle(CodexTheme.mutedText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        .padding(CodexTheme.panelPadding)
         .background(
-            RoundedRectangle(cornerRadius: CodexTheme.fieldCornerRadius, style: .continuous)
-                .fill(isSelected ? CodexTheme.surfaceFill(for: .strong) : CodexTheme.surfaceFill(for: .nested))
-                .overlay {
-                    RoundedRectangle(cornerRadius: CodexTheme.fieldCornerRadius, style: .continuous)
-                        .stroke(
-                            isSelected
-                                ? CodexTheme.accentOrange.opacity(0.35)
-                                : CodexTheme.surfaceBorder(for: .nested),
-                            lineWidth: 1
-                        )
-                }
+            RoundedRectangle(cornerRadius: CodexTheme.cornerRadius(for: .nested), style: .continuous)
+                .fill(CodexTheme.surfaceFill(for: .nested))
+                .overlay(
+                    RoundedRectangle(cornerRadius: CodexTheme.cornerRadius(for: .nested), style: .continuous)
+                        .fill(tone.backgroundColor.opacity(0.52))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: CodexTheme.cornerRadius(for: .nested), style: .continuous)
+                        .stroke(tone.borderColor, lineWidth: 1)
+                )
         )
     }
 }
 
-private struct LargeUsageMetricCard: View {
-    let title: String
-    let value: String
-    let subtitle: String
-    let accent: Color
+private struct ProfileManagerPrimaryButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
 
-    var body: some View {
-        CodexCard(tier: .nested, accent: accent, shadow: false) {
-            VStack(alignment: .leading, spacing: 10) {
-                Text(title)
-                    .font(.codexCaption)
-                    .foregroundStyle(CodexTheme.supportText)
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(ProfileManagerTypography.smallStrong)
+            .foregroundStyle(CodexTheme.accentInk)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
+                    .fill(CodexTheme.accentGradient)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
+                            .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                    )
+            )
+            .shadow(color: CodexTheme.accentOrange.opacity(0.20), radius: 12, y: 6)
+            .opacity(isEnabled ? (configuration.isPressed ? 0.92 : 1) : 0.46)
+            .scaleEffect(configuration.isPressed ? 0.99 : 1)
+            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
+    }
+}
 
-                Text(value)
-                    .font(.codexDisplayTitle)
-                    .foregroundStyle(accent)
-                    .monospacedDigit()
+private struct ProfileManagerSecondaryButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
 
-                Text(subtitle)
-                    .font(.codexSmall)
-                    .foregroundStyle(CodexTheme.mutedText)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(ProfileManagerTypography.smallStrong)
+            .foregroundStyle(CodexTheme.primaryText)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
+                    .fill(CodexTheme.surfaceFill(for: .subtle))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
+                            .fill(CodexTheme.surfaceSheen(for: .subtle))
+                    )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
+                    .stroke(CodexTheme.surfaceBorder(for: .subtle), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.16), radius: 8, y: 4)
+            .opacity(isEnabled ? (configuration.isPressed ? 0.92 : 1) : 0.46)
+            .scaleEffect(configuration.isPressed ? 0.99 : 1)
+            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
+    }
+}
+
+private struct ProfileManagerDangerButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(ProfileManagerTypography.smallStrong)
+            .foregroundStyle(CodexTheme.accentRed)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
+                    .fill(CodexTheme.accentRed.opacity(configuration.isPressed ? 0.16 : 0.10))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
+                    .stroke(CodexTheme.accentRed.opacity(0.24), lineWidth: 1)
+            )
+            .opacity(isEnabled ? 1 : 0.46)
     }
 }
 

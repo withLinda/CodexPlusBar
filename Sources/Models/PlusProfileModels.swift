@@ -156,6 +156,76 @@ struct PlusProfileUsage: Equatable, Sendable {
     var sevenDayRemainingPercent: Int? {
         secondaryWindow?.remainingPercent
     }
+
+    func usageSummary(referenceDate: Date = .now) -> ProfileUsageSummary {
+        ProfileUsageSummary(
+            primary: .available(
+                shortTitle: "5H",
+                remainingPercent: fiveHourRemainingPercent,
+                resetText: primaryWindow.resetDescription(referenceDate: referenceDate)
+            ),
+            secondary: secondaryWindow.map {
+                .available(
+                    shortTitle: "7D",
+                    remainingPercent: $0.remainingPercent,
+                    resetText: $0.resetDescription(referenceDate: referenceDate)
+                )
+            } ?? .unavailable(shortTitle: "7D")
+        )
+    }
+}
+
+struct ProfileUsageMetricSummary: Equatable, Sendable {
+    let shortTitle: String
+    let remainingPercent: Int?
+    let valueText: String
+    let resetText: String
+    let isAvailable: Bool
+
+    static func available(
+        shortTitle: String,
+        remainingPercent: Int,
+        resetText: String
+    ) -> ProfileUsageMetricSummary {
+        ProfileUsageMetricSummary(
+            shortTitle: shortTitle,
+            remainingPercent: remainingPercent,
+            valueText: "\(remainingPercent)%",
+            resetText: resetText,
+            isAvailable: true
+        )
+    }
+
+    static func unavailable(shortTitle: String) -> ProfileUsageMetricSummary {
+        ProfileUsageMetricSummary(
+            shortTitle: shortTitle,
+            remainingPercent: nil,
+            valueText: "—",
+            resetText: "Unavailable",
+            isAvailable: false
+        )
+    }
+
+    var accessibilityValue: String {
+        if isAvailable {
+            return "\(shortTitle) \(valueText), resets in \(resetText)"
+        }
+
+        return "\(shortTitle) unavailable"
+    }
+}
+
+struct ProfileUsageSummary: Equatable, Sendable {
+    let primary: ProfileUsageMetricSummary
+    let secondary: ProfileUsageMetricSummary
+
+    var metrics: [ProfileUsageMetricSummary] {
+        [primary, secondary]
+    }
+
+    var accessibilityValue: String {
+        metrics.map(\.accessibilityValue).joined(separator: ". ") + "."
+    }
 }
 
 struct PlusProfileRefreshResult: Equatable, Sendable {
@@ -196,6 +266,10 @@ struct PlusProfileSnapshot: Identifiable, Equatable, Sendable {
         }
 
         return "—"
+    }
+
+    func usageSummary(referenceDate: Date = .now) -> ProfileUsageSummary? {
+        usage?.usageSummary(referenceDate: referenceDate)
     }
 
     func updating(

@@ -338,6 +338,10 @@ enum CodexTheme {
         }
     }
 
+    static func usagePercentageColor(forRemainingPercent remainingPercent: Int) -> Color {
+        progressTextToken(forRemainingPercent: remainingPercent).color
+    }
+
     static func progressStopTokens(forRemainingPercent remainingPercent: Int) -> [CodexColorToken] {
         let dominant = progressTextToken(forRemainingPercent: remainingPercent)
         return [
@@ -399,6 +403,14 @@ enum CodexTheme {
         default:
             return Palette.accYellow
         }
+    }
+
+    static func resetCountdownEmphasisToken() -> CodexColorToken {
+        Palette.accAqua
+    }
+
+    static var resetCountdownEmphasisColor: Color {
+        resetCountdownEmphasisToken().color
     }
 
     static func statusLabelColor(for authState: AuthState, limitReached: Bool) -> Color {
