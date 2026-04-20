@@ -1,0 +1,16 @@
+.DS_Store
+
+# Local Codex app state
+.codex/
+
+# Generated build output
+build/
+DerivedData/
+*.xcresult/
+
+# Xcode user-specific data
+*.xcuserdatad/
+*.xcuserstate
+
+# Local agent selection cache
+agents/current_name.txt

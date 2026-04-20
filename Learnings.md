@@ -1,0 +1,95 @@
+---
+title: CodexPlusBar Learnings
+status: active
+last_updated: 2026-03-18
+purpose: "Keep non-obvious project knowledge in one place so future agents can avoid repeated tool mistakes, API misunderstandings, and fragile fixes."
+update_policy:
+  - "Read this file before debugging, tool-heavy work, networking changes, or test repair."
+  - "Append new knowledge after any problem or bug that takes extra effort to solve."
+  - "Prefer short dated notes under the closest section instead of rewriting history."
+---
+
+# Learnings
+
+## Table of Contents
+- [How To Use This File](#how-to-use-this-file)
+- [How To Update This File](#how-to-update-this-file)
+- [Build And Test Commands](#build-and-test-commands)
+- [Tooling Notes](#tooling-notes)
+- [Backend API Notes](#backend-api-notes)
+- [Swift And Testing Pitfalls](#swift-and-testing-pitfalls)
+- [UI And Data Flow Notes](#ui-and-data-flow-notes)
+
+## How To Use This File
+- Read this file before you change networking, session handling, account loading, dashboard UI, or tests.
+- Treat this file like a workshop notebook: it is for practical lessons, not polished documentation.
+- If a note becomes outdated, add a new note that corrects it. Do not silently delete the old lesson unless it is clearly wrong and harmful.
+
+## How To Update This File
+- Add new notes only when they would save the next agent time or prevent a bug, bad tool call, or wrong assumption.
+- Append under the closest section with a date prefix like `2026-03-18`.
+- Keep each note short and concrete:
+  - problem
+  - fix
+  - prevention
+- Good example: `2026-03-18: /wham/usage is account-scoped by ChatGPT-Account-ID, so do not add workspace-switch fallback logic for multi-account limit fetches.`
+- If you learn something from a failed build, test, or tool call, record the exact trap and the safer pattern.
+
+## Build And Test Commands
+- 2026-03-18: Use `xcodebuild test -project CodexPlusBar.xcodeproj -scheme CodexPlusBar -destination 'platform=macOS'` as the main verification command for this repo.
+- 2026-03-18: For normal local verification in this repo, prefer the Makefile entry points the project already wraps: `make test`, `make agent-verify`, and `TRACE_PRIVATE_API=1 make build-and-run-background`.
+
+## Tooling Notes
+- 2026-03-18: Proxyman is useful for confirming private ChatGPT web calls in this app. It is especially helpful for checking real request headers like `ChatGPT-Account-ID` and matching them to returned account data.
+- 2026-03-18: When you need quick repo-wide search here, `rg` is enough for most code and test discovery. There is no existing root onboarding file beyond `AGENTS.md`, so future onboarding rules should live there.
+- 2026-03-19: Pencil MCP flagged `SF Pro Display`, `SF Pro Text`, and `SF Mono` as invalid font families during the menubar/app redesign, but the canvas still rendered readable fallback text. For Pencil work here, always verify with screenshots instead of trusting font validation warnings alone.
+- 2026-03-19: For multiple bundled font families in this macOS app, point `ATSApplicationFontsPath` at the top-level `Fonts` folder and also register `.ttf`/`.otf` files at launch. If Info.plist only points at one subfolder, Manrope and Cormorant can fall back silently and the redesign loses its intended typography.
+- 2026-04-20: The persistent WebKit profile API names differ in Swift from many docs/examples. Use `WKWebsiteDataStore(forIdentifier:)` to open a profile store and `WKWebsiteDataStore.remove(forIdentifier:completionHandler:)` to delete one. Do not search for `dataStoreForIdentifier` in Swift code and assume it will compile.
+
+## Backend API Notes
+- 2026-03-18: `/backend-api/accounts/check/v4-2023-04-27` is the source of truth for multi-account catalog data. It provides account names, plan types, entitlement dates, accessibility flags, deactivation state, and `account_ordering`.
+- 2026-03-18: `/backend-api/wham/usage` is account-scoped by the `ChatGPT-Account-ID` header. The URL does not change per account; the header decides which account limit payload you get back.
+- 2026-03-18: Do not overwrite an explicit `ChatGPT-Account-ID` in the request signer. If the caller already set it, preserve it.
+- 2026-03-18: In the native menu bar app, header-only `wham/usage` requests can still return the currently pinned account for every response. The working fix was to switch the app session to each target account first, then call `wham/usage`, then restore the original account at the end of the sweep.
+- 2026-03-18: The real browser workspace switch call is a cookie-only `GET /api/auth/session?exchange_workspace_token=true&workspace_id=...&reason=setCurrentAccount`. Do not add `Authorization`, `ChatGPT-Account-ID`, or `OAI-Language` to that request. Decode the switch response directly and verify the returned account before calling `/wham/usage`.
+- 2026-03-18: ChatGPT workspace switching in the native app also depends on the `_account` cookie, not just `workspace_id` in `/api/auth/session`. Set `_account` to the target account before each switch and before restore, or the backend can keep the session pinned to the old account.
+- 2026-03-18: The `timezone_offset_min` query for `accounts/check` must follow the browser `Date.getTimezoneOffset()` sign convention. Example: Asia/Jakarta should send `-420`, not `420`.
+- 2026-03-18: `accounts/check` can return duplicate logical `account_id` values under different entries. Normalize and merge account catalogs before building dictionaries or starting per-account limit fetches, or the app can crash on `Dictionary(uniqueKeysWithValues:)`.
+- 2026-04-07: When `/backend-api/wham/usage` is slow, plain timeout text is not enough to debug. Emit trace-gated structured logs (`event=limit_fetch_timeout` and `event=limit_fetch_slow_success`) with account, sweep index, checkpoint (`switch`/`request`/`decode`/`restore`), elapsed/timeout thresholds, and session+`_account` cookie before/after. Prevent future guesswork by grepping `event=limit_fetch_` before changing timeout values.
+- 2026-04-07: Timeout traces can look "missing" when they depend on stdout capture and trace env flags. Keep slow-success logs trace-gated, but always persist timeout diagnostics to a durable local file (`~/Library/Application Support/CodexPlusBar/Logs/limit-fetch-timeouts.log` by default, overridable with `CODEXPLUSBAR_TIMEOUT_DIAGNOSTICS_LOG`) and pass the same typed diagnostics into the account card message so users can see exact timeout context without opening logs.
+- 2026-04-07: If multi-account refresh fails only at `checkpoint=switch` around the same cutoff (for example ~20s), the trap is a single shared timeout covering both switch and usage phases. Fix by splitting timeout budgets per stage (`switch`, `request`, `restore`) and set a longer switch request timeout on `/api/auth/session?exchange_workspace_token=true` so URLSession does not cancel early. Prevent regressions by asserting stage-specific `timeout_ms` values and explicit switch request timeout in tests.
+- 2026-04-20: Even in the Plus-only flow, `AuthSessionService.fetchCurrentSession` can still hit `/codex/settings/usage` after `/api/auth/session` when the cached auth context does not yet have `clientVersion`, account, or token details. In tests, either seed a fallback auth context or mock the bootstrap HTML too, or the request sequence looks wrong even though the runtime path is correct.
+
+## Swift And Testing Pitfalls
+- 2026-03-18: In Swift Testing, avoid nesting `#require(...)` inside another `#require(...)` expression. Split the values into separate local constants first, or the macro can recurse badly and fail compilation.
+- 2026-03-18: Swift 6 can struggle with type inference around `Dictionary(uniqueKeysWithValues:)` when the input comes from `compactMap`. If inference fails, give the dictionary an explicit type like `[String: WorkspaceLimitSnapshot](...)`.
+- 2026-03-18: For this repo, bounded async loading was safer to implement with chunked batches of `Task { @MainActor ... }` than with the earlier task-group attempt that ran into Swift 6 isolation/compiler trouble.
+- 2026-03-18: When testing dates from ISO strings, compare against a parsed ISO8601 date instead of hand-written epoch seconds. Manual epoch values are easy to get wrong and create fake decoder failures.
+- 2026-03-18: `ChatGPTRequestSigner` now gives `/backend-api/wham/` calls browser-style headers like `Accept: */*`, `Referer: /codex`, and `X-OpenAI-Target-*`. If signer tests still expect the older JSON usage-page headers, the tests fail even though the runtime fix is correct.
+- 2026-03-19: This repo treats warnings as errors, so old single-parameter SwiftUI `onChange` closures now fail macOS builds. Use the two-parameter macOS 14+ form during UI refactors, or the test/build step will stop on a deprecation instead of a runtime bug.
+
+## UI And Data Flow Notes
+- 2026-03-18: The app now uses a dashboard-first account flow, not a selection-first workspace flow. Keep names and expiry dates visible for all returned accounts, and keep raw account IDs internal where possible.
+- 2026-03-18: Partial limit failures should stay local to the affected account card. If `accounts/check` succeeds, the dashboard should still render even when one or more `wham/usage` calls fail.
+- 2026-03-18: A full multi-account limit sweep can take longer than the old 12-second controller stage timeout. Do not wrap the whole dashboard load in one timeout or wait for every account before updating the UI. Load the current account first, update cards progressively, and map cancellations to friendly timeout/interrupted messages instead of showing raw `cancelled`.
+- 2026-04-06: The account catalog refresh can also exceed the old shared 12-second stage timeout even when the request is still in flight. If users see `Loading the account list took too long`, inspect the unified log for a `-999` cancellation around 12 seconds before blaming ChatGPT; the safer fix is separate stage budgets so `accounts/check` is not cut off as aggressively as session validation.
+- 2026-03-18: The compact menu bar surface should summarize urgency and counts, while the account window holds the full scrollable card grid and the embedded session repair web view.
+- 2026-03-18: In the account window, a vertical `ScrollView` inside `VSplitView` can collapse to intrinsic content width unless the inner dashboard stack is explicitly framed to the available width. When that happens, `LazyVGrid` cards and the session web view squeeze into unreadable narrow columns.
+- 2026-03-19: In the menu bar panel, `CodexCard` inside a `ScrollView` can also hug its intrinsic content width. When a compact card should fill the panel, explicitly frame the card or its root content to `maxWidth: .infinity`, or the panel shows large empty gutters even though the outer window is wide enough.
+- 2026-03-19: A `MenuBarExtra(.window)` panel can still shave the right edge even when the NSWindow is already at the intended size. The practical fix here was to keep the outer window at `484 x 560`, then reserve an explicit outer chrome inset for `CodexShell` and give the shell content an explicit measured frame inside that surface instead of trusting implicit `ZStack` padding proposals.
+- 2026-03-19: If the menu bar panel still truncates on the right after the outer window is correct, inspect the live accessibility bounds before widening anything. In this app the real trap was a `ScrollView` content area growing wider than the `484pt` panel plus `fixedSize(horizontal: true)` badge rows, so the fix was to lock the menu content to the computed inner width and let the left text truncate before the badges.
+- 2026-04-20: On this Mac, the `MenuBarExtra(.window)` status item could render and receive clicks without ever realizing a popup window, even with a minimal static popup body. The reliable fix was to keep the SwiftUI panel view but host it through an AppKit `NSStatusItem` plus `NSPopover` bridge instead of relying on the SwiftUI popup scene.
+- 2026-03-18: Hide expired and deactivated accounts before creating dashboard items and before starting per-account limit fetches. If you only hide them in SwiftUI later, the app still wastes `wham/usage` calls and can leave hidden rows stuck in a loading state.
+- 2026-03-18: For countdown text like `Reset in ...`, use `resetAt` as the source of truth. `reset_after_seconds` is only correct at fetch time and goes stale if the UI stays open.
+- 2026-03-18: `TimelineView` inside a `MenuBarExtra` label caused an invisible status item and multi-GB layout churn on macOS 26. Keep menu bar labels plain and drive time updates through explicit observed state instead.
+- 2026-03-19: The embedded ChatGPT sign-in web view can navigate through `/auth/` and usage pages during normal browsing. Do not treat those navigations as account-data refresh signals, or the app will ask ChatGPT for limits far more often than the 5-minute timer.
+- 2026-03-19: For ADHD-focused dashboard work, do not create cards, repeated facts, or header copy that add no decision value. Keep shared facts like refresh time once at the top, keep expiry visible where it helps account choice, and remove decorative summary blocks that only increase cognitive load.
+- 2026-04-07: The app should now show only `5H` and `7D` windows. Keep decoding tolerant if ChatGPT still sends `code_review_rate_limit`, but do not surface that window in models or UI to avoid stale, misleading dashboard sections.
+- 2026-04-07: A background refresh can fail during `checkingSession` after the app already has valid cards on screen. Do not force `authState` back to `.signingIn` for every refresh; restore the previous presentation state when that first stage times out, and keep a longer default budget than 12 seconds because real `/api/auth/session` calls can exceed it.
+- 2026-03-23: For menu bar priority selection, keep the chosen account ID in `@AppStorage` at the view layer and let both the panel content and the status label read the same key. If only the panel owns that state, the menu bar text and the opened panel drift out of sync.
+- 2026-03-24: For a transparent custom account window title bar on macOS, do not stop at `titlebarAppearsTransparent = true`. Add `.fullSizeContentView` to the `NSWindow` style mask too, or macOS can leave a visible top chrome seam that looks like an app border bug.
+- 2026-03-24: If you want real desktop-through glass in that transparent title-bar strip, lowering the shell alpha is not enough. Use an AppKit `NSVisualEffectView` with `.titlebar` material and `.behindWindow` blending for the top strip, then keep the main shell body separate and opaque enough for readable content.
+- 2026-03-24: If the goal is a truly clear native title bar, do not paint your app shell or custom glass into the title-bar height after enabling `.fullSizeContentView`. Leave that strip empty and start the styled body below `contentLayoutRect`, or the title bar turns into fake content again.
+- 2026-03-24: If a 1px dirty line still remains after moving the body below a clear title bar, the problem can be the body shell itself: clipped backdrop and shadow pixels touching the transparent strip. Bury the body upward by one device pixel and stop shadow bleed at the top edge.
+- 2026-03-24: The new SwiftUI Liquid Glass APIs (`glassEffect`, `Glass.clear`, `Glass.tint`) are macOS 26+ only. In this macOS 14-targeted app, gate them with availability and keep an AppKit title-bar visual-effect fallback for older systems.
+- 2026-03-24: If a transparent title-bar glass cap still looks rectangular, the problem can be the glass layer shape, not the window. Clip the title-bar material itself to a top-rounded shape that matches the shell radius, and keep the tint very light or the glass starts reading like a dark slab.

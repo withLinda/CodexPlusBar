@@ -1,0 +1,62 @@
+name: CodexPlusBar
+options:
+  deploymentTarget:
+    macOS: 14.0
+settings:
+  base:
+    SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+    GCC_TREAT_WARNINGS_AS_ERRORS: YES
+    SWIFT_STRICT_CONCURRENCY: complete
+    SWIFT_VERSION: 6.0
+
+schemes:
+  CodexPlusBar:
+    shared: true
+    build:
+      targets:
+        CodexPlusBar: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - CodexPlusBarTests
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
+
+targets:
+  CodexPlusBar:
+    type: application
+    platform: macOS
+    bundleId: com.linda.CodexPlusBar
+    sources:
+      - path: Sources
+        type: syncedFolder
+    resources:
+      - Resources
+    settings:
+      base:
+        INFOPLIST_FILE: Sources/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: com.linda.CodexPlusBar
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        CURRENT_PROJECT_VERSION: 1
+        MARKETING_VERSION: 1.0
+
+  CodexPlusBarTests:
+    type: bundle.unit-test
+    platform: macOS
+    bundleId: com.linda.CodexPlusBar.Tests
+    sources:
+      - path: Tests
+        type: syncedFolder
+    settings:
+      base:
+        INFOPLIST_FILE: Tests/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: com.linda.CodexPlusBar.Tests
+    dependencies:
+      - target: CodexPlusBar
