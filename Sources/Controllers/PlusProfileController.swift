@@ -82,9 +82,27 @@ final class PlusProfileController {
     }
 
     func statusBarText(referenceDate: Date = .now) -> String {
-        if let urgent = mostUrgentHealthyProfile() {
-            let label = compactLabel(for: urgent.profile.displayLabel)
-            return "\(label) 5H \(urgent.fiveHourText)"
+        statusBarText(preferredProfileID: nil, referenceDate: referenceDate)
+    }
+
+    func preferredStatusProfile(preferredProfileID: UUID?) -> PlusProfileSnapshot? {
+        if let preferredProfileID,
+           let preferred = profiles.first(where: { $0.id == preferredProfileID }),
+           preferred.state == .ready,
+           preferred.usage != nil {
+            return preferred
+        }
+
+        return mostUrgentHealthyProfile()
+    }
+
+    func statusBarText(
+        preferredProfileID: UUID?,
+        referenceDate: Date = .now
+    ) -> String {
+        if let preferred = preferredStatusProfile(preferredProfileID: preferredProfileID) {
+            let label = compactStatusLabel(for: preferred.profile.displayLabel)
+            return "\(label) 5H \(preferred.fiveHourText) 7D \(preferred.sevenDayText)"
         }
 
         if isRefreshing {
@@ -117,6 +135,7 @@ final class PlusProfileController {
         let newProfile = PlusProfile(
             id: UUID(),
             label: label ?? "Account \(nextIndex)",
+            emailLink: nil,
             detectedNote: nil,
             webDataStoreID: UUID(),
             sortOrder: profiles.count,
@@ -147,6 +166,14 @@ final class PlusProfileController {
         guard let index = indexOfProfile(profileID) else { return }
         var updatedProfile = profiles[index].profile
         updatedProfile.label = label
+        profiles[index] = profiles[index].updating(profile: updatedProfile)
+        persistProfiles()
+    }
+
+    func updateEmailLink(for profileID: UUID, link: String) {
+        guard let index = indexOfProfile(profileID) else { return }
+        var updatedProfile = profiles[index].profile
+        updatedProfile.emailLink = PlusProfile.normalizedEmailLink(link)
         profiles[index] = profiles[index].updating(profile: updatedProfile)
         persistProfiles()
     }
@@ -484,13 +511,26 @@ final class PlusProfileController {
         }.first
     }
 
-    private func compactLabel(for label: String) -> String {
+    private func compactStatusLabel(for label: String) -> String {
         let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.count > 12 else {
-            return trimmed
+        guard trimmed.isEmpty == false else {
+            return "Profile"
         }
 
-        return String(trimmed.prefix(11)) + "…"
+        let compactSource: String
+        if let atSignIndex = trimmed.firstIndex(of: "@"),
+           atSignIndex > trimmed.startIndex {
+            compactSource = String(trimmed[..<atSignIndex])
+        } else {
+            compactSource = trimmed
+        }
+
+        let cleanSource = compactSource.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard cleanSource.count > 7 else {
+            return cleanSource.isEmpty ? "Profile" : cleanSource
+        }
+
+        return String(cleanSource.prefix(7))
     }
 
     private func indexOfProfile(_ profileID: UUID) -> Int? {

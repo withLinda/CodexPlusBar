@@ -105,6 +105,136 @@ struct PlusProfileControllerTests {
         #expect(service.clearedProfileIDs == [profile.id])
         #expect(try store.loadProfiles().first?.lastKnownState == .needsLogin)
     }
+
+    @Test
+    func updateEmailLinkPersistsTrimmedValueWithoutChangingOrdering() throws {
+        let tempDirectory = makeTemporaryDirectory()
+        let store = ProfileCatalogStore(
+            fileURL: tempDirectory.appendingPathComponent("profiles.json", isDirectory: false)
+        )
+        let first = sampleProfile(label: "alpha@example.com", sortOrder: 0)
+        let second = sampleProfile(label: "beta@example.com", sortOrder: 1)
+        try store.saveProfiles([first, second])
+
+        let controller = PlusProfileController(
+            catalogStore: store,
+            dataService: StubPlusProfileDataService(refreshResults: [:]),
+            autoStart: false
+        )
+
+        controller.updateEmailLink(
+            for: first.id,
+            link: "  mail.google.com/mail/u/0/#inbox  "
+        )
+
+        let persisted = try store.loadProfiles()
+        #expect(persisted.map(\.id) == [first.id, second.id])
+        #expect(controller.profiles.first?.profile.emailLink == "mail.google.com/mail/u/0/#inbox")
+        #expect(persisted.first?.emailLink == "mail.google.com/mail/u/0/#inbox")
+        #expect(persisted.last?.emailLink == nil)
+    }
+
+    @Test
+    func updateEmailLinkNormalizesBlankInputToNil() throws {
+        let tempDirectory = makeTemporaryDirectory()
+        let store = ProfileCatalogStore(
+            fileURL: tempDirectory.appendingPathComponent("profiles.json", isDirectory: false)
+        )
+        let profile = sampleProfile(
+            label: "alpha@example.com",
+            sortOrder: 0,
+            emailLink: "https://mail.google.com"
+        )
+        try store.saveProfiles([profile])
+
+        let controller = PlusProfileController(
+            catalogStore: store,
+            dataService: StubPlusProfileDataService(refreshResults: [:]),
+            autoStart: false
+        )
+
+        controller.updateEmailLink(for: profile.id, link: "   ")
+
+        #expect(controller.profiles.first?.profile.emailLink == nil)
+        #expect(try store.loadProfiles().first?.emailLink == nil)
+    }
+
+    @Test
+    func statusBarTextUsesPreferredReadyProfileBeforeUrgentFallback() {
+        let controller = PlusProfileController(dataService: StubPlusProfileDataService(refreshResults: [:]), autoStart: false)
+        let urgent = menuBarSnapshot(
+            label: "urgent@example.com",
+            state: .ready,
+            fiveHourRemainingPercent: 12,
+            sevenDayRemainingPercent: 38,
+            sortOrder: 0
+        )
+        let preferred = menuBarSnapshot(
+            label: "monijoa@example.com",
+            state: .ready,
+            fiveHourRemainingPercent: 74,
+            sevenDayRemainingPercent: 42,
+            sortOrder: 1
+        )
+        controller.profiles = [urgent, preferred]
+
+        #expect(controller.preferredStatusProfile(preferredProfileID: preferred.id)?.id == preferred.id)
+        #expect(
+            controller.statusBarText(
+                preferredProfileID: preferred.id,
+                referenceDate: Date(timeIntervalSince1970: 1_776_000_000)
+            ) == "monijoa 5H 74% 7D 42%"
+        )
+    }
+
+    @Test
+    func preferredStatusProfileFallsBackWhenPreferredProfileIsMissingOrNotReady() {
+        let controller = PlusProfileController(dataService: StubPlusProfileDataService(refreshResults: [:]), autoStart: false)
+        let urgent = menuBarSnapshot(
+            label: "urgent@example.com",
+            state: .ready,
+            fiveHourRemainingPercent: 18,
+            sevenDayRemainingPercent: 51,
+            sortOrder: 0
+        )
+        let needsLogin = menuBarSnapshot(
+            label: "repair@example.com",
+            state: .needsLogin,
+            fiveHourRemainingPercent: nil,
+            sevenDayRemainingPercent: nil,
+            sortOrder: 1
+        )
+        controller.profiles = [urgent, needsLogin]
+
+        #expect(controller.preferredStatusProfile(preferredProfileID: needsLogin.id)?.id == urgent.id)
+        #expect(controller.preferredStatusProfile(preferredProfileID: UUID())?.id == urgent.id)
+        #expect(
+            controller.statusBarText(
+                preferredProfileID: needsLogin.id,
+                referenceDate: Date(timeIntervalSince1970: 1_776_000_000)
+            ) == "urgent 5H 18% 7D 51%"
+        )
+    }
+
+    @Test
+    func statusBarTextUsesSevenCharacterNonEmailPrefixWithoutEllipsis() {
+        let controller = PlusProfileController(dataService: StubPlusProfileDataService(refreshResults: [:]), autoStart: false)
+        let profile = menuBarSnapshot(
+            label: "LongLabelProfile",
+            state: .ready,
+            fiveHourRemainingPercent: 83,
+            sevenDayRemainingPercent: nil,
+            sortOrder: 0
+        )
+        controller.profiles = [profile]
+
+        #expect(
+            controller.statusBarText(
+                preferredProfileID: profile.id,
+                referenceDate: Date(timeIntervalSince1970: 1_776_000_000)
+            ) == "LongLab 5H 83% 7D —"
+        )
+    }
 }
 
 @MainActor
@@ -225,10 +355,78 @@ private func makeUsage(
     )
 }
 
-private func sampleProfile(label: String, sortOrder: Int) -> PlusProfile {
+private func menuBarSnapshot(
+    label: String,
+    state: PlusProfileState,
+    fiveHourRemainingPercent: Int?,
+    sevenDayRemainingPercent: Int?,
+    sortOrder: Int
+) -> PlusProfileSnapshot {
+    let profile = PlusProfile(
+        id: UUID(),
+        label: label,
+        emailLink: nil,
+        detectedNote: nil,
+        webDataStoreID: UUID(),
+        sortOrder: sortOrder,
+        createdAt: Date(timeIntervalSince1970: 1_776_000_000 + TimeInterval(sortOrder)),
+        lastRefreshAt: nil,
+        lastKnownState: state.storedState
+    )
+
+    let usage = makeMenuBarUsage(
+        accountID: "acct_\(sortOrder)",
+        fiveHourRemainingPercent: fiveHourRemainingPercent,
+        sevenDayRemainingPercent: sevenDayRemainingPercent
+    )
+
+    return PlusProfileSnapshot(
+        profile: profile,
+        state: state,
+        usage: usage,
+        statusMessage: nil,
+        isRefreshing: false
+    )
+}
+
+private func makeMenuBarUsage(
+    accountID: String,
+    fiveHourRemainingPercent: Int?,
+    sevenDayRemainingPercent: Int?
+) -> PlusProfileUsage? {
+    guard let fiveHourRemainingPercent else {
+        return nil
+    }
+
+    let fiveHourWindow = WorkspaceLimitWindow(
+        usedPercent: 100 - fiveHourRemainingPercent,
+        limitWindowSeconds: 18_000,
+        resetAfterSeconds: 900,
+        resetAt: Date(timeIntervalSince1970: 1_776_000_900)
+    )
+    let sevenDayWindow = sevenDayRemainingPercent.map {
+        WorkspaceLimitWindow(
+            usedPercent: 100 - $0,
+            limitWindowSeconds: 604_800,
+            resetAfterSeconds: 86_400,
+            resetAt: Date(timeIntervalSince1970: 1_776_086_400)
+        )
+    }
+
+    return PlusProfileUsage(
+        accountID: accountID,
+        planType: "chatgpt_plus",
+        primaryWindow: fiveHourWindow,
+        secondaryWindow: sevenDayWindow,
+        fetchedAt: Date(timeIntervalSince1970: 1_776_000_000)
+    )
+}
+
+private func sampleProfile(label: String, sortOrder: Int, emailLink: String? = nil) -> PlusProfile {
     PlusProfile(
         id: UUID(),
         label: label,
+        emailLink: emailLink,
         detectedNote: nil,
         webDataStoreID: UUID(),
         sortOrder: sortOrder,

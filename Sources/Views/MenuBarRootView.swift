@@ -3,8 +3,25 @@ import SwiftUI
 
 struct MenuBarRootView: View {
     @Bindable var controller: PlusProfileController
+    @AppStorage(MenuBarProfilePreference.preferredProfileIDKey) private var preferredProfileIDStorage = ""
     let currentTime: AppMinuteClock
     let openManagerWindow: @MainActor (UUID?) -> Void
+
+    init(
+        controller: PlusProfileController,
+        currentTime: AppMinuteClock,
+        userDefaults: UserDefaults = .standard,
+        openManagerWindow: @escaping @MainActor (UUID?) -> Void
+    ) {
+        self.controller = controller
+        self.currentTime = currentTime
+        self.openManagerWindow = openManagerWindow
+        _preferredProfileIDStorage = AppStorage(
+            wrappedValue: "",
+            MenuBarProfilePreference.preferredProfileIDKey,
+            store: userDefaults
+        )
+    }
 
     var body: some View {
         let panelContentWidth = MenuBarPanelMetrics.contentWidth
@@ -42,6 +59,10 @@ struct MenuBarRootView: View {
             height: MenuBarPanelMetrics.height,
             alignment: .topLeading
         )
+        .onAppear(perform: clearStalePreferredProfileID)
+        .onChange(of: controller.profiles.map(\.id)) { _, _ in
+            clearStalePreferredProfileID()
+        }
     }
 
     private var header: some View {
@@ -104,12 +125,24 @@ struct MenuBarRootView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         } else {
             ForEach(controller.profiles) { snapshot in
-                Button {
-                    openManagerWindow(snapshot.id)
-                } label: {
-                    MenuBarProfileCard(snapshot: snapshot, referenceDate: currentTime.now)
-                }
-                .buttonStyle(.plain)
+                MenuBarProfileCard(
+                    snapshot: snapshot,
+                    referenceDate: currentTime.now,
+                    isPinned: snapshot.id == storedPinnedProfileID,
+                    openManagerWindow: {
+                        openManagerWindow(snapshot.id)
+                    },
+                    copyProfileLabel: {
+                        copyProfileLabel(snapshot.label)
+                    },
+                    openEmailLink: {
+                        openEmailLink(for: snapshot.profile)
+                    },
+                    canOpenEmailLink: snapshot.profile.resolvedEmailLinkURL != nil,
+                    pinProfile: {
+                        setPinnedProfile(snapshot.id)
+                    }
+                )
             }
         }
     }
@@ -129,7 +162,7 @@ struct MenuBarRootView: View {
                 helpText: "Open manager window",
                 tone: .secondary,
                 action: {
-                    openManagerWindow(controller.selectedProfileID)
+                    openManagerWindow(preferredManagerProfileID)
                 }
             )
 
@@ -163,6 +196,53 @@ struct MenuBarRootView: View {
         }
     }
 
+    private var storedPinnedProfileID: UUID? {
+        MenuBarProfilePreference.normalizedProfileID(from: preferredProfileIDStorage)
+    }
+
+    private var currentPinnedProfileID: UUID? {
+        guard let storedPinnedProfileID else {
+            return nil
+        }
+
+        return controller.profiles.first(where: { $0.id == storedPinnedProfileID })?.id
+    }
+
+    private var preferredManagerProfileID: UUID? {
+        currentPinnedProfileID ?? controller.selectedProfileID ?? controller.profiles.first?.id
+    }
+
+    private func setPinnedProfile(_ profileID: UUID) {
+        preferredProfileIDStorage = MenuBarProfilePreference.storedValue(for: profileID)
+    }
+
+    private func copyProfileLabel(_ label: String) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(label, forType: .string)
+    }
+
+    private func openEmailLink(for profile: PlusProfile) {
+        guard let url = profile.resolvedEmailLinkURL else {
+            return
+        }
+
+        NSWorkspace.shared.open(url)
+    }
+
+    private func clearStalePreferredProfileID() {
+        let trimmed = preferredProfileIDStorage.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false else {
+            return
+        }
+
+        guard let storedPinnedProfileID,
+              controller.profiles.contains(where: { $0.id == storedPinnedProfileID }) else {
+            preferredProfileIDStorage = ""
+            return
+        }
+    }
+
     private func quitApp() {
         NSApplication.shared.terminate(nil)
     }
@@ -170,10 +250,14 @@ struct MenuBarRootView: View {
 
 struct MenuBarStatusLabel: View {
     let controller: PlusProfileController
+    @AppStorage(MenuBarProfilePreference.preferredProfileIDKey) private var preferredProfileIDStorage = ""
     let currentTime: AppMinuteClock
 
     var body: some View {
-        let labelText = controller.statusBarText(referenceDate: currentTime.now)
+        let labelText = controller.statusBarText(
+            preferredProfileID: MenuBarProfilePreference.normalizedProfileID(from: preferredProfileIDStorage),
+            referenceDate: currentTime.now
+        )
         let labelColor = statusLabelColor
 
         HStack(spacing: 5) {
@@ -208,29 +292,63 @@ struct MenuBarStatusLabel: View {
 private struct MenuBarProfileCard: View {
     let snapshot: PlusProfileSnapshot
     let referenceDate: Date
+    let isPinned: Bool
+    let openManagerWindow: () -> Void
+    let copyProfileLabel: () -> Void
+    let openEmailLink: () -> Void
+    let canOpenEmailLink: Bool
+    let pinProfile: () -> Void
 
     var body: some View {
         CodexCard(tier: snapshot.state == .needsLogin ? .strong : .regular, accent: accentColor) {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .top, spacing: 12) {
                     VStack(alignment: .leading, spacing: 5) {
-                        Text(snapshot.label)
-                            .font(.codexBodyStrong)
-                            .foregroundStyle(CodexTheme.primaryText)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
+                        HStack(alignment: .center, spacing: 8) {
+                            Button(action: openManagerWindow) {
+                                Text(snapshot.label)
+                                    .font(.codexBodyStrong)
+                                    .foregroundStyle(CodexTheme.primaryText)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+
+                            HStack(spacing: 6) {
+                                MenuBarInlineActionButton(
+                                    symbolName: "doc.on.doc",
+                                    helpText: "Copy profile label",
+                                    action: copyProfileLabel
+                                )
+
+                                MenuBarInlineActionButton(
+                                    symbolName: "arrow.up.forward.square",
+                                    helpText: canOpenEmailLink
+                                        ? "Open email link"
+                                        : "Add an email link in the manager to open it here",
+                                    isDisabled: canOpenEmailLink == false,
+                                    action: openEmailLink
+                                )
+                            }
+                        }
 
                         if let note = snapshot.note {
-                            Text(note)
-                                .font(.codexCaption)
-                                .foregroundStyle(CodexTheme.supportText)
-                                .lineLimit(1)
+                            Button(action: openManagerWindow) {
+                                Text(note)
+                                    .font(.codexCaption)
+                                    .foregroundStyle(CodexTheme.supportText)
+                                    .lineLimit(1)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
-                    Spacer(minLength: 0)
-
-                    VStack(alignment: .trailing, spacing: 6) {
+                    VStack(alignment: .trailing, spacing: 8) {
                         CodexStatusBadge(
                             title: snapshot.state.title,
                             tone: snapshot.state.tone
@@ -241,39 +359,31 @@ private struct MenuBarProfileCard: View {
                                 .controlSize(.small)
                                 .tint(CodexTheme.accentOrange)
                         }
+
+                        MenuBarPinnedProfileButton(
+                            isPinned: isPinned,
+                            action: pinProfile
+                        )
                     }
                 }
 
-                if let usage = snapshot.usage {
-                    HStack(spacing: 8) {
-                        ProfileMetricPill(
-                            title: "5H",
-                            value: snapshot.fiveHourText,
-                            tone: snapshot.state.tone
-                        )
-
-                        ProfileMetricPill(
-                            title: "7D",
-                            value: snapshot.sevenDayText,
-                            tone: .neutral
-                        )
-                    }
-
-                    Text(resetSummary(for: usage))
-                        .font(.codexCaption)
-                        .foregroundStyle(CodexTheme.mutedText)
-                        .fixedSize(horizontal: false, vertical: true)
-                } else {
-                    Text(snapshot.statusMessage ?? emptyMessage)
-                        .font(.codexSmall)
-                        .foregroundStyle(snapshot.state.tone.foregroundColor)
-                        .fixedSize(horizontal: false, vertical: true)
+                Button(action: openManagerWindow) {
+                    detailContent
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(RoundedRectangle(cornerRadius: CodexTheme.sectionCornerRadius, style: .continuous))
+        .contextMenu {
+            Button(isPinned ? "Current" : "Show on top") {
+                pinProfile()
+            }
+            .disabled(isPinned)
+        }
     }
 
     private var accentColor: Color? {
@@ -303,6 +413,37 @@ private struct MenuBarProfileCard: View {
         }
     }
 
+    @ViewBuilder
+    private var detailContent: some View {
+        if let usage = snapshot.usage {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 8) {
+                    ProfileMetricPill(
+                        title: "5H",
+                        value: snapshot.fiveHourText,
+                        tone: snapshot.state.tone
+                    )
+
+                    ProfileMetricPill(
+                        title: "7D",
+                        value: snapshot.sevenDayText,
+                        tone: .neutral
+                    )
+                }
+
+                Text(resetSummary(for: usage))
+                    .font(.codexCaption)
+                    .foregroundStyle(CodexTheme.mutedText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        } else {
+            Text(snapshot.statusMessage ?? emptyMessage)
+                .font(.codexSmall)
+                .foregroundStyle(snapshot.state.tone.foregroundColor)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
     private func resetSummary(for usage: PlusProfileUsage) -> String {
         var parts = ["5H resets in \(usage.primaryWindow.resetDescription(referenceDate: referenceDate))"]
 
@@ -311,6 +452,89 @@ private struct MenuBarProfileCard: View {
         }
 
         return parts.joined(separator: " · ")
+    }
+}
+
+private struct MenuBarInlineActionButton: View {
+    let symbolName: String
+    let helpText: String
+    let isDisabled: Bool
+    let action: () -> Void
+
+    init(
+        symbolName: String,
+        helpText: String,
+        isDisabled: Bool = false,
+        action: @escaping () -> Void
+    ) {
+        self.symbolName = symbolName
+        self.helpText = helpText
+        self.isDisabled = isDisabled
+        self.action = action
+    }
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: symbolName)
+                .font(.system(size: 11, weight: .semibold))
+                .frame(width: 28, height: 28)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(isDisabled ? CodexTheme.quietText : CodexTheme.primaryText)
+        .background(
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(CodexTheme.surfaceFill(for: .subtle))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .stroke(CodexTheme.surfaceBorder(for: .subtle), lineWidth: 1)
+                )
+        )
+        .opacity(isDisabled ? 0.52 : 1)
+        .accessibilityLabel(helpText)
+        .help(helpText)
+        .disabled(isDisabled)
+    }
+}
+
+private struct MenuBarPinnedProfileButton: View {
+    let isPinned: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(isPinned ? "Current" : "Show on top") {
+            action()
+        }
+        .buttonStyle(.plain)
+        .font(.codexMicro)
+        .foregroundStyle(foregroundColor)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(
+            Capsule(style: .continuous)
+                .fill(backgroundColor)
+                .overlay(
+                    Capsule(style: .continuous)
+                        .stroke(borderColor, lineWidth: 1)
+                )
+        )
+        .help(
+            isPinned
+                ? "This profile already drives the top menu bar summary."
+                : "Show this profile in the top menu bar summary."
+        )
+        .disabled(isPinned)
+    }
+
+    private var foregroundColor: Color {
+        isPinned ? CodexTheme.primaryText : CodexTheme.accentOrange
+    }
+
+    private var backgroundColor: Color {
+        isPinned ? CodexTheme.surfaceFill(for: .subtle) : CodexTheme.accentOrange.opacity(0.10)
+    }
+
+    private var borderColor: Color {
+        isPinned ? CodexTheme.surfaceBorder(for: .subtle) : CodexTheme.accentOrange.opacity(0.24)
     }
 }
 

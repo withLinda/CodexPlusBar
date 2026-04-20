@@ -11,6 +11,7 @@ enum PlusProfileStoredState: String, Codable, Equatable, Sendable {
 struct PlusProfile: Identifiable, Codable, Equatable, Sendable {
     let id: UUID
     var label: String
+    var emailLink: String?
     var detectedNote: String?
     let webDataStoreID: UUID
     var sortOrder: Int
@@ -21,6 +22,57 @@ struct PlusProfile: Identifiable, Codable, Equatable, Sendable {
     var displayLabel: String {
         let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? "Untitled profile" : trimmed
+    }
+
+    var normalizedEmailLink: String? {
+        Self.normalizedEmailLink(emailLink)
+    }
+
+    var resolvedEmailLinkURL: URL? {
+        Self.resolvedEmailLinkURL(from: emailLink)
+    }
+
+    static func normalizedEmailLink(_ rawValue: String?) -> String? {
+        guard let rawValue else {
+            return nil
+        }
+
+        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    static func resolvedEmailLinkURL(from rawValue: String?) -> URL? {
+        guard let normalized = normalizedEmailLink(rawValue) else {
+            return nil
+        }
+
+        if let directURL = validatedEmailLinkURL(from: normalized) {
+            return directURL
+        }
+
+        guard normalized.contains("://") == false else {
+            return nil
+        }
+
+        return validatedEmailLinkURL(from: "https://\(normalized)")
+    }
+
+    private static func validatedEmailLinkURL(from candidate: String) -> URL? {
+        guard let components = URLComponents(string: candidate),
+              let scheme = components.scheme?.trimmingCharacters(in: .whitespacesAndNewlines),
+              scheme.isEmpty == false else {
+            return nil
+        }
+
+        let normalizedScheme = scheme.lowercased()
+        if normalizedScheme == "http" || normalizedScheme == "https" {
+            guard let host = components.host?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  host.isEmpty == false else {
+                return nil
+            }
+        }
+
+        return components.url
     }
 }
 

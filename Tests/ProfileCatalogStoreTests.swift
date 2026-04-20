@@ -13,6 +13,7 @@ struct ProfileCatalogStoreTests {
         let second = sampleProfile(
             label: "beta@example.com",
             sortOrder: 1,
+            emailLink: "https://mail.google.com",
             detectedNote: "Plus · acct_b",
             lastKnownState: .needsLogin
         )
@@ -24,7 +25,37 @@ struct ProfileCatalogStoreTests {
         #expect(loaded.map(\.id) == [first.id, second.id])
         #expect(loaded.map(\.webDataStoreID) == [first.webDataStoreID, second.webDataStoreID])
         #expect(loaded.map(\.label) == ["alpha@example.com", "beta@example.com"])
+        #expect(loaded.map(\.emailLink) == [nil, "https://mail.google.com"])
         #expect(loaded.map(\.lastKnownState) == [.active, .needsLogin])
+    }
+
+    @Test
+    func loadProfilesDecodesOlderJSONWithoutEmailLink() throws {
+        let tempDirectory = makeTemporaryDirectory()
+        let fileURL = tempDirectory.appendingPathComponent("profiles.json", isDirectory: false)
+        let store = ProfileCatalogStore(fileURL: fileURL)
+        let legacyJSON = """
+        [
+          {
+            "id" : "4D3DD8D1-7408-4B71-A72D-4ED8CB2616EB",
+            "label" : "legacy@example.com",
+            "detectedNote" : null,
+            "webDataStoreID" : "CC19D410-7A2C-4D41-967A-97FCA178D0F2",
+            "sortOrder" : 0,
+            "createdAt" : 777600000,
+            "lastRefreshAt" : null,
+            "lastKnownState" : "unknown"
+          }
+        ]
+        """
+
+        try legacyJSON.data(using: .utf8)?.write(to: fileURL, options: .atomic)
+
+        let loaded = try store.loadProfiles()
+
+        #expect(loaded.count == 1)
+        #expect(loaded.first?.label == "legacy@example.com")
+        #expect(loaded.first?.emailLink == nil)
     }
 
     @Test
@@ -76,6 +107,7 @@ struct ProfileCatalogStoreTests {
 private func sampleProfile(
     label: String,
     sortOrder: Int,
+    emailLink: String? = nil,
     detectedNote: String? = nil,
     lastKnownState: PlusProfileStoredState = .unknown
 ) -> PlusProfile {
@@ -84,6 +116,7 @@ private func sampleProfile(
     return PlusProfile(
         id: UUID(),
         label: label,
+        emailLink: emailLink,
         detectedNote: detectedNote,
         webDataStoreID: UUID(),
         sortOrder: sortOrder,

@@ -4,8 +4,19 @@ struct ProfileManagerWindowView: View {
     @Bindable var controller: PlusProfileController
     let currentTime: AppMinuteClock
     @Environment(\.displayScale) private var displayScale
+    @State private var isSessionExpanded = false
     @State private var windowChromeMetrics = WindowChromeMetrics()
     @State private var webViewReloadToken = UUID()
+
+    init(
+        controller: PlusProfileController,
+        currentTime: AppMinuteClock,
+        initialSessionExpanded: Bool = false
+    ) {
+        self.controller = controller
+        self.currentTime = currentTime
+        _isSessionExpanded = State(initialValue: initialSessionExpanded)
+    }
 
     var body: some View {
         let seamOverlap = 1 / max(displayScale, 1)
@@ -198,31 +209,20 @@ struct ProfileManagerWindowView: View {
         CodexCard(tier: .strong, accent: detailAccent(for: snapshot)) {
             VStack(alignment: .leading, spacing: 16) {
                 HStack(alignment: .top, spacing: 16) {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Profile label")
-                            .font(.codexCaption)
-                            .foregroundStyle(CodexTheme.supportText)
+                    VStack(alignment: .leading, spacing: 12) {
+                        profileField(
+                            title: "Profile label",
+                            placeholder: "Email or label",
+                            text: labelBinding(for: snapshot.id)
+                        )
 
-                        TextField("Email or label", text: labelBinding(for: snapshot.id))
-                            .textFieldStyle(.plain)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 10)
-                            .background(
-                                RoundedRectangle(
-                                    cornerRadius: CodexTheme.fieldCornerRadius,
-                                    style: .continuous
-                                )
-                                .fill(CodexTheme.surfaceFill(for: .nested))
-                                .overlay {
-                                    RoundedRectangle(
-                                        cornerRadius: CodexTheme.fieldCornerRadius,
-                                        style: .continuous
-                                    )
-                                    .stroke(CodexTheme.surfaceBorder(for: .nested), lineWidth: 1)
-                                }
-                            )
-                            .foregroundStyle(CodexTheme.primaryText)
+                        profileField(
+                            title: "Email link",
+                            placeholder: "https://mail.google.com",
+                            text: emailLinkBinding(for: snapshot.id)
+                        )
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
                     Spacer(minLength: 0)
 
@@ -252,6 +252,38 @@ struct ProfileManagerWindowView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func profileField(
+        title: String,
+        placeholder: String,
+        text: Binding<String>
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title)
+                .font(.codexCaption)
+                .foregroundStyle(CodexTheme.supportText)
+
+            TextField(placeholder, text: text)
+                .textFieldStyle(.plain)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(
+                    RoundedRectangle(
+                        cornerRadius: CodexTheme.fieldCornerRadius,
+                        style: .continuous
+                    )
+                    .fill(CodexTheme.surfaceFill(for: .nested))
+                    .overlay {
+                        RoundedRectangle(
+                            cornerRadius: CodexTheme.fieldCornerRadius,
+                            style: .continuous
+                        )
+                        .stroke(CodexTheme.surfaceBorder(for: .nested), lineWidth: 1)
+                    }
+                )
+                .foregroundStyle(CodexTheme.primaryText)
         }
     }
 
@@ -349,27 +381,43 @@ struct ProfileManagerWindowView: View {
     private func webViewPanel(for snapshot: PlusProfileSnapshot) -> some View {
         if let dataStore = controller.dataStore(for: snapshot.id) {
             CodexCard(tier: .strong) {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Sign in / repair session")
-                        .font(.codexBodyStrong)
-                        .foregroundStyle(CodexTheme.primaryText)
+                VStack(alignment: .leading, spacing: isSessionExpanded ? 12 : 0) {
+                    HStack(spacing: 12) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Sign in / repair session")
+                                .font(.codexBodyStrong)
+                                .foregroundStyle(CodexTheme.primaryText)
 
-                    Text("This web view is bound to only this profile’s cookie store.")
-                        .font(.codexSmall)
-                        .foregroundStyle(CodexTheme.mutedText)
+                            Text(sessionSummaryText(for: snapshot))
+                                .font(.codexSmall)
+                                .foregroundStyle(CodexTheme.mutedText)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
 
-                    CodexCard(tier: .subtle, padding: 8, shadow: false) {
-                        ProfileSignInWebView(dataStore: dataStore)
-                            .id("\(snapshot.id.uuidString)-\(webViewReloadToken.uuidString)")
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .clipShape(
-                                RoundedRectangle(
-                                    cornerRadius: CodexTheme.fieldCornerRadius - 1,
-                                    style: .continuous
-                                )
-                            )
+                        Spacer(minLength: 0)
+
+                        Button(isSessionExpanded ? "Hide session" : "Show session") {
+                            withAnimation(.easeInOut(duration: 0.18)) {
+                                isSessionExpanded.toggle()
+                            }
+                        }
+                        .buttonStyle(CodexSecondaryButtonStyle())
                     }
-                    .frame(minHeight: 360, idealHeight: 420, maxHeight: 520)
+
+                    if isSessionExpanded {
+                        CodexCard(tier: .subtle, padding: 8, shadow: false) {
+                            ProfileSignInWebView(dataStore: dataStore)
+                                .id("\(snapshot.id.uuidString)-\(webViewReloadToken.uuidString)")
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .clipShape(
+                                    RoundedRectangle(
+                                        cornerRadius: CodexTheme.fieldCornerRadius - 1,
+                                        style: .continuous
+                                    )
+                                )
+                        }
+                        .frame(minHeight: 360, idealHeight: 420, maxHeight: 520)
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -419,6 +467,29 @@ struct ProfileManagerWindowView: View {
         return snapshot.state == .ready ? nil : snapshot.state.tone.foregroundColor
     }
 
+    private func sessionSummaryText(for snapshot: PlusProfileSnapshot) -> String {
+        switch snapshot.state {
+        case .idle:
+            return isSessionExpanded
+                ? "Sign in with this profile in its own cookie store."
+                : "Hidden until you need to sign in."
+        case .loading:
+            return isSessionExpanded
+                ? "This profile is refreshing while the session view stays open."
+                : "Hidden while this profile refreshes."
+        case .ready:
+            return isSessionExpanded
+                ? "This profile session view is open."
+                : "Hidden until you need to repair this session."
+        case .needsLogin:
+            return isSessionExpanded
+                ? "Sign in again to repair this profile."
+                : "Open the session view to sign in again."
+        case .failed:
+            return snapshot.statusMessage ?? "Open the session view to inspect this profile."
+        }
+    }
+
     private func labelBinding(for profileID: UUID) -> Binding<String> {
         Binding(
             get: {
@@ -426,6 +497,17 @@ struct ProfileManagerWindowView: View {
             },
             set: { newValue in
                 controller.updateLabel(for: profileID, label: newValue)
+            }
+        )
+    }
+
+    private func emailLinkBinding(for profileID: UUID) -> Binding<String> {
+        Binding(
+            get: {
+                controller.profiles.first(where: { $0.id == profileID })?.profile.emailLink ?? ""
+            },
+            set: { newValue in
+                controller.updateEmailLink(for: profileID, link: newValue)
             }
         )
     }

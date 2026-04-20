@@ -165,6 +165,7 @@ private func sampleProfile(label: String, sortOrder: Int) -> PlusProfile {
     PlusProfile(
         id: UUID(),
         label: label,
+        emailLink: nil,
         detectedNote: nil,
         webDataStoreID: UUID(),
         sortOrder: sortOrder,
