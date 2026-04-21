@@ -6,7 +6,7 @@ import WebKit
 @MainActor
 struct PlusProfileDataServiceTests {
     @Test
-    func refreshProfileFetchesSessionThenUsageAndBuildsDetectedNote() async throws {
+    func refreshProfileFetchesSessionThenUsageAndExpiryAndBuildsDetectedNote() async throws {
         let profile = sampleProfile(label: "alpha@example.com", sortOrder: 0)
         let transport = MockHTTPTransport { request in
             switch request.url?.path {
@@ -95,6 +95,34 @@ struct PlusProfileDataServiceTests {
                         headerFields: [:]
                     )!
                 )
+            case "/backend-api/accounts/check/v4-2023-04-27":
+                return HTTPResponseData(
+                    data: Data(
+                        """
+                        {
+                          "accounts": {
+                            "acct_alpha_123456": {
+                              "account": {
+                                "id": "acct_alpha_123456",
+                                "name": "Alpha",
+                                "plan_type": "chatgpt_plus"
+                              },
+                              "entitlement": {
+                                "expires_at": "2026-05-18T10:00:00Z",
+                                "has_active_subscription": true
+                              }
+                            }
+                          }
+                        }
+                        """.utf8
+                    ),
+                    response: HTTPURLResponse(
+                        url: try #require(request.url),
+                        statusCode: 200,
+                        httpVersion: nil,
+                        headerFields: [:]
+                    )!
+                )
             default:
                 throw ChatGPTAPIError.invalidResponse
             }
@@ -115,7 +143,16 @@ struct PlusProfileDataServiceTests {
         #expect(result.usage.primaryWindow.remainingPercent == 64)
         #expect(result.usage.secondaryWindow?.remainingPercent == 82)
         #expect(result.detectedNote == "Chatgpt Plus · 123456")
-        #expect(transport.requestPaths == ["/api/auth/session", "/codex/settings/usage", "/backend-api/wham/usage"])
+        #expect(result.expiryRefresh == .value(isoDate("2026-05-18T10:00:00Z")))
+        #expect(
+            transport.requestPaths
+                == [
+                    "/api/auth/session",
+                    "/codex/settings/usage",
+                    "/backend-api/wham/usage",
+                    "/backend-api/accounts/check/v4-2023-04-27",
+                ]
+        )
     }
 }
 
@@ -173,4 +210,10 @@ private func sampleProfile(label: String, sortOrder: Int) -> PlusProfile {
         lastRefreshAt: nil,
         lastKnownState: .unknown
     )
+}
+
+private func isoDate(_ value: String) -> Date {
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withInternetDateTime]
+    return formatter.date(from: value)!
 }

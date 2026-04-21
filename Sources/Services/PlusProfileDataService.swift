@@ -42,6 +42,10 @@ final class PlusProfileDataService: PlusProfileDataServing {
             from: response.data,
             workspaceID: context.accountID
         )
+        let expiryRefresh = await Self.fetchExpiryRefresh(
+            accountID: snapshot.accountID,
+            transport: runtime.transport
+        )
 
         return PlusProfileRefreshResult(
             usage: PlusProfileUsage(
@@ -54,7 +58,8 @@ final class PlusProfileDataService: PlusProfileDataServing {
             detectedNote: Self.makeDetectedNote(
                 planType: snapshot.planType,
                 accountID: snapshot.accountID
-            )
+            ),
+            expiryRefresh: expiryRefresh
         )
     }
 
@@ -95,5 +100,18 @@ final class PlusProfileDataService: PlusProfileDataServing {
         }
 
         return "\(trimmedPlan) · \(shortAccountID)"
+    }
+
+    private static func fetchExpiryRefresh(
+        accountID: String,
+        transport: HTTPTransport
+    ) async -> ProfileExpiryRefresh {
+        do {
+            let catalog = try await AccountCatalogService(transport: transport).fetchCatalog()
+            let expiresAt = catalog.first(where: { $0.accountID == accountID })?.expiresAt
+            return .value(expiresAt)
+        } catch {
+            return .unchanged
+        }
     }
 }

@@ -15,6 +15,7 @@ struct ProfileCatalogStoreTests {
             sortOrder: 1,
             emailLink: "https://mail.google.com",
             detectedNote: "Plus · acct_b",
+            expiresAt: Date(timeIntervalSince1970: 1_779_097_600),
             lastKnownState: .needsLogin
         )
 
@@ -26,6 +27,7 @@ struct ProfileCatalogStoreTests {
         #expect(loaded.map(\.webDataStoreID) == [first.webDataStoreID, second.webDataStoreID])
         #expect(loaded.map(\.label) == ["alpha@example.com", "beta@example.com"])
         #expect(loaded.map(\.emailLink) == [nil, "https://mail.google.com"])
+        #expect(loaded.map(\.expiresAt) == [nil, Date(timeIntervalSince1970: 1_779_097_600)])
         #expect(loaded.map(\.lastKnownState) == [.active, .needsLogin])
     }
 
@@ -109,6 +111,7 @@ private func sampleProfile(
     sortOrder: Int,
     emailLink: String? = nil,
     detectedNote: String? = nil,
+    expiresAt: Date? = nil,
     lastKnownState: PlusProfileStoredState = .unknown
 ) -> PlusProfile {
     let createdAt = Date(timeIntervalSince1970: 1_776_000_000 + TimeInterval(sortOrder))
@@ -118,6 +121,7 @@ private func sampleProfile(
         label: label,
         emailLink: emailLink,
         detectedNote: detectedNote,
+        expiresAt: expiresAt,
         webDataStoreID: UUID(),
         sortOrder: sortOrder,
         createdAt: createdAt,

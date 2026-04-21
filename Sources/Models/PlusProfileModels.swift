@@ -13,11 +13,36 @@ struct PlusProfile: Identifiable, Codable, Equatable, Sendable {
     var label: String
     var emailLink: String?
     var detectedNote: String?
+    var expiresAt: Date?
     let webDataStoreID: UUID
     var sortOrder: Int
     let createdAt: Date
     var lastRefreshAt: Date?
     var lastKnownState: PlusProfileStoredState
+
+    init(
+        id: UUID,
+        label: String,
+        emailLink: String?,
+        detectedNote: String?,
+        expiresAt: Date? = nil,
+        webDataStoreID: UUID,
+        sortOrder: Int,
+        createdAt: Date,
+        lastRefreshAt: Date?,
+        lastKnownState: PlusProfileStoredState
+    ) {
+        self.id = id
+        self.label = label
+        self.emailLink = emailLink
+        self.detectedNote = detectedNote
+        self.expiresAt = expiresAt
+        self.webDataStoreID = webDataStoreID
+        self.sortOrder = sortOrder
+        self.createdAt = createdAt
+        self.lastRefreshAt = lastRefreshAt
+        self.lastKnownState = lastKnownState
+    }
 
     var displayLabel: String {
         let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -231,6 +256,22 @@ struct ProfileUsageSummary: Equatable, Sendable {
 struct PlusProfileRefreshResult: Equatable, Sendable {
     let usage: PlusProfileUsage
     let detectedNote: String?
+    let expiryRefresh: ProfileExpiryRefresh
+
+    init(
+        usage: PlusProfileUsage,
+        detectedNote: String?,
+        expiryRefresh: ProfileExpiryRefresh = .unchanged
+    ) {
+        self.usage = usage
+        self.detectedNote = detectedNote
+        self.expiryRefresh = expiryRefresh
+    }
+}
+
+enum ProfileExpiryRefresh: Equatable, Sendable {
+    case unchanged
+    case value(Date?)
 }
 
 struct PlusProfileSnapshot: Identifiable, Equatable, Sendable {
@@ -250,6 +291,10 @@ struct PlusProfileSnapshot: Identifiable, Equatable, Sendable {
 
     var note: String? {
         profile.detectedNote
+    }
+
+    var expiresAt: Date? {
+        profile.expiresAt
     }
 
     var lastRefreshAt: Date? {

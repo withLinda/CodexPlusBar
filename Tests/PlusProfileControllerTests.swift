@@ -21,7 +21,8 @@ struct PlusProfileControllerTests {
                 first.id: .success(
                     PlusProfileRefreshResult(
                         usage: firstUsage,
-                        detectedNote: "Chatgpt Plus · alpha"
+                        detectedNote: "Chatgpt Plus · alpha",
+                        expiryRefresh: .value(Date(timeIntervalSince1970: 1_779_097_600))
                     )
                 ),
                 second.id: .failure(.unauthorized),
@@ -40,6 +41,7 @@ struct PlusProfileControllerTests {
         #expect(rows[0].state == .ready)
         #expect(rows[0].usage?.primaryWindow.remainingPercent == 78)
         #expect(rows[0].profile.detectedNote == "Chatgpt Plus · alpha")
+        #expect(rows[0].profile.expiresAt == Date(timeIntervalSince1970: 1_779_097_600))
         #expect(rows[1].state == .needsLogin)
         #expect(rows[1].usage == nil)
 
@@ -85,7 +87,8 @@ struct PlusProfileControllerTests {
                 profile.id: .success(
                     PlusProfileRefreshResult(
                         usage: makeUsage(accountID: "acct_alpha", primaryUsedPercent: 25, secondaryUsedPercent: 40),
-                        detectedNote: "Chatgpt Plus · alpha"
+                        detectedNote: "Chatgpt Plus · alpha",
+                        expiryRefresh: .value(Date(timeIntervalSince1970: 1_779_097_600))
                     )
                 ),
             ]
@@ -316,7 +319,8 @@ private final class ConcurrencyRecordingProfileDataService: PlusProfileDataServi
                 primaryUsedPercent: 20 + profile.sortOrder,
                 secondaryUsedPercent: 30 + profile.sortOrder
             ),
-            detectedNote: "Chatgpt Plus · \(profile.sortOrder)"
+            detectedNote: "Chatgpt Plus · \(profile.sortOrder)",
+            expiryRefresh: .value(Date(timeIntervalSince1970: 1_779_097_600 + TimeInterval(profile.sortOrder)))
         )
     }
 

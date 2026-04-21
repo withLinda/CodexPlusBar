@@ -4,12 +4,13 @@ import Testing
 
 struct ProfileSummaryRowTests {
     @Test
-    func readyPresentationUsesUsageSummaryAndMutedSupportLine() throws {
+    func readyMenuBarPresentationUsesExpiryLineInsteadOfDetectedNote() throws {
         let referenceDate = Date(timeIntervalSince1970: 1_776_000_000)
         let snapshot = sampleSnapshot(
             state: .ready,
             usage: sampleUsage(referenceDate: referenceDate, sevenDayRemainingPercent: 62),
             note: "Plus · Alpha",
+            expiresAt: referenceDate.addingTimeInterval(TimeInterval((17 * 24 + 5) * 3_600)),
             statusMessage: nil,
             isRefreshing: false,
             emailLink: "https://mail.google.com"
@@ -24,7 +25,8 @@ struct ProfileSummaryRowTests {
         let usageSummary = try #require(presentation.usageSummary)
         #expect(usageSummary.primary.valueText == "78%")
         #expect(usageSummary.secondary.valueText == "62%")
-        #expect(presentation.supportText == "Plus · Alpha")
+        #expect(presentation.expiryValue == DisplayFormatter.LabeledValue(label: "Expires in", value: "17d 5h"))
+        #expect(presentation.expiryEmphasisToken?.hex == CodexTheme.Palette.accYellow.hex)
         #expect(presentation.supportStyle == .muted)
         #expect(presentation.showsStatusBadge == false)
         #expect(presentation.showsInlineSecondaryActions == true)
@@ -35,12 +37,13 @@ struct ProfileSummaryRowTests {
     }
 
     @Test
-    func readyPresentationKeepsUnavailableSevenDayWindow() throws {
+    func readySidebarPresentationAlsoUsesExpiryLine() throws {
         let referenceDate = Date(timeIntervalSince1970: 1_776_000_000)
         let snapshot = sampleSnapshot(
             state: .ready,
             usage: sampleUsage(referenceDate: referenceDate, sevenDayRemainingPercent: nil),
             note: "Plus · Beta",
+            expiresAt: referenceDate.addingTimeInterval(TimeInterval(5 * 24 * 3_600)),
             statusMessage: nil,
             isRefreshing: false,
             emailLink: nil
@@ -56,6 +59,8 @@ struct ProfileSummaryRowTests {
         #expect(usageSummary.secondary.valueText == "—")
         #expect(usageSummary.secondary.resetText == "Unavailable")
         #expect(presentation.supportText == "Plus · Beta")
+        #expect(presentation.expiryValue == DisplayFormatter.LabeledValue(label: "Expires in", value: "5d"))
+        #expect(presentation.expiryEmphasisToken?.hex == CodexTheme.Palette.accOrange.hex)
         #expect(presentation.supportStyle == .muted)
     }
 
@@ -65,6 +70,7 @@ struct ProfileSummaryRowTests {
             state: .needsLogin,
             usage: nil,
             note: "Plus · Gamma",
+            expiresAt: nil,
             statusMessage: "Sign in again to restore this account.",
             isRefreshing: false,
             emailLink: nil
@@ -87,6 +93,7 @@ struct ProfileSummaryRowTests {
             state: .failed,
             usage: nil,
             note: "Plus · Delta",
+            expiresAt: nil,
             statusMessage: "Refresh this profile in the manager window.",
             isRefreshing: false,
             emailLink: nil
@@ -110,6 +117,7 @@ struct ProfileSummaryRowTests {
             state: .ready,
             usage: sampleUsage(referenceDate: referenceDate, sevenDayRemainingPercent: 62),
             note: "Plus · Epsilon",
+            expiresAt: referenceDate.addingTimeInterval(TimeInterval(2 * 24 * 3_600)),
             statusMessage: nil,
             isRefreshing: false,
             emailLink: nil
@@ -121,11 +129,13 @@ struct ProfileSummaryRowTests {
             mode: .menuBar(isPinned: true)
         )
 
-        #expect(presentation.accessory == .pinned)
+        #expect(presentation.accessory == .none)
         #expect(presentation.showsInlineSecondaryActions == true)
         #expect(presentation.canOpenEmailLink == false)
         #expect(presentation.showsPinnedCapsule == true)
         #expect(presentation.pinnedCapsuleTitle == "On top")
+        #expect(presentation.expiryValue == DisplayFormatter.LabeledValue(label: "Expires in", value: "2d"))
+        #expect(presentation.expiryEmphasisToken?.hex == CodexTheme.Palette.accRed.hex)
     }
 }
 
@@ -133,6 +143,7 @@ private func sampleSnapshot(
     state: PlusProfileState,
     usage: PlusProfileUsage?,
     note: String?,
+    expiresAt: Date?,
     statusMessage: String?,
     isRefreshing: Bool,
     emailLink: String?
@@ -143,6 +154,7 @@ private func sampleSnapshot(
             label: "alpha@example.com",
             emailLink: emailLink,
             detectedNote: note,
+            expiresAt: expiresAt,
             webDataStoreID: UUID(),
             sortOrder: 0,
             createdAt: Date(timeIntervalSince1970: 1_776_000_000),

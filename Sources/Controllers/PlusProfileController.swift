@@ -303,6 +303,9 @@ final class PlusProfileController {
             let result = try await dataService.refreshProfile(snapshot.profile)
             var updatedProfile = snapshot.profile
             updatedProfile.detectedNote = result.detectedNote
+            if case let .value(expiresAt) = result.expiryRefresh {
+                updatedProfile.expiresAt = expiresAt
+            }
             updatedProfile.lastRefreshAt = result.usage.fetchedAt
             updatedProfile.lastKnownState = .active
 

@@ -2,6 +2,7 @@
 
 # Local Codex app state
 .codex/
+.superpowers/
 
 # Generated build output
 build/

@@ -31,6 +31,8 @@ struct ProfileSummaryRowPresentation: Equatable, Sendable {
     let usageSummary: ProfileUsageSummary?
     let supportText: String
     let supportStyle: ProfileSummaryRowSupportStyle
+    let expiryValue: DisplayFormatter.LabeledValue?
+    let expiryEmphasisToken: CodexColorToken?
     let accessory: ProfileSummaryRowAccessory
     let isPinned: Bool
     let showsStatusBadge: Bool
@@ -47,6 +49,21 @@ struct ProfileSummaryRowPresentation: Equatable, Sendable {
         title = snapshot.label
         let usageSummary = snapshot.usageSummary(referenceDate: referenceDate)
         self.usageSummary = usageSummary
+        let showsExpirySupportLine = usageSummary != nil
+
+        if showsExpirySupportLine {
+            expiryValue = DisplayFormatter.expiryValue(
+                snapshot.expiresAt,
+                referenceDate: referenceDate
+            )
+            expiryEmphasisToken = CodexTheme.expiryEmphasisToken(
+                for: snapshot.expiresAt,
+                referenceDate: referenceDate
+            )
+        } else {
+            expiryValue = nil
+            expiryEmphasisToken = nil
+        }
 
         if usageSummary != nil {
             supportText = snapshot.note ?? snapshot.state.title
@@ -80,14 +97,10 @@ struct ProfileSummaryRowPresentation: Equatable, Sendable {
             pinnedCapsuleTitle = ""
         case let .menuBar(isPinned):
             self.isPinned = isPinned
-            switch (isPinned, snapshot.isRefreshing) {
-            case (true, true):
-                accessory = .pinnedAndRefreshing
-            case (true, false):
-                accessory = .pinned
-            case (false, true):
+            switch snapshot.isRefreshing {
+            case true:
                 accessory = .refreshing
-            case (false, false):
+            case false:
                 accessory = .none
             }
 
@@ -149,74 +162,96 @@ struct ProfileSummaryRow: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if let primaryAction {
-                Button(action: primaryAction) {
-                    contentBody
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
+        Group {
+            if isMenuBarMode {
+                menuBarContent
             } else {
-                contentBody
-            }
-
-            if presentation.showsInlineSecondaryActions {
-                actionRail
+                sidebarContent
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        .padding(.horizontal, isMenuBarMode ? 10 : 12)
+        .padding(.vertical, isMenuBarMode ? 8 : 10)
         .background(backgroundShape)
     }
 
-    private var contentBody: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            HStack(alignment: .top, spacing: 10) {
-                Text(presentation.title)
-                    .font(ProfileManagerTypography.smallStrong)
-                    .foregroundStyle(CodexTheme.primaryText)
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+    private var isMenuBarMode: Bool {
+        if case .menuBar = mode {
+            return true
+        }
 
-                if presentation.accessory != .none {
-                    accessoryView
-                }
+        return false
+    }
+
+    private var sidebarContent: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            wrappedPrimaryAction {
+                sidebarContentBody
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var sidebarContentBody: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            titleRow
 
             if let usageSummary = presentation.usageSummary {
-                HStack(alignment: .top, spacing: 8) {
-                    ProfileUsageMetricBlock(
-                        summary: usageSummary.primary,
-                        density: .compact
-                    )
-
-                    ProfileUsageMetricBlock(
-                        summary: usageSummary.secondary,
-                        density: .compact
-                    )
-                }
-                .accessibilityElement(children: .contain)
-                .accessibilityLabel("Usage summary")
-                .accessibilityValue(usageSummary.accessibilityValue)
+                usageSummaryView(usageSummary, spacing: 8)
             }
 
-            Text(presentation.supportText)
-                .font(ProfileManagerTypography.caption)
-                .foregroundStyle(presentation.supportStyle.foregroundStyle)
-                .lineLimit(1)
+            supportLine
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private var actionRail: some View {
-        HStack(spacing: 8) {
-            HStack(spacing: 6) {
+    private var menuBarContent: some View {
+        HStack(alignment: .top, spacing: 8) {
+            wrappedPrimaryAction {
+                VStack(alignment: .leading, spacing: 8) {
+                    titleRow
+
+                    if let usageSummary = presentation.usageSummary {
+                        usageSummaryView(usageSummary, spacing: 6)
+                    }
+
+                    supportLine
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            if presentation.showsInlineSecondaryActions {
+                topActionRail
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var titleRow: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Text(presentation.title)
+                .font(ProfileManagerTypography.smallStrong)
+                .foregroundStyle(CodexTheme.primaryText)
+                .lineLimit(1)
+                .minimumScaleFactor(isMenuBarMode ? 0.88 : 1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            if presentation.accessory != .none {
+                accessoryView
+            }
+        }
+    }
+
+    private var topActionRail: some View {
+        HStack(spacing: 5) {
+            HStack(spacing: 5) {
                 ProfileSummaryInlineIconButton(
                     symbolName: "doc.on.doc",
                     label: "Copy profile label",
                     helpText: "Copy profile label",
                     isDisabled: copyAction == nil,
+                    size: 26,
                     action: copyAction ?? {}
                 )
 
@@ -227,11 +262,10 @@ struct ProfileSummaryRow: View {
                         ? "Open email link"
                         : "Add an email link in the manager to open it here",
                     isDisabled: presentation.canOpenEmailLink == false || emailAction == nil,
+                    size: 26,
                     action: emailAction ?? {}
                 )
             }
-
-            Spacer(minLength: 0)
 
             if presentation.showsPinnedCapsule {
                 ProfileSummaryPinnedCapsuleButton(
@@ -242,12 +276,60 @@ struct ProfileSummaryRow: View {
                 )
             }
         }
+        .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private func usageSummaryView(_ usageSummary: ProfileUsageSummary, spacing: CGFloat) -> some View {
+        HStack(alignment: .top, spacing: spacing) {
+            ProfileUsageMetricBlock(
+                summary: usageSummary.primary,
+                density: .compact
+            )
+
+            ProfileUsageMetricBlock(
+                summary: usageSummary.secondary,
+                density: .compact
+            )
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Usage summary")
+        .accessibilityValue(usageSummary.accessibilityValue)
+    }
+
+    @ViewBuilder
+    private var supportLine: some View {
+        if let expiryValue = presentation.expiryValue {
+            ProfileSummaryExpiryLine(
+                presentation: expiryValue,
+                emphasisToken: presentation.expiryEmphasisToken
+            )
+        } else {
+            Text(presentation.supportText)
+                .font(ProfileManagerTypography.caption)
+                .foregroundStyle(presentation.supportStyle.foregroundStyle)
+                .lineLimit(1)
+        }
+    }
+
+    @ViewBuilder
+    private func wrappedPrimaryAction<Content: View>(
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        if let primaryAction {
+            Button(action: primaryAction) {
+                content()
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        } else {
+            content()
+        }
     }
 
     @ViewBuilder
     private var accessoryView: some View {
         HStack(spacing: 6) {
-            if presentation.showsPinnedCapsule == false,
+            if isMenuBarMode == false,
                presentation.accessory == .pinned || presentation.accessory == .pinnedAndRefreshing {
                 ProfileSummaryPinnedAccessory()
             }
@@ -282,21 +364,38 @@ private struct ProfileSummaryInlineIconButton: View {
     let label: String
     let helpText: String
     let isDisabled: Bool
+    let size: CGFloat
     let action: () -> Void
+
+    init(
+        symbolName: String,
+        label: String,
+        helpText: String,
+        isDisabled: Bool,
+        size: CGFloat = 28,
+        action: @escaping () -> Void
+    ) {
+        self.symbolName = symbolName
+        self.label = label
+        self.helpText = helpText
+        self.isDisabled = isDisabled
+        self.size = size
+        self.action = action
+    }
 
     var body: some View {
         Button(action: action) {
             Image(systemName: symbolName)
-                .font(.system(size: 11, weight: .semibold))
-                .frame(width: 28, height: 28)
+                .font(.system(size: size == 26 ? 10.5 : 11, weight: .semibold))
+                .frame(width: size, height: size)
         }
         .buttonStyle(.plain)
         .foregroundStyle(isDisabled ? CodexTheme.quietText : CodexTheme.primaryText)
         .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
+            RoundedRectangle(cornerRadius: size == 26 ? 7 : 8, style: .continuous)
                 .fill(CodexTheme.surfaceFill(for: .subtle))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    RoundedRectangle(cornerRadius: size == 26 ? 7 : 8, style: .continuous)
                         .stroke(CodexTheme.surfaceBorder(for: .subtle), lineWidth: 1)
                 )
         )
@@ -338,7 +437,7 @@ private struct ProfileSummaryPinnedCapsuleButton: View {
             .font(.codexMicro)
             .foregroundStyle(isPinned ? CodexTheme.primaryText : CodexTheme.accentOrange)
             .padding(.horizontal, 8)
-            .padding(.vertical, 5)
+            .padding(.vertical, 4)
             .background(
                 Capsule(style: .continuous)
                     .fill(isPinned ? CodexTheme.surfaceFill(for: .subtle) : CodexTheme.accentOrange.opacity(0.10))
@@ -363,6 +462,31 @@ private struct ProfileSummaryPinnedCapsuleButton: View {
                     : "Pin this profile to the menu bar summary."
             )
             .disabled(isDisabled)
+    }
+}
+
+private struct ProfileSummaryExpiryLine: View {
+    let presentation: DisplayFormatter.LabeledValue
+    let emphasisToken: CodexColorToken?
+
+    var body: some View {
+        Group {
+            if let label = presentation.label {
+                (
+                    Text(label + " ")
+                        .foregroundStyle(CodexTheme.mutedText)
+                    + Text(presentation.value)
+                        .foregroundStyle(emphasisToken?.color ?? CodexTheme.mutedText)
+                        .monospacedDigit()
+                )
+                .font(ProfileManagerTypography.caption)
+            } else {
+                Text(presentation.value)
+                    .font(ProfileManagerTypography.caption)
+                    .foregroundStyle(emphasisToken?.color ?? CodexTheme.mutedText)
+            }
+        }
+        .lineLimit(1)
     }
 }
 
@@ -450,7 +574,7 @@ enum UsageMetricDensity {
     var padding: CGFloat {
         switch self {
         case .compact:
-            return 8
+            return 7
         case .expanded:
             return 12
         }
@@ -459,7 +583,7 @@ enum UsageMetricDensity {
     var contentSpacing: CGFloat {
         switch self {
         case .compact:
-            return 5
+            return 4
         case .expanded:
             return 8
         }
@@ -483,6 +607,6 @@ enum ProfileManagerTypography {
     static let small = Font.codexUtility(size: 13, weight: .regular, relativeTo: .subheadline)
     static let smallStrong = Font.codexUtility(size: 13, weight: .semibold, relativeTo: .subheadline)
     static let caption = Font.codexUtility(size: 12, weight: .medium, relativeTo: .caption)
-    static let metricCompact = Font.codexUtility(size: 17, weight: .semibold, relativeTo: .headline)
+    static let metricCompact = Font.codexUtility(size: 16, weight: .semibold, relativeTo: .headline)
     static let metricExpanded = Font.codexUtility(size: 30, weight: .semibold, relativeTo: .title2)
 }

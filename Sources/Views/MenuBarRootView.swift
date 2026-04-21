@@ -27,7 +27,7 @@ struct MenuBarRootView: View {
         let panelContentWidth = MenuBarPanelMetrics.contentWidth
 
         CodexShell(role: .panel, padding: MenuBarPanelMetrics.innerPadding) {
-            VStack(alignment: .leading, spacing: CodexTheme.sectionSpacing) {
+            VStack(alignment: .leading, spacing: MenuBarPanelMetrics.stackSpacing) {
                 header
 
                 if let bannerMessage = controller.statusMessage {
@@ -40,7 +40,7 @@ struct MenuBarRootView: View {
                 }
 
                 ScrollView(.vertical, showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: CodexTheme.sectionSpacing) {
+                    VStack(alignment: .leading, spacing: MenuBarPanelMetrics.rowSpacing) {
                         content
                     }
                     .frame(width: panelContentWidth, alignment: .leading)
@@ -66,26 +66,14 @@ struct MenuBarRootView: View {
     }
 
     private var header: some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("CodexPlusBar")
-                    .font(.codexMicro)
-                    .foregroundStyle(CodexTheme.supportText)
-                    .kerning(1.2)
-
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .center, spacing: 10) {
                 Text("Profiles")
                     .font(.codexTitle)
                     .foregroundStyle(CodexTheme.primaryText)
 
-                Text(headerMetaText)
-                    .font(.codexSmall)
-                    .foregroundStyle(CodexTheme.mutedText)
-                    .lineLimit(1)
-            }
+                Spacer(minLength: 0)
 
-            Spacer(minLength: 0)
-
-            VStack(alignment: .trailing, spacing: 10) {
                 CodexStatusBadge(
                     title: controller.dashboardStatus.title,
                     tone: controller.dashboardStatus.tone
@@ -93,10 +81,15 @@ struct MenuBarRootView: View {
 
                 if controller.isRefreshing {
                     ProgressView()
-                        .controlSize(.small)
+                        .controlSize(.mini)
                         .tint(CodexTheme.accentOrange)
                 }
             }
+
+            Text(headerMetaText)
+                .font(.codexSmall)
+                .foregroundStyle(CodexTheme.mutedText)
+                .lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -336,6 +329,8 @@ enum MenuBarPanelMetrics {
     static let width: CGFloat = 484
     static let height: CGFloat = 560
     static let chromeInset: CGFloat = 10
-    static let innerPadding: CGFloat = 20
+    static let innerPadding: CGFloat = 18
+    static let stackSpacing: CGFloat = 14
+    static let rowSpacing: CGFloat = 10
     static let contentWidth = width - (chromeInset * 2) - (innerPadding * 2)
 }

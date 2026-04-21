@@ -7,6 +7,8 @@ struct ProfileManagerWindowView: View {
     @State private var isSessionExpanded = false
     @State private var windowChromeMetrics = WindowChromeMetrics()
     @State private var webViewReloadToken = UUID()
+    @State private var labelDraft = ""
+    @State private var emailLinkDraft = ""
 
     init(
         controller: PlusProfileController,
@@ -57,8 +59,12 @@ struct ProfileManagerWindowView: View {
                 .allowsHitTesting(false)
         }
         .preferredColorScheme(.dark)
+        .onAppear {
+            syncDrafts(with: controller.selectedProfile)
+        }
         .onChange(of: controller.selectedProfileID) { _, _ in
             webViewReloadToken = UUID()
+            syncDrafts(with: controller.selectedProfile)
         }
     }
 
@@ -213,16 +219,24 @@ struct ProfileManagerWindowView: View {
             VStack(alignment: .leading, spacing: 16) {
                 HStack(alignment: .top, spacing: 16) {
                     VStack(alignment: .leading, spacing: 12) {
-                        profileField(
+                        ProfileManagerEditableField(
                             title: "Profile label",
                             placeholder: "Email or label",
-                            text: labelBinding(for: snapshot.id)
+                            text: $labelDraft,
+                            isSaveEnabled: isLabelSaveEnabled(for: snapshot),
+                            onSave: {
+                                saveLabelDraft(for: snapshot)
+                            }
                         )
 
-                        profileField(
+                        ProfileManagerEditableField(
                             title: "Email link",
                             placeholder: "https://mail.google.com",
-                            text: emailLinkBinding(for: snapshot.id)
+                            text: $emailLinkDraft,
+                            isSaveEnabled: isEmailLinkSaveEnabled(for: snapshot),
+                            onSave: {
+                                saveEmailLinkDraft(for: snapshot)
+                            }
                         )
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -249,45 +263,16 @@ struct ProfileManagerWindowView: View {
                         .foregroundStyle(CodexTheme.supportText)
                 }
 
+                if shouldShowExpiry(for: snapshot) {
+                    detailExpiryLine(for: snapshot)
+                }
+
                 Text(detailSummary(for: snapshot))
                     .font(ProfileManagerTypography.small)
                     .foregroundStyle(CodexTheme.mutedText)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-
-    private func profileField(
-        title: String,
-        placeholder: String,
-        text: Binding<String>
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(title)
-                .font(ProfileManagerTypography.caption)
-                .foregroundStyle(CodexTheme.supportText)
-
-            TextField(placeholder, text: text)
-                .font(ProfileManagerTypography.body)
-                .textFieldStyle(.plain)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
-                .background(
-                    RoundedRectangle(
-                        cornerRadius: CodexTheme.fieldCornerRadius,
-                        style: .continuous
-                    )
-                    .fill(CodexTheme.surfaceFill(for: .nested))
-                    .overlay {
-                        RoundedRectangle(
-                            cornerRadius: CodexTheme.fieldCornerRadius,
-                            style: .continuous
-                        )
-                        .stroke(CodexTheme.surfaceBorder(for: .nested), lineWidth: 1)
-                    }
-                )
-                .foregroundStyle(CodexTheme.primaryText)
         }
     }
 
@@ -332,44 +317,60 @@ struct ProfileManagerWindowView: View {
                     .foregroundStyle(CodexTheme.primaryText)
 
                 HStack(spacing: 10) {
-                    Button(action: {
+                    CodexIconButton(
+                        symbolName: "arrow.clockwise",
+                        helpText: "Refresh profile",
+                        tone: .primary,
+                        isDisabled: snapshot.isRefreshing
+                    ) {
                         refreshProfile(snapshot.id)
-                    }) {
-                        Label("Refresh profile", systemImage: "arrow.clockwise")
                     }
-                    .buttonStyle(ProfileManagerPrimaryButtonStyle())
-                    .disabled(snapshot.isRefreshing)
 
-                    Button(action: reloadSelectedWebView) {
-                        Label("Reload login view", systemImage: "safari")
+                    CodexIconButton(
+                        symbolName: "safari",
+                        helpText: "Reload login view",
+                        tone: .secondary
+                    ) {
+                        reloadSelectedWebView()
                     }
-                    .buttonStyle(ProfileManagerSecondaryButtonStyle())
 
-                    Button(action: {
+                    CodexIconButton(
+                        symbolName: "xmark.circle",
+                        helpText: "Clear session",
+                        tone: .danger
+                    ) {
                         clearSession(snapshot.id)
-                    }) {
-                        Label("Clear session", systemImage: "xmark.circle")
                     }
-                    .buttonStyle(ProfileManagerDangerButtonStyle())
                 }
 
                 HStack(spacing: 10) {
-                    Button("Move up") {
+                    CodexIconButton(
+                        symbolName: "arrow.up",
+                        helpText: "Move profile up",
+                        tone: .secondary,
+                        isDisabled: isMoveUpDisabled(for: snapshot)
+                    ) {
                         controller.selectProfile(id: snapshot.id)
                         controller.moveSelectedProfileUp()
                     }
-                    .buttonStyle(ProfileManagerSecondaryButtonStyle())
 
-                    Button("Move down") {
+                    CodexIconButton(
+                        symbolName: "arrow.down",
+                        helpText: "Move profile down",
+                        tone: .secondary,
+                        isDisabled: isMoveDownDisabled(for: snapshot)
+                    ) {
                         controller.selectProfile(id: snapshot.id)
                         controller.moveSelectedProfileDown()
                     }
-                    .buttonStyle(ProfileManagerSecondaryButtonStyle())
 
-                    Button("Remove profile") {
+                    CodexIconButton(
+                        symbolName: "trash",
+                        helpText: "Remove profile",
+                        tone: .danger
+                    ) {
                         removeProfile(snapshot.id)
                     }
-                    .buttonStyle(ProfileManagerDangerButtonStyle())
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -485,26 +486,69 @@ struct ProfileManagerWindowView: View {
         }
     }
 
-    private func labelBinding(for profileID: UUID) -> Binding<String> {
-        Binding(
-            get: {
-                controller.profiles.first(where: { $0.id == profileID })?.profile.label ?? ""
-            },
-            set: { newValue in
-                controller.updateLabel(for: profileID, label: newValue)
-            }
-        )
+    private func isLabelSaveEnabled(for snapshot: PlusProfileSnapshot) -> Bool {
+        labelDraft != snapshot.profile.label
     }
 
-    private func emailLinkBinding(for profileID: UUID) -> Binding<String> {
-        Binding(
-            get: {
-                controller.profiles.first(where: { $0.id == profileID })?.profile.emailLink ?? ""
-            },
-            set: { newValue in
-                controller.updateEmailLink(for: profileID, link: newValue)
-            }
+    private func isEmailLinkSaveEnabled(for snapshot: PlusProfileSnapshot) -> Bool {
+        PlusProfile.normalizedEmailLink(emailLinkDraft) != snapshot.profile.normalizedEmailLink
+    }
+
+    private func isMoveUpDisabled(for snapshot: PlusProfileSnapshot) -> Bool {
+        controller.profiles.first?.id == snapshot.id
+    }
+
+    private func isMoveDownDisabled(for snapshot: PlusProfileSnapshot) -> Bool {
+        controller.profiles.last?.id == snapshot.id
+    }
+
+    private func shouldShowExpiry(for snapshot: PlusProfileSnapshot) -> Bool {
+        snapshot.expiresAt != nil || snapshot.usage != nil || snapshot.lastRefreshAt != nil
+    }
+
+    @ViewBuilder
+    private func detailExpiryLine(for snapshot: PlusProfileSnapshot) -> some View {
+        let presentation = DisplayFormatter.expiryValue(
+            snapshot.expiresAt,
+            referenceDate: currentTime.now
         )
+        let emphasisToken = CodexTheme.expiryEmphasisToken(
+            for: snapshot.expiresAt,
+            referenceDate: currentTime.now
+        )
+
+        Group {
+            if let label = presentation.label {
+                (
+                    Text(label + " ")
+                        .foregroundStyle(CodexTheme.mutedText)
+                    + Text(presentation.value)
+                        .foregroundStyle(emphasisToken?.color ?? CodexTheme.mutedText)
+                        .monospacedDigit()
+                )
+                .font(ProfileManagerTypography.small)
+            } else {
+                Text(presentation.value)
+                    .font(ProfileManagerTypography.small)
+                    .foregroundStyle(emphasisToken?.color ?? CodexTheme.mutedText)
+            }
+        }
+        .lineLimit(1)
+    }
+
+    private func syncDrafts(with snapshot: PlusProfileSnapshot?) {
+        labelDraft = snapshot?.profile.label ?? ""
+        emailLinkDraft = snapshot?.profile.emailLink ?? ""
+    }
+
+    private func saveLabelDraft(for snapshot: PlusProfileSnapshot) {
+        controller.updateLabel(for: snapshot.id, label: labelDraft)
+        labelDraft = controller.profiles.first(where: { $0.id == snapshot.id })?.profile.label ?? labelDraft
+    }
+
+    private func saveEmailLinkDraft(for snapshot: PlusProfileSnapshot) {
+        controller.updateEmailLink(for: snapshot.id, link: emailLinkDraft)
+        emailLinkDraft = controller.profiles.first(where: { $0.id == snapshot.id })?.profile.emailLink ?? ""
     }
 
     private func refreshAll() {
@@ -539,6 +583,56 @@ struct ProfileManagerWindowView: View {
 
     private func reloadSelectedWebView() {
         webViewReloadToken = UUID()
+    }
+}
+
+private struct ProfileManagerEditableField: View {
+    let title: String
+    let placeholder: String
+    @Binding var text: String
+    let isSaveEnabled: Bool
+    let onSave: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title)
+                .font(ProfileManagerTypography.caption)
+                .foregroundStyle(CodexTheme.supportText)
+
+            HStack(alignment: .center, spacing: 10) {
+                TextField(placeholder, text: $text)
+                    .font(ProfileManagerTypography.body)
+                    .textFieldStyle(.plain)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .frame(maxWidth: .infinity)
+                    .background(
+                        RoundedRectangle(
+                            cornerRadius: CodexTheme.fieldCornerRadius,
+                            style: .continuous
+                        )
+                        .fill(CodexTheme.surfaceFill(for: .nested))
+                        .overlay {
+                            RoundedRectangle(
+                                cornerRadius: CodexTheme.fieldCornerRadius,
+                                style: .continuous
+                            )
+                            .stroke(CodexTheme.surfaceBorder(for: .nested), lineWidth: 1)
+                        }
+                    )
+                    .foregroundStyle(CodexTheme.primaryText)
+                    .submitLabel(.done)
+                    .onSubmit {
+                        if isSaveEnabled {
+                            onSave()
+                        }
+                    }
+
+                Button("Save", action: onSave)
+                    .buttonStyle(ProfileManagerInlineSaveButtonStyle())
+                    .disabled(isSaveEnabled == false)
+            }
+        }
     }
 }
 
@@ -588,6 +682,38 @@ private struct ProfileManagerStatusBanner: View {
                         .stroke(tone.borderColor, lineWidth: 1)
                 )
         )
+    }
+}
+
+private struct ProfileManagerInlineSaveButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(ProfileManagerTypography.caption)
+            .foregroundStyle(isEnabled ? CodexTheme.accentOrange : CodexTheme.quietText)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
+                    .fill(CodexTheme.surfaceFill(for: .subtle))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
+                            .fill(CodexTheme.surfaceSheen(for: .subtle))
+                    )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
+                    .stroke(
+                        isEnabled
+                            ? CodexTheme.accentOrange.opacity(0.24)
+                            : CodexTheme.surfaceBorder(for: .subtle),
+                        lineWidth: 1
+                    )
+            )
+            .opacity(isEnabled ? (configuration.isPressed ? 0.92 : 1) : 0.46)
+            .scaleEffect(configuration.isPressed ? 0.99 : 1)
+            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
     }
 }
 
