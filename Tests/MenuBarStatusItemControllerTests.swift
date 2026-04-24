@@ -94,9 +94,14 @@ struct MenuBarStatusItemControllerTests {
             at: 0,
             effectiveRange: &titleRange
         )
+        let visibleTitle = attributedTitle.string
 
-        #expect(button.title == " monijoa 5H 74% 7D 42%")
-        #expect(attributedTitle.string == " monijoa 5H 74% 7D 42%")
+        #expect(visibleTitle.contains("monijoa"))
+        #expect(visibleTitle.contains("74%"))
+        #expect(visibleTitle.contains("42%"))
+        #expect(visibleTitle.contains("5H") == false)
+        #expect(visibleTitle.contains("7D") == false)
+        #expect(button.accessibilityLabel() == "CodexPlusBar monijoa, 5 hour 74%, 7 day 42%")
         #expect(titleColor == nil)
     }
 
@@ -143,8 +148,14 @@ struct MenuBarStatusItemControllerTests {
         }
 
         let button = try #require(statusItem.button)
+        let visibleTitle = button.attributedTitle.string
 
-        #expect(button.title == " urgent 5H 11% 7D 35%")
+        #expect(visibleTitle.contains("urgent"))
+        #expect(visibleTitle.contains("11%"))
+        #expect(visibleTitle.contains("35%"))
+        #expect(visibleTitle.contains("5H") == false)
+        #expect(visibleTitle.contains("7D") == false)
+        #expect(button.accessibilityLabel() == "CodexPlusBar urgent, 5 hour 11%, 7 day 35%")
         #expect(MenuBarProfilePreference.preferredProfileID(defaults: defaults, validProfileIDs: [urgent.id]) == nil)
     }
 }

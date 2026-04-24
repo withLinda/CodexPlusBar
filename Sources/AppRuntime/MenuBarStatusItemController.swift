@@ -79,7 +79,7 @@ final class MenuBarStatusItemController: NSObject, NSPopoverDelegate {
     private func startObservingStatus() {
         withObservationTracking {
             _ = controller.statusBarSymbolName
-            _ = controller.statusBarText(referenceDate: clock.now)
+            _ = controller.statusBarContent(referenceDate: clock.now).plainText
             _ = controller.dashboardStatus
             _ = controller.isRefreshing
             _ = controller.profiles
@@ -103,21 +103,51 @@ final class MenuBarStatusItemController: NSObject, NSPopoverDelegate {
             defaults: userDefaults,
             validProfileIDs: controller.profiles.map(\.id)
         )
-        let labelText = controller.statusBarText(
+        let content = controller.statusBarContent(
             preferredProfileID: preferredProfileID,
             referenceDate: clock.now
         )
-        let title = " \(labelText)"
+
+        button.attributedTitle = statusTitle(for: content)
+        button.image = statusImage(named: controller.statusBarSymbolName)
+        button.contentTintColor = nil
+        button.toolTip = "CodexPlusBar"
+        button.setAccessibilityLabel("CodexPlusBar \(content.accessibilityText)")
+        statusItem.length = NSStatusItem.variableLength
+    }
+
+    private func statusTitle(for content: MenuBarStatusContent) -> NSAttributedString {
+        let title = NSMutableAttributedString()
         let attributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .semibold),
         ]
 
-        button.title = title
-        button.attributedTitle = NSAttributedString(string: title, attributes: attributes)
-        button.image = statusImage(named: controller.statusBarSymbolName)
-        button.contentTintColor = nil
-        button.toolTip = "CodexPlusBar"
-        statusItem.length = NSStatusItem.variableLength
+        title.append(NSAttributedString(string: " ", attributes: attributes))
+
+        guard content.showsUsageSummary else {
+            title.append(NSAttributedString(string: content.plainText, attributes: attributes))
+            return title
+        }
+
+        title.append(NSAttributedString(string: content.profileLabel, attributes: attributes))
+        title.append(NSAttributedString(string: " ", attributes: attributes))
+        title.append(statusSymbolAttachment(named: "hourglass.circle"))
+        title.append(NSAttributedString(string: " \(content.fiveHourText) ", attributes: attributes))
+        title.append(statusSymbolAttachment(named: "7.calendar"))
+        title.append(NSAttributedString(string: " \(content.sevenDayText)", attributes: attributes))
+
+        return title
+    }
+
+    private func statusSymbolAttachment(named systemName: String) -> NSAttributedString {
+        let attachment = NSTextAttachment()
+        let configuration = NSImage.SymbolConfiguration(pointSize: 10.5, weight: .semibold)
+        let image = NSImage(systemSymbolName: systemName, accessibilityDescription: nil)?
+            .withSymbolConfiguration(configuration)
+        image?.isTemplate = true
+        attachment.image = image
+        attachment.bounds = NSRect(x: 0, y: -1.6, width: 11.5, height: 11.5)
+        return NSAttributedString(attachment: attachment)
     }
 
     private func statusImage(named systemName: String) -> NSImage? {

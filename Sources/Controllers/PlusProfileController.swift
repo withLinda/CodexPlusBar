@@ -2,6 +2,51 @@ import Foundation
 import Observation
 import WebKit
 
+struct MenuBarStatusContent: Equatable, Sendable {
+    let profileLabel: String
+    let fiveHourText: String
+    let sevenDayText: String
+    let showsUsageSummary: Bool
+
+    var plainText: String {
+        guard showsUsageSummary else {
+            return profileLabel
+        }
+
+        return "\(profileLabel) 5H \(fiveHourText) 7D \(sevenDayText)"
+    }
+
+    var accessibilityText: String {
+        guard showsUsageSummary else {
+            return profileLabel
+        }
+
+        return "\(profileLabel), 5 hour \(fiveHourText), 7 day \(sevenDayText)"
+    }
+
+    static func usage(
+        profileLabel: String,
+        fiveHourText: String,
+        sevenDayText: String
+    ) -> MenuBarStatusContent {
+        MenuBarStatusContent(
+            profileLabel: profileLabel,
+            fiveHourText: fiveHourText,
+            sevenDayText: sevenDayText,
+            showsUsageSummary: true
+        )
+    }
+
+    static func text(_ text: String) -> MenuBarStatusContent {
+        MenuBarStatusContent(
+            profileLabel: text,
+            fiveHourText: "",
+            sevenDayText: "",
+            showsUsageSummary: false
+        )
+    }
+}
+
 @Observable
 @MainActor
 final class PlusProfileController {
@@ -100,33 +145,51 @@ final class PlusProfileController {
         preferredProfileID: UUID?,
         referenceDate: Date = .now
     ) -> String {
+        statusBarContent(
+            preferredProfileID: preferredProfileID,
+            referenceDate: referenceDate
+        ).plainText
+    }
+
+    func statusBarContent(referenceDate: Date = .now) -> MenuBarStatusContent {
+        statusBarContent(preferredProfileID: nil, referenceDate: referenceDate)
+    }
+
+    func statusBarContent(
+        preferredProfileID: UUID?,
+        referenceDate: Date = .now
+    ) -> MenuBarStatusContent {
         if let preferred = preferredStatusProfile(preferredProfileID: preferredProfileID) {
             let label = compactStatusLabel(for: preferred.profile.displayLabel)
-            return "\(label) 5H \(preferred.fiveHourText) 7D \(preferred.sevenDayText)"
+            return .usage(
+                profileLabel: label,
+                fiveHourText: preferred.fiveHourText,
+                sevenDayText: preferred.sevenDayText
+            )
         }
 
         if isRefreshing {
-            return profiles.isEmpty ? "Checking…" : "Refreshing…"
+            return .text(profiles.isEmpty ? "Checking…" : "Refreshing…")
         }
 
         switch dashboardStatus {
         case .empty:
-            return "Add profile"
+            return .text("Add profile")
         case .needsLogin:
-            return "Login needed"
+            return .text("Login needed")
         case .failed:
-            return "Check profiles"
+            return .text("Check profiles")
         case .mixedAttention:
-            return "\(readyProfiles.count)/\(profiles.count) ready"
+            return .text("\(readyProfiles.count)/\(profiles.count) ready")
         case .refreshing:
-            return "Refreshing…"
+            return .text("Refreshing…")
         case .ready:
             if let refreshedAt = profiles.compactMap(\.lastRefreshAt).max(),
                let updated = DisplayFormatter.updatedText(refreshedAt, referenceDate: referenceDate) {
-                return updated.replacingOccurrences(of: "Updated ", with: "")
+                return .text(updated.replacingOccurrences(of: "Updated ", with: ""))
             }
 
-            return "\(readyProfiles.count) ready"
+            return .text("\(readyProfiles.count) ready")
         }
     }
 

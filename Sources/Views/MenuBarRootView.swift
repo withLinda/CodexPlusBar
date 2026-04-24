@@ -268,7 +268,7 @@ struct MenuBarStatusLabel: View {
     let currentTime: AppMinuteClock
 
     var body: some View {
-        let labelText = controller.statusBarText(
+        let content = controller.statusBarContent(
             preferredProfileID: MenuBarProfilePreference.normalizedProfileID(from: preferredProfileIDStorage),
             referenceDate: currentTime.now
         )
@@ -279,13 +279,41 @@ struct MenuBarStatusLabel: View {
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(labelColor)
 
-            Text(labelText)
-                .font(.codexMenuBarLabel)
-                .lineLimit(1)
-                .monospacedDigit()
-                .foregroundStyle(labelColor)
+            if content.showsUsageSummary {
+                Text(content.profileLabel)
+                    .font(.codexMenuBarLabel)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .foregroundStyle(labelColor)
+
+                Image(systemName: "hourglass.circle")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(labelColor)
+
+                Text(content.fiveHourText)
+                    .font(.codexMenuBarLabel)
+                    .lineLimit(1)
+                    .monospacedDigit()
+                    .foregroundStyle(labelColor)
+
+                Image(systemName: "7.calendar")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(labelColor)
+
+                Text(content.sevenDayText)
+                    .font(.codexMenuBarLabel)
+                    .lineLimit(1)
+                    .monospacedDigit()
+                    .foregroundStyle(labelColor)
+            } else {
+                Text(content.plainText)
+                    .font(.codexMenuBarLabel)
+                    .lineLimit(1)
+                    .monospacedDigit()
+                    .foregroundStyle(labelColor)
+            }
         }
-        .accessibilityLabel("CodexPlusBar \(labelText)")
+        .accessibilityLabel("CodexPlusBar \(content.accessibilityText)")
     }
 
     private var statusLabelColor: Color {

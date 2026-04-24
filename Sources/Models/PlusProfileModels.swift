@@ -383,7 +383,7 @@ enum PlusDashboardStatus: Equatable, Sendable {
         case .refreshing:
             return "arrow.triangle.2.circlepath.circle"
         case .ready:
-            return "person.2.fill"
+            return "figure.run"
         case .needsLogin:
             return "person.crop.circle.badge.exclamationmark"
         case .mixedAttention:

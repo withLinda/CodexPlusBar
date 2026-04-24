@@ -46,6 +46,7 @@ update_policy:
 - 2026-03-19: For multiple bundled font families in this macOS app, point `ATSApplicationFontsPath` at the top-level `Fonts` folder and also register `.ttf`/`.otf` files at launch. If Info.plist only points at one subfolder, Manrope and Cormorant can fall back silently and the redesign loses its intended typography.
 - 2026-04-20: The persistent WebKit profile API names differ in Swift from many docs/examples. Use `WKWebsiteDataStore(forIdentifier:)` to open a profile store and `WKWebsiteDataStore.remove(forIdentifier:completionHandler:)` to delete one. Do not search for `dataStoreForIdentifier` in Swift code and assume it will compile.
 - 2026-04-21: Sketch MCP `document.save(...)` can write the `.sketch` file to the requested path even when the returned `doc.path` still shows the old unsaved/iCloud location. After saving through Sketch MCP, verify the target file on disk instead of trusting the reported path string.
+- 2026-04-24: The local screenshot skill helper can fail on this Mac with a Swift JIT `NSScreen` symbol error even after Screen Recording permission is granted. For visual verification, fall back to macOS `screencapture -x <path>` and inspect the PNG with `view_image`.
 
 ## Backend API Notes
 - 2026-03-18: `/backend-api/accounts/check/v4-2023-04-27` is the source of truth for multi-account catalog data. It provides account names, plan types, entitlement dates, accessibility flags, deactivation state, and `account_ordering`.

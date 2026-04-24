@@ -182,12 +182,37 @@ struct PlusProfileControllerTests {
         controller.profiles = [urgent, preferred]
 
         #expect(controller.preferredStatusProfile(preferredProfileID: preferred.id)?.id == preferred.id)
+        let content = controller.statusBarContent(
+            preferredProfileID: preferred.id,
+            referenceDate: Date(timeIntervalSince1970: 1_776_000_000)
+        )
+        #expect(content.profileLabel == "monijoa")
+        #expect(content.fiveHourText == "74%")
+        #expect(content.sevenDayText == "42%")
+        #expect(content.plainText == "monijoa 5H 74% 7D 42%")
+        #expect(content.accessibilityText == "monijoa, 5 hour 74%, 7 day 42%")
         #expect(
             controller.statusBarText(
                 preferredProfileID: preferred.id,
                 referenceDate: Date(timeIntervalSince1970: 1_776_000_000)
             ) == "monijoa 5H 74% 7D 42%"
         )
+    }
+
+    @Test
+    func statusBarSymbolUsesRunningFigureForHealthyReadyState() {
+        let controller = PlusProfileController(dataService: StubPlusProfileDataService(refreshResults: [:]), autoStart: false)
+        controller.dashboardStatus = .ready
+        let profile = menuBarSnapshot(
+            label: "runner@example.com",
+            state: .ready,
+            fiveHourRemainingPercent: 83,
+            sevenDayRemainingPercent: 72,
+            sortOrder: 0
+        )
+        controller.profiles = [profile]
+
+        #expect(controller.statusBarSymbolName == "figure.run")
     }
 
     @Test

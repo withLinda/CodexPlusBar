@@ -38,8 +38,9 @@ struct ProfileSummaryRowPresentation: Equatable, Sendable {
     let showsStatusBadge: Bool
     let showsInlineSecondaryActions: Bool
     let canOpenEmailLink: Bool
-    let showsPinnedCapsule: Bool
-    let pinnedCapsuleTitle: String
+    let showsPinAction: Bool
+    let pinActionSymbolName: String
+    let pinActionAccessibilityLabel: String
 
     init(
         snapshot: PlusProfileSnapshot,
@@ -93,8 +94,9 @@ struct ProfileSummaryRowPresentation: Equatable, Sendable {
             accessory = snapshot.isRefreshing ? .refreshing : .none
             showsInlineSecondaryActions = false
             canOpenEmailLink = false
-            showsPinnedCapsule = false
-            pinnedCapsuleTitle = ""
+            showsPinAction = false
+            pinActionSymbolName = ""
+            pinActionAccessibilityLabel = ""
         case let .menuBar(isPinned):
             self.isPinned = isPinned
             switch snapshot.isRefreshing {
@@ -106,8 +108,9 @@ struct ProfileSummaryRowPresentation: Equatable, Sendable {
 
             showsInlineSecondaryActions = true
             canOpenEmailLink = snapshot.profile.resolvedEmailLinkURL != nil
-            showsPinnedCapsule = true
-            pinnedCapsuleTitle = isPinned ? "On top" : "Show on top"
+            showsPinAction = true
+            pinActionSymbolName = isPinned ? "pin.circle.fill" : "pin.circle"
+            pinActionAccessibilityLabel = isPinned ? "On top" : "Show on top"
         }
 
         showsStatusBadge = false
@@ -206,11 +209,27 @@ struct ProfileSummaryRow: View {
     }
 
     private var menuBarContent: some View {
-        HStack(alignment: .top, spacing: 8) {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(alignment: .center, spacing: 5) {
+                wrappedPrimaryAction {
+                    menuBarTitleLabel
+                }
+                .layoutPriority(1)
+
+                if presentation.accessory != .none {
+                    accessoryView
+                }
+
+                if presentation.showsInlineSecondaryActions {
+                    topActionRail
+                }
+
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
             wrappedPrimaryAction {
                 VStack(alignment: .leading, spacing: 8) {
-                    titleRow
-
                     if let usageSummary = presentation.usageSummary {
                         usageSummaryView(usageSummary, spacing: 6)
                     }
@@ -220,10 +239,6 @@ struct ProfileSummaryRow: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-
-            if presentation.showsInlineSecondaryActions {
-                topActionRail
-            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -243,35 +258,49 @@ struct ProfileSummaryRow: View {
         }
     }
 
+    private var menuBarTitleLabel: some View {
+        Text(presentation.title)
+            .font(ProfileManagerTypography.smallStrong)
+            .foregroundStyle(CodexTheme.primaryText)
+            .lineLimit(1)
+            .truncationMode(.middle)
+            .minimumScaleFactor(0.9)
+            .frame(minWidth: 40, alignment: .leading)
+    }
+
     private var topActionRail: some View {
         HStack(spacing: 5) {
-            HStack(spacing: 5) {
-                ProfileSummaryInlineIconButton(
-                    symbolName: "doc.on.doc",
-                    label: "Copy profile label",
-                    helpText: "Copy profile label",
-                    isDisabled: copyAction == nil,
-                    size: 26,
-                    action: copyAction ?? {}
-                )
+            ProfileSummaryInlineIconButton(
+                symbolName: "doc.on.doc",
+                label: "Copy profile label",
+                helpText: "Copy profile label",
+                isDisabled: copyAction == nil,
+                size: 24,
+                action: copyAction ?? {}
+            )
 
-                ProfileSummaryInlineIconButton(
-                    symbolName: "arrow.up.forward.square",
-                    label: "Open email link",
-                    helpText: presentation.canOpenEmailLink
-                        ? "Open email link"
-                        : "Add an email link in the manager to open it here",
-                    isDisabled: presentation.canOpenEmailLink == false || emailAction == nil,
-                    size: 26,
-                    action: emailAction ?? {}
-                )
-            }
+            ProfileSummaryInlineIconButton(
+                symbolName: "arrow.up.forward.square",
+                label: "Open email link",
+                helpText: presentation.canOpenEmailLink
+                    ? "Open email link"
+                    : "Add an email link in the manager to open it here",
+                isDisabled: presentation.canOpenEmailLink == false || emailAction == nil,
+                size: 24,
+                action: emailAction ?? {}
+            )
 
-            if presentation.showsPinnedCapsule {
-                ProfileSummaryPinnedCapsuleButton(
-                    title: presentation.pinnedCapsuleTitle,
-                    isPinned: presentation.isPinned,
+            if presentation.showsPinAction {
+                ProfileSummaryInlineIconButton(
+                    symbolName: presentation.pinActionSymbolName,
+                    label: presentation.pinActionAccessibilityLabel,
+                    helpText: presentation.isPinned
+                        ? "This profile already drives the top menu bar summary."
+                        : "Show this profile in the top menu bar summary.",
+                    tone: presentation.isPinned ? .selected : .accent,
                     isDisabled: presentation.isPinned || pinAction == nil,
+                    disabledOpacity: presentation.isPinned ? 1 : 0.48,
+                    size: 24,
                     action: pinAction ?? {}
                 )
             }
@@ -360,10 +389,18 @@ struct ProfileSummaryRow: View {
 }
 
 private struct ProfileSummaryInlineIconButton: View {
+    enum Tone {
+        case quiet
+        case accent
+        case selected
+    }
+
     let symbolName: String
     let label: String
     let helpText: String
+    let tone: Tone
     let isDisabled: Bool
+    let disabledOpacity: Double
     let size: CGFloat
     let action: () -> Void
 
@@ -371,14 +408,18 @@ private struct ProfileSummaryInlineIconButton: View {
         symbolName: String,
         label: String,
         helpText: String,
+        tone: Tone = .quiet,
         isDisabled: Bool,
+        disabledOpacity: Double = 0.48,
         size: CGFloat = 28,
         action: @escaping () -> Void
     ) {
         self.symbolName = symbolName
         self.label = label
         self.helpText = helpText
+        self.tone = tone
         self.isDisabled = isDisabled
+        self.disabledOpacity = disabledOpacity
         self.size = size
         self.action = action
     }
@@ -386,24 +427,61 @@ private struct ProfileSummaryInlineIconButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: symbolName)
-                .font(.system(size: size == 26 ? 10.5 : 11, weight: .semibold))
+                .font(.system(size: size <= 24 ? 10.5 : 11, weight: .semibold))
                 .frame(width: size, height: size)
         }
         .buttonStyle(.plain)
-        .foregroundStyle(isDisabled ? CodexTheme.quietText : CodexTheme.primaryText)
+        .foregroundStyle(foregroundStyle)
         .background(
-            RoundedRectangle(cornerRadius: size == 26 ? 7 : 8, style: .continuous)
-                .fill(CodexTheme.surfaceFill(for: .subtle))
+            RoundedRectangle(cornerRadius: size <= 24 ? 7 : 8, style: .continuous)
+                .fill(backgroundFill)
                 .overlay(
-                    RoundedRectangle(cornerRadius: size == 26 ? 7 : 8, style: .continuous)
-                        .stroke(CodexTheme.surfaceBorder(for: .subtle), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: size <= 24 ? 7 : 8, style: .continuous)
+                        .stroke(borderColor, lineWidth: 1)
                 )
         )
-        .opacity(isDisabled ? 0.48 : 1)
+        .opacity(isDisabled ? disabledOpacity : 1)
         .accessibilityLabel(label)
         .accessibilityHint(helpText)
         .help(helpText)
         .disabled(isDisabled)
+    }
+
+    private var foregroundStyle: Color {
+        if isDisabled, tone != .selected {
+            return CodexTheme.quietText
+        }
+
+        switch tone {
+        case .quiet:
+            return CodexTheme.primaryText
+        case .accent:
+            return CodexTheme.accentOrange
+        case .selected:
+            return CodexTheme.primaryText
+        }
+    }
+
+    private var backgroundFill: Color {
+        switch tone {
+        case .quiet:
+            return CodexTheme.surfaceFill(for: .subtle)
+        case .accent:
+            return CodexTheme.accentOrange.opacity(0.10)
+        case .selected:
+            return CodexTheme.surfaceFill(for: .subtle)
+        }
+    }
+
+    private var borderColor: Color {
+        switch tone {
+        case .quiet:
+            return CodexTheme.surfaceBorder(for: .subtle)
+        case .accent:
+            return CodexTheme.accentOrange.opacity(0.24)
+        case .selected:
+            return CodexTheme.surfaceBorder(for: .subtle)
+        }
     }
 }
 
@@ -422,46 +500,6 @@ private struct ProfileSummaryPinnedAccessory: View {
                     )
             )
             .accessibilityHidden(true)
-    }
-}
-
-private struct ProfileSummaryPinnedCapsuleButton: View {
-    let title: String
-    let isPinned: Bool
-    let isDisabled: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(title, action: action)
-            .buttonStyle(.plain)
-            .font(.codexMicro)
-            .foregroundStyle(isPinned ? CodexTheme.primaryText : CodexTheme.accentOrange)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(
-                Capsule(style: .continuous)
-                    .fill(isPinned ? CodexTheme.surfaceFill(for: .subtle) : CodexTheme.accentOrange.opacity(0.10))
-                    .overlay(
-                        Capsule(style: .continuous)
-                            .stroke(
-                                isPinned
-                                    ? CodexTheme.surfaceBorder(for: .subtle)
-                                    : CodexTheme.accentOrange.opacity(0.24),
-                                lineWidth: 1
-                            )
-                    )
-            )
-            .help(
-                isPinned
-                    ? "This profile already drives the top menu bar summary."
-                    : "Show this profile in the top menu bar summary."
-            )
-            .accessibilityHint(
-                isPinned
-                    ? "Already pinned to the menu bar summary."
-                    : "Pin this profile to the menu bar summary."
-            )
-            .disabled(isDisabled)
     }
 }
 

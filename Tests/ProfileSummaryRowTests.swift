@@ -31,8 +31,9 @@ struct ProfileSummaryRowTests {
         #expect(presentation.showsStatusBadge == false)
         #expect(presentation.showsInlineSecondaryActions == true)
         #expect(presentation.canOpenEmailLink == true)
-        #expect(presentation.showsPinnedCapsule == true)
-        #expect(presentation.pinnedCapsuleTitle == "Show on top")
+        #expect(presentation.showsPinAction == true)
+        #expect(presentation.pinActionSymbolName == "pin.circle")
+        #expect(presentation.pinActionAccessibilityLabel == "Show on top")
         #expect(presentation.accessory == .none)
     }
 
@@ -111,7 +112,7 @@ struct ProfileSummaryRowTests {
     }
 
     @Test
-    func pinnedMenuBarPresentationShowsPinnedCapsuleState() {
+    func pinnedMenuBarPresentationShowsPinnedIconState() {
         let referenceDate = Date(timeIntervalSince1970: 1_776_000_000)
         let snapshot = sampleSnapshot(
             state: .ready,
@@ -132,8 +133,9 @@ struct ProfileSummaryRowTests {
         #expect(presentation.accessory == .none)
         #expect(presentation.showsInlineSecondaryActions == true)
         #expect(presentation.canOpenEmailLink == false)
-        #expect(presentation.showsPinnedCapsule == true)
-        #expect(presentation.pinnedCapsuleTitle == "On top")
+        #expect(presentation.showsPinAction == true)
+        #expect(presentation.pinActionSymbolName == "pin.circle.fill")
+        #expect(presentation.pinActionAccessibilityLabel == "On top")
         #expect(presentation.expiryValue == DisplayFormatter.LabeledValue(label: "Expires in", value: "2d"))
         #expect(presentation.expiryEmphasisToken?.hex == CodexTheme.Palette.accRed.hex)
     }
