@@ -103,6 +103,12 @@ struct AccountCatalogService {
         let isUsableInSession = WorkspacePayloadSupport.boolValue(
             from: object["can_access_with_session"] ?? object["canAccessWithSession"]
         ) ?? true
+        let matchAliases = matchAliases(
+            accountID: accountID,
+            fallbackID: entry.fallbackID,
+            accountObject: accountObject,
+            object: object
+        )
 
         return .catalogItem(
             AccountCatalogItem(
@@ -128,9 +134,53 @@ struct AccountCatalogService {
                 isDeactivated: WorkspacePayloadSupport.boolValue(
                     from: accountObject["is_deactivated"] ?? accountObject["isDeactivated"]
                 ) ?? false,
-                isUsableInSession: isUsableInSession
+                isUsableInSession: isUsableInSession,
+                matchAliases: matchAliases,
+                isDefaultAccount: isDefaultAccount(entry.fallbackID)
             )
         )
+    }
+
+    private static func matchAliases(
+        accountID: String,
+        fallbackID: String?,
+        accountObject: JSONObject,
+        object: JSONObject
+    ) -> Set<String> {
+        nonEmptyStringSet(
+            accountID,
+            accountObject["account_id"],
+            accountObject["accountId"],
+            accountObject["id"],
+            accountObject["account_user_id"],
+            accountObject["accountUserID"],
+            accountObject["account_owner_id"],
+            accountObject["accountOwnerID"],
+            object["account_id"],
+            object["accountId"],
+            object["id"],
+            object["account_user_id"],
+            object["accountUserID"],
+            object["account_owner_id"],
+            object["accountOwnerID"],
+            fallbackID
+        )
+    }
+
+    private static func nonEmptyStringSet(_ values: Any?...) -> Set<String> {
+        Set(values.compactMap { value in
+            guard let string = value as? String else {
+                return nil
+            }
+
+            let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        })
+    }
+
+    private static func isDefaultAccount(_ fallbackID: String?) -> Bool {
+        fallbackID?.trimmingCharacters(in: .whitespacesAndNewlines)
+            .caseInsensitiveCompare("default") == .orderedSame
     }
 
     private static func orderedItems(_ items: [AccountCatalogItem], orderedBy ids: [String]) -> [AccountCatalogItem] {

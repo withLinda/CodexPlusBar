@@ -51,7 +51,9 @@ enum AccountCatalogNormalizer {
             renewsAt: items.compactMap(\.renewsAt).min(),
             hasActiveSubscription: hasActiveSubscription,
             isDeactivated: items.contains(where: { $0.isDeactivated }),
-            isUsableInSession: items.allSatisfy { $0.isUsableInSession }
+            isUsableInSession: items.allSatisfy { $0.isUsableInSession },
+            matchAliases: Set(items.flatMap(\.matchAliases)),
+            isDefaultAccount: items.contains(where: { $0.isDefaultAccount })
         )
     }
 

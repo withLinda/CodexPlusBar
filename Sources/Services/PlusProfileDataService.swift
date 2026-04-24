@@ -108,7 +108,8 @@ final class PlusProfileDataService: PlusProfileDataServing {
     ) async -> ProfileExpiryRefresh {
         do {
             let catalog = try await AccountCatalogService(transport: transport).fetchCatalog()
-            let expiresAt = catalog.first(where: { $0.accountID == accountID })?.expiresAt
+            let expiresAt = catalog.first(where: { $0.matchesAccountID(accountID) })?.expiresAt
+                ?? catalog.first(where: { $0.isDefaultAccount })?.expiresAt
             return .value(expiresAt)
         } catch {
             return .unchanged

@@ -48,10 +48,18 @@ endif
 
 BUILD_PRODUCTS := $(DERIVED)/Build/Products/$(CONFIGURATION)$(PLATFORM_SUFFIX)
 APP_PATH := $(BUILD_PRODUCTS)/$(APP_SCHEME).app
+ARCHIVE_DERIVED := $(DERIVED_BASE)/$(AGENT_NAME)-archive
+ARCHIVE_PATH := $(CURDIR)/build/archive/$(APP_SCHEME).xcarchive
+ARCHIVED_APP_PATH := $(ARCHIVE_PATH)/Products/Applications/$(APP_SCHEME).app
+DIST_DIR := $(CURDIR)/build/dist
+DMG_NAME ?= $(APP_SCHEME)
+DMG_VOLUME_NAME ?= $(APP_NAME)
+DMG_PATH := $(DIST_DIR)/$(DMG_NAME).dmg
 
 PHONY_TARGETS := $(TARGET_PREFIX)help $(TARGET_PREFIX)diagnose $(TARGET_PREFIX)build \
 	$(TARGET_PREFIX)test $(TARGET_PREFIX)run $(TARGET_PREFIX)build-and-run \
-	$(TARGET_PREFIX)build-and-run-background $(TARGET_PREFIX)clean $(TARGET_PREFIX)agent-verify
+	$(TARGET_PREFIX)build-and-run-background $(TARGET_PREFIX)archive $(TARGET_PREFIX)dmg \
+	$(TARGET_PREFIX)clean $(TARGET_PREFIX)agent-verify
 .PHONY: $(PHONY_TARGETS)
 
 $(TARGET_PREFIX)help:
@@ -63,6 +71,8 @@ $(TARGET_PREFIX)help:
 		"  make $(TARGET_PREFIX)run                      Run app (assumes prior build)" \
 		"  make $(TARGET_PREFIX)build-and-run            Build then run" \
 		"  make $(TARGET_PREFIX)build-and-run-background Build then run in background" \
+		"  make $(TARGET_PREFIX)archive                  Build a Release .xcarchive for packaging" \
+		"  make $(TARGET_PREFIX)dmg                      Build a local drag-to-Applications DMG" \
 		"  make $(TARGET_PREFIX)clean                    Clean derived data + logs" \
 		"  TRACE_PRIVATE_API=1 make $(TARGET_PREFIX)build-and-run Capture private API trace in $(TRACE_LOG_FILE)" \
 		"  make $(TARGET_PREFIX)agent-verify             Build and test"
@@ -165,6 +175,28 @@ else
 	@mkdir -p "$(LOG_DIR)"
 	@TRACE_PRIVATE_API="$(TRACE_PRIVATE_API)" APP_TRACE_LOG="$(TRACE_LOG_FILE)" $(SCRIPTS_DIR)/run_app_macos.sh --app-path "$(APP_PATH)" --background --replace-bundle-id
 endif
+
+$(TARGET_PREFIX)archive:
+	@mkdir -p "$(dir $(ARCHIVE_PATH))"
+	@LOG_DIR="$(LOG_DIR)" CACHE_ROOT="$(CACHE_ROOT)" TMPDIR="$(TMPDIR_PATH)" $(XCBUILD) --label "$(AGENT_NAME)" --action archive -- \
+		$(BUILD_FILE_FLAG) \
+		-scheme $(APP_SCHEME) \
+		-configuration Release \
+		-destination 'generic/platform=macOS' \
+		-derivedDataPath $(ARCHIVE_DERIVED) \
+		-archivePath $(ARCHIVE_PATH) \
+		GCC_TREAT_WARNINGS_AS_ERRORS=YES \
+		SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
+		SWIFT_STRICT_CONCURRENCY=complete \
+		SKIP_INSTALL=NO \
+		archive
+	@printf "Archive: %s\n" "$(ARCHIVE_PATH)"
+
+$(TARGET_PREFIX)dmg: $(TARGET_PREFIX)archive
+	@$(SCRIPTS_DIR)/create_dmg.sh \
+		--app "$(ARCHIVED_APP_PATH)" \
+		--output "$(DMG_PATH)" \
+		--volume-name "$(DMG_VOLUME_NAME)"
 
 $(TARGET_PREFIX)clean:
 	@$(SCRIPTS_DIR)/clean.sh

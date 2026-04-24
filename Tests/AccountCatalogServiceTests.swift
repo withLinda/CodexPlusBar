@@ -57,6 +57,55 @@ struct AccountCatalogServiceTests {
         #expect(catalog.first?.expiresAt == date("2026-04-25T08:30:00+00:00"))
         #expect(catalog.last?.expiresAt == date("2026-05-01T10:00:00+00:00"))
     }
+
+    @Test
+    func decodeCatalogKeepsDefaultAccountAliasesForExpiryMatching() throws {
+        let data = Data(
+            """
+            {
+              "account_ordering": ["11111111-2222-4333-8444-555555555555"],
+              "accounts": {
+                "11111111-2222-4333-8444-555555555555": {
+                  "account": {
+                    "account_id": "11111111-2222-4333-8444-555555555555",
+                    "account_user_id": "user-owner-alpha__11111111-2222-4333-8444-555555555555",
+                    "account_owner_id": "user-owner-alpha",
+                    "plan_type": "plus"
+                  },
+                  "entitlement": {
+                    "expires_at": "2026-05-17T13:42:54+00:00",
+                    "has_active_subscription": true
+                  }
+                },
+                "default": {
+                  "account": {
+                    "account_id": "11111111-2222-4333-8444-555555555555",
+                    "account_user_id": "user-owner-alpha__11111111-2222-4333-8444-555555555555",
+                    "account_owner_id": "user-owner-alpha",
+                    "plan_type": "plus"
+                  },
+                  "entitlement": {
+                    "expires_at": "2026-05-17T13:42:54+00:00",
+                    "has_active_subscription": true
+                  }
+                }
+              }
+            }
+            """.utf8
+        )
+
+        let catalog = try AccountCatalogService.decodeCatalog(from: data)
+        let item = try #require(catalog.first)
+
+        #expect(catalog.count == 1)
+        #expect(item.accountID == "11111111-2222-4333-8444-555555555555")
+        #expect(item.expiresAt == date("2026-05-17T13:42:54+00:00"))
+        #expect(item.isDefaultAccount)
+        #expect(item.matchAliases.contains("11111111-2222-4333-8444-555555555555"))
+        #expect(item.matchAliases.contains("default"))
+        #expect(item.matchAliases.contains("user-owner-alpha"))
+        #expect(item.matchAliases.contains("user-owner-alpha__11111111-2222-4333-8444-555555555555"))
+    }
 }
 
 private func date(_ value: String) -> Date {
