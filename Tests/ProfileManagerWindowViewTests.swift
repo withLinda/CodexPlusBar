@@ -75,6 +75,66 @@ struct ProfileManagerWindowViewTests {
         #expect(editableTextFieldCount(in: hostingView) == 2)
     }
 
+    @Test
+    func selectedProfileQuickActionsExposeCopyAndEmailAvailability() {
+        let profileWithEmail = sampleProfile(
+            label: "alpha@example.com",
+            emailLink: "mail.google.com/mail/u/0/#inbox",
+            sortOrder: 0
+        )
+        let profileWithoutEmail = sampleProfile(
+            label: "beta@example.com",
+            emailLink: nil,
+            sortOrder: 1
+        )
+
+        let enabledPresentation = ProfileManagerSelectedProfileActionsPresentation(profile: profileWithEmail)
+        #expect(enabledPresentation.canCopyProfileLabel)
+        #expect(enabledPresentation.copyHelpText == "Copy profile label")
+        #expect(enabledPresentation.canOpenEmailLink)
+        #expect(enabledPresentation.emailHelpText == "Open email link")
+
+        let disabledPresentation = ProfileManagerSelectedProfileActionsPresentation(profile: profileWithoutEmail)
+        #expect(disabledPresentation.canCopyProfileLabel)
+        #expect(disabledPresentation.canOpenEmailLink == false)
+        #expect(disabledPresentation.emailHelpText == "Add an email link before opening it.")
+    }
+
+    @Test
+    func detailLayoutUsesCompactTopGridToExposeSessionBrowserSooner() {
+        let metrics = ProfileManagerDetailLayoutMetrics.browserFirst
+
+        #expect(metrics.detailStackSpacing < CodexTheme.contentSpacing)
+        #expect(metrics.topGridSpacing < CodexTheme.contentSpacing)
+        #expect(metrics.compactCardPadding < CodexTheme.panelPadding)
+        #expect(metrics.actionPanelWidth <= 180)
+        #expect(metrics.actionGridColumnCount == 3)
+        #expect(metrics.sessionBrowserMinHeight >= 360)
+    }
+
+    @Test
+    func expandedSessionPresentationKeepsHideSessionAction() {
+        let snapshot = PlusProfileSnapshot(
+            profile: sampleProfile(label: "alpha@example.com", sortOrder: 0),
+            state: .ready,
+            usage: nil,
+            statusMessage: nil,
+            isRefreshing: false
+        )
+
+        let expanded = ProfileManagerSessionPanelPresentation(
+            snapshot: snapshot,
+            isExpanded: true
+        )
+        let collapsed = ProfileManagerSessionPanelPresentation(
+            snapshot: snapshot,
+            isExpanded: false
+        )
+
+        #expect(expanded.toggleTitle == "Hide session")
+        #expect(expanded.summaryText == "This profile session view is open.")
+        #expect(collapsed.toggleTitle == "Show session")
+    }
 }
 
 @MainActor

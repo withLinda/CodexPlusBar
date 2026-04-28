@@ -120,6 +120,7 @@ struct ProfileSummaryRowPresentation: Equatable, Sendable {
 struct ProfileSummaryRow: View {
     let presentation: ProfileSummaryRowPresentation
     let mode: ProfileSummaryRowMode
+    let textScale: Double
     let primaryAction: (() -> Void)?
     let copyAction: (() -> Void)?
     let emailAction: (() -> Void)?
@@ -129,6 +130,7 @@ struct ProfileSummaryRow: View {
         snapshot: PlusProfileSnapshot,
         referenceDate: Date = .now,
         mode: ProfileSummaryRowMode,
+        textScale: Double = 1,
         primaryAction: (() -> Void)? = nil,
         copyAction: (() -> Void)? = nil,
         emailAction: (() -> Void)? = nil,
@@ -141,6 +143,7 @@ struct ProfileSummaryRow: View {
                 mode: mode
             ),
             mode: mode,
+            textScale: textScale,
             primaryAction: primaryAction,
             copyAction: copyAction,
             emailAction: emailAction,
@@ -151,6 +154,7 @@ struct ProfileSummaryRow: View {
     init(
         presentation: ProfileSummaryRowPresentation,
         mode: ProfileSummaryRowMode,
+        textScale: Double = 1,
         primaryAction: (() -> Void)? = nil,
         copyAction: (() -> Void)? = nil,
         emailAction: (() -> Void)? = nil,
@@ -158,6 +162,7 @@ struct ProfileSummaryRow: View {
     ) {
         self.presentation = presentation
         self.mode = mode
+        self.textScale = textScale
         self.primaryAction = primaryAction
         self.copyAction = copyAction
         self.emailAction = emailAction
@@ -174,7 +179,7 @@ struct ProfileSummaryRow: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, isMenuBarMode ? 10 : 12)
-        .padding(.vertical, isMenuBarMode ? 8 : 10)
+        .padding(.vertical, isMenuBarMode ? scaled(8) : 10)
         .background(backgroundShape)
     }
 
@@ -184,6 +189,14 @@ struct ProfileSummaryRow: View {
         }
 
         return false
+    }
+
+    private var effectiveTextScale: Double {
+        isMenuBarMode ? MenuBarPanelTextScalePreference.normalizedTextScale(textScale) : 1
+    }
+
+    private func scaled(_ value: CGFloat) -> CGFloat {
+        value * CGFloat(effectiveTextScale)
     }
 
     private var sidebarContent: some View {
@@ -209,8 +222,8 @@ struct ProfileSummaryRow: View {
     }
 
     private var menuBarContent: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            HStack(alignment: .center, spacing: 5) {
+        VStack(alignment: .leading, spacing: scaled(7)) {
+            HStack(alignment: .center, spacing: scaled(5)) {
                 wrappedPrimaryAction {
                     menuBarTitleLabel
                 }
@@ -229,9 +242,9 @@ struct ProfileSummaryRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
 
             wrappedPrimaryAction {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: scaled(8)) {
                     if let usageSummary = presentation.usageSummary {
-                        usageSummaryView(usageSummary, spacing: 6)
+                        usageSummaryView(usageSummary, spacing: scaled(6))
                     }
 
                     supportLine
@@ -260,7 +273,7 @@ struct ProfileSummaryRow: View {
 
     private var menuBarTitleLabel: some View {
         Text(presentation.title)
-            .font(ProfileManagerTypography.smallStrong)
+            .font(ProfileManagerTypography.smallStrong(scale: effectiveTextScale))
             .foregroundStyle(CodexTheme.primaryText)
             .lineLimit(1)
             .truncationMode(.middle)
@@ -312,12 +325,14 @@ struct ProfileSummaryRow: View {
         HStack(alignment: .top, spacing: spacing) {
             ProfileUsageMetricBlock(
                 summary: usageSummary.primary,
-                density: .compact
+                density: .compact,
+                textScale: effectiveTextScale
             )
 
             ProfileUsageMetricBlock(
                 summary: usageSummary.secondary,
-                density: .compact
+                density: .compact,
+                textScale: effectiveTextScale
             )
         }
         .accessibilityElement(children: .contain)
@@ -330,11 +345,12 @@ struct ProfileSummaryRow: View {
         if let expiryValue = presentation.expiryValue {
             ProfileSummaryExpiryLine(
                 presentation: expiryValue,
-                emphasisToken: presentation.expiryEmphasisToken
+                emphasisToken: presentation.expiryEmphasisToken,
+                textScale: effectiveTextScale
             )
         } else {
             Text(presentation.supportText)
-                .font(ProfileManagerTypography.caption)
+                .font(ProfileManagerTypography.caption(scale: effectiveTextScale))
                 .foregroundStyle(presentation.supportStyle.foregroundStyle)
                 .lineLimit(1)
         }
@@ -506,6 +522,17 @@ private struct ProfileSummaryPinnedAccessory: View {
 private struct ProfileSummaryExpiryLine: View {
     let presentation: DisplayFormatter.LabeledValue
     let emphasisToken: CodexColorToken?
+    let textScale: Double
+
+    init(
+        presentation: DisplayFormatter.LabeledValue,
+        emphasisToken: CodexColorToken?,
+        textScale: Double = 1
+    ) {
+        self.presentation = presentation
+        self.emphasisToken = emphasisToken
+        self.textScale = textScale
+    }
 
     var body: some View {
         Group {
@@ -517,10 +544,10 @@ private struct ProfileSummaryExpiryLine: View {
                         .foregroundStyle(emphasisToken?.color ?? CodexTheme.mutedText)
                         .monospacedDigit()
                 )
-                .font(ProfileManagerTypography.caption)
+                .font(ProfileManagerTypography.caption(scale: textScale))
             } else {
                 Text(presentation.value)
-                    .font(ProfileManagerTypography.caption)
+                    .font(ProfileManagerTypography.caption(scale: textScale))
                     .foregroundStyle(emphasisToken?.color ?? CodexTheme.mutedText)
             }
         }
@@ -531,6 +558,17 @@ private struct ProfileSummaryExpiryLine: View {
 struct ProfileUsageMetricBlock: View {
     let summary: ProfileUsageMetricSummary
     let density: UsageMetricDensity
+    let textScale: Double
+
+    init(
+        summary: ProfileUsageMetricSummary,
+        density: UsageMetricDensity,
+        textScale: Double = 1
+    ) {
+        self.summary = summary
+        self.density = density
+        self.textScale = textScale
+    }
 
     private var accent: Color {
         if let remainingPercent = summary.remainingPercent {
@@ -544,18 +582,18 @@ struct ProfileUsageMetricBlock: View {
         CodexCard(
             tier: density.cardTier,
             accent: density == .expanded ? accent : nil,
-            padding: density.padding,
+            padding: density.padding(scale: textScale),
             shadow: false
         ) {
-            VStack(alignment: .leading, spacing: density.contentSpacing) {
+            VStack(alignment: .leading, spacing: density.contentSpacing(scale: textScale)) {
                 if density == .compact {
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    HStack(alignment: .firstTextBaseline, spacing: 6 * CGFloat(textScale)) {
                         Text(summary.shortTitle)
-                            .font(ProfileManagerTypography.caption)
+                            .font(ProfileManagerTypography.caption(scale: textScale))
                             .foregroundStyle(CodexTheme.supportText)
 
                         Text(summary.valueText)
-                            .font(ProfileManagerTypography.metricCompact)
+                            .font(ProfileManagerTypography.metricCompact(scale: textScale))
                             .foregroundStyle(accent)
                             .monospacedDigit()
                             .lineLimit(1)
@@ -563,11 +601,11 @@ struct ProfileUsageMetricBlock: View {
                     }
                 } else {
                     Text(summary.shortTitle)
-                        .font(ProfileManagerTypography.caption)
+                        .font(ProfileManagerTypography.caption(scale: textScale))
                         .foregroundStyle(CodexTheme.supportText)
 
                     Text(summary.valueText)
-                        .font(ProfileManagerTypography.metricExpanded)
+                        .font(ProfileManagerTypography.metricExpanded(scale: textScale))
                         .foregroundStyle(accent)
                         .monospacedDigit()
                 }
@@ -577,12 +615,12 @@ struct ProfileUsageMetricBlock: View {
                         .foregroundStyle(CodexTheme.mutedText)
                      + Text(summary.resetText)
                         .foregroundStyle(CodexTheme.resetCountdownEmphasisColor))
-                    .font(density.resetFont)
+                    .font(density.resetFont(scale: textScale))
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
                 } else {
                     Text(summary.resetText)
-                        .font(density.resetFont)
+                        .font(density.resetFont(scale: textScale))
                         .foregroundStyle(CodexTheme.mutedText)
                         .lineLimit(1)
                 }
@@ -609,30 +647,30 @@ enum UsageMetricDensity {
         }
     }
 
-    var padding: CGFloat {
+    func padding(scale: Double = 1) -> CGFloat {
         switch self {
         case .compact:
-            return 7
+            return 7 * CGFloat(scale)
         case .expanded:
-            return 12
+            return 12 * CGFloat(scale)
         }
     }
 
-    var contentSpacing: CGFloat {
+    func contentSpacing(scale: Double = 1) -> CGFloat {
         switch self {
         case .compact:
-            return 4
+            return 4 * CGFloat(scale)
         case .expanded:
-            return 8
+            return 8 * CGFloat(scale)
         }
     }
 
-    var resetFont: Font {
+    func resetFont(scale: Double = 1) -> Font {
         switch self {
         case .compact:
-            return ProfileManagerTypography.micro
+            return ProfileManagerTypography.micro(scale: scale)
         case .expanded:
-            return ProfileManagerTypography.small
+            return ProfileManagerTypography.small(scale: scale)
         }
     }
 }
@@ -647,4 +685,40 @@ enum ProfileManagerTypography {
     static let caption = Font.codexUtility(size: 12, weight: .medium, relativeTo: .caption)
     static let metricCompact = Font.codexUtility(size: 16, weight: .semibold, relativeTo: .headline)
     static let metricExpanded = Font.codexUtility(size: 30, weight: .semibold, relativeTo: .title2)
+
+    static func micro(scale: Double) -> Font {
+        Font.codexUtility(size: scaled(11, by: scale), weight: .medium, relativeTo: .caption2)
+    }
+
+    static func body(scale: Double) -> Font {
+        Font.codexUtility(size: scaled(15, by: scale), weight: .regular, relativeTo: .body)
+    }
+
+    static func bodyStrong(scale: Double) -> Font {
+        Font.codexUtility(size: scaled(15, by: scale), weight: .semibold, relativeTo: .body)
+    }
+
+    static func small(scale: Double) -> Font {
+        Font.codexUtility(size: scaled(13, by: scale), weight: .regular, relativeTo: .subheadline)
+    }
+
+    static func smallStrong(scale: Double) -> Font {
+        Font.codexUtility(size: scaled(13, by: scale), weight: .semibold, relativeTo: .subheadline)
+    }
+
+    static func caption(scale: Double) -> Font {
+        Font.codexUtility(size: scaled(12, by: scale), weight: .medium, relativeTo: .caption)
+    }
+
+    static func metricCompact(scale: Double) -> Font {
+        Font.codexUtility(size: scaled(16, by: scale), weight: .semibold, relativeTo: .headline)
+    }
+
+    static func metricExpanded(scale: Double) -> Font {
+        Font.codexUtility(size: scaled(30, by: scale), weight: .semibold, relativeTo: .title2)
+    }
+
+    private static func scaled(_ size: CGFloat, by scale: Double) -> CGFloat {
+        size * CGFloat(MenuBarPanelTextScalePreference.normalizedTextScale(scale))
+    }
 }

@@ -48,6 +48,39 @@ struct MenuBarRootViewTests {
         let bodyDescription = String(reflecting: type(of: rootView.body))
         #expect(bodyDescription.contains("MenuBarProfileRow") == true)
     }
+
+    @Test
+    func menuBarRootViewExposesPanelZoomControls() throws {
+        let tempDirectory = makeTemporaryDirectory()
+        let store = ProfileCatalogStore(
+            fileURL: tempDirectory.appendingPathComponent("profiles.json", isDirectory: false)
+        )
+        try store.saveProfiles([])
+
+        let controller = PlusProfileController(
+            catalogStore: store,
+            autoStart: false
+        )
+        let (defaults, suiteName) = makeUserDefaults()
+        let rootView = MenuBarRootView(
+            controller: controller,
+            currentTime: AppMinuteClock(now: Date(timeIntervalSince1970: 1_776_000_000)),
+            userDefaults: defaults,
+            openManagerWindow: { _ in }
+        )
+        let hostingView = NSHostingView(rootView: rootView)
+        hostingView.frame = NSRect(x: 0, y: 0, width: 484, height: 560)
+        let window = hostInWindow(hostingView)
+        defer {
+            defaults.removePersistentDomain(forName: suiteName)
+            window.orderOut(nil)
+        }
+
+        flushViewHierarchy(for: hostingView)
+
+        let bodyDescription = String(reflecting: type(of: rootView.body))
+        #expect(bodyDescription.contains("MenuBarZoomControls") == true)
+    }
 }
 
 @MainActor

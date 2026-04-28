@@ -75,6 +75,7 @@ update_policy:
 - 2026-04-20: In AppKit-hosted SwiftUI tests here, static `Text` inside styled cards or sidebar rows may not appear as `NSTextField` descendants at all. For UI copy/layout contracts, prefer testing a shared presentation model or explicit accessibility value instead of scraping sidebar labels from the `NSView` tree.
 - 2026-04-20: For narrow MenuBarRootView regressions where AppKit view scraping still hides styled row content, a lightweight structural check on `type(of: rootView.body)` can confirm an old inline-card view is gone. Use that only for small containment regressions; keep real behavior assertions in shared presentation tests first.
 - 2026-04-21: The same view-scraping trap also applies to inline `Save` buttons inside `ProfileManagerWindowView`. Even when the buttons are visible in SwiftUI, the hosted `NSView` tree here may expose neither `NSButton.title` nor a matching `NSTextField`. Prevent flaky tests by asserting editable-field structure or shared presentation/state, not visible button copy.
+- 2026-04-28: `xcodebuild -only-testing:CodexPlusBarTests/...` can compile this Swift Testing target but run `0 tests`, which is a false green for focused checks. Use `make test` for final verification, and confirm the Swift Testing summary shows the expected test count.
 
 ## UI And Data Flow Notes
 - 2026-03-18: The app now uses a dashboard-first account flow, not a selection-first workspace flow. Keep names and expiry dates visible for all returned accounts, and keep raw account IDs internal where possible.

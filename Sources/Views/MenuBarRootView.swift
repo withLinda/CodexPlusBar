@@ -4,6 +4,7 @@ import SwiftUI
 struct MenuBarRootView: View {
     @Bindable var controller: PlusProfileController
     @AppStorage(MenuBarProfilePreference.preferredProfileIDKey) private var preferredProfileIDStorage = ""
+    @AppStorage(MenuBarPanelTextScalePreference.textScaleKey) private var panelTextScaleStorage = MenuBarPanelTextScalePreference.defaultScale
     let currentTime: AppMinuteClock
     let openManagerWindow: @MainActor (UUID?) -> Void
 
@@ -19,6 +20,11 @@ struct MenuBarRootView: View {
         _preferredProfileIDStorage = AppStorage(
             wrappedValue: "",
             MenuBarProfilePreference.preferredProfileIDKey,
+            store: userDefaults
+        )
+        _panelTextScaleStorage = AppStorage(
+            wrappedValue: MenuBarPanelTextScalePreference.defaultScale,
+            MenuBarPanelTextScalePreference.textScaleKey,
             store: userDefaults
         )
     }
@@ -69,10 +75,22 @@ struct MenuBarRootView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .center, spacing: 10) {
                 Text("Profiles")
-                    .font(.codexTitle)
+                    .font(.codexSans(
+                        size: 18 * CGFloat(panelTextScale),
+                        weight: .semibold,
+                        relativeTo: .headline
+                    ))
                     .foregroundStyle(CodexTheme.primaryText)
 
                 Spacer(minLength: 0)
+
+                MenuBarZoomControls(
+                    textScale: panelTextScale,
+                    canZoomOut: panelTextScale > MenuBarPanelTextScalePreference.minimumScale,
+                    canZoomIn: panelTextScale < MenuBarPanelTextScalePreference.maximumScale,
+                    zoomOut: zoomPanelOut,
+                    zoomIn: zoomPanelIn
+                )
 
                 CodexStatusBadge(
                     title: controller.dashboardStatus.title,
@@ -87,7 +105,7 @@ struct MenuBarRootView: View {
             }
 
             Text(headerMetaText)
-                .font(.codexSmall)
+                .font(ProfileManagerTypography.small(scale: panelTextScale))
                 .foregroundStyle(CodexTheme.mutedText)
                 .lineLimit(1)
         }
@@ -100,11 +118,11 @@ struct MenuBarRootView: View {
             CodexCard(tier: .strong, accent: controller.dashboardStatus.tone.foregroundColor) {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Add your first profile")
-                        .font(.codexBodyStrong)
+                        .font(ProfileManagerTypography.bodyStrong(scale: panelTextScale))
                         .foregroundStyle(CodexTheme.primaryText)
 
                     Text("Each profile keeps its own ChatGPT cookies, so you only need to sign in once per email account.")
-                        .font(.codexSmall)
+                        .font(ProfileManagerTypography.small(scale: panelTextScale))
                         .foregroundStyle(CodexTheme.mutedText)
                         .fixedSize(horizontal: false, vertical: true)
 
@@ -124,6 +142,7 @@ struct MenuBarRootView: View {
                     snapshot: snapshot,
                     referenceDate: currentTime.now,
                     isPinned: isPinned,
+                    textScale: panelTextScale,
                     openManagerWindow: {
                         openManagerWindow(snapshot.id)
                     },
@@ -192,6 +211,10 @@ struct MenuBarRootView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    private var panelTextScale: Double {
+        MenuBarPanelTextScalePreference.normalizedTextScale(panelTextScaleStorage)
+    }
+
     private var headerMetaText: String {
         let count = controller.profiles.count
         let countLabel = count == 1 ? "1 profile" : "\(count) profiles"
@@ -230,6 +253,14 @@ struct MenuBarRootView: View {
         preferredProfileIDStorage = MenuBarProfilePreference.storedValue(for: profileID)
     }
 
+    private func zoomPanelIn() {
+        panelTextScaleStorage = MenuBarPanelTextScalePreference.zoomedInValue(from: panelTextScale)
+    }
+
+    private func zoomPanelOut() {
+        panelTextScaleStorage = MenuBarPanelTextScalePreference.zoomedOutValue(from: panelTextScale)
+    }
+
     private func copyProfileLabel(_ label: String) {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
@@ -259,6 +290,68 @@ struct MenuBarRootView: View {
 
     private func quitApp() {
         NSApplication.shared.terminate(nil)
+    }
+}
+
+private struct MenuBarZoomControls: View {
+    let textScale: Double
+    let canZoomOut: Bool
+    let canZoomIn: Bool
+    let zoomOut: () -> Void
+    let zoomIn: () -> Void
+
+    var body: some View {
+        HStack(spacing: 5) {
+            MenuBarZoomButton(
+                title: "A-",
+                helpText: "Zoom out menu bar panel",
+                textScale: textScale,
+                isDisabled: canZoomOut == false,
+                action: zoomOut
+            )
+
+            MenuBarZoomButton(
+                title: "A+",
+                helpText: "Zoom in menu bar panel",
+                textScale: textScale,
+                isDisabled: canZoomIn == false,
+                action: zoomIn
+            )
+        }
+        .fixedSize(horizontal: true, vertical: false)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Menu bar panel zoom")
+    }
+}
+
+private struct MenuBarZoomButton: View {
+    let title: String
+    let helpText: String
+    let textScale: Double
+    let isDisabled: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(ProfileManagerTypography.caption(scale: textScale))
+                .monospacedDigit()
+                .frame(minWidth: 30, minHeight: 28)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(isDisabled ? CodexTheme.quietText : CodexTheme.primaryText)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(CodexTheme.surfaceFill(for: .subtle))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(CodexTheme.surfaceBorder(for: .subtle), lineWidth: 1)
+                )
+        )
+        .opacity(isDisabled ? 0.46 : 1)
+        .accessibilityLabel(helpText)
+        .help(helpText)
+        .disabled(isDisabled)
     }
 }
 
@@ -335,6 +428,7 @@ private struct MenuBarProfileRow: View {
     let snapshot: PlusProfileSnapshot
     let referenceDate: Date
     let isPinned: Bool
+    let textScale: Double
     let openManagerWindow: () -> Void
     let copyProfileLabel: () -> Void
     let openEmailLink: () -> Void
@@ -345,6 +439,7 @@ private struct MenuBarProfileRow: View {
             snapshot: snapshot,
             referenceDate: referenceDate,
             mode: .menuBar(isPinned: isPinned),
+            textScale: textScale,
             primaryAction: openManagerWindow,
             copyAction: copyProfileLabel,
             emailAction: openEmailLink,

@@ -1,4 +1,93 @@
+import AppKit
 import SwiftUI
+
+struct ProfileManagerSelectedProfileActionsPresentation: Equatable, Sendable {
+    let canCopyProfileLabel: Bool
+    let copyHelpText: String
+    let canOpenEmailLink: Bool
+    let emailHelpText: String
+
+    init(profile: PlusProfile) {
+        canCopyProfileLabel = true
+        copyHelpText = "Copy profile label"
+        canOpenEmailLink = profile.resolvedEmailLinkURL != nil
+        emailHelpText = canOpenEmailLink
+            ? "Open email link"
+            : "Add an email link before opening it."
+    }
+}
+
+struct ProfileManagerDetailLayoutMetrics: Equatable {
+    let detailStackSpacing: CGFloat
+    let topGridSpacing: CGFloat
+    let compactCardPadding: CGFloat
+    let actionPanelWidth: CGFloat
+    let actionGridColumnCount: Int
+    let actionButtonSize: CGFloat
+    let actionButtonSpacing: CGFloat
+    let usageMetricSpacing: CGFloat
+    let usageMetricTextScale: Double
+    let sessionBrowserMinHeight: CGFloat
+    let sessionBrowserIdealHeight: CGFloat
+    let sessionBrowserMaxHeight: CGFloat
+
+    static let browserFirst = ProfileManagerDetailLayoutMetrics(
+        detailStackSpacing: 12,
+        topGridSpacing: 12,
+        compactCardPadding: 12,
+        actionPanelWidth: 168,
+        actionGridColumnCount: 3,
+        actionButtonSize: 36,
+        actionButtonSpacing: 8,
+        usageMetricSpacing: 10,
+        usageMetricTextScale: 0.9,
+        sessionBrowserMinHeight: 360,
+        sessionBrowserIdealHeight: 420,
+        sessionBrowserMaxHeight: 520
+    )
+
+    var actionGridColumns: [GridItem] {
+        Array(
+            repeating: GridItem(
+                .fixed(actionButtonSize),
+                spacing: actionButtonSpacing,
+                alignment: .leading
+            ),
+            count: actionGridColumnCount
+        )
+    }
+}
+
+struct ProfileManagerSessionPanelPresentation: Equatable, Sendable {
+    let title = "Sign in / repair session"
+    let summaryText: String
+    let toggleTitle: String
+
+    init(snapshot: PlusProfileSnapshot, isExpanded: Bool) {
+        toggleTitle = isExpanded ? "Hide session" : "Show session"
+
+        switch snapshot.state {
+        case .idle:
+            summaryText = isExpanded
+                ? "Sign in with this profile in its own cookie store."
+                : "Hidden until you need to sign in."
+        case .loading:
+            summaryText = isExpanded
+                ? "This profile is refreshing while the session view stays open."
+                : "Hidden while this profile refreshes."
+        case .ready:
+            summaryText = isExpanded
+                ? "This profile session view is open."
+                : "Hidden until you need to repair this session."
+        case .needsLogin:
+            summaryText = isExpanded
+                ? "Sign in again to repair this profile."
+                : "Open the session view to sign in again."
+        case .failed:
+            summaryText = snapshot.statusMessage ?? "Open the session view to inspect this profile."
+        }
+    }
+}
 
 struct ProfileManagerWindowView: View {
     @Bindable var controller: PlusProfileController
@@ -187,15 +276,16 @@ struct ProfileManagerWindowView: View {
     @ViewBuilder
     private var detailPane: some View {
         if let snapshot = controller.selectedProfile {
+            let metrics = ProfileManagerDetailLayoutMetrics.browserFirst
+
             ScrollView(.vertical, showsIndicators: true) {
-                VStack(alignment: .leading, spacing: CodexTheme.contentSpacing) {
-                    detailHeader(for: snapshot)
-                    usagePanel(for: snapshot)
-                    actionPanel(for: snapshot)
-                    webViewPanel(for: snapshot)
+                VStack(alignment: .leading, spacing: metrics.detailStackSpacing) {
+                    detailTopGrid(for: snapshot, metrics: metrics)
+                    usagePanel(for: snapshot, metrics: metrics)
+                    webViewPanel(for: snapshot, metrics: metrics)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.bottom, CodexTheme.contentSpacing)
+                .padding(.bottom, metrics.detailStackSpacing)
             }
         } else {
             CodexCard(tier: .strong) {
@@ -214,11 +304,32 @@ struct ProfileManagerWindowView: View {
         }
     }
 
-    private func detailHeader(for snapshot: PlusProfileSnapshot) -> some View {
-        CodexCard(tier: .strong, accent: detailAccent(for: snapshot)) {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack(alignment: .top, spacing: 16) {
-                    VStack(alignment: .leading, spacing: 12) {
+    private func detailTopGrid(
+        for snapshot: PlusProfileSnapshot,
+        metrics: ProfileManagerDetailLayoutMetrics
+    ) -> some View {
+        HStack(alignment: .top, spacing: metrics.topGridSpacing) {
+            detailHeader(for: snapshot, metrics: metrics)
+                .layoutPriority(1)
+
+            actionPanel(for: snapshot, metrics: metrics)
+                .frame(width: metrics.actionPanelWidth, alignment: .topLeading)
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    private func detailHeader(
+        for snapshot: PlusProfileSnapshot,
+        metrics: ProfileManagerDetailLayoutMetrics
+    ) -> some View {
+        CodexCard(
+            tier: .strong,
+            accent: detailAccent(for: snapshot),
+            padding: metrics.compactCardPadding
+        ) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .top, spacing: 12) {
+                    HStack(alignment: .top, spacing: 10) {
                         ProfileManagerEditableField(
                             title: "Profile label",
                             placeholder: "Email or label",
@@ -228,6 +339,7 @@ struct ProfileManagerWindowView: View {
                                 saveLabelDraft(for: snapshot)
                             }
                         )
+                        .frame(maxWidth: .infinity, alignment: .leading)
 
                         ProfileManagerEditableField(
                             title: "Email link",
@@ -238,6 +350,7 @@ struct ProfileManagerWindowView: View {
                                 saveEmailLinkDraft(for: snapshot)
                             }
                         )
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -254,6 +367,8 @@ struct ProfileManagerWindowView: View {
                                 .controlSize(.small)
                                 .tint(CodexTheme.accentOrange)
                         }
+
+                        selectedProfileQuickActions(for: snapshot)
                     }
                 }
 
@@ -276,23 +391,52 @@ struct ProfileManagerWindowView: View {
         }
     }
 
-    private func usagePanel(for snapshot: PlusProfileSnapshot) -> some View {
-        CodexCard(tier: .regular) {
-            VStack(alignment: .leading, spacing: 14) {
+    private func selectedProfileQuickActions(for snapshot: PlusProfileSnapshot) -> some View {
+        let presentation = ProfileManagerSelectedProfileActionsPresentation(profile: snapshot.profile)
+
+        return HStack(spacing: 8) {
+            ProfileManagerQuickActionIconButton(
+                symbolName: "doc.on.doc",
+                label: "Copy profile label",
+                helpText: presentation.copyHelpText,
+                isDisabled: presentation.canCopyProfileLabel == false
+            ) {
+                copyProfileLabel(for: snapshot)
+            }
+
+            ProfileManagerQuickActionIconButton(
+                symbolName: "arrow.up.forward.square",
+                label: "Open email link",
+                helpText: presentation.emailHelpText,
+                isDisabled: presentation.canOpenEmailLink == false
+            ) {
+                openEmailLink(for: snapshot.profile)
+            }
+        }
+    }
+
+    private func usagePanel(
+        for snapshot: PlusProfileSnapshot,
+        metrics: ProfileManagerDetailLayoutMetrics
+    ) -> some View {
+        CodexCard(tier: .regular, padding: metrics.compactCardPadding) {
+            VStack(alignment: .leading, spacing: 10) {
                 Text("Usage")
                     .font(ProfileManagerTypography.bodyStrong)
                     .foregroundStyle(CodexTheme.primaryText)
 
                 if let usageSummary = snapshot.usageSummary(referenceDate: currentTime.now) {
-                    HStack(spacing: 12) {
+                    HStack(spacing: metrics.usageMetricSpacing) {
                         ProfileUsageMetricBlock(
                             summary: usageSummary.primary,
-                            density: .expanded
+                            density: .expanded,
+                            textScale: metrics.usageMetricTextScale
                         )
 
                         ProfileUsageMetricBlock(
                             summary: usageSummary.secondary,
-                            density: .expanded
+                            density: .expanded,
+                            textScale: metrics.usageMetricTextScale
                         )
                     }
                     .accessibilityElement(children: .contain)
@@ -309,14 +453,21 @@ struct ProfileManagerWindowView: View {
         }
     }
 
-    private func actionPanel(for snapshot: PlusProfileSnapshot) -> some View {
-        CodexCard(tier: .regular) {
-            VStack(alignment: .leading, spacing: 14) {
+    private func actionPanel(
+        for snapshot: PlusProfileSnapshot,
+        metrics: ProfileManagerDetailLayoutMetrics
+    ) -> some View {
+        CodexCard(tier: .regular, padding: metrics.compactCardPadding) {
+            VStack(alignment: .leading, spacing: 10) {
                 Text("Actions")
                     .font(ProfileManagerTypography.bodyStrong)
                     .foregroundStyle(CodexTheme.primaryText)
 
-                HStack(spacing: 10) {
+                LazyVGrid(
+                    columns: metrics.actionGridColumns,
+                    alignment: .leading,
+                    spacing: metrics.actionButtonSpacing
+                ) {
                     CodexIconButton(
                         symbolName: "arrow.clockwise",
                         helpText: "Refresh profile",
@@ -341,9 +492,7 @@ struct ProfileManagerWindowView: View {
                     ) {
                         clearSession(snapshot.id)
                     }
-                }
 
-                HStack(spacing: 10) {
                     CodexIconButton(
                         symbolName: "arrow.up",
                         helpText: "Move profile up",
@@ -378,17 +527,25 @@ struct ProfileManagerWindowView: View {
     }
 
     @ViewBuilder
-    private func webViewPanel(for snapshot: PlusProfileSnapshot) -> some View {
+    private func webViewPanel(
+        for snapshot: PlusProfileSnapshot,
+        metrics: ProfileManagerDetailLayoutMetrics
+    ) -> some View {
         if let dataStore = controller.dataStore(for: snapshot.id) {
-            CodexCard(tier: .strong) {
+            let presentation = ProfileManagerSessionPanelPresentation(
+                snapshot: snapshot,
+                isExpanded: isSessionExpanded
+            )
+
+            CodexCard(tier: .strong, padding: metrics.compactCardPadding) {
                 VStack(alignment: .leading, spacing: isSessionExpanded ? 12 : 0) {
                     HStack(spacing: 12) {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("Sign in / repair session")
+                            Text(presentation.title)
                                 .font(ProfileManagerTypography.bodyStrong)
                                 .foregroundStyle(CodexTheme.primaryText)
 
-                            Text(sessionSummaryText(for: snapshot))
+                            Text(presentation.summaryText)
                                 .font(ProfileManagerTypography.small)
                                 .foregroundStyle(CodexTheme.mutedText)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -396,7 +553,7 @@ struct ProfileManagerWindowView: View {
 
                         Spacer(minLength: 0)
 
-                        Button(isSessionExpanded ? "Hide session" : "Show session") {
+                        Button(presentation.toggleTitle) {
                             withAnimation(.easeInOut(duration: 0.18)) {
                                 isSessionExpanded.toggle()
                             }
@@ -416,7 +573,11 @@ struct ProfileManagerWindowView: View {
                                     )
                                 )
                         }
-                        .frame(minHeight: 360, idealHeight: 420, maxHeight: 520)
+                        .frame(
+                            minHeight: metrics.sessionBrowserMinHeight,
+                            idealHeight: metrics.sessionBrowserIdealHeight,
+                            maxHeight: metrics.sessionBrowserMaxHeight
+                        )
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -461,29 +622,6 @@ struct ProfileManagerWindowView: View {
         }
 
         return snapshot.state == .ready ? nil : snapshot.state.tone.foregroundColor
-    }
-
-    private func sessionSummaryText(for snapshot: PlusProfileSnapshot) -> String {
-        switch snapshot.state {
-        case .idle:
-            return isSessionExpanded
-                ? "Sign in with this profile in its own cookie store."
-                : "Hidden until you need to sign in."
-        case .loading:
-            return isSessionExpanded
-                ? "This profile is refreshing while the session view stays open."
-                : "Hidden while this profile refreshes."
-        case .ready:
-            return isSessionExpanded
-                ? "This profile session view is open."
-                : "Hidden until you need to repair this session."
-        case .needsLogin:
-            return isSessionExpanded
-                ? "Sign in again to repair this profile."
-                : "Open the session view to sign in again."
-        case .failed:
-            return snapshot.statusMessage ?? "Open the session view to inspect this profile."
-        }
     }
 
     private func isLabelSaveEnabled(for snapshot: PlusProfileSnapshot) -> Bool {
@@ -549,6 +687,20 @@ struct ProfileManagerWindowView: View {
     private func saveEmailLinkDraft(for snapshot: PlusProfileSnapshot) {
         controller.updateEmailLink(for: snapshot.id, link: emailLinkDraft)
         emailLinkDraft = controller.profiles.first(where: { $0.id == snapshot.id })?.profile.emailLink ?? ""
+    }
+
+    private func copyProfileLabel(for snapshot: PlusProfileSnapshot) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(snapshot.label, forType: .string)
+    }
+
+    private func openEmailLink(for profile: PlusProfile) {
+        guard let url = profile.resolvedEmailLinkURL else {
+            return
+        }
+
+        NSWorkspace.shared.open(url)
     }
 
     private func refreshAll() {
@@ -682,6 +834,26 @@ private struct ProfileManagerStatusBanner: View {
                         .stroke(tone.borderColor, lineWidth: 1)
                 )
         )
+    }
+}
+
+private struct ProfileManagerQuickActionIconButton: View {
+    let symbolName: String
+    let label: String
+    let helpText: String
+    let isDisabled: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: symbolName)
+                .frame(width: 14, height: 14)
+        }
+        .buttonStyle(CodexIconButtonStyle(tone: .secondary))
+        .accessibilityLabel(label)
+        .accessibilityHint(helpText)
+        .help(helpText)
+        .disabled(isDisabled)
     }
 }
 
