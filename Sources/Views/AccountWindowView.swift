@@ -1,19 +1,41 @@
 import AppKit
 import SwiftUI
 
-struct ProfileManagerSelectedProfileActionsPresentation: Equatable, Sendable {
-    let canCopyProfileLabel: Bool
-    let copyHelpText: String
-    let canOpenEmailLink: Bool
-    let emailHelpText: String
+struct ProfileManagerLabelCopyButtonPresentation: Equatable, Sendable {
+    let title: String
+    let symbolName: String
+    let helpText: String
+    let accessibilityLabel: String
+    let copyText: String
+    let isCopied: Bool
+
+    init(labelDraft: String, isCopied: Bool) {
+        let copyText = labelDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.copyText = copyText
+        self.isCopied = isCopied
+        title = isCopied ? "Copied" : "Copy"
+        symbolName = isCopied ? "checkmark" : "doc.on.doc"
+        helpText = copyText.isEmpty ? "Add a profile label before copying it." : "Copy profile label"
+        accessibilityLabel = isCopied ? "Profile label copied" : "Copy profile label"
+    }
+
+    var isDisabled: Bool {
+        copyText.isEmpty
+    }
+}
+
+struct ProfileManagerEmailLinkButtonPresentation: Equatable, Sendable {
+    let title = "Open"
+    let symbolName = "arrow.up.forward.square"
+    let helpText: String
+    let accessibilityLabel = "Open email link"
+    let isDisabled: Bool
 
     init(profile: PlusProfile) {
-        canCopyProfileLabel = true
-        copyHelpText = "Copy profile label"
-        canOpenEmailLink = profile.resolvedEmailLinkURL != nil
-        emailHelpText = canOpenEmailLink
-            ? "Open email link"
-            : "Add an email link before opening it."
+        isDisabled = profile.resolvedEmailLinkURL == nil
+        helpText = isDisabled
+            ? "Add an email link before opening it."
+            : "Open email link"
     }
 }
 
@@ -98,6 +120,8 @@ struct ProfileManagerWindowView: View {
     @State private var webViewReloadToken = UUID()
     @State private var labelDraft = ""
     @State private var emailLinkDraft = ""
+    @State private var copiedProfileID: UUID?
+    @State private var labelCopyResetTask: Task<Void, Never>?
 
     init(
         controller: PlusProfileController,
@@ -153,7 +177,11 @@ struct ProfileManagerWindowView: View {
         }
         .onChange(of: controller.selectedProfileID) { _, _ in
             webViewReloadToken = UUID()
+            resetLabelCopyFeedback()
             syncDrafts(with: controller.selectedProfile)
+        }
+        .onDisappear {
+            resetLabelCopyFeedback()
         }
     }
 
@@ -329,7 +357,7 @@ struct ProfileManagerWindowView: View {
         ) {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .top, spacing: 12) {
-                    HStack(alignment: .top, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 12) {
                         ProfileManagerEditableField(
                             title: "Profile label",
                             placeholder: "Email or label",
@@ -338,7 +366,14 @@ struct ProfileManagerWindowView: View {
                             onSave: {
                                 saveLabelDraft(for: snapshot)
                             }
-                        )
+                        ) {
+                            ProfileManagerLabelCopyButton(
+                                presentation: labelCopyButtonPresentation(for: snapshot),
+                                action: {
+                                    copyLabelDraft(for: snapshot)
+                                }
+                            )
+                        }
                         .frame(maxWidth: .infinity, alignment: .leading)
 
                         ProfileManagerEditableField(
@@ -349,7 +384,14 @@ struct ProfileManagerWindowView: View {
                             onSave: {
                                 saveEmailLinkDraft(for: snapshot)
                             }
-                        )
+                        ) {
+                            ProfileManagerEmailLinkButton(
+                                presentation: ProfileManagerEmailLinkButtonPresentation(profile: snapshot.profile),
+                                action: {
+                                    openEmailLink(for: snapshot.profile)
+                                }
+                            )
+                        }
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -367,8 +409,6 @@ struct ProfileManagerWindowView: View {
                                 .controlSize(.small)
                                 .tint(CodexTheme.accentOrange)
                         }
-
-                        selectedProfileQuickActions(for: snapshot)
                     }
                 }
 
@@ -388,30 +428,6 @@ struct ProfileManagerWindowView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-
-    private func selectedProfileQuickActions(for snapshot: PlusProfileSnapshot) -> some View {
-        let presentation = ProfileManagerSelectedProfileActionsPresentation(profile: snapshot.profile)
-
-        return HStack(spacing: 8) {
-            ProfileManagerQuickActionIconButton(
-                symbolName: "doc.on.doc",
-                label: "Copy profile label",
-                helpText: presentation.copyHelpText,
-                isDisabled: presentation.canCopyProfileLabel == false
-            ) {
-                copyProfileLabel(for: snapshot)
-            }
-
-            ProfileManagerQuickActionIconButton(
-                symbolName: "arrow.up.forward.square",
-                label: "Open email link",
-                helpText: presentation.emailHelpText,
-                isDisabled: presentation.canOpenEmailLink == false
-            ) {
-                openEmailLink(for: snapshot.profile)
-            }
         }
     }
 
@@ -689,10 +705,40 @@ struct ProfileManagerWindowView: View {
         emailLinkDraft = controller.profiles.first(where: { $0.id == snapshot.id })?.profile.emailLink ?? ""
     }
 
-    private func copyProfileLabel(for snapshot: PlusProfileSnapshot) {
+    private func labelCopyButtonPresentation(for snapshot: PlusProfileSnapshot) -> ProfileManagerLabelCopyButtonPresentation {
+        ProfileManagerLabelCopyButtonPresentation(
+            labelDraft: labelDraft,
+            isCopied: copiedProfileID == snapshot.id
+        )
+    }
+
+    private func copyLabelDraft(for snapshot: PlusProfileSnapshot) {
+        let presentation = labelCopyButtonPresentation(for: snapshot)
+        guard presentation.isDisabled == false else {
+            return
+        }
+
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
-        pasteboard.setString(snapshot.label, forType: .string)
+        pasteboard.setString(presentation.copyText, forType: .string)
+
+        copiedProfileID = snapshot.id
+        labelCopyResetTask?.cancel()
+        labelCopyResetTask = Task { @MainActor [profileID = snapshot.id] in
+            try? await Task.sleep(for: .milliseconds(1_400))
+            guard Task.isCancelled == false, copiedProfileID == profileID else {
+                return
+            }
+
+            copiedProfileID = nil
+            labelCopyResetTask = nil
+        }
+    }
+
+    private func resetLabelCopyFeedback() {
+        labelCopyResetTask?.cancel()
+        labelCopyResetTask = nil
+        copiedProfileID = nil
     }
 
     private func openEmailLink(for profile: PlusProfile) {
@@ -738,12 +784,29 @@ struct ProfileManagerWindowView: View {
     }
 }
 
-private struct ProfileManagerEditableField: View {
+private struct ProfileManagerEditableField<TrailingContent: View>: View {
     let title: String
     let placeholder: String
     @Binding var text: String
     let isSaveEnabled: Bool
     let onSave: () -> Void
+    let trailingContent: TrailingContent
+
+    init(
+        title: String,
+        placeholder: String,
+        text: Binding<String>,
+        isSaveEnabled: Bool,
+        onSave: @escaping () -> Void,
+        @ViewBuilder trailingContent: () -> TrailingContent
+    ) {
+        self.title = title
+        self.placeholder = placeholder
+        _text = text
+        self.isSaveEnabled = isSaveEnabled
+        self.onSave = onSave
+        self.trailingContent = trailingContent()
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -780,11 +843,149 @@ private struct ProfileManagerEditableField: View {
                         }
                     }
 
+                trailingContent
+
                 Button("Save", action: onSave)
                     .buttonStyle(ProfileManagerInlineSaveButtonStyle())
                     .disabled(isSaveEnabled == false)
             }
         }
+    }
+}
+
+private extension ProfileManagerEditableField where TrailingContent == EmptyView {
+    init(
+        title: String,
+        placeholder: String,
+        text: Binding<String>,
+        isSaveEnabled: Bool,
+        onSave: @escaping () -> Void
+    ) {
+        self.init(
+            title: title,
+            placeholder: placeholder,
+            text: text,
+            isSaveEnabled: isSaveEnabled,
+            onSave: onSave
+        ) {
+            EmptyView()
+        }
+    }
+}
+
+private struct ProfileManagerLabelCopyButton: View {
+    let presentation: ProfileManagerLabelCopyButtonPresentation
+    let action: () -> Void
+
+    var body: some View {
+        ProfileManagerInlineFieldActionButton(
+            title: presentation.title,
+            symbolName: presentation.symbolName,
+            helpText: presentation.helpText,
+            accessibilityLabel: presentation.accessibilityLabel,
+            isDisabled: presentation.isDisabled,
+            isConfirmed: presentation.isCopied,
+            action: action
+        )
+    }
+}
+
+private struct ProfileManagerEmailLinkButton: View {
+    let presentation: ProfileManagerEmailLinkButtonPresentation
+    let action: () -> Void
+
+    var body: some View {
+        ProfileManagerInlineFieldActionButton(
+            title: presentation.title,
+            symbolName: presentation.symbolName,
+            helpText: presentation.helpText,
+            accessibilityLabel: presentation.accessibilityLabel,
+            isDisabled: presentation.isDisabled,
+            isConfirmed: false,
+            action: action
+        )
+    }
+}
+
+private struct ProfileManagerInlineFieldActionButton: View {
+    let title: String
+    let symbolName: String
+    let helpText: String
+    let accessibilityLabel: String
+    let isDisabled: Bool
+    let isConfirmed: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: symbolName)
+                    .font(.system(size: 12, weight: .semibold))
+                    .frame(width: 14, height: 14)
+
+                Text(title)
+            }
+        }
+        .buttonStyle(ProfileManagerInlineFieldActionButtonStyle(isConfirmed: isConfirmed))
+        .disabled(isDisabled)
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityHint(helpText)
+        .help(helpText)
+    }
+}
+
+private struct ProfileManagerInlineFieldActionButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    let isConfirmed: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(ProfileManagerTypography.caption)
+            .foregroundStyle(foregroundColor)
+            .frame(width: 94, height: 38)
+            .background(
+                RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
+                    .fill(backgroundColor(isPressed: configuration.isPressed))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
+                            .fill(CodexTheme.surfaceSheen(for: .subtle))
+                    )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
+                    .stroke(borderColor, lineWidth: 1)
+            )
+            .opacity(isEnabled ? (configuration.isPressed ? 0.92 : 1) : 0.46)
+            .scaleEffect(configuration.isPressed ? 0.99 : 1)
+            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
+            .animation(.easeInOut(duration: 0.16), value: isConfirmed)
+    }
+
+    private var foregroundColor: Color {
+        guard isEnabled else {
+            return CodexTheme.quietText
+        }
+
+        return isConfirmed ? CodexTheme.accentGreen : CodexTheme.primaryText
+    }
+
+    private var borderColor: Color {
+        guard isEnabled else {
+            return CodexTheme.surfaceBorder(for: .subtle)
+        }
+
+        return isConfirmed
+            ? CodexTheme.accentGreen.opacity(0.34)
+            : CodexTheme.surfaceBorder(for: .subtle)
+    }
+
+    private func backgroundColor(isPressed: Bool) -> Color {
+        if isConfirmed {
+            return CodexTheme.accentGreen.opacity(isPressed ? 0.16 : 0.12)
+        }
+
+        return CodexTheme.surfaceFill(for: .subtle).opacity(isPressed ? 0.98 : 0.92)
     }
 }
 
@@ -834,26 +1035,6 @@ private struct ProfileManagerStatusBanner: View {
                         .stroke(tone.borderColor, lineWidth: 1)
                 )
         )
-    }
-}
-
-private struct ProfileManagerQuickActionIconButton: View {
-    let symbolName: String
-    let label: String
-    let helpText: String
-    let isDisabled: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: symbolName)
-                .frame(width: 14, height: 14)
-        }
-        .buttonStyle(CodexIconButtonStyle(tone: .secondary))
-        .accessibilityLabel(label)
-        .accessibilityHint(helpText)
-        .help(helpText)
-        .disabled(isDisabled)
     }
 }
 

@@ -76,7 +76,7 @@ struct ProfileManagerWindowViewTests {
     }
 
     @Test
-    func selectedProfileQuickActionsExposeCopyAndEmailAvailability() {
+    func emailLinkOpenButtonPresentationUsesInlineFieldActionState() {
         let profileWithEmail = sampleProfile(
             label: "alpha@example.com",
             emailLink: "mail.google.com/mail/u/0/#inbox",
@@ -88,16 +88,48 @@ struct ProfileManagerWindowViewTests {
             sortOrder: 1
         )
 
-        let enabledPresentation = ProfileManagerSelectedProfileActionsPresentation(profile: profileWithEmail)
-        #expect(enabledPresentation.canCopyProfileLabel)
-        #expect(enabledPresentation.copyHelpText == "Copy profile label")
-        #expect(enabledPresentation.canOpenEmailLink)
-        #expect(enabledPresentation.emailHelpText == "Open email link")
+        let enabled = ProfileManagerEmailLinkButtonPresentation(profile: profileWithEmail)
+        let disabled = ProfileManagerEmailLinkButtonPresentation(profile: profileWithoutEmail)
 
-        let disabledPresentation = ProfileManagerSelectedProfileActionsPresentation(profile: profileWithoutEmail)
-        #expect(disabledPresentation.canCopyProfileLabel)
-        #expect(disabledPresentation.canOpenEmailLink == false)
-        #expect(disabledPresentation.emailHelpText == "Add an email link before opening it.")
+        #expect(enabled.title == "Open")
+        #expect(enabled.symbolName == "arrow.up.forward.square")
+        #expect(enabled.isDisabled == false)
+        #expect(enabled.helpText == "Open email link")
+
+        #expect(disabled.title == "Open")
+        #expect(disabled.symbolName == "arrow.up.forward.square")
+        #expect(disabled.isDisabled)
+        #expect(disabled.helpText == "Add an email link before opening it.")
+    }
+
+    @Test
+    func labelCopyButtonPresentationUsesStableInlineStates() {
+        let normal = ProfileManagerLabelCopyButtonPresentation(
+            labelDraft: "  alpha@example.com  ",
+            isCopied: false
+        )
+        let copied = ProfileManagerLabelCopyButtonPresentation(
+            labelDraft: "alpha@example.com",
+            isCopied: true
+        )
+        let empty = ProfileManagerLabelCopyButtonPresentation(
+            labelDraft: "   ",
+            isCopied: false
+        )
+
+        #expect(normal.title == "Copy")
+        #expect(normal.symbolName == "doc.on.doc")
+        #expect(normal.isDisabled == false)
+        #expect(normal.copyText == "alpha@example.com")
+
+        #expect(copied.title == "Copied")
+        #expect(copied.symbolName == "checkmark")
+        #expect(copied.isDisabled == false)
+
+        #expect(empty.title == "Copy")
+        #expect(empty.symbolName == "doc.on.doc")
+        #expect(empty.isDisabled)
+        #expect(empty.copyText == "")
     }
 
     @Test
