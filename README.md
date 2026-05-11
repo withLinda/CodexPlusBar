@@ -38,15 +38,24 @@ When you use more than one ChatGPT profile, checking limits can become slow and 
 
 ## Install
 
-If you have a packaged DMG, open it and drag `CodexPlusBar.app` to Applications.
+Download the latest packaged DMG from the GitHub release:
 
-To build from source:
+- [CodexPlusBar build edb83e1fee7d release](https://github.com/withLinda/CodexPlusBar/releases/tag/snapshot-2026-05-11-edb83e1fee7d)
+- [Direct DMG download](https://github.com/withLinda/CodexPlusBar/releases/download/snapshot-2026-05-11-edb83e1fee7d/CodexPlusBar-edb83e1fee7d.dmg)
+
+Open the DMG, then drag `CodexPlusBar.app` to Applications.
+
+This build is ad-hoc signed, so macOS may show a security warning the first time you open it.
+
+### Build From Source
+
+Use this if you want to run the app from the source code:
 
 ```bash
 make build-and-run
 ```
 
-To create a local DMG:
+To create a local developer DMG:
 
 ```bash
 make dmg
