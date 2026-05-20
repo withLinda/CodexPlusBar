@@ -174,8 +174,11 @@ struct ProfileSummaryRowTests {
 
         #expect(taggedPresentation.tags == [.active, .pending])
         #expect(taggedPresentation.showsTags)
+        #expect(taggedPresentation.compactTagSummary.primaryTag == .pending)
+        #expect(taggedPresentation.compactTagSummary.overflowCount == 1)
         #expect(untaggedPresentation.tags == [])
         #expect(untaggedPresentation.showsTags == false)
+        #expect(untaggedPresentation.compactTagSummary.primaryTag == nil)
     }
 }
 

@@ -33,6 +33,24 @@ struct PlusProfileModelsTests {
     }
 
     @Test
+    func compactTagSummaryUsesPriorityTagAndOverflowCount() {
+        let summary = ProfileTagSummary(tags: [.active, .pending, .needAction])
+
+        #expect(summary.primaryTag == .needAction)
+        #expect(summary.overflowCount == 2)
+        #expect(summary.accessibilityValue == "Need action, Active, Pending")
+    }
+
+    @Test
+    func compactTagSummaryCollapsesWhenTagsAreEmpty() {
+        let summary = ProfileTagSummary(tags: [])
+
+        #expect(summary.primaryTag == nil)
+        #expect(summary.overflowCount == 0)
+        #expect(summary.accessibilityValue == "No tags")
+    }
+
+    @Test
     func profileDecoderDefaultsMissingTagsToEmpty() throws {
         let json = """
         {

@@ -153,7 +153,9 @@ struct ProfileManagerWindowViewTests {
             tagCounts: ProfileTagCounts(active: 2, needAction: 1, pending: 2)
         )
 
-        #expect(presentation.countText == "2 shown of 5")
+        #expect(presentation.countText == "2 of 5 shown")
+        #expect(presentation.visibleSummaryText == "2 of 5 shown")
+        #expect(presentation.accessibilitySummaryText == "2 of 5 shown, 2 active, 1 need action, 2 pending")
         #expect(presentation.statusCountText == "2 active · 1 need action · 2 pending")
         #expect(presentation.isAllSelected == false)
         #expect(presentation.isSelected(.active))

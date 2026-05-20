@@ -625,10 +625,10 @@ struct ProfileManagerWindowView: View {
 
         if let refreshedAt = controller.profiles.compactMap(\.lastRefreshAt).max(),
            let updatedText = DisplayFormatter.updatedText(refreshedAt, referenceDate: currentTime.now) {
-            return "\(updatedText) · \(countLabel) · \(profileTagCounts.statusText)"
+            return "\(updatedText) · \(countLabel)"
         }
 
-        return count == 0 ? "Add your first profile to begin" : "\(countLabel) · \(profileTagCounts.statusText)"
+        return count == 0 ? "Add your first profile to begin" : countLabel
     }
 
     private var filteredSidebarProfiles: [PlusProfileSnapshot] {
@@ -653,7 +653,7 @@ struct ProfileManagerWindowView: View {
             return "No saved profiles yet"
         }
 
-        return "\(sidebarFilterPresentation.countText) · \(sidebarFilterPresentation.statusCountText)"
+        return sidebarFilterPresentation.visibleSummaryText
     }
 
     private func detailSummary(for snapshot: PlusProfileSnapshot) -> String {

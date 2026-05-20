@@ -88,12 +88,38 @@ struct MenuBarRootViewTests {
         let presentation = ProfileTagFilterBarPresentation(
             filter: ProfileTagFilter(),
             shownCount: 3,
-            totalCount: 3
+            totalCount: 3,
+            tagCounts: ProfileTagCounts(active: 1, needAction: 1, pending: 1)
         )
 
         #expect(presentation.countText == "3 profiles")
+        #expect(presentation.visibleSummaryText == "3 profiles")
+        #expect(presentation.accessibilitySummaryText == "3 profiles, 1 active, 1 need action, 1 pending")
+        #expect(presentation.segments.map(\.displayText) == ["All 3", "Active 1", "Action 1", "Pending 1"])
         #expect(presentation.isAllSelected)
         #expect(presentation.isSelected(.active) == false)
+    }
+
+    @Test
+    func tagFilterPresentationDisablesEmptyUnselectedSegments() throws {
+        let presentation = ProfileTagFilterBarPresentation(
+            filter: ProfileTagFilter([.active]),
+            shownCount: 2,
+            totalCount: 3,
+            tagCounts: ProfileTagCounts(active: 2, needAction: 0, pending: 1)
+        )
+
+        let active = try #require(presentation.segments.first { $0.tag == .active })
+        let needAction = try #require(presentation.segments.first { $0.tag == .needAction })
+
+        #expect(presentation.visibleSummaryText == "2 of 3 shown")
+        #expect(active.displayText == "Active 2")
+        #expect(active.isSelected)
+        #expect(active.isEnabled)
+        #expect(needAction.displayText == "Action 0")
+        #expect(needAction.accessibilityLabel == "Need action")
+        #expect(needAction.isSelected == false)
+        #expect(needAction.isEnabled == false)
     }
 }
 

@@ -36,6 +36,7 @@ struct ProfileSummaryRowPresentation: Equatable, Sendable {
     let expiryEmphasisToken: CodexColorToken?
     let accessory: ProfileSummaryRowAccessory
     let isPinned: Bool
+    let compactTagSummary: ProfileTagSummary
     let showsStatusBadge: Bool
     let showsInlineSecondaryActions: Bool
     let canOpenEmailLink: Bool
@@ -50,6 +51,7 @@ struct ProfileSummaryRowPresentation: Equatable, Sendable {
     ) {
         title = snapshot.label
         tags = snapshot.tags
+        compactTagSummary = ProfileTagSummary(tags: snapshot.tags)
         let usageSummary = snapshot.usageSummary(referenceDate: referenceDate)
         self.usageSummary = usageSummary
         let showsExpirySupportLine = usageSummary != nil
@@ -250,7 +252,10 @@ struct ProfileSummaryRow: View {
             wrappedPrimaryAction {
                 VStack(alignment: .leading, spacing: scaled(8)) {
                     if presentation.showsTags {
-                        ProfileTagStrip(tags: presentation.tags, textScale: effectiveTextScale)
+                        ProfileTagSummaryStrip(
+                            summary: presentation.compactTagSummary,
+                            textScale: effectiveTextScale
+                        )
                     }
 
                     if let usageSummary = presentation.usageSummary {
@@ -277,10 +282,9 @@ struct ProfileSummaryRow: View {
                 .layoutPriority(1)
 
             if presentation.showsTags {
-                ProfileTagStrip(
-                    tags: presentation.tags,
-                    textScale: 0.92,
-                    labelStyle: sidebarTagLabelStyle
+                ProfileTagSummaryStrip(
+                    summary: presentation.compactTagSummary,
+                    textScale: 0.92
                 )
                 .layoutPriority(2)
             }
@@ -289,10 +293,6 @@ struct ProfileSummaryRow: View {
                 accessoryView
             }
         }
-    }
-
-    private var sidebarTagLabelStyle: ProfileTagChipLabelStyle {
-        presentation.tags.count > 1 ? .short : .full
     }
 
     private var menuBarTitleLabel: some View {

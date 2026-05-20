@@ -27,7 +27,15 @@ struct ProfileTagFilterBarPresentation: Equatable, Sendable {
             return totalCount == 1 ? "1 profile" : "\(totalCount) profiles"
         }
 
-        return "\(shownCount) shown of \(totalCount)"
+        return "\(shownCount) of \(totalCount) shown"
+    }
+
+    var visibleSummaryText: String {
+        countText
+    }
+
+    var accessibilitySummaryText: String {
+        "\(visibleSummaryText), \(tagCounts.accessibilityText)"
     }
 
     var isAllSelected: Bool {
@@ -40,6 +48,46 @@ struct ProfileTagFilterBarPresentation: Equatable, Sendable {
 
     var statusCountText: String {
         tagCounts.statusText
+    }
+
+    var segments: [ProfileTagFilterSegment] {
+        let allSegment = ProfileTagFilterSegment(
+            tag: nil,
+            title: "All",
+            count: totalCount,
+            isSelected: isAllSelected,
+            isEnabled: totalCount > 0,
+            accessibilityLabel: "All profiles"
+        )
+
+        return [allSegment] + PlusProfileTag.allCases.map { tag in
+            let count = tagCounts.count(for: tag)
+            return ProfileTagFilterSegment(
+                tag: tag,
+                title: tag.shortDisplayName,
+                count: count,
+                isSelected: isSelected(tag),
+                isEnabled: count > 0 || isSelected(tag),
+                accessibilityLabel: tag.displayName
+            )
+        }
+    }
+}
+
+struct ProfileTagFilterSegment: Identifiable, Equatable, Sendable {
+    let tag: PlusProfileTag?
+    let title: String
+    let count: Int
+    let isSelected: Bool
+    let isEnabled: Bool
+    let accessibilityLabel: String
+
+    var id: String {
+        tag?.id ?? "all"
+    }
+
+    var displayText: String {
+        "\(title) \(count)"
     }
 }
 
@@ -76,45 +124,205 @@ struct ProfileTagFilterBar: View {
     }
 
     var body: some View {
-        LazyVGrid(
-            columns: [
-                GridItem(
-                    .adaptive(
-                        minimum: 96 * CGFloat(textScale),
-                        maximum: 140 * CGFloat(textScale)
-                    ),
-                    spacing: 6 * CGFloat(textScale),
-                    alignment: .leading
-                ),
-            ],
-            alignment: .leading,
-            spacing: 6 * CGFloat(textScale)
-        ) {
-            ProfileTagToggleChip(
-                title: "All",
-                systemImage: "line.3.horizontal.decrease.circle",
-                isSelected: presentation.isAllSelected,
-                textScale: textScale,
-                action: clearFilter
-            )
-
-            ForEach(PlusProfileTag.allCases) { tag in
-                ProfileTagToggleChip(
-                    title: tag.displayName,
-                    systemImage: tag.systemImage,
-                    isSelected: presentation.isSelected(tag),
-                    tone: tag.statusTone,
-                    textScale: textScale,
-                    action: {
-                        toggleTag(tag)
-                    }
-                )
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 4 * CGFloat(textScale)) {
+                ForEach(presentation.segments) { segment in
+                    ProfileTagSegmentButton(
+                        segment: segment,
+                        textScale: textScale,
+                        action: {
+                            activate(segment)
+                        }
+                    )
+                }
             }
+            .fixedSize(horizontal: true, vertical: false)
+
+            ProfileTagFilterMenu(
+                presentation: presentation,
+                textScale: textScale,
+                clearFilter: clearFilter,
+                toggleTag: toggleTag
+            )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Profile tag filters")
-        .accessibilityValue("\(presentation.countText), \(presentation.statusCountText)")
+        .accessibilityLabel("Profile filters")
+        .accessibilityValue(presentation.accessibilitySummaryText)
+    }
+
+    private func activate(_ segment: ProfileTagFilterSegment) {
+        guard segment.isEnabled else {
+            return
+        }
+
+        if let tag = segment.tag {
+            toggleTag(tag)
+        } else {
+            clearFilter()
+        }
+    }
+}
+
+private struct ProfileTagSegmentButton: View {
+    let segment: ProfileTagFilterSegment
+    let textScale: Double
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 4 * CGFloat(textScale)) {
+                if segment.isSelected, let tag = segment.tag {
+                    Circle()
+                        .fill(tag.statusTone.foregroundColor)
+                        .frame(width: 5 * CGFloat(textScale), height: 5 * CGFloat(textScale))
+                }
+
+                Text(segment.title)
+                    .lineLimit(1)
+
+                Text("\(segment.count)")
+                    .monospacedDigit()
+                    .lineLimit(1)
+            }
+        }
+        .font(ProfileManagerTypography.micro(scale: textScale))
+        .padding(.horizontal, 6 * CGFloat(textScale))
+        .padding(.vertical, 5 * CGFloat(textScale))
+        .background(backgroundShape)
+        .foregroundStyle(foregroundStyle)
+        .buttonStyle(.plain)
+        .opacity(segment.isEnabled ? 1 : 0.48)
+        .disabled(segment.isEnabled == false)
+        .help(helpText)
+        .accessibilityLabel(segment.accessibilityLabel)
+        .accessibilityValue(accessibilityValue)
+    }
+
+    private var backgroundShape: some View {
+        RoundedRectangle(cornerRadius: 7, style: .continuous)
+            .fill(
+                segment.isSelected
+                    ? CodexTheme.surfaceFill(for: .strong)
+                    : CodexTheme.surfaceFill(for: .subtle)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .stroke(borderColor, lineWidth: 1)
+            )
+    }
+
+    private var foregroundStyle: Color {
+        guard segment.isEnabled else {
+            return CodexTheme.quietText
+        }
+
+        return segment.isSelected ? CodexTheme.primaryText : CodexTheme.supportText
+    }
+
+    private var borderColor: Color {
+        guard segment.isSelected else {
+            return CodexTheme.surfaceBorder(for: .subtle)
+        }
+
+        if let tag = segment.tag {
+            return tag.statusTone.borderColor.opacity(0.82)
+        }
+
+        return CodexTheme.accentAqua.opacity(0.28)
+    }
+
+    private var helpText: String {
+        if segment.isEnabled == false {
+            return "No \(segment.accessibilityLabel.lowercased()) profiles"
+        }
+
+        if segment.isSelected, segment.tag != nil {
+            return "Remove \(segment.accessibilityLabel) filter"
+        }
+
+        return segment.tag == nil ? "Show all profiles" : "Filter by \(segment.accessibilityLabel)"
+    }
+
+    private var accessibilityValue: String {
+        let profileText = segment.count == 1 ? "1 profile" : "\(segment.count) profiles"
+        return segment.isSelected ? "\(profileText), selected" : profileText
+    }
+}
+
+private struct ProfileTagFilterMenu: View {
+    let presentation: ProfileTagFilterBarPresentation
+    let textScale: Double
+    let clearFilter: () -> Void
+    let toggleTag: (PlusProfileTag) -> Void
+
+    var body: some View {
+        Menu {
+            ForEach(presentation.segments) { segment in
+                Button {
+                    activate(segment)
+                } label: {
+                    Label(segment.displayText, systemImage: symbolName(for: segment))
+                }
+                .disabled(segment.isEnabled == false)
+            }
+
+            if presentation.isAllSelected == false {
+                Divider()
+
+                Button("Clear filter", action: clearFilter)
+            }
+        } label: {
+            HStack(spacing: 6 * CGFloat(textScale)) {
+                Image(systemName: "line.3.horizontal.decrease.circle")
+                    .font(.system(size: 11 * CGFloat(textScale), weight: .semibold))
+
+                Text("Filter")
+                    .lineLimit(1)
+
+                Text(presentation.visibleSummaryText)
+                    .foregroundStyle(CodexTheme.mutedText)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            .font(ProfileManagerTypography.caption(scale: textScale))
+            .foregroundStyle(CodexTheme.primaryText)
+            .padding(.horizontal, 9 * CGFloat(textScale))
+            .padding(.vertical, 6 * CGFloat(textScale))
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(CodexTheme.surfaceFill(for: .subtle))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .stroke(CodexTheme.surfaceBorder(for: .subtle), lineWidth: 1)
+                    )
+            )
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .help("Filter profiles")
+        .accessibilityLabel("Filter profiles")
+        .accessibilityValue(presentation.accessibilitySummaryText)
+    }
+
+    private func activate(_ segment: ProfileTagFilterSegment) {
+        guard segment.isEnabled else {
+            return
+        }
+
+        if let tag = segment.tag {
+            toggleTag(tag)
+        } else {
+            clearFilter()
+        }
+    }
+
+    private func symbolName(for segment: ProfileTagFilterSegment) -> String {
+        if segment.isSelected {
+            return "checkmark"
+        }
+
+        return segment.tag?.systemImage ?? "line.3.horizontal.decrease.circle"
     }
 }
 
@@ -144,6 +352,74 @@ struct ProfileTagStrip: View {
             .accessibilityLabel("Profile tags")
             .accessibilityValue(tags.map(\.displayName).joined(separator: ", "))
         }
+    }
+}
+
+struct ProfileTagSummaryStrip: View {
+    let summary: ProfileTagSummary
+    let textScale: Double
+
+    init(summary: ProfileTagSummary, textScale: Double = 1) {
+        self.summary = summary
+        self.textScale = textScale
+    }
+
+    var body: some View {
+        if let primaryTag = summary.primaryTag {
+            HStack(spacing: 4 * CGFloat(textScale)) {
+                ProfileTagSummaryChip(tag: primaryTag, textScale: textScale)
+
+                if summary.overflowCount > 0 {
+                    Text("+\(summary.overflowCount)")
+                        .font(ProfileManagerTypography.micro(scale: textScale))
+                        .monospacedDigit()
+                        .foregroundStyle(CodexTheme.mutedText)
+                        .padding(.horizontal, 6 * CGFloat(textScale))
+                        .padding(.vertical, 3 * CGFloat(textScale))
+                        .background(
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .fill(CodexTheme.surfaceFill(for: .subtle))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                        .stroke(CodexTheme.surfaceBorder(for: .subtle), lineWidth: 1)
+                                )
+                        )
+                }
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Profile tags")
+            .accessibilityValue(summary.accessibilityValue)
+        }
+    }
+}
+
+private struct ProfileTagSummaryChip: View {
+    let tag: PlusProfileTag
+    let textScale: Double
+
+    var body: some View {
+        HStack(spacing: 4 * CGFloat(textScale)) {
+            Circle()
+                .fill(tag.statusTone.foregroundColor)
+                .frame(width: 5 * CGFloat(textScale), height: 5 * CGFloat(textScale))
+
+            Text(tag.shortDisplayName)
+                .lineLimit(1)
+                .minimumScaleFactor(0.9)
+        }
+        .font(ProfileManagerTypography.micro(scale: textScale))
+        .foregroundStyle(tag.statusTone.foregroundColor)
+        .padding(.horizontal, 6 * CGFloat(textScale))
+        .padding(.vertical, 3 * CGFloat(textScale))
+        .background(
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(tag.statusTone.backgroundColor.opacity(0.72))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .stroke(tag.statusTone.borderColor.opacity(0.82), lineWidth: 1)
+                )
+        )
+        .accessibilityLabel(tag.displayName)
     }
 }
 

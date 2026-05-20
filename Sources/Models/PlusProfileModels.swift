@@ -531,6 +531,34 @@ struct ProfileTagCounts: Equatable, Sendable {
     var statusText: String {
         "\(active) active · \(needAction) need action · \(pending) pending"
     }
+
+    var accessibilityText: String {
+        "\(active) active, \(needAction) need action, \(pending) pending"
+    }
+}
+
+struct ProfileTagSummary: Equatable, Sendable {
+    let tags: [PlusProfileTag]
+    let primaryTag: PlusProfileTag?
+    let overflowCount: Int
+
+    init(tags: [PlusProfileTag]) {
+        let normalizedTags = PlusProfile.normalizedTags(tags)
+        self.tags = normalizedTags
+
+        let priorityOrder: [PlusProfileTag] = [.needAction, .pending, .active]
+        primaryTag = priorityOrder.first { normalizedTags.contains($0) }
+        overflowCount = max(normalizedTags.count - 1, 0)
+    }
+
+    var accessibilityValue: String {
+        guard let primaryTag else {
+            return "No tags"
+        }
+
+        let orderedTags = [primaryTag] + tags.filter { $0 != primaryTag }
+        return orderedTags.map(\.displayName).joined(separator: ", ")
+    }
 }
 
 enum PlusDashboardStatus: Equatable, Sendable {
