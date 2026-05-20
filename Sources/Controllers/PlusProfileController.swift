@@ -241,6 +241,27 @@ final class PlusProfileController {
         persistProfiles()
     }
 
+    func setTags(_ tags: [PlusProfileTag], for profileID: UUID) {
+        guard let index = indexOfProfile(profileID) else { return }
+        var updatedProfile = profiles[index].profile
+        updatedProfile.tags = PlusProfile.normalizedTags(tags)
+        profiles[index] = profiles[index].updating(profile: updatedProfile)
+        persistProfiles()
+    }
+
+    func toggleTag(_ tag: PlusProfileTag, for profileID: UUID) {
+        guard let index = indexOfProfile(profileID) else { return }
+        var updatedTags = profiles[index].profile.normalizedTags
+
+        if updatedTags.contains(tag) {
+            updatedTags.removeAll { $0 == tag }
+        } else {
+            updatedTags.append(tag)
+        }
+
+        setTags(updatedTags, for: profileID)
+    }
+
     func moveSelectedProfileUp() {
         guard let selectedProfileID,
               let index = indexOfProfile(selectedProfileID),

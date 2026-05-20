@@ -16,6 +16,7 @@ struct ProfileCatalogStoreTests {
             emailLink: "https://mail.google.com",
             detectedNote: "Plus · acct_b",
             expiresAt: Date(timeIntervalSince1970: 1_779_097_600),
+            tags: [.pending, .active],
             lastKnownState: .needsLogin
         )
 
@@ -28,6 +29,7 @@ struct ProfileCatalogStoreTests {
         #expect(loaded.map(\.label) == ["alpha@example.com", "beta@example.com"])
         #expect(loaded.map(\.emailLink) == [nil, "https://mail.google.com"])
         #expect(loaded.map(\.expiresAt) == [nil, Date(timeIntervalSince1970: 1_779_097_600)])
+        #expect(loaded.map(\.tags) == [[], [.active, .pending]])
         #expect(loaded.map(\.lastKnownState) == [.active, .needsLogin])
     }
 
@@ -58,6 +60,7 @@ struct ProfileCatalogStoreTests {
         #expect(loaded.count == 1)
         #expect(loaded.first?.label == "legacy@example.com")
         #expect(loaded.first?.emailLink == nil)
+        #expect(loaded.first?.tags == [])
     }
 
     @Test
@@ -112,6 +115,7 @@ private func sampleProfile(
     emailLink: String? = nil,
     detectedNote: String? = nil,
     expiresAt: Date? = nil,
+    tags: [PlusProfileTag] = [],
     lastKnownState: PlusProfileStoredState = .unknown
 ) -> PlusProfile {
     let createdAt = Date(timeIntervalSince1970: 1_776_000_000 + TimeInterval(sortOrder))
@@ -122,6 +126,7 @@ private func sampleProfile(
         emailLink: emailLink,
         detectedNote: detectedNote,
         expiresAt: expiresAt,
+        tags: tags,
         webDataStoreID: UUID(),
         sortOrder: sortOrder,
         createdAt: createdAt,

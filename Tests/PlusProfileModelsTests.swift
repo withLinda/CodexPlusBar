@@ -4,6 +4,80 @@ import Testing
 
 struct PlusProfileModelsTests {
     @Test
+    func profileTagsNormalizeToDisplayOrderWithoutDuplicates() {
+        let tags = PlusProfile.normalizedTags([.pending, .active, .needAction, .active])
+
+        #expect(tags == [.active, .needAction, .pending])
+        #expect(tags.map(\.rawValue) == ["active", "need_action", "pending"])
+        #expect(tags.map(\.displayName) == ["Active", "Need action", "Pending"])
+        #expect(PlusProfileTag.active.statusTone == .success)
+        #expect(PlusProfileTag.needAction.statusTone == .critical)
+        #expect(PlusProfileTag.pending.statusTone == .info)
+        #expect(PlusProfileTag.needAction.systemImage == "exclamationmark.triangle")
+    }
+
+    @Test
+    func profileTagCountsSummarizeStatusBuckets() {
+        let active = sampleSnapshot(tags: [.active])
+        let action = sampleSnapshot(tags: [.needAction, .pending])
+        let pending = sampleSnapshot(tags: [.pending])
+        let untagged = sampleSnapshot(tags: [])
+
+        let counts = ProfileTagCounts(snapshots: [active, action, pending, untagged])
+
+        #expect(counts.active == 1)
+        #expect(counts.needAction == 1)
+        #expect(counts.pending == 2)
+        #expect(counts.count(for: .needAction) == 1)
+        #expect(counts.statusText == "1 active · 1 need action · 2 pending")
+    }
+
+    @Test
+    func profileDecoderDefaultsMissingTagsToEmpty() throws {
+        let json = """
+        {
+          "id" : "4D3DD8D1-7408-4B71-A72D-4ED8CB2616EB",
+          "label" : "legacy@example.com",
+          "emailLink" : null,
+          "detectedNote" : null,
+          "expiresAt" : null,
+          "webDataStoreID" : "CC19D410-7A2C-4D41-967A-97FCA178D0F2",
+          "sortOrder" : 0,
+          "createdAt" : 777600000,
+          "lastRefreshAt" : null,
+          "lastKnownState" : "unknown"
+        }
+        """
+
+        let profile = try JSONDecoder().decode(PlusProfile.self, from: try #require(json.data(using: .utf8)))
+
+        #expect(profile.tags == [])
+    }
+
+    @Test
+    func profileDecoderNormalizesStoredTagsAndSkipsUnknownValues() throws {
+        let json = """
+        {
+          "id" : "4D3DD8D1-7408-4B71-A72D-4ED8CB2616EB",
+          "label" : "tagged@example.com",
+          "emailLink" : null,
+          "detectedNote" : null,
+          "expiresAt" : null,
+          "webDataStoreID" : "CC19D410-7A2C-4D41-967A-97FCA178D0F2",
+          "sortOrder" : 0,
+          "createdAt" : 777600000,
+          "lastRefreshAt" : null,
+          "lastKnownState" : "unknown",
+          "tags" : ["pending", "active", "future_tag", "active", "need_action"]
+        }
+        """
+
+        let profile = try JSONDecoder().decode(PlusProfile.self, from: try #require(json.data(using: .utf8)))
+
+        #expect(profile.tags == [.active, .needAction, .pending])
+    }
+
+    @Test
     func resolvedEmailLinkURLReturnsExistingSchemeURL() {
         let profile = sampleProfile(emailLink: "mailto:test@example.com")
 
@@ -65,12 +139,23 @@ struct PlusProfileModelsTests {
     }
 }
 
-private func sampleProfile(emailLink: String?) -> PlusProfile {
+private func sampleSnapshot(tags: [PlusProfileTag]) -> PlusProfileSnapshot {
+    PlusProfileSnapshot(
+        profile: sampleProfile(emailLink: nil, tags: tags),
+        state: .idle,
+        usage: nil,
+        statusMessage: nil,
+        isRefreshing: false
+    )
+}
+
+private func sampleProfile(emailLink: String?, tags: [PlusProfileTag] = []) -> PlusProfile {
     PlusProfile(
         id: UUID(),
         label: "alpha@example.com",
         emailLink: emailLink,
         detectedNote: nil,
+        tags: tags,
         webDataStoreID: UUID(),
         sortOrder: 0,
         createdAt: Date(timeIntervalSince1970: 1_776_000_000),

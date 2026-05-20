@@ -163,6 +163,75 @@ struct PlusProfileControllerTests {
     }
 
     @Test
+    func toggleTagPersistsTagsWithoutChangingRuntimeState() throws {
+        let tempDirectory = makeTemporaryDirectory()
+        let store = ProfileCatalogStore(
+            fileURL: tempDirectory.appendingPathComponent("profiles.json", isDirectory: false)
+        )
+        let profile = sampleProfile(label: "alpha@example.com", sortOrder: 0)
+        try store.saveProfiles([profile])
+
+        let controller = PlusProfileController(
+            catalogStore: store,
+            dataService: StubPlusProfileDataService(refreshResults: [:]),
+            autoStart: false
+        )
+        let initialState = try #require(controller.profiles.first?.state)
+        let initialMessage = controller.profiles.first?.statusMessage
+
+        controller.toggleTag(.pending, for: profile.id)
+        controller.toggleTag(.active, for: profile.id)
+        controller.toggleTag(.pending, for: profile.id)
+
+        let row = try #require(controller.profiles.first)
+        #expect(row.profile.tags == [.active])
+        #expect(row.state == initialState)
+        #expect(row.statusMessage == initialMessage)
+        #expect(try store.loadProfiles().first?.tags == [.active])
+    }
+
+    @Test
+    func profileTagFilterUsesAnySelectedTagAndFallsBackToAllWhenEmpty() {
+        let active = menuBarSnapshot(
+            label: "active@example.com",
+            state: .ready,
+            fiveHourRemainingPercent: 74,
+            sevenDayRemainingPercent: 42,
+            sortOrder: 0,
+            tags: [.active]
+        )
+        let pending = menuBarSnapshot(
+            label: "pending@example.com",
+            state: .needsLogin,
+            fiveHourRemainingPercent: nil,
+            sevenDayRemainingPercent: nil,
+            sortOrder: 1,
+            tags: [.pending]
+        )
+        let mixed = menuBarSnapshot(
+            label: "mixed@example.com",
+            state: .failed,
+            fiveHourRemainingPercent: nil,
+            sevenDayRemainingPercent: nil,
+            sortOrder: 2,
+            tags: [.needAction, .pending]
+        )
+        let untagged = menuBarSnapshot(
+            label: "untagged@example.com",
+            state: .ready,
+            fiveHourRemainingPercent: 32,
+            sevenDayRemainingPercent: 18,
+            sortOrder: 3,
+            tags: []
+        )
+        let rows = [active, pending, mixed, untagged]
+
+        #expect(ProfileTagFilter().apply(to: rows).map(\.id) == rows.map(\.id))
+        #expect(ProfileTagFilter([.active, .needAction]).apply(to: rows).map(\.id) == [active.id, mixed.id])
+        #expect(ProfileTagFilter([.pending]).apply(to: rows).map(\.id) == [pending.id, mixed.id])
+    }
+
+    @Test
     func statusBarTextUsesPreferredReadyProfileBeforeUrgentFallback() {
         let controller = PlusProfileController(dataService: StubPlusProfileDataService(refreshResults: [:]), autoStart: false)
         let urgent = menuBarSnapshot(
@@ -389,13 +458,15 @@ private func menuBarSnapshot(
     state: PlusProfileState,
     fiveHourRemainingPercent: Int?,
     sevenDayRemainingPercent: Int?,
-    sortOrder: Int
+    sortOrder: Int,
+    tags: [PlusProfileTag] = []
 ) -> PlusProfileSnapshot {
     let profile = PlusProfile(
         id: UUID(),
         label: label,
         emailLink: nil,
         detectedNote: nil,
+        tags: tags,
         webDataStoreID: UUID(),
         sortOrder: sortOrder,
         createdAt: Date(timeIntervalSince1970: 1_776_000_000 + TimeInterval(sortOrder)),
@@ -457,6 +528,7 @@ private func sampleProfile(label: String, sortOrder: Int, emailLink: String? = n
         label: label,
         emailLink: emailLink,
         detectedNote: nil,
+        tags: [],
         webDataStoreID: UUID(),
         sortOrder: sortOrder,
         createdAt: Date(timeIntervalSince1970: 1_776_000_000 + TimeInterval(sortOrder)),

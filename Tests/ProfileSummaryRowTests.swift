@@ -139,6 +139,44 @@ struct ProfileSummaryRowTests {
         #expect(presentation.expiryValue == DisplayFormatter.LabeledValue(label: "Expires in", value: "2d"))
         #expect(presentation.expiryEmphasisToken?.hex == CodexTheme.Palette.accRed.hex)
     }
+
+    @Test
+    func rowPresentationExposesTagsOnlyWhenPresent() {
+        let tagged = sampleSnapshot(
+            state: .needsLogin,
+            usage: nil,
+            note: nil,
+            expiresAt: nil,
+            statusMessage: nil,
+            isRefreshing: false,
+            emailLink: nil,
+            tags: [.pending, .active]
+        )
+        let untagged = sampleSnapshot(
+            state: .ready,
+            usage: nil,
+            note: nil,
+            expiresAt: nil,
+            statusMessage: nil,
+            isRefreshing: false,
+            emailLink: nil,
+            tags: []
+        )
+
+        let taggedPresentation = ProfileSummaryRowPresentation(
+            snapshot: tagged,
+            mode: .sidebar(isSelected: false)
+        )
+        let untaggedPresentation = ProfileSummaryRowPresentation(
+            snapshot: untagged,
+            mode: .menuBar(isPinned: false)
+        )
+
+        #expect(taggedPresentation.tags == [.active, .pending])
+        #expect(taggedPresentation.showsTags)
+        #expect(untaggedPresentation.tags == [])
+        #expect(untaggedPresentation.showsTags == false)
+    }
 }
 
 private func sampleSnapshot(
@@ -148,7 +186,8 @@ private func sampleSnapshot(
     expiresAt: Date?,
     statusMessage: String?,
     isRefreshing: Bool,
-    emailLink: String?
+    emailLink: String?,
+    tags: [PlusProfileTag] = []
 ) -> PlusProfileSnapshot {
     PlusProfileSnapshot(
         profile: PlusProfile(
@@ -157,6 +196,7 @@ private func sampleSnapshot(
             emailLink: emailLink,
             detectedNote: note,
             expiresAt: expiresAt,
+            tags: tags,
             webDataStoreID: UUID(),
             sortOrder: 0,
             createdAt: Date(timeIntervalSince1970: 1_776_000_000),

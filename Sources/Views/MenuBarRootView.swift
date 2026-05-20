@@ -5,6 +5,7 @@ struct MenuBarRootView: View {
     @Bindable var controller: PlusProfileController
     @AppStorage(MenuBarProfilePreference.preferredProfileIDKey) private var preferredProfileIDStorage = ""
     @AppStorage(MenuBarPanelTextScalePreference.textScaleKey) private var panelTextScaleStorage = MenuBarPanelTextScalePreference.defaultScale
+    @State private var tagFilter = ProfileTagFilter()
     let currentTime: AppMinuteClock
     let openManagerWindow: @MainActor (UUID?) -> Void
 
@@ -35,6 +36,15 @@ struct MenuBarRootView: View {
         CodexShell(role: .panel, padding: MenuBarPanelMetrics.innerPadding) {
             VStack(alignment: .leading, spacing: MenuBarPanelMetrics.stackSpacing) {
                 header
+
+                if controller.profiles.isEmpty == false {
+                    ProfileTagFilterBar(
+                        presentation: tagFilterPresentation,
+                        textScale: panelTextScale,
+                        clearFilter: clearTagFilter,
+                        toggleTag: toggleTagFilter
+                    )
+                }
 
                 if let bannerMessage = controller.statusMessage {
                     CodexStatusBanner(
@@ -134,8 +144,10 @@ struct MenuBarRootView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+        } else if filteredProfiles.isEmpty {
+            ProfileTagEmptyState(clearFilter: clearTagFilter)
         } else {
-            ForEach(controller.profiles) { snapshot in
+            ForEach(filteredProfiles) { snapshot in
                 let isPinned = snapshot.id == storedPinnedProfileID
 
                 MenuBarProfileRow(
@@ -216,15 +228,29 @@ struct MenuBarRootView: View {
     }
 
     private var headerMetaText: String {
-        let count = controller.profiles.count
-        let countLabel = count == 1 ? "1 profile" : "\(count) profiles"
-
         if let updatedAt = controller.profiles.compactMap(\.lastRefreshAt).max(),
            let updatedText = DisplayFormatter.updatedText(updatedAt, referenceDate: currentTime.now) {
-            return "\(updatedText) · \(countLabel)"
+            return "\(updatedText) · \(tagFilterPresentation.countText)"
         }
 
-        return count == 0 ? "No saved profiles yet" : countLabel
+        return controller.profiles.isEmpty ? "No saved profiles yet" : tagFilterPresentation.countText
+    }
+
+    private var filteredProfiles: [PlusProfileSnapshot] {
+        tagFilter.apply(to: controller.profiles)
+    }
+
+    private var profileTagCounts: ProfileTagCounts {
+        ProfileTagCounts(snapshots: controller.profiles)
+    }
+
+    private var tagFilterPresentation: ProfileTagFilterBarPresentation {
+        ProfileTagFilterBarPresentation(
+            filter: tagFilter,
+            shownCount: filteredProfiles.count,
+            totalCount: controller.profiles.count,
+            tagCounts: profileTagCounts
+        )
     }
 
     private func refreshAll() {
@@ -251,6 +277,14 @@ struct MenuBarRootView: View {
 
     private func setPinnedProfile(_ profileID: UUID) {
         preferredProfileIDStorage = MenuBarProfilePreference.storedValue(for: profileID)
+    }
+
+    private func clearTagFilter() {
+        tagFilter.clear()
+    }
+
+    private func toggleTagFilter(_ tag: PlusProfileTag) {
+        tagFilter.toggle(tag)
     }
 
     private func zoomPanelIn() {

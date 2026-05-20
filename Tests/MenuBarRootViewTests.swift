@@ -16,6 +16,7 @@ struct MenuBarRootViewTests {
             label: "alpha@example.com",
             emailLink: "https://mail.google.com",
             detectedNote: "Plus",
+            tags: [],
             webDataStoreID: UUID(),
             sortOrder: 0,
             createdAt: Date(timeIntervalSince1970: 1_776_000_000),
@@ -80,6 +81,19 @@ struct MenuBarRootViewTests {
 
         let bodyDescription = String(reflecting: type(of: rootView.body))
         #expect(bodyDescription.contains("MenuBarZoomControls") == true)
+    }
+
+    @Test
+    func tagFilterPresentationUsesAllStateForMenuBarPanel() {
+        let presentation = ProfileTagFilterBarPresentation(
+            filter: ProfileTagFilter(),
+            shownCount: 3,
+            totalCount: 3
+        )
+
+        #expect(presentation.countText == "3 profiles")
+        #expect(presentation.isAllSelected)
+        #expect(presentation.isSelected(.active) == false)
     }
 }
 

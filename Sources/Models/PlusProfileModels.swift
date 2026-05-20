@@ -8,17 +8,86 @@ enum PlusProfileStoredState: String, Codable, Equatable, Sendable {
     case failed
 }
 
+enum PlusProfileTag: String, Codable, CaseIterable, Equatable, Hashable, Identifiable, Sendable {
+    case active
+    case needAction = "need_action"
+    case pending
+
+    var id: String {
+        rawValue
+    }
+
+    var displayName: String {
+        switch self {
+        case .active:
+            return "Active"
+        case .needAction:
+            return "Need action"
+        case .pending:
+            return "Pending"
+        }
+    }
+
+    var shortDisplayName: String {
+        switch self {
+        case .active:
+            return "Active"
+        case .needAction:
+            return "Action"
+        case .pending:
+            return "Pending"
+        }
+    }
+
+    var statusTone: CodexStatusTone {
+        switch self {
+        case .active:
+            return .success
+        case .needAction:
+            return .critical
+        case .pending:
+            return .info
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .active:
+            return "checkmark.circle"
+        case .needAction:
+            return "exclamationmark.triangle"
+        case .pending:
+            return "clock"
+        }
+    }
+}
+
 struct PlusProfile: Identifiable, Codable, Equatable, Sendable {
     let id: UUID
     var label: String
     var emailLink: String?
     var detectedNote: String?
     var expiresAt: Date?
+    var tags: [PlusProfileTag]
     let webDataStoreID: UUID
     var sortOrder: Int
     let createdAt: Date
     var lastRefreshAt: Date?
     var lastKnownState: PlusProfileStoredState
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case label
+        case emailLink
+        case detectedNote
+        case expiresAt
+        case tags
+        case webDataStoreID
+        case sortOrder
+        case createdAt
+        case lastRefreshAt
+        case lastKnownState
+    }
 
     init(
         id: UUID,
@@ -26,6 +95,7 @@ struct PlusProfile: Identifiable, Codable, Equatable, Sendable {
         emailLink: String?,
         detectedNote: String?,
         expiresAt: Date? = nil,
+        tags: [PlusProfileTag] = [],
         webDataStoreID: UUID,
         sortOrder: Int,
         createdAt: Date,
@@ -37,11 +107,46 @@ struct PlusProfile: Identifiable, Codable, Equatable, Sendable {
         self.emailLink = emailLink
         self.detectedNote = detectedNote
         self.expiresAt = expiresAt
+        self.tags = Self.normalizedTags(tags)
         self.webDataStoreID = webDataStoreID
         self.sortOrder = sortOrder
         self.createdAt = createdAt
         self.lastRefreshAt = lastRefreshAt
         self.lastKnownState = lastKnownState
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        id = try container.decode(UUID.self, forKey: .id)
+        label = try container.decode(String.self, forKey: .label)
+        emailLink = try container.decodeIfPresent(String.self, forKey: .emailLink)
+        detectedNote = try container.decodeIfPresent(String.self, forKey: .detectedNote)
+        expiresAt = try container.decodeIfPresent(Date.self, forKey: .expiresAt)
+        webDataStoreID = try container.decode(UUID.self, forKey: .webDataStoreID)
+        sortOrder = try container.decode(Int.self, forKey: .sortOrder)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        lastRefreshAt = try container.decodeIfPresent(Date.self, forKey: .lastRefreshAt)
+        lastKnownState = try container.decode(PlusProfileStoredState.self, forKey: .lastKnownState)
+
+        let rawTags = try container.decodeIfPresent([String].self, forKey: .tags) ?? []
+        tags = Self.normalizedTags(rawTags.compactMap(PlusProfileTag.init(rawValue:)))
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+
+        try container.encode(id, forKey: .id)
+        try container.encode(label, forKey: .label)
+        try container.encodeIfPresent(emailLink, forKey: .emailLink)
+        try container.encodeIfPresent(detectedNote, forKey: .detectedNote)
+        try container.encodeIfPresent(expiresAt, forKey: .expiresAt)
+        try container.encode(Self.normalizedTags(tags).map(\.rawValue), forKey: .tags)
+        try container.encode(webDataStoreID, forKey: .webDataStoreID)
+        try container.encode(sortOrder, forKey: .sortOrder)
+        try container.encode(createdAt, forKey: .createdAt)
+        try container.encodeIfPresent(lastRefreshAt, forKey: .lastRefreshAt)
+        try container.encode(lastKnownState, forKey: .lastKnownState)
     }
 
     var displayLabel: String {
@@ -51,6 +156,10 @@ struct PlusProfile: Identifiable, Codable, Equatable, Sendable {
 
     var normalizedEmailLink: String? {
         Self.normalizedEmailLink(emailLink)
+    }
+
+    var normalizedTags: [PlusProfileTag] {
+        Self.normalizedTags(tags)
     }
 
     var resolvedEmailLinkURL: URL? {
@@ -80,6 +189,11 @@ struct PlusProfile: Identifiable, Codable, Equatable, Sendable {
         }
 
         return validatedEmailLinkURL(from: "https://\(normalized)")
+    }
+
+    static func normalizedTags(_ tags: [PlusProfileTag]) -> [PlusProfileTag] {
+        let selectedTags = Set(tags)
+        return PlusProfileTag.allCases.filter { selectedTags.contains($0) }
     }
 
     private static func validatedEmailLinkURL(from candidate: String) -> URL? {
@@ -301,6 +415,10 @@ struct PlusProfileSnapshot: Identifiable, Equatable, Sendable {
         profile.lastRefreshAt
     }
 
+    var tags: [PlusProfileTag] {
+        profile.normalizedTags
+    }
+
     var fiveHourText: String {
         usage.map { "\($0.fiveHourRemainingPercent)%" } ?? "—"
     }
@@ -331,6 +449,87 @@ struct PlusProfileSnapshot: Identifiable, Equatable, Sendable {
             statusMessage: statusMessage ?? self.statusMessage,
             isRefreshing: isRefreshing ?? self.isRefreshing
         )
+    }
+}
+
+struct ProfileTagFilter: Equatable, Sendable {
+    private(set) var selectedTags: [PlusProfileTag]
+
+    init(_ selectedTags: [PlusProfileTag] = []) {
+        self.selectedTags = PlusProfile.normalizedTags(selectedTags)
+    }
+
+    var isEmpty: Bool {
+        selectedTags.isEmpty
+    }
+
+    func isSelected(_ tag: PlusProfileTag) -> Bool {
+        selectedTags.contains(tag)
+    }
+
+    func includes(_ snapshot: PlusProfileSnapshot) -> Bool {
+        guard isEmpty == false else {
+            return true
+        }
+
+        return selectedTags.contains { selectedTag in
+            snapshot.tags.contains(selectedTag)
+        }
+    }
+
+    func apply(to snapshots: [PlusProfileSnapshot]) -> [PlusProfileSnapshot] {
+        guard isEmpty == false else {
+            return snapshots
+        }
+
+        return snapshots.filter(includes)
+    }
+
+    mutating func toggle(_ tag: PlusProfileTag) {
+        if selectedTags.contains(tag) {
+            selectedTags.removeAll { $0 == tag }
+        } else {
+            selectedTags.append(tag)
+        }
+
+        selectedTags = PlusProfile.normalizedTags(selectedTags)
+    }
+
+    mutating func clear() {
+        selectedTags = []
+    }
+}
+
+struct ProfileTagCounts: Equatable, Sendable {
+    let active: Int
+    let needAction: Int
+    let pending: Int
+
+    init(active: Int = 0, needAction: Int = 0, pending: Int = 0) {
+        self.active = active
+        self.needAction = needAction
+        self.pending = pending
+    }
+
+    init(snapshots: [PlusProfileSnapshot]) {
+        active = snapshots.count { $0.tags.contains(.active) }
+        needAction = snapshots.count { $0.tags.contains(.needAction) }
+        pending = snapshots.count { $0.tags.contains(.pending) }
+    }
+
+    func count(for tag: PlusProfileTag) -> Int {
+        switch tag {
+        case .active:
+            return active
+        case .needAction:
+            return needAction
+        case .pending:
+            return pending
+        }
+    }
+
+    var statusText: String {
+        "\(active) active · \(needAction) need action · \(pending) pending"
     }
 }
 

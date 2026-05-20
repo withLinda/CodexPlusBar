@@ -145,6 +145,22 @@ struct ProfileManagerWindowViewTests {
     }
 
     @Test
+    func tagFilterPresentationShowsFilteredCountForManagerSidebar() {
+        let presentation = ProfileTagFilterBarPresentation(
+            filter: ProfileTagFilter([.active]),
+            shownCount: 2,
+            totalCount: 5,
+            tagCounts: ProfileTagCounts(active: 2, needAction: 1, pending: 2)
+        )
+
+        #expect(presentation.countText == "2 shown of 5")
+        #expect(presentation.statusCountText == "2 active · 1 need action · 2 pending")
+        #expect(presentation.isAllSelected == false)
+        #expect(presentation.isSelected(.active))
+        #expect(presentation.isSelected(.pending) == false)
+    }
+
+    @Test
     func expandedSessionPresentationKeepsHideSessionAction() {
         let snapshot = PlusProfileSnapshot(
             profile: sampleProfile(label: "alpha@example.com", sortOrder: 0),
@@ -236,6 +252,7 @@ private func sampleProfile(label: String, emailLink: String? = nil, sortOrder: I
         label: label,
         emailLink: emailLink,
         detectedNote: nil,
+        tags: [],
         webDataStoreID: UUID(),
         sortOrder: sortOrder,
         createdAt: Date(timeIntervalSince1970: 1_776_000_000),

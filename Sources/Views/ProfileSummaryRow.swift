@@ -28,6 +28,7 @@ enum ProfileSummaryRowSupportStyle: Equatable, Sendable {
 
 struct ProfileSummaryRowPresentation: Equatable, Sendable {
     let title: String
+    let tags: [PlusProfileTag]
     let usageSummary: ProfileUsageSummary?
     let supportText: String
     let supportStyle: ProfileSummaryRowSupportStyle
@@ -48,6 +49,7 @@ struct ProfileSummaryRowPresentation: Equatable, Sendable {
         mode: ProfileSummaryRowMode
     ) {
         title = snapshot.label
+        tags = snapshot.tags
         let usageSummary = snapshot.usageSummary(referenceDate: referenceDate)
         self.usageSummary = usageSummary
         let showsExpirySupportLine = usageSummary != nil
@@ -114,6 +116,10 @@ struct ProfileSummaryRowPresentation: Equatable, Sendable {
         }
 
         showsStatusBadge = false
+    }
+
+    var showsTags: Bool {
+        tags.isEmpty == false
     }
 }
 
@@ -243,6 +249,10 @@ struct ProfileSummaryRow: View {
 
             wrappedPrimaryAction {
                 VStack(alignment: .leading, spacing: scaled(8)) {
+                    if presentation.showsTags {
+                        ProfileTagStrip(tags: presentation.tags, textScale: effectiveTextScale)
+                    }
+
                     if let usageSummary = presentation.usageSummary {
                         usageSummaryView(usageSummary, spacing: scaled(6))
                     }
@@ -264,11 +274,25 @@ struct ProfileSummaryRow: View {
                 .lineLimit(1)
                 .minimumScaleFactor(isMenuBarMode ? 0.88 : 1)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .layoutPriority(1)
+
+            if presentation.showsTags {
+                ProfileTagStrip(
+                    tags: presentation.tags,
+                    textScale: 0.92,
+                    labelStyle: sidebarTagLabelStyle
+                )
+                .layoutPriority(2)
+            }
 
             if presentation.accessory != .none {
                 accessoryView
             }
         }
+    }
+
+    private var sidebarTagLabelStyle: ProfileTagChipLabelStyle {
+        presentation.tags.count > 1 ? .short : .full
     }
 
     private var menuBarTitleLabel: some View {

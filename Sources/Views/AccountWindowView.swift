@@ -120,6 +120,7 @@ struct ProfileManagerWindowView: View {
     @State private var webViewReloadToken = UUID()
     @State private var labelDraft = ""
     @State private var emailLinkDraft = ""
+    @State private var sidebarTagFilter = ProfileTagFilter()
     @State private var copiedProfileID: UUID?
     @State private var labelCopyResetTask: Task<Void, Never>?
 
@@ -255,7 +256,7 @@ struct ProfileManagerWindowView: View {
                             .font(ProfileManagerTypography.bodyStrong)
                             .foregroundStyle(CodexTheme.primaryText)
 
-                        Text("One WebKit store per email account.")
+                        Text(sidebarMetaText)
                             .font(ProfileManagerTypography.caption)
                             .foregroundStyle(CodexTheme.mutedText)
                     }
@@ -275,24 +276,34 @@ struct ProfileManagerWindowView: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
-                    ScrollView(.vertical, showsIndicators: true) {
-                        VStack(alignment: .leading, spacing: 10) {
-                            ForEach(controller.profiles) { snapshot in
-                                Button {
-                                    controller.selectProfile(id: snapshot.id)
-                                } label: {
-                                    ProfileSummaryRow(
-                                        snapshot: snapshot,
-                                        referenceDate: currentTime.now,
-                                        mode: .sidebar(
-                                            isSelected: snapshot.id == controller.selectedProfileID
+                    ProfileTagFilterBar(
+                        presentation: sidebarFilterPresentation,
+                        clearFilter: clearSidebarFilter,
+                        toggleTag: toggleSidebarFilter
+                    )
+
+                    if filteredSidebarProfiles.isEmpty {
+                        ProfileTagEmptyState(clearFilter: clearSidebarFilter)
+                    } else {
+                        ScrollView(.vertical, showsIndicators: true) {
+                            VStack(alignment: .leading, spacing: 10) {
+                                ForEach(filteredSidebarProfiles) { snapshot in
+                                    Button {
+                                        controller.selectProfile(id: snapshot.id)
+                                    } label: {
+                                        ProfileSummaryRow(
+                                            snapshot: snapshot,
+                                            referenceDate: currentTime.now,
+                                            mode: .sidebar(
+                                                isSelected: snapshot.id == controller.selectedProfileID
+                                            )
                                         )
-                                    )
+                                    }
+                                    .buttonStyle(.plain)
                                 }
-                                .buttonStyle(.plain)
                             }
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
             }
@@ -393,6 +404,13 @@ struct ProfileManagerWindowView: View {
                             )
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
+
+                        ProfileTagAssignmentSection(
+                            selectedTags: snapshot.tags,
+                            toggleTag: { tag in
+                                toggleTag(tag, for: snapshot.id)
+                            }
+                        )
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -607,10 +625,35 @@ struct ProfileManagerWindowView: View {
 
         if let refreshedAt = controller.profiles.compactMap(\.lastRefreshAt).max(),
            let updatedText = DisplayFormatter.updatedText(refreshedAt, referenceDate: currentTime.now) {
-            return "\(updatedText) · \(countLabel)"
+            return "\(updatedText) · \(countLabel) · \(profileTagCounts.statusText)"
         }
 
-        return count == 0 ? "Add your first profile to begin" : countLabel
+        return count == 0 ? "Add your first profile to begin" : "\(countLabel) · \(profileTagCounts.statusText)"
+    }
+
+    private var filteredSidebarProfiles: [PlusProfileSnapshot] {
+        sidebarTagFilter.apply(to: controller.profiles)
+    }
+
+    private var profileTagCounts: ProfileTagCounts {
+        ProfileTagCounts(snapshots: controller.profiles)
+    }
+
+    private var sidebarFilterPresentation: ProfileTagFilterBarPresentation {
+        ProfileTagFilterBarPresentation(
+            filter: sidebarTagFilter,
+            shownCount: filteredSidebarProfiles.count,
+            totalCount: controller.profiles.count,
+            tagCounts: profileTagCounts
+        )
+    }
+
+    private var sidebarMetaText: String {
+        if controller.profiles.isEmpty {
+            return "No saved profiles yet"
+        }
+
+        return "\(sidebarFilterPresentation.countText) · \(sidebarFilterPresentation.statusCountText)"
     }
 
     private func detailSummary(for snapshot: PlusProfileSnapshot) -> String {
@@ -765,6 +808,26 @@ struct ProfileManagerWindowView: View {
         controller.addProfile()
     }
 
+    private func clearSidebarFilter() {
+        sidebarTagFilter.clear()
+    }
+
+    private func toggleSidebarFilter(_ tag: PlusProfileTag) {
+        sidebarTagFilter.toggle(tag)
+
+        guard let selectedProfileID = controller.selectedProfileID,
+              filteredSidebarProfiles.isEmpty == false,
+              filteredSidebarProfiles.contains(where: { $0.id == selectedProfileID }) == false else {
+            return
+        }
+
+        controller.selectProfile(id: filteredSidebarProfiles.first?.id)
+    }
+
+    private func toggleTag(_ tag: PlusProfileTag, for profileID: UUID) {
+        controller.toggleTag(tag, for: profileID)
+    }
+
     private func clearSession(_ profileID: UUID) {
         Task {
             await controller.clearSession(for: profileID)
@@ -781,6 +844,39 @@ struct ProfileManagerWindowView: View {
 
     private func reloadSelectedWebView() {
         webViewReloadToken = UUID()
+    }
+}
+
+private struct ProfileTagAssignmentSection: View {
+    let selectedTags: [PlusProfileTag]
+    let toggleTag: (PlusProfileTag) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Tags")
+                .font(ProfileManagerTypography.caption)
+                .foregroundStyle(CodexTheme.supportText)
+
+            HStack(spacing: 6) {
+                ForEach(PlusProfileTag.allCases) { tag in
+                    ProfileTagToggleChip(
+                        title: tag.displayName,
+                        systemImage: tag.systemImage,
+                        isSelected: selectedTags.contains(tag),
+                        tone: tag.statusTone,
+                        helpText: selectedTags.contains(tag)
+                            ? "Remove \(tag.displayName) tag"
+                            : "Mark as \(tag.displayName)"
+                    ) {
+                        toggleTag(tag)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Profile tags")
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
