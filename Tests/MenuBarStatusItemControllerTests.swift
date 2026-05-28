@@ -186,14 +186,30 @@ private final class StubPinnedStatusDataService: PlusProfileDataServing {
         return PlusProfileRefreshResult(usage: usage, detectedNote: "Chatgpt Plus")
     }
 
+    func openChromeSignIn(for profile: PlusProfile) async throws {
+    }
+
+    func openChromePasskeySetup(for profile: PlusProfile) async throws {
+    }
+
+    func syncChromeSession(for profile: PlusProfile) async throws -> ChatGPTAuthContext {
+        ChatGPTAuthContext(
+            accessToken: "token-\(profile.id.uuidString)",
+            accountID: "acct-\(profile.id.uuidString)",
+            expiresAt: nil,
+            deviceID: nil,
+            clientVersion: nil,
+            language: "en-US"
+        )
+    }
+
+    func closeChromeSignIn(for profile: PlusProfile) async {
+    }
+
     func clearSession(for profile: PlusProfile) async throws {
     }
 
     func removeProfileData(for profile: PlusProfile) async throws {
-    }
-
-    func dataStore(for profile: PlusProfile) -> WKWebsiteDataStore {
-        .nonPersistent()
     }
 }
 

@@ -110,6 +110,138 @@ struct PlusProfileControllerTests {
     }
 
     @Test
+    func openChromeSignInMarksProfileAsWaitingForChrome() async throws {
+        let tempDirectory = makeTemporaryDirectory()
+        let store = ProfileCatalogStore(
+            fileURL: tempDirectory.appendingPathComponent("profiles.json", isDirectory: false)
+        )
+        let profile = sampleProfile(label: "chrome@example.com", sortOrder: 0)
+        try store.saveProfiles([profile])
+        let service = StubPlusProfileDataService(refreshResults: [:])
+        let controller = PlusProfileController(
+            catalogStore: store,
+            dataService: service,
+            autoStart: false
+        )
+
+        await controller.openChromeSignIn(for: profile.id)
+
+        let row = try #require(controller.profiles.first)
+        #expect(service.openedChromeProfileIDs == [profile.id])
+        #expect(controller.isChromeSignInOpen(for: profile.id))
+        #expect(row.statusMessage == "Waiting for sign-in in Chrome.")
+    }
+
+    @Test
+    func openChromePasskeySetupShowsShortTouchIDHelpAndCanCancel() async throws {
+        let tempDirectory = makeTemporaryDirectory()
+        let store = ProfileCatalogStore(
+            fileURL: tempDirectory.appendingPathComponent("profiles.json", isDirectory: false)
+        )
+        let profile = sampleProfile(label: "touchid@example.com", sortOrder: 0)
+        try store.saveProfiles([profile])
+        let service = StubPlusProfileDataService(refreshResults: [:])
+        let controller = PlusProfileController(
+            catalogStore: store,
+            dataService: service,
+            autoStart: false
+        )
+
+        await controller.openChromePasskeySetup(for: profile.id)
+
+        var row = try #require(controller.profiles.first)
+        #expect(service.openedPasskeySetupProfileIDs == [profile.id])
+        #expect(controller.isChromeSignInOpen(for: profile.id))
+        #expect(row.statusMessage == PlusProfileController.touchIDPasskeyHelpMessage)
+
+        await controller.closeChromeSignIn(for: profile.id)
+
+        row = try #require(controller.profiles.first)
+        #expect(service.closedChromeProfileIDs == [profile.id])
+        #expect(controller.isChromeSignInOpen(for: profile.id) == false)
+        #expect(row.statusMessage == "Chrome sign-in was cancelled.")
+    }
+
+    @Test
+    func syncChromeSessionRefreshesProfileAndClearsWaitingState() async throws {
+        let tempDirectory = makeTemporaryDirectory()
+        let store = ProfileCatalogStore(
+            fileURL: tempDirectory.appendingPathComponent("profiles.json", isDirectory: false)
+        )
+        let profile = sampleProfile(label: "chrome@example.com", sortOrder: 0)
+        try store.saveProfiles([profile])
+        let usage = makeUsage(accountID: "acct_chrome", primaryUsedPercent: 30, secondaryUsedPercent: 45)
+        let service = StubPlusProfileDataService(
+            refreshResults: [
+                profile.id: .success(
+                    PlusProfileRefreshResult(
+                        usage: usage,
+                        detectedNote: "Chatgpt Plus · chrome",
+                        expiryRefresh: .unchanged
+                    )
+                ),
+            ],
+            syncResults: [
+                profile.id: .success(
+                    ChatGPTAuthContext(
+                        accessToken: "token-chrome",
+                        accountID: "acct_chrome",
+                        expiresAt: nil,
+                        deviceID: "device-a",
+                        clientVersion: nil,
+                        language: "en-US"
+                    )
+                ),
+            ]
+        )
+        let controller = PlusProfileController(
+            catalogStore: store,
+            dataService: service,
+            autoStart: false
+        )
+
+        await controller.openChromeSignIn(for: profile.id)
+        await controller.syncChromeSession(for: profile.id)
+
+        let row = try #require(controller.profiles.first)
+        #expect(service.syncedChromeProfileIDs == [profile.id])
+        #expect(controller.isChromeSignInOpen(for: profile.id) == false)
+        #expect(row.state == .ready)
+        #expect(row.usage?.accountID == "acct_chrome")
+        #expect(row.statusMessage == nil)
+    }
+
+    @Test
+    func syncChromeSessionWithoutSessionKeepsChromeFlowOpen() async throws {
+        let tempDirectory = makeTemporaryDirectory()
+        let store = ProfileCatalogStore(
+            fileURL: tempDirectory.appendingPathComponent("profiles.json", isDirectory: false)
+        )
+        let profile = sampleProfile(label: "chrome@example.com", sortOrder: 0)
+        try store.saveProfiles([profile])
+        let service = StubPlusProfileDataService(
+            refreshResults: [:],
+            syncResults: [
+                profile.id: .failure(.unauthorized),
+            ]
+        )
+        let controller = PlusProfileController(
+            catalogStore: store,
+            dataService: service,
+            autoStart: false
+        )
+
+        await controller.openChromeSignIn(for: profile.id)
+        await controller.syncChromeSession(for: profile.id)
+
+        let row = try #require(controller.profiles.first)
+        #expect(controller.isChromeSignInOpen(for: profile.id))
+        #expect(row.state == .needsLogin)
+        #expect(row.statusMessage == "Chrome session was not ready. Stay signed in, then sync again.")
+        #expect(row.isRefreshing == false)
+    }
+
+    @Test
     func updateEmailLinkPersistsTrimmedValueWithoutChangingOrdering() throws {
         let tempDirectory = makeTemporaryDirectory()
         let store = ProfileCatalogStore(
@@ -337,17 +469,53 @@ struct PlusProfileControllerTests {
 @MainActor
 private final class StubPlusProfileDataService: PlusProfileDataServing {
     private let refreshResults: [UUID: Result<PlusProfileRefreshResult, ChatGPTAPIError>]
+    private let syncResults: [UUID: Result<ChatGPTAuthContext, ChatGPTAPIError>]
+    private(set) var openedChromeProfileIDs: [UUID] = []
+    private(set) var openedPasskeySetupProfileIDs: [UUID] = []
+    private(set) var syncedChromeProfileIDs: [UUID] = []
+    private(set) var closedChromeProfileIDs: [UUID] = []
     private(set) var clearedProfileIDs: [UUID] = []
     private(set) var removedProfileIDs: [UUID] = []
-    private var dataStores: [UUID: WKWebsiteDataStore] = [:]
 
-    init(refreshResults: [UUID: Result<PlusProfileRefreshResult, ChatGPTAPIError>]) {
+    init(
+        refreshResults: [UUID: Result<PlusProfileRefreshResult, ChatGPTAPIError>],
+        syncResults: [UUID: Result<ChatGPTAuthContext, ChatGPTAPIError>] = [:]
+    ) {
         self.refreshResults = refreshResults
+        self.syncResults = syncResults
     }
 
     func refreshProfile(_ profile: PlusProfile) async throws -> PlusProfileRefreshResult {
         let result = try #require(refreshResults[profile.id])
         return try result.get()
+    }
+
+    func openChromeSignIn(for profile: PlusProfile) async throws {
+        openedChromeProfileIDs.append(profile.id)
+    }
+
+    func openChromePasskeySetup(for profile: PlusProfile) async throws {
+        openedPasskeySetupProfileIDs.append(profile.id)
+    }
+
+    func syncChromeSession(for profile: PlusProfile) async throws -> ChatGPTAuthContext {
+        syncedChromeProfileIDs.append(profile.id)
+        if let result = syncResults[profile.id] {
+            return try result.get()
+        }
+
+        return ChatGPTAuthContext(
+            accessToken: "token-\(profile.id.uuidString)",
+            accountID: "acct-\(profile.id.uuidString)",
+            expiresAt: nil,
+            deviceID: nil,
+            clientVersion: nil,
+            language: "en-US"
+        )
+    }
+
+    func closeChromeSignIn(for profile: PlusProfile) async {
+        closedChromeProfileIDs.append(profile.id)
     }
 
     func clearSession(for profile: PlusProfile) async throws {
@@ -358,15 +526,6 @@ private final class StubPlusProfileDataService: PlusProfileDataServing {
         removedProfileIDs.append(profile.id)
     }
 
-    func dataStore(for profile: PlusProfile) -> WKWebsiteDataStore {
-        if let existing = dataStores[profile.id] {
-            return existing
-        }
-
-        let store = WKWebsiteDataStore.nonPersistent()
-        dataStores[profile.id] = store
-        return store
-    }
 }
 
 private actor ConcurrencyRecorder {
@@ -418,15 +577,32 @@ private final class ConcurrencyRecordingProfileDataService: PlusProfileDataServi
         )
     }
 
+    func openChromeSignIn(for profile: PlusProfile) async throws {
+    }
+
+    func openChromePasskeySetup(for profile: PlusProfile) async throws {
+    }
+
+    func syncChromeSession(for profile: PlusProfile) async throws -> ChatGPTAuthContext {
+        ChatGPTAuthContext(
+            accessToken: "token-\(profile.id.uuidString)",
+            accountID: "acct-\(profile.id.uuidString)",
+            expiresAt: nil,
+            deviceID: nil,
+            clientVersion: nil,
+            language: "en-US"
+        )
+    }
+
+    func closeChromeSignIn(for profile: PlusProfile) async {
+    }
+
     func clearSession(for profile: PlusProfile) async throws {
     }
 
     func removeProfileData(for profile: PlusProfile) async throws {
     }
 
-    func dataStore(for profile: PlusProfile) -> WKWebsiteDataStore {
-        .nonPersistent()
-    }
 }
 
 private func makeUsage(

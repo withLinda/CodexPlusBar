@@ -31,7 +31,7 @@ struct PlusProfileDataServiceTests {
                         headerFields: [:]
                     )!
                 )
-            case "/codex/settings/usage":
+            case "/codex/cloud/settings/analytics":
                 return HTTPResponseData(
                     data: Data(
                         """
@@ -148,7 +148,7 @@ struct PlusProfileDataServiceTests {
             transport.requestPaths
                 == [
                     "/api/auth/session",
-                    "/codex/settings/usage",
+                    "/codex/cloud/settings/analytics",
                     "/backend-api/wham/usage",
                     "/backend-api/accounts/check/v4-2023-04-27",
                 ]
@@ -244,6 +244,239 @@ struct PlusProfileDataServiceTests {
         #expect(result.usage.accountID == "user-not-listed-in-catalog")
         #expect(result.expiryRefresh == .value(isoDate("2026-05-17T13:42:54+00:00")))
     }
+
+    @Test
+    func syncChromeSessionImportsCookiesAndValidatesCurrentSession() async throws {
+        let profile = sampleProfile(label: "chrome@example.com", sortOrder: 0)
+        let transport = MockHTTPTransport { request in
+            switch request.url?.path {
+            case "/api/auth/session":
+                return HTTPResponseData(
+                    data: Data(
+                        """
+                        {
+                          "accessToken": "token-chrome",
+                          "account": {
+                            "id": "acct_chrome_123456"
+                          },
+                          "expires": "2026-05-01T10:00:00Z",
+                          "locale": "en-US"
+                        }
+                        """.utf8
+                    ),
+                    response: HTTPURLResponse(
+                        url: try #require(request.url),
+                        statusCode: 200,
+                        httpVersion: nil,
+                        headerFields: [:]
+                    )!
+                )
+            case "/codex/cloud/settings/analytics":
+                return HTTPResponseData(
+                    data: Data(
+                        """
+                        <html data-build="web-2026.04.20">
+                          <body>
+                            <script id="client-bootstrap" type="application/json">
+                              {
+                                "authStatus": "logged_in",
+                                "session": {
+                                  "accessToken": "token-chrome",
+                                  "expires": "2026-05-01T10:00:00Z",
+                                  "account": {
+                                    "id": "acct_chrome_123456"
+                                  }
+                                },
+                                "locale": "en-US"
+                              }
+                            </script>
+                          </body>
+                        </html>
+                        """.utf8
+                    ),
+                    response: HTTPURLResponse(
+                        url: try #require(request.url),
+                        statusCode: 200,
+                        httpVersion: nil,
+                        headerFields: ["Content-Type": "text/html"]
+                    )!
+                )
+            default:
+                throw ChatGPTAPIError.invalidResponse
+            }
+        }
+        let runtime = PlusProfileRuntime(
+            profileID: profile.id,
+            dataStore: .nonPersistent(),
+            transport: transport
+        )
+        let provider = StubRuntimeProvider(runtimeByProfileID: [profile.id: runtime])
+        let chromeSessionManager = StubChromeSessionManager(
+            cookies: [
+                ChromeDevToolsCookie(
+                    name: "__Secure-next-auth.session-token",
+                    value: "session-a",
+                    domain: ".chatgpt.com",
+                    path: "/",
+                    expires: nil,
+                    httpOnly: true,
+                    secure: true
+                ),
+                ChromeDevToolsCookie(
+                    name: "oai-did",
+                    value: "device-a",
+                    domain: ".chatgpt.com",
+                    path: "/",
+                    expires: nil,
+                    httpOnly: false,
+                    secure: true
+                ),
+            ]
+        )
+        let service = PlusProfileDataService(
+            runtimeProvider: provider,
+            chromeSessionManager: chromeSessionManager
+        )
+
+        let context = try await service.syncChromeSession(for: profile)
+
+        #expect(chromeSessionManager.syncedProfileIDs == [profile.id])
+        #expect(context.accountID == "acct_chrome_123456")
+        #expect(context.deviceID == "device-a")
+        #expect(runtime.authContext == context)
+        #expect(await runtime.sessionStore.cookieValue(named: "oai-did") == "device-a")
+    }
+
+    @Test
+    func syncChromeSessionReopensChromeWhenValidationRejectsImportedCookies() async throws {
+        let profile = sampleProfile(label: "retry@example.com", sortOrder: 0)
+        let transport = MockHTTPTransport { request in
+            switch request.url?.path {
+            case "/api/auth/session":
+                return HTTPResponseData(
+                    data: Data("{}".utf8),
+                    response: HTTPURLResponse(
+                        url: try #require(request.url),
+                        statusCode: 200,
+                        httpVersion: nil,
+                        headerFields: [:]
+                    )!
+                )
+            case "/codex/cloud/settings/analytics":
+                return HTTPResponseData(
+                    data: Data(
+                        """
+                        <html data-build="web-2026.04.20">
+                          <body>
+                            <script id="client-bootstrap" type="application/json">
+                              {
+                                "authStatus": "logged_out"
+                              }
+                            </script>
+                          </body>
+                        </html>
+                        """.utf8
+                    ),
+                    response: HTTPURLResponse(
+                        url: try #require(request.url),
+                        statusCode: 200,
+                        httpVersion: nil,
+                        headerFields: ["Content-Type": "text/html"]
+                    )!
+                )
+            default:
+                throw ChatGPTAPIError.invalidResponse
+            }
+        }
+        let runtime = PlusProfileRuntime(
+            profileID: profile.id,
+            dataStore: .nonPersistent(),
+            transport: transport
+        )
+        let provider = StubRuntimeProvider(runtimeByProfileID: [profile.id: runtime])
+        let chromeSessionManager = StubChromeSessionManager(
+            cookies: [
+                ChromeDevToolsCookie(
+                    name: "__Secure-next-auth.session-token",
+                    value: "stale-session",
+                    domain: ".chatgpt.com",
+                    path: "/",
+                    expires: nil,
+                    httpOnly: true,
+                    secure: true
+                ),
+            ]
+        )
+        let service = PlusProfileDataService(
+            runtimeProvider: provider,
+            chromeSessionManager: chromeSessionManager
+        )
+
+        await #expect(throws: ChatGPTAPIError.unauthorized) {
+            _ = try await service.syncChromeSession(for: profile)
+        }
+        #expect(chromeSessionManager.syncedProfileIDs == [profile.id])
+        #expect(chromeSessionManager.openedProfileIDs == [profile.id])
+    }
+
+    @Test
+    func clearSessionClearsNativeCookiesAndChromeCookies() async throws {
+        let profile = sampleProfile(label: "clear@example.com", sortOrder: 0)
+        let runtime = PlusProfileRuntime(
+            profileID: profile.id,
+            dataStore: .nonPersistent()
+        )
+        let provider = StubRuntimeProvider(runtimeByProfileID: [profile.id: runtime])
+        let chromeSessionManager = StubChromeSessionManager()
+        let service = PlusProfileDataService(
+            runtimeProvider: provider,
+            chromeSessionManager: chromeSessionManager
+        )
+
+        try await service.clearSession(for: profile)
+
+        #expect(provider.clearedProfileIDs == [profile.id])
+        #expect(chromeSessionManager.clearedProfileIDs == [profile.id])
+    }
+
+    @Test
+    func openChromePasskeySetupDelegatesToChromeSessionManager() async throws {
+        let profile = sampleProfile(label: "touchid@example.com", sortOrder: 0)
+        let runtime = PlusProfileRuntime(
+            profileID: profile.id,
+            dataStore: .nonPersistent()
+        )
+        let provider = StubRuntimeProvider(runtimeByProfileID: [profile.id: runtime])
+        let chromeSessionManager = StubChromeSessionManager()
+        let service = PlusProfileDataService(
+            runtimeProvider: provider,
+            chromeSessionManager: chromeSessionManager
+        )
+
+        try await service.openChromePasskeySetup(for: profile)
+
+        #expect(chromeSessionManager.openedPasskeySetupProfileIDs == [profile.id])
+    }
+
+    @Test
+    func removeProfileDataRemovesNativeDataAndDedicatedChromeProfile() async throws {
+        let profile = sampleProfile(label: "remove@example.com", sortOrder: 0)
+        let runtime = PlusProfileRuntime(
+            profileID: profile.id,
+            dataStore: .nonPersistent()
+        )
+        let provider = StubRuntimeProvider(runtimeByProfileID: [profile.id: runtime])
+        let chromeSessionManager = StubChromeSessionManager()
+        let service = PlusProfileDataService(
+            runtimeProvider: provider,
+            chromeSessionManager: chromeSessionManager
+        )
+
+        try await service.removeProfileData(for: profile)
+
+        #expect(provider.removedProfileIDs == [profile.id])
+        #expect(chromeSessionManager.removedProfileIDs == [profile.id])
+    }
 }
 
 @MainActor
@@ -270,6 +503,53 @@ private final class StubRuntimeProvider: PlusProfileRuntimeProviding {
 
     func removeProfileData(for profile: PlusProfile) async throws {
         removedProfileIDs.append(profile.id)
+    }
+}
+
+@MainActor
+private final class StubChromeSessionManager: ChromeSessionManaging {
+    private let cookies: [ChromeDevToolsCookie]
+    private(set) var openedProfileIDs: [UUID] = []
+    private(set) var openedPasskeySetupProfileIDs: [UUID] = []
+    private(set) var syncedProfileIDs: [UUID] = []
+    private(set) var clearedProfileIDs: [UUID] = []
+    private(set) var removedProfileIDs: [UUID] = []
+    private(set) var closedProfileIDs: [UUID] = []
+
+    init(cookies: [ChromeDevToolsCookie] = []) {
+        self.cookies = cookies
+    }
+
+    func openSignIn(for profile: PlusProfile) async throws {
+        openedProfileIDs.append(profile.id)
+    }
+
+    func openPasskeySetup(for profile: PlusProfile) async throws {
+        openedPasskeySetupProfileIDs.append(profile.id)
+    }
+
+    func syncCookies(
+        for profile: PlusProfile,
+        into sessionStore: WebSessionStore
+    ) async throws -> ChromeCookieImportResult {
+        syncedProfileIDs.append(profile.id)
+        let count = try await ChromeCookieImporter.storeChatGPTCookies(
+            from: cookies,
+            in: sessionStore
+        )
+        return ChromeCookieImportResult(importedCookieCount: count)
+    }
+
+    func clearCookies(for profile: PlusProfile) async throws {
+        clearedProfileIDs.append(profile.id)
+    }
+
+    func removeProfileData(for profile: PlusProfile) async throws {
+        removedProfileIDs.append(profile.id)
+    }
+
+    func closeSignIn(for profile: PlusProfile) async {
+        closedProfileIDs.append(profile.id)
     }
 }
 
@@ -316,7 +596,7 @@ private func makeRefreshTransport(
                     headerFields: [:]
                 )!
             )
-        case "/codex/settings/usage":
+        case "/codex/cloud/settings/analytics":
             return HTTPResponseData(
                 data: Data(
                     """

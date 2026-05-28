@@ -49,11 +49,8 @@ struct ProfileManagerDetailLayoutMetrics: Equatable {
     let actionButtonSpacing: CGFloat
     let usageMetricSpacing: CGFloat
     let usageMetricTextScale: Double
-    let sessionBrowserMinHeight: CGFloat
-    let sessionBrowserIdealHeight: CGFloat
-    let sessionBrowserMaxHeight: CGFloat
 
-    static let browserFirst = ProfileManagerDetailLayoutMetrics(
+    static let chromeSignIn = ProfileManagerDetailLayoutMetrics(
         detailStackSpacing: 12,
         topGridSpacing: 12,
         compactCardPadding: 12,
@@ -62,10 +59,7 @@ struct ProfileManagerDetailLayoutMetrics: Equatable {
         actionButtonSize: 36,
         actionButtonSpacing: 8,
         usageMetricSpacing: 10,
-        usageMetricTextScale: 0.9,
-        sessionBrowserMinHeight: 360,
-        sessionBrowserIdealHeight: 420,
-        sessionBrowserMaxHeight: 520
+        usageMetricTextScale: 0.9
     )
 
     var actionGridColumns: [GridItem] {
@@ -81,32 +75,38 @@ struct ProfileManagerDetailLayoutMetrics: Equatable {
 }
 
 struct ProfileManagerSessionPanelPresentation: Equatable, Sendable {
-    let title = "Sign in / repair session"
+    let title = "Chrome sign-in"
     let summaryText: String
-    let toggleTitle: String
+    let primaryTitle = "Open Chrome"
+    let passkeyHelpTitle = "Touch ID help"
+    let syncTitle = "Sync now"
+    let cancelTitle = "Cancel"
+    let isSyncDisabled: Bool
+    let showsCancel: Bool
 
-    init(snapshot: PlusProfileSnapshot, isExpanded: Bool) {
-        toggleTitle = isExpanded ? "Hide session" : "Show session"
+    init(snapshot: PlusProfileSnapshot, isChromeSignInOpen: Bool) {
+        isSyncDisabled = isChromeSignInOpen == false || snapshot.isRefreshing
+        showsCancel = isChromeSignInOpen
+
+        if isChromeSignInOpen {
+            summaryText = snapshot.statusMessage ?? "Waiting for sign-in in Chrome."
+            return
+        }
+
+        if let statusMessage = snapshot.statusMessage, snapshot.state == .failed {
+            summaryText = statusMessage
+            return
+        }
 
         switch snapshot.state {
-        case .idle:
-            summaryText = isExpanded
-                ? "Sign in with this profile in its own cookie store."
-                : "Hidden until you need to sign in."
+        case .idle, .needsLogin:
+            summaryText = "Open Chrome, sign in, then sync."
         case .loading:
-            summaryText = isExpanded
-                ? "This profile is refreshing while the session view stays open."
-                : "Hidden while this profile refreshes."
+            summaryText = "Checking this profile."
         case .ready:
-            summaryText = isExpanded
-                ? "This profile session view is open."
-                : "Hidden until you need to repair this session."
-        case .needsLogin:
-            summaryText = isExpanded
-                ? "Sign in again to repair this profile."
-                : "Open the session view to sign in again."
+            summaryText = "Session is synced."
         case .failed:
-            summaryText = snapshot.statusMessage ?? "Open the session view to inspect this profile."
+            summaryText = "Open Chrome to repair this profile."
         }
     }
 }
@@ -115,9 +115,7 @@ struct ProfileManagerWindowView: View {
     @Bindable var controller: PlusProfileController
     let currentTime: AppMinuteClock
     @Environment(\.displayScale) private var displayScale
-    @State private var isSessionExpanded = false
     @State private var windowChromeMetrics = WindowChromeMetrics()
-    @State private var webViewReloadToken = UUID()
     @State private var labelDraft = ""
     @State private var emailLinkDraft = ""
     @State private var sidebarTagFilter = ProfileTagFilter()
@@ -126,12 +124,10 @@ struct ProfileManagerWindowView: View {
 
     init(
         controller: PlusProfileController,
-        currentTime: AppMinuteClock,
-        initialSessionExpanded: Bool = false
+        currentTime: AppMinuteClock
     ) {
         self.controller = controller
         self.currentTime = currentTime
-        _isSessionExpanded = State(initialValue: initialSessionExpanded)
     }
 
     var body: some View {
@@ -177,7 +173,6 @@ struct ProfileManagerWindowView: View {
             syncDrafts(with: controller.selectedProfile)
         }
         .onChange(of: controller.selectedProfileID) { _, _ in
-            webViewReloadToken = UUID()
             resetLabelCopyFeedback()
             syncDrafts(with: controller.selectedProfile)
         }
@@ -315,13 +310,13 @@ struct ProfileManagerWindowView: View {
     @ViewBuilder
     private var detailPane: some View {
         if let snapshot = controller.selectedProfile {
-            let metrics = ProfileManagerDetailLayoutMetrics.browserFirst
+            let metrics = ProfileManagerDetailLayoutMetrics.chromeSignIn
 
             ScrollView(.vertical, showsIndicators: true) {
                 VStack(alignment: .leading, spacing: metrics.detailStackSpacing) {
                     detailTopGrid(for: snapshot, metrics: metrics)
                     usagePanel(for: snapshot, metrics: metrics)
-                    webViewPanel(for: snapshot, metrics: metrics)
+                    chromeSignInPanel(for: snapshot, metrics: metrics)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.bottom, metrics.detailStackSpacing)
@@ -512,11 +507,11 @@ struct ProfileManagerWindowView: View {
                     }
 
                     CodexIconButton(
-                        symbolName: "safari",
-                        helpText: "Reload login view",
+                        symbolName: "globe",
+                        helpText: "Open Chrome sign-in",
                         tone: .secondary
                     ) {
-                        reloadSelectedWebView()
+                        openChromeSignIn(snapshot.id)
                     }
 
                     CodexIconButton(
@@ -561,61 +556,70 @@ struct ProfileManagerWindowView: View {
     }
 
     @ViewBuilder
-    private func webViewPanel(
+    private func chromeSignInPanel(
         for snapshot: PlusProfileSnapshot,
         metrics: ProfileManagerDetailLayoutMetrics
     ) -> some View {
-        if let dataStore = controller.dataStore(for: snapshot.id) {
-            let presentation = ProfileManagerSessionPanelPresentation(
-                snapshot: snapshot,
-                isExpanded: isSessionExpanded
-            )
+        let presentation = ProfileManagerSessionPanelPresentation(
+            snapshot: snapshot,
+            isChromeSignInOpen: controller.isChromeSignInOpen(for: snapshot.id)
+        )
 
-            CodexCard(tier: .strong, padding: metrics.compactCardPadding) {
-                VStack(alignment: .leading, spacing: isSessionExpanded ? 12 : 0) {
-                    HStack(spacing: 12) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(presentation.title)
-                                .font(ProfileManagerTypography.bodyStrong)
-                                .foregroundStyle(CodexTheme.primaryText)
+        CodexCard(tier: .strong, padding: metrics.compactCardPadding) {
+            HStack(alignment: .center, spacing: 12) {
+                Image(systemName: "key.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(CodexTheme.accentOrange)
+                    .frame(width: 24, height: 24)
+                    .accessibilityHidden(true)
 
-                            Text(presentation.summaryText)
-                                .font(ProfileManagerTypography.small)
-                                .foregroundStyle(CodexTheme.mutedText)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(presentation.title)
+                        .font(ProfileManagerTypography.bodyStrong)
+                        .foregroundStyle(CodexTheme.primaryText)
 
-                        Spacer(minLength: 0)
+                    Text(presentation.summaryText)
+                        .font(ProfileManagerTypography.small)
+                        .foregroundStyle(CodexTheme.mutedText)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
 
-                        Button(presentation.toggleTitle) {
-                            withAnimation(.easeInOut(duration: 0.18)) {
-                                isSessionExpanded.toggle()
-                            }
+                Spacer(minLength: 0)
+
+                HStack(spacing: 8) {
+                    Button {
+                        openChromeSignIn(snapshot.id)
+                    } label: {
+                        Label(presentation.primaryTitle, systemImage: "globe")
+                    }
+                    .buttonStyle(ProfileManagerPrimaryButtonStyle())
+                    .disabled(snapshot.isRefreshing)
+
+                    CodexIconButton(
+                        symbolName: "touchid",
+                        helpText: presentation.passkeyHelpTitle,
+                        tone: .quiet,
+                        isDisabled: snapshot.isRefreshing
+                    ) {
+                        openChromePasskeySetup(snapshot.id)
+                    }
+
+                    Button(presentation.syncTitle) {
+                        syncChromeSession(snapshot.id)
+                    }
+                    .buttonStyle(ProfileManagerSecondaryButtonStyle())
+                    .disabled(presentation.isSyncDisabled)
+
+                    if presentation.showsCancel {
+                        Button(presentation.cancelTitle) {
+                            closeChromeSignIn(snapshot.id)
                         }
                         .buttonStyle(ProfileManagerSecondaryButtonStyle())
                     }
-
-                    if isSessionExpanded {
-                        CodexCard(tier: .subtle, padding: 8, shadow: false) {
-                            ProfileSignInWebView(dataStore: dataStore)
-                                .id("\(snapshot.id.uuidString)-\(webViewReloadToken.uuidString)")
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                .clipShape(
-                                    RoundedRectangle(
-                                        cornerRadius: CodexTheme.fieldCornerRadius - 1,
-                                        style: .continuous
-                                    )
-                                )
-                        }
-                        .frame(
-                            minHeight: metrics.sessionBrowserMinHeight,
-                            idealHeight: metrics.sessionBrowserIdealHeight,
-                            maxHeight: metrics.sessionBrowserMaxHeight
-                        )
-                    }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -831,19 +835,37 @@ struct ProfileManagerWindowView: View {
     private func clearSession(_ profileID: UUID) {
         Task {
             await controller.clearSession(for: profileID)
-            reloadSelectedWebView()
         }
     }
 
     private func removeProfile(_ profileID: UUID) {
         Task {
             await controller.removeProfile(id: profileID)
-            reloadSelectedWebView()
         }
     }
 
-    private func reloadSelectedWebView() {
-        webViewReloadToken = UUID()
+    private func openChromeSignIn(_ profileID: UUID) {
+        Task {
+            await controller.openChromeSignIn(for: profileID)
+        }
+    }
+
+    private func openChromePasskeySetup(_ profileID: UUID) {
+        Task {
+            await controller.openChromePasskeySetup(for: profileID)
+        }
+    }
+
+    private func syncChromeSession(_ profileID: UUID) {
+        Task {
+            await controller.syncChromeSession(for: profileID)
+        }
+    }
+
+    private func closeChromeSignIn(_ profileID: UUID) {
+        Task {
+            await controller.closeChromeSignIn(for: profileID)
+        }
     }
 }
 

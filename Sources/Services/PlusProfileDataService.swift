@@ -1,5 +1,4 @@
 import Foundation
-import WebKit
 
 @MainActor
 protocol PlusProfileRuntimeProviding: AnyObject {
@@ -13,17 +12,25 @@ extension ProfileRuntimeRegistry: PlusProfileRuntimeProviding {}
 @MainActor
 protocol PlusProfileDataServing: AnyObject {
     func refreshProfile(_ profile: PlusProfile) async throws -> PlusProfileRefreshResult
+    func openChromeSignIn(for profile: PlusProfile) async throws
+    func openChromePasskeySetup(for profile: PlusProfile) async throws
+    func syncChromeSession(for profile: PlusProfile) async throws -> ChatGPTAuthContext
+    func closeChromeSignIn(for profile: PlusProfile) async
     func clearSession(for profile: PlusProfile) async throws
     func removeProfileData(for profile: PlusProfile) async throws
-    func dataStore(for profile: PlusProfile) -> WKWebsiteDataStore
 }
 
 @MainActor
 final class PlusProfileDataService: PlusProfileDataServing {
     private let runtimeProvider: PlusProfileRuntimeProviding
+    private let chromeSessionManager: ChromeSessionManaging
 
-    init(runtimeProvider: PlusProfileRuntimeProviding = ProfileRuntimeRegistry()) {
+    init(
+        runtimeProvider: PlusProfileRuntimeProviding = ProfileRuntimeRegistry(),
+        chromeSessionManager: ChromeSessionManaging = DefaultChromeSessionManager()
+    ) {
         self.runtimeProvider = runtimeProvider
+        self.chromeSessionManager = chromeSessionManager
     }
 
     func refreshProfile(_ profile: PlusProfile) async throws -> PlusProfileRefreshResult {
@@ -67,16 +74,52 @@ final class PlusProfileDataService: PlusProfileDataServing {
         let runtime = runtimeProvider.runtime(for: profile)
         runtime.updateAuthContext(nil)
         await runtimeProvider.clearSession(for: profile)
+        try await chromeSessionManager.clearCookies(for: profile)
     }
 
     func removeProfileData(for profile: PlusProfile) async throws {
         let runtime = runtimeProvider.runtime(for: profile)
         runtime.updateAuthContext(nil)
         try await runtimeProvider.removeProfileData(for: profile)
+        try await chromeSessionManager.removeProfileData(for: profile)
     }
 
-    func dataStore(for profile: PlusProfile) -> WKWebsiteDataStore {
-        runtimeProvider.runtime(for: profile).dataStore
+    func openChromeSignIn(for profile: PlusProfile) async throws {
+        try await chromeSessionManager.openSignIn(for: profile)
+    }
+
+    func openChromePasskeySetup(for profile: PlusProfile) async throws {
+        try await chromeSessionManager.openPasskeySetup(for: profile)
+    }
+
+    func syncChromeSession(for profile: PlusProfile) async throws -> ChatGPTAuthContext {
+        let runtime = runtimeProvider.runtime(for: profile)
+        _ = try await chromeSessionManager.syncCookies(
+            for: profile,
+            into: runtime.sessionStore
+        )
+
+        let authSessionService = AuthSessionService(
+            transport: runtime.transport,
+            sessionStore: runtime.sessionStore
+        )
+
+        do {
+            let context = try await authSessionService.fetchCurrentSession(fallback: runtime.authContext)
+            runtime.updateAuthContext(context)
+            await chromeSessionManager.closeSignIn(for: profile)
+            return context
+        } catch {
+            if ChatGPTAPIError.map(error) == .unauthorized {
+                try? await chromeSessionManager.openSignIn(for: profile)
+            }
+
+            throw error
+        }
+    }
+
+    func closeChromeSignIn(for profile: PlusProfile) async {
+        await chromeSessionManager.closeSignIn(for: profile)
     }
 
     private static func makeUsageRequest(accountID: String) -> URLRequest {

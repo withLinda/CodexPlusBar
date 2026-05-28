@@ -1,6 +1,5 @@
 import Foundation
 import Observation
-import WebKit
 
 struct MenuBarStatusContent: Equatable, Sendable {
     let profileLabel: String
@@ -50,11 +49,14 @@ struct MenuBarStatusContent: Equatable, Sendable {
 @Observable
 @MainActor
 final class PlusProfileController {
+    static let touchIDPasskeyHelpMessage = "Touch ID works when the OpenAI passkey is in Apple Passwords or synced into this Chrome profile."
+
     var profiles: [PlusProfileSnapshot] = []
     var selectedProfileID: UUID?
     var statusMessage: String?
     var isRefreshing = false
     var dashboardStatus: PlusDashboardStatus = .empty
+    var chromeSignInProfileIDs: Set<UUID> = []
 
     @ObservationIgnored private let catalogStore: ProfileCatalogStore
     @ObservationIgnored private let dataService: PlusProfileDataServing
@@ -212,7 +214,7 @@ final class PlusProfileController {
                 profile: newProfile,
                 state: .idle,
                 usage: nil,
-                statusMessage: "Sign in with this account in the web view below.",
+                statusMessage: "Open Chrome to sign in with this account.",
                 isRefreshing: false
             )
         )
@@ -330,9 +332,10 @@ final class PlusProfileController {
                 profile: updatedProfile,
                 state: .needsLogin,
                 usage: .some(nil),
-                statusMessage: .some("Sign in again to restore this account."),
+                statusMessage: .some("Open Chrome to sign in again."),
                 isRefreshing: false
             )
+            chromeSignInProfileIDs.remove(profileID)
             persistProfiles()
             updateDashboardStatus()
         } catch {
@@ -351,6 +354,7 @@ final class PlusProfileController {
         do {
             try await dataService.removeProfileData(for: snapshot.profile)
             profiles.remove(at: index)
+            chromeSignInProfileIDs.remove(profileID)
 
             if selectedProfileID == profileID {
                 selectedProfileID = profiles.indices.contains(index)
@@ -370,12 +374,89 @@ final class PlusProfileController {
         }
     }
 
-    func dataStore(for profileID: UUID) -> WKWebsiteDataStore? {
-        guard let snapshot = profiles.first(where: { $0.id == profileID }) else {
-            return nil
-        }
+    func isChromeSignInOpen(for profileID: UUID) -> Bool {
+        chromeSignInProfileIDs.contains(profileID)
+    }
 
-        return dataService.dataStore(for: snapshot.profile)
+    func openChromeSignIn(for profileID: UUID) async {
+        guard let index = indexOfProfile(profileID) else { return }
+        let snapshot = profiles[index]
+
+        do {
+            try await dataService.openChromeSignIn(for: snapshot.profile)
+            chromeSignInProfileIDs.insert(profileID)
+            if let refreshedIndex = indexOfProfile(profileID) {
+                profiles[refreshedIndex] = profiles[refreshedIndex].updating(
+                    statusMessage: .some("Waiting for sign-in in Chrome."),
+                    isRefreshing: false
+                )
+            }
+            updateDashboardStatus()
+        } catch {
+            applyFailure(
+                ChatGPTAPIError.map(error),
+                to: profileID,
+                preserveUsage: true
+            )
+        }
+    }
+
+    func openChromePasskeySetup(for profileID: UUID) async {
+        guard let index = indexOfProfile(profileID) else { return }
+        let snapshot = profiles[index]
+
+        do {
+            try await dataService.openChromePasskeySetup(for: snapshot.profile)
+            chromeSignInProfileIDs.insert(profileID)
+            if let refreshedIndex = indexOfProfile(profileID) {
+                profiles[refreshedIndex] = profiles[refreshedIndex].updating(
+                    statusMessage: .some(Self.touchIDPasskeyHelpMessage),
+                    isRefreshing: false
+                )
+            }
+            updateDashboardStatus()
+        } catch {
+            applyFailure(
+                ChatGPTAPIError.map(error),
+                to: profileID,
+                preserveUsage: true
+            )
+        }
+    }
+
+    func syncChromeSession(for profileID: UUID) async {
+        guard let index = indexOfProfile(profileID) else { return }
+        let snapshot = profiles[index]
+        setRefreshingState(for: profileID, isRefreshing: true)
+
+        do {
+            _ = try await dataService.syncChromeSession(for: snapshot.profile)
+            chromeSignInProfileIDs.remove(profileID)
+            await refreshProfile(id: profileID)
+        } catch {
+            let mappedError = ChatGPTAPIError.map(error)
+            if mappedError == .unauthorized {
+                markChromeSignInNeedsMoreTime(profileID: profileID)
+                return
+            }
+
+            applyFailure(mappedError, to: profileID, preserveUsage: true)
+        }
+    }
+
+    func closeChromeSignIn(for profileID: UUID) async {
+        guard let index = indexOfProfile(profileID) else { return }
+        let snapshot = profiles[index]
+        await dataService.closeChromeSignIn(for: snapshot.profile)
+        chromeSignInProfileIDs.remove(profileID)
+
+        if let refreshedIndex = indexOfProfile(profileID) {
+            profiles[refreshedIndex] = profiles[refreshedIndex].updating(
+                statusMessage: .some("Chrome sign-in was cancelled."),
+                isRefreshing: false
+            )
+        }
+        updateDashboardStatus()
     }
 
     private func refreshProfile(id profileID: UUID, isBackgroundBatch: Bool) async {
@@ -470,7 +551,7 @@ final class PlusProfileController {
         case .active:
             return "Live usage will refresh automatically."
         case .needsLogin:
-            return "Sign in again to restore this account."
+            return "Open Chrome to sign in again."
         case .failed:
             return "Refresh this profile to retry the last failed request."
         }
@@ -503,7 +584,7 @@ final class PlusProfileController {
                 profile: updatedProfile,
                 state: .needsLogin,
                 usage: preserveUsage ? nil : .some(nil),
-                statusMessage: .some("Sign in again to restore this account."),
+                statusMessage: .some("Open Chrome to sign in again."),
                 isRefreshing: false
             )
         default:
@@ -517,6 +598,22 @@ final class PlusProfileController {
             )
         }
 
+        persistProfiles()
+        updateDashboardStatus()
+    }
+
+    private func markChromeSignInNeedsMoreTime(profileID: UUID) {
+        guard let index = indexOfProfile(profileID) else { return }
+        let snapshot = profiles[index]
+        var updatedProfile = snapshot.profile
+        updatedProfile.lastKnownState = .needsLogin
+        profiles[index] = snapshot.updating(
+            profile: updatedProfile,
+            state: .needsLogin,
+            usage: .some(nil),
+            statusMessage: .some("Chrome session was not ready. Stay signed in, then sync again."),
+            isRefreshing: false
+        )
         persistProfiles()
         updateDashboardStatus()
     }

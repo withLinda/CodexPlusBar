@@ -7,7 +7,7 @@ import WebKit
 @MainActor
 struct ProfileManagerWindowViewTests {
     @Test
-    func sessionPaneBuildsWebViewOnlyWhenExpanded() throws {
+    func sessionPaneNeverBuildsWKWebView() throws {
         let tempDirectory = makeTemporaryDirectory()
         let store = ProfileCatalogStore(
             fileURL: tempDirectory.appendingPathComponent("profiles.json", isDirectory: false)
@@ -20,27 +20,16 @@ struct ProfileManagerWindowViewTests {
             dataService: StubProfileViewDataService(),
             autoStart: false
         )
-        let collapsedHostingView = makeHostingView(
-            controller: controller,
-            initialSessionExpanded: false
-        )
-        let expandedHostingView = makeHostingView(
-            controller: controller,
-            initialSessionExpanded: true
-        )
+        let hostingView = makeHostingView(controller: controller)
 
-        let collapsedWindow = hostInWindow(collapsedHostingView)
-        let expandedWindow = hostInWindow(expandedHostingView)
+        let window = hostInWindow(hostingView)
         defer {
-            collapsedWindow.orderOut(nil)
-            expandedWindow.orderOut(nil)
+            window.orderOut(nil)
         }
 
-        flushViewHierarchy(for: collapsedHostingView)
-        flushViewHierarchy(for: expandedHostingView)
+        flushViewHierarchy(for: hostingView)
 
-        #expect(containsWebView(in: collapsedHostingView) == false)
-        #expect(containsWebView(in: expandedHostingView))
+        #expect(containsWebView(in: hostingView) == false)
     }
 
     @Test
@@ -61,10 +50,7 @@ struct ProfileManagerWindowViewTests {
             dataService: StubProfileViewDataService(),
             autoStart: false
         )
-        let hostingView = makeHostingView(
-            controller: controller,
-            initialSessionExpanded: false
-        )
+        let hostingView = makeHostingView(controller: controller)
         let window = hostInWindow(hostingView)
         defer {
             window.orderOut(nil)
@@ -133,15 +119,14 @@ struct ProfileManagerWindowViewTests {
     }
 
     @Test
-    func detailLayoutUsesCompactTopGridToExposeSessionBrowserSooner() {
-        let metrics = ProfileManagerDetailLayoutMetrics.browserFirst
+    func detailLayoutKeepsChromeSignInCardCompact() {
+        let metrics = ProfileManagerDetailLayoutMetrics.chromeSignIn
 
         #expect(metrics.detailStackSpacing < CodexTheme.contentSpacing)
         #expect(metrics.topGridSpacing < CodexTheme.contentSpacing)
         #expect(metrics.compactCardPadding < CodexTheme.panelPadding)
         #expect(metrics.actionPanelWidth <= 180)
         #expect(metrics.actionGridColumnCount == 3)
-        #expect(metrics.sessionBrowserMinHeight >= 360)
     }
 
     @Test
@@ -163,27 +148,35 @@ struct ProfileManagerWindowViewTests {
     }
 
     @Test
-    func expandedSessionPresentationKeepsHideSessionAction() {
+    func chromeSessionPresentationUsesCompactActionState() {
         let snapshot = PlusProfileSnapshot(
             profile: sampleProfile(label: "alpha@example.com", sortOrder: 0),
-            state: .ready,
+            state: .needsLogin,
             usage: nil,
             statusMessage: nil,
             isRefreshing: false
         )
 
-        let expanded = ProfileManagerSessionPanelPresentation(
+        let waiting = ProfileManagerSessionPanelPresentation(
             snapshot: snapshot,
-            isExpanded: true
+            isChromeSignInOpen: true
         )
-        let collapsed = ProfileManagerSessionPanelPresentation(
+        let idle = ProfileManagerSessionPanelPresentation(
             snapshot: snapshot,
-            isExpanded: false
+            isChromeSignInOpen: false
         )
 
-        #expect(expanded.toggleTitle == "Hide session")
-        #expect(expanded.summaryText == "This profile session view is open.")
-        #expect(collapsed.toggleTitle == "Show session")
+        #expect(waiting.title == "Chrome sign-in")
+        #expect(waiting.summaryText == "Waiting for sign-in in Chrome.")
+        #expect(waiting.primaryTitle == "Open Chrome")
+        #expect(waiting.passkeyHelpTitle == "Touch ID help")
+        #expect(waiting.syncTitle == "Sync now")
+        #expect(waiting.cancelTitle == "Cancel")
+        #expect(waiting.isSyncDisabled == false)
+        #expect(waiting.showsCancel)
+        #expect(idle.summaryText == "Open Chrome, sign in, then sync.")
+        #expect(idle.isSyncDisabled)
+        #expect(idle.showsCancel == false)
     }
 }
 
@@ -193,14 +186,30 @@ private final class StubProfileViewDataService: PlusProfileDataServing {
         fatalError("Not used in ProfileManagerWindowViewTests")
     }
 
+    func openChromeSignIn(for profile: PlusProfile) async throws {
+    }
+
+    func openChromePasskeySetup(for profile: PlusProfile) async throws {
+    }
+
+    func syncChromeSession(for profile: PlusProfile) async throws -> ChatGPTAuthContext {
+        ChatGPTAuthContext(
+            accessToken: "token-\(profile.id.uuidString)",
+            accountID: "acct-\(profile.id.uuidString)",
+            expiresAt: nil,
+            deviceID: nil,
+            clientVersion: nil,
+            language: "en-US"
+        )
+    }
+
+    func closeChromeSignIn(for profile: PlusProfile) async {
+    }
+
     func clearSession(for profile: PlusProfile) async throws {
     }
 
     func removeProfileData(for profile: PlusProfile) async throws {
-    }
-
-    func dataStore(for profile: PlusProfile) -> WKWebsiteDataStore {
-        .nonPersistent()
     }
 }
 
@@ -211,14 +220,12 @@ private func containsWebView(in rootView: NSView) -> Bool {
 
 @MainActor
 private func makeHostingView(
-    controller: PlusProfileController,
-    initialSessionExpanded: Bool
+    controller: PlusProfileController
 ) -> NSHostingView<ProfileManagerWindowView> {
     let hostingView = NSHostingView(
         rootView: ProfileManagerWindowView(
             controller: controller,
-            currentTime: AppMinuteClock(now: Date(timeIntervalSince1970: 1_776_000_000)),
-            initialSessionExpanded: initialSessionExpanded
+            currentTime: AppMinuteClock(now: Date(timeIntervalSince1970: 1_776_000_000))
         )
     )
     hostingView.frame = NSRect(x: 0, y: 0, width: 1280, height: 900)

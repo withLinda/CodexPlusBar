@@ -131,7 +131,7 @@ struct MenuBarRootView: View {
                         .font(ProfileManagerTypography.bodyStrong(scale: panelTextScale))
                         .foregroundStyle(CodexTheme.primaryText)
 
-                    Text("Each profile keeps its own ChatGPT cookies, so you only need to sign in once per email account.")
+                    Text("Each profile uses its own Chrome sign-in, so you only need to sign in once per email account.")
                         .font(ProfileManagerTypography.small(scale: panelTextScale))
                         .foregroundStyle(CodexTheme.mutedText)
                         .fixedSize(horizontal: false, vertical: true)
