@@ -1261,7 +1261,7 @@ private struct ProfileManagerDangerButtonStyle: ButtonStyle {
     }
 }
 
-private struct AccountWindowTitleBarGlass: View {
+struct AccountWindowTitleBarGlass: View {
     let height: CGFloat
     let seamOverlap: CGFloat
 
@@ -1311,7 +1311,7 @@ private struct AccountWindowTitleBarGlass: View {
     }
 }
 
-private struct AccountWindowTitleBarGlassShape: Shape {
+struct AccountWindowTitleBarGlassShape: Shape {
     let cornerRadius: CGFloat
 
     func path(in rect: CGRect) -> Path {
@@ -1354,7 +1354,7 @@ private struct AccountWindowTitleBarGlassShape: Shape {
     }
 }
 
-private struct AccountWindowBodyShell<Content: View>: View {
+struct AccountWindowBodyShell<Content: View>: View {
     let seamOverlap: CGFloat
     let content: Content
 
@@ -1417,7 +1417,7 @@ private struct AccountWindowBodyShell<Content: View>: View {
     }
 }
 
-private struct AccountWindowBodyMask: Shape {
+struct AccountWindowBodyMask: Shape {
     let cornerRadius: CGFloat
 
     func path(in rect: CGRect) -> Path {
@@ -1460,7 +1460,7 @@ private struct AccountWindowBodyMask: Shape {
     }
 }
 
-private struct AccountWindowBodyBorderShape: Shape {
+struct AccountWindowBodyBorderShape: Shape {
     let cornerRadius: CGFloat
 
     func path(in rect: CGRect) -> Path {

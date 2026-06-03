@@ -8,16 +8,19 @@ struct MenuBarRootView: View {
     @State private var tagFilter = ProfileTagFilter()
     let currentTime: AppMinuteClock
     let openManagerWindow: @MainActor (UUID?) -> Void
+    let openEmailToolsWindow: @MainActor () -> Void
 
     init(
         controller: PlusProfileController,
         currentTime: AppMinuteClock,
         userDefaults: UserDefaults = .standard,
-        openManagerWindow: @escaping @MainActor (UUID?) -> Void
+        openManagerWindow: @escaping @MainActor (UUID?) -> Void,
+        openEmailToolsWindow: @escaping @MainActor () -> Void
     ) {
         self.controller = controller
         self.currentTime = currentTime
         self.openManagerWindow = openManagerWindow
+        self.openEmailToolsWindow = openEmailToolsWindow
         _preferredProfileIDStorage = AppStorage(
             wrappedValue: "",
             MenuBarProfilePreference.preferredProfileIDKey,
@@ -208,6 +211,15 @@ struct MenuBarRootView: View {
                 tone: .secondary,
                 action: {
                     openManagerWindow(preferredManagerProfileID)
+                }
+            )
+
+            CodexIconButton(
+                symbolName: "envelope.badge.fill",
+                helpText: "Open email tools",
+                tone: .secondary,
+                action: {
+                    openEmailToolsWindow()
                 }
             )
 

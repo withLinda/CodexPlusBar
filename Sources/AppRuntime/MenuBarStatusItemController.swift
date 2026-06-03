@@ -8,6 +8,7 @@ final class MenuBarStatusItemController: NSObject, NSPopoverDelegate {
     private let clock: AppMinuteClock
     private let userDefaults: UserDefaults
     private let openManagerWindow: @MainActor (UUID?) -> Void
+    private let openEmailToolsWindow: @MainActor () -> Void
     private let statusItem: NSStatusItem
     private let popover: NSPopover
     private var defaultsObserver: NSObjectProtocol?
@@ -16,12 +17,14 @@ final class MenuBarStatusItemController: NSObject, NSPopoverDelegate {
         controller: PlusProfileController,
         clock: AppMinuteClock,
         userDefaults: UserDefaults = .standard,
-        openManagerWindow: @escaping @MainActor (UUID?) -> Void
+        openManagerWindow: @escaping @MainActor (UUID?) -> Void,
+        openEmailToolsWindow: @escaping @MainActor () -> Void
     ) {
         self.controller = controller
         self.clock = clock
         self.userDefaults = userDefaults
         self.openManagerWindow = openManagerWindow
+        self.openEmailToolsWindow = openEmailToolsWindow
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         self.popover = NSPopover()
         super.init()
@@ -59,6 +62,10 @@ final class MenuBarStatusItemController: NSObject, NSPopoverDelegate {
                 openManagerWindow: { [weak self] profileID in
                     self?.popover.performClose(nil)
                     self?.openManagerWindow(profileID)
+                },
+                openEmailToolsWindow: { [weak self] in
+                    self?.popover.performClose(nil)
+                    self?.openEmailToolsWindow()
                 }
             )
         )

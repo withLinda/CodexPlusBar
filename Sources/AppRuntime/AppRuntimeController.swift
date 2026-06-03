@@ -4,15 +4,20 @@ import Foundation
 @MainActor
 final class AppRuntimeController {
     let controller: PlusProfileController
+    let dotTrickController: DotTrickController
     let clock: AppMinuteClock
 
     private let profileManagerWindowPresenter: ProfileManagerWindowPresenter
+    private let emailToolsWindowPresenter: EmailToolsWindowPresenter
     private let singleInstanceCoordinator: SingleInstanceCoordinator
     private lazy var menuBarStatusItemController = MenuBarStatusItemController(
         controller: controller,
         clock: clock,
         openManagerWindow: { [weak self] profileID in
             self?.showManagerWindow(selecting: profileID)
+        },
+        openEmailToolsWindow: { [weak self] in
+            self?.showEmailToolsWindow()
         }
     )
     private var hasStarted = false
@@ -20,12 +25,17 @@ final class AppRuntimeController {
 
     init(singleInstanceCoordinator: SingleInstanceCoordinator = SingleInstanceCoordinator()) {
         let controller = PlusProfileController()
+        let dotTrickController = DotTrickController()
         let clock = AppMinuteClock()
         self.controller = controller
+        self.dotTrickController = dotTrickController
         self.clock = clock
         self.profileManagerWindowPresenter = ProfileManagerWindowPresenter(
             controller: controller,
             clock: clock
+        )
+        self.emailToolsWindowPresenter = EmailToolsWindowPresenter(
+            controller: dotTrickController
         )
         self.singleInstanceCoordinator = singleInstanceCoordinator
     }
@@ -59,5 +69,9 @@ final class AppRuntimeController {
 
     func showManagerWindow(selecting profileID: UUID? = nil) {
         profileManagerWindowPresenter.show(selecting: profileID)
+    }
+
+    func showEmailToolsWindow() {
+        emailToolsWindowPresenter.show()
     }
 }

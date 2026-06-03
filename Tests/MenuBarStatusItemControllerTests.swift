@@ -19,7 +19,8 @@ struct MenuBarStatusItemControllerTests {
         let statusController = MenuBarStatusItemController(
             controller: controller,
             clock: clock,
-            openManagerWindow: { _ in }
+            openManagerWindow: { _ in },
+            openEmailToolsWindow: {}
         )
 
         statusController.start()
@@ -73,7 +74,8 @@ struct MenuBarStatusItemControllerTests {
             controller: controller,
             clock: clock,
             userDefaults: defaults,
-            openManagerWindow: { _ in }
+            openManagerWindow: { _ in },
+            openEmailToolsWindow: {}
         )
 
         await controller.refreshAll()
@@ -134,7 +136,8 @@ struct MenuBarStatusItemControllerTests {
             controller: controller,
             clock: clock,
             userDefaults: defaults,
-            openManagerWindow: { _ in }
+            openManagerWindow: { _ in },
+            openEmailToolsWindow: {}
         )
 
         await controller.refreshAll()

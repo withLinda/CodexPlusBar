@@ -34,7 +34,8 @@ struct MenuBarRootViewTests {
             controller: controller,
             currentTime: AppMinuteClock(now: Date(timeIntervalSince1970: 1_776_000_000)),
             userDefaults: defaults,
-            openManagerWindow: { _ in }
+            openManagerWindow: { _ in },
+            openEmailToolsWindow: {}
         )
         let hostingView = NSHostingView(rootView: rootView)
         hostingView.frame = NSRect(x: 0, y: 0, width: 484, height: 560)
@@ -67,7 +68,8 @@ struct MenuBarRootViewTests {
             controller: controller,
             currentTime: AppMinuteClock(now: Date(timeIntervalSince1970: 1_776_000_000)),
             userDefaults: defaults,
-            openManagerWindow: { _ in }
+            openManagerWindow: { _ in },
+            openEmailToolsWindow: {}
         )
         let hostingView = NSHostingView(rootView: rootView)
         hostingView.frame = NSRect(x: 0, y: 0, width: 484, height: 560)
