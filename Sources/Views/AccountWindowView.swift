@@ -635,8 +635,10 @@ struct ProfileManagerWindowView: View {
         return count == 0 ? "Add your first profile to begin" : countLabel
     }
 
-    private var filteredSidebarProfiles: [PlusProfileSnapshot] {
-        sidebarTagFilter.apply(to: controller.profiles)
+    var filteredSidebarProfiles: [PlusProfileSnapshot] {
+        PlusProfileSnapshot.expiryFirstDisplayOrder(
+            sidebarTagFilter.apply(to: controller.profiles)
+        )
     }
 
     private var profileTagCounts: ProfileTagCounts {

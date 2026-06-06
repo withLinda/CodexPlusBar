@@ -123,6 +123,148 @@ struct MenuBarRootViewTests {
         #expect(needAction.isSelected == false)
         #expect(needAction.isEnabled == false)
     }
+
+    @Test
+    func menuBarFilteredProfilesUseExpiryFirstDisplayOrder() {
+        let controller = PlusProfileController(
+            dataService: StubMenuBarRootViewDataService(),
+            autoStart: false
+        )
+        let (defaults, suiteName) = makeUserDefaults()
+        defer {
+            defaults.removePersistentDomain(forName: suiteName)
+        }
+
+        controller.profiles = [
+            menuBarTestSnapshot(
+                label: "unknown@example.com",
+                state: .ready,
+                fiveHourRemainingPercent: 50,
+                sevenDayRemainingPercent: 50,
+                sortOrder: 0,
+                tags: [.active]
+            ),
+            menuBarTestSnapshot(
+                label: "later@example.com",
+                state: .ready,
+                fiveHourRemainingPercent: 50,
+                sevenDayRemainingPercent: 50,
+                sortOrder: 1,
+                expiresAt: Date(timeIntervalSince1970: 1_781_049_600),
+                tags: [.active]
+            ),
+            menuBarTestSnapshot(
+                label: "soonest@example.com",
+                state: .ready,
+                fiveHourRemainingPercent: 50,
+                sevenDayRemainingPercent: 50,
+                sortOrder: 2,
+                expiresAt: Date(timeIntervalSince1970: 1_780_876_800),
+                tags: [.active]
+            ),
+        ]
+
+        let view = MenuBarRootView(
+            controller: controller,
+            currentTime: AppMinuteClock(now: Date(timeIntervalSince1970: 1_776_000_000)),
+            userDefaults: defaults,
+            openManagerWindow: { _ in },
+            openEmailToolsWindow: {}
+        )
+
+        #expect(view.displayProfiles(for: ProfileTagFilter([.active])).map(\.label) == [
+            "soonest@example.com",
+            "later@example.com",
+            "unknown@example.com",
+        ])
+    }
+}
+
+@MainActor
+private final class StubMenuBarRootViewDataService: PlusProfileDataServing {
+    func refreshProfile(_ profile: PlusProfile) async throws -> PlusProfileRefreshResult {
+        fatalError("Not used in MenuBarRootViewTests")
+    }
+
+    func openChromeSignIn(for profile: PlusProfile) async throws {
+    }
+
+    func openChromePasskeySetup(for profile: PlusProfile) async throws {
+    }
+
+    func syncChromeSession(for profile: PlusProfile) async throws -> ChatGPTAuthContext {
+        ChatGPTAuthContext(
+            accessToken: "token-\(profile.id.uuidString)",
+            accountID: "acct-\(profile.id.uuidString)",
+            expiresAt: nil,
+            deviceID: nil,
+            clientVersion: nil,
+            language: "en-US"
+        )
+    }
+
+    func closeChromeSignIn(for profile: PlusProfile) async {
+    }
+
+    func clearSession(for profile: PlusProfile) async throws {
+    }
+
+    func removeProfileData(for profile: PlusProfile) async throws {
+    }
+}
+
+private func menuBarTestSnapshot(
+    label: String,
+    state: PlusProfileState,
+    fiveHourRemainingPercent: Int?,
+    sevenDayRemainingPercent: Int?,
+    sortOrder: Int,
+    expiresAt: Date? = nil,
+    tags: [PlusProfileTag] = []
+) -> PlusProfileSnapshot {
+    let usage: PlusProfileUsage? = if let fiveHourRemainingPercent {
+        PlusProfileUsage(
+            accountID: "acct-\(sortOrder)",
+            planType: "chatgpt_plus",
+            primaryWindow: WorkspaceLimitWindow(
+                usedPercent: 100 - fiveHourRemainingPercent,
+                limitWindowSeconds: 18_000,
+                resetAfterSeconds: 18_000,
+                resetAt: Date(timeIntervalSince1970: 1_776_018_000)
+            ),
+            secondaryWindow: sevenDayRemainingPercent.map {
+                WorkspaceLimitWindow(
+                    usedPercent: 100 - $0,
+                    limitWindowSeconds: 604_800,
+                    resetAfterSeconds: 604_800,
+                    resetAt: Date(timeIntervalSince1970: 1_776_086_400)
+                )
+            },
+            fetchedAt: Date(timeIntervalSince1970: 1_776_000_000)
+        )
+    } else {
+        nil
+    }
+
+    return PlusProfileSnapshot(
+        profile: PlusProfile(
+            id: UUID(),
+            label: label,
+            emailLink: nil,
+            detectedNote: "Plus",
+            expiresAt: expiresAt,
+            tags: tags,
+            webDataStoreID: UUID(),
+            sortOrder: sortOrder,
+            createdAt: Date(timeIntervalSince1970: 1_776_000_000 + TimeInterval(sortOrder)),
+            lastRefreshAt: nil,
+            lastKnownState: state.storedState
+        ),
+        state: state,
+        usage: usage,
+        statusMessage: nil,
+        isRefreshing: false
+    )
 }
 
 @MainActor

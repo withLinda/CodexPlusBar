@@ -450,6 +450,35 @@ struct PlusProfileSnapshot: Identifiable, Equatable, Sendable {
             isRefreshing: isRefreshing ?? self.isRefreshing
         )
     }
+
+    static func expiryFirstDisplayOrder(_ snapshots: [PlusProfileSnapshot]) -> [PlusProfileSnapshot] {
+        snapshots.sorted(by: expiryFirstSort)
+    }
+
+    private static func expiryFirstSort(_ lhs: PlusProfileSnapshot, _ rhs: PlusProfileSnapshot) -> Bool {
+        switch (lhs.expiresAt, rhs.expiresAt) {
+        case let (lhsExpiry?, rhsExpiry?):
+            if lhsExpiry != rhsExpiry {
+                return lhsExpiry < rhsExpiry
+            }
+        case (.some, .none):
+            return true
+        case (.none, .some):
+            return false
+        case (.none, .none):
+            break
+        }
+
+        if lhs.profile.sortOrder != rhs.profile.sortOrder {
+            return lhs.profile.sortOrder < rhs.profile.sortOrder
+        }
+
+        if lhs.profile.createdAt != rhs.profile.createdAt {
+            return lhs.profile.createdAt < rhs.profile.createdAt
+        }
+
+        return lhs.id.uuidString < rhs.id.uuidString
+    }
 }
 
 struct ProfileTagFilter: Equatable, Sendable {

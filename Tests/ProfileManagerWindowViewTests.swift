@@ -178,6 +178,71 @@ struct ProfileManagerWindowViewTests {
         #expect(idle.isSyncDisabled)
         #expect(idle.showsCancel == false)
     }
+
+    @Test
+    func sidebarUsesExpiryFirstDisplayOrderWithoutChangingControllerStorageOrder() throws {
+        let tempDirectory = makeTemporaryDirectory()
+        let store = ProfileCatalogStore(
+            fileURL: tempDirectory.appendingPathComponent("profiles.json", isDirectory: false)
+        )
+        let first = sampleProfile(label: "unknown@example.com", sortOrder: 0)
+        let second = sampleProfile(label: "later@example.com", sortOrder: 1)
+        let third = sampleProfile(label: "soonest@example.com", sortOrder: 2)
+        try store.saveProfiles([first, second, third])
+
+        let controller = PlusProfileController(
+            catalogStore: store,
+            dataService: StubProfileViewDataService(),
+            autoStart: false
+        )
+        controller.profiles = [
+            PlusProfileSnapshot(
+                profile: first,
+                state: .ready,
+                usage: nil,
+                statusMessage: nil,
+                isRefreshing: false
+            ),
+            PlusProfileSnapshot(
+                profile: {
+                    var profile = second
+                    profile.expiresAt = Date(timeIntervalSince1970: 1_781_049_600)
+                    return profile
+                }(),
+                state: .ready,
+                usage: nil,
+                statusMessage: nil,
+                isRefreshing: false
+            ),
+            PlusProfileSnapshot(
+                profile: {
+                    var profile = third
+                    profile.expiresAt = Date(timeIntervalSince1970: 1_780_876_800)
+                    return profile
+                }(),
+                state: .ready,
+                usage: nil,
+                statusMessage: nil,
+                isRefreshing: false
+            ),
+        ]
+
+        let view = ProfileManagerWindowView(
+            controller: controller,
+            currentTime: AppMinuteClock(now: Date(timeIntervalSince1970: 1_776_000_000))
+        )
+
+        #expect(controller.profiles.map(\.label) == [
+            "unknown@example.com",
+            "later@example.com",
+            "soonest@example.com",
+        ])
+        #expect(view.filteredSidebarProfiles.map(\.label) == [
+            "soonest@example.com",
+            "later@example.com",
+            "unknown@example.com",
+        ])
+    }
 }
 
 @MainActor

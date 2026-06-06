@@ -5,7 +5,7 @@ struct MenuBarRootView: View {
     @Bindable var controller: PlusProfileController
     @AppStorage(MenuBarProfilePreference.preferredProfileIDKey) private var preferredProfileIDStorage = ""
     @AppStorage(MenuBarPanelTextScalePreference.textScaleKey) private var panelTextScaleStorage = MenuBarPanelTextScalePreference.defaultScale
-    @State private var tagFilter = ProfileTagFilter()
+    @State var tagFilter = ProfileTagFilter()
     let currentTime: AppMinuteClock
     let openManagerWindow: @MainActor (UUID?) -> Void
     let openEmailToolsWindow: @MainActor () -> Void
@@ -248,8 +248,14 @@ struct MenuBarRootView: View {
         return controller.profiles.isEmpty ? "No saved profiles yet" : tagFilterPresentation.countText
     }
 
-    private var filteredProfiles: [PlusProfileSnapshot] {
-        tagFilter.apply(to: controller.profiles)
+    var filteredProfiles: [PlusProfileSnapshot] {
+        displayProfiles(for: tagFilter)
+    }
+
+    func displayProfiles(for filter: ProfileTagFilter) -> [PlusProfileSnapshot] {
+        PlusProfileSnapshot.expiryFirstDisplayOrder(
+            filter.apply(to: controller.profiles)
+        )
     }
 
     private var profileTagCounts: ProfileTagCounts {
