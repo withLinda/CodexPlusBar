@@ -277,7 +277,8 @@ struct ProfileSummaryRow: View {
                 .font(ProfileManagerTypography.smallStrong)
                 .foregroundStyle(CodexTheme.primaryText)
                 .lineLimit(1)
-                .minimumScaleFactor(isMenuBarMode ? 0.88 : 1)
+                .allowsTightening(true)
+                .minimumScaleFactor(0.88)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .layoutPriority(1)
 

@@ -227,22 +227,6 @@ final class PlusProfileController {
         selectedProfileID = id ?? profiles.first?.id
     }
 
-    func updateLabel(for profileID: UUID, label: String) {
-        guard let index = indexOfProfile(profileID) else { return }
-        var updatedProfile = profiles[index].profile
-        updatedProfile.label = label
-        profiles[index] = profiles[index].updating(profile: updatedProfile)
-        persistProfiles()
-    }
-
-    func updateEmailLink(for profileID: UUID, link: String) {
-        guard let index = indexOfProfile(profileID) else { return }
-        var updatedProfile = profiles[index].profile
-        updatedProfile.emailLink = PlusProfile.normalizedEmailLink(link)
-        profiles[index] = profiles[index].updating(profile: updatedProfile)
-        persistProfiles()
-    }
-
     @discardableResult
     func updateDetails(for profileID: UUID, draft: PlusProfileDetailsDraft) -> Bool {
         guard let index = indexOfProfile(profileID) else {

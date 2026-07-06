@@ -97,6 +97,18 @@ struct ProfileManagerDetailsFormPresentation: Equatable, Sendable {
     }
 }
 
+enum ProfilePrivateField: Hashable {
+    case password
+    case twoFactorCode
+}
+
+enum ProfileDetailsCopyField: Hashable {
+    case label
+    case password
+    case twoFactorCode
+    case phoneNumber
+}
+
 struct ProfileManagerDetailLayoutMetrics: Equatable {
     let detailStackSpacing: CGFloat
     let topGridSpacing: CGFloat
@@ -174,11 +186,13 @@ struct ProfileManagerWindowView: View {
     let currentTime: AppMinuteClock
     @Environment(\.displayScale) private var displayScale
     @State private var windowChromeMetrics = WindowChromeMetrics()
-    @State private var labelDraft = ""
-    @State private var emailLinkDraft = ""
+    @State private var detailsDraft = PlusProfileDetailsDraft()
     @State private var sidebarTagFilter = ProfileTagFilter()
-    @State private var copiedProfileID: UUID?
-    @State private var labelCopyResetTask: Task<Void, Never>?
+    @State private var revealedPrivateFields: Set<ProfilePrivateField> = []
+    @State private var copiedField: ProfileDetailsCopyField?
+    @State private var copyResetTask: Task<Void, Never>?
+    @State private var showsSavedConfirmation = false
+    @State private var saveResetTask: Task<Void, Never>?
 
     init(
         controller: PlusProfileController,
@@ -231,11 +245,20 @@ struct ProfileManagerWindowView: View {
             syncDrafts(with: controller.selectedProfile)
         }
         .onChange(of: controller.selectedProfileID) { _, _ in
-            resetLabelCopyFeedback()
+            resetDetailsFeedback()
             syncDrafts(with: controller.selectedProfile)
         }
+        .onChange(of: detailsDraft) { _, newDraft in
+            guard let snapshot = controller.selectedProfile else {
+                return
+            }
+
+            if newDraft != PlusProfileDetailsDraft(profile: snapshot.profile) {
+                resetSaveFeedback()
+            }
+        }
         .onDisappear {
-            resetLabelCopyFeedback()
+            resetDetailsFeedback()
         }
     }
 
@@ -422,41 +445,7 @@ struct ProfileManagerWindowView: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .top, spacing: 12) {
                     VStack(alignment: .leading, spacing: 12) {
-                        ProfileManagerEditableField(
-                            title: "Profile label",
-                            placeholder: "Email or label",
-                            text: $labelDraft,
-                            isSaveEnabled: isLabelSaveEnabled(for: snapshot),
-                            onSave: {
-                                saveLabelDraft(for: snapshot)
-                            }
-                        ) {
-                            ProfileManagerLabelCopyButton(
-                                presentation: labelCopyButtonPresentation(for: snapshot),
-                                action: {
-                                    copyLabelDraft(for: snapshot)
-                                }
-                            )
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-
-                        ProfileManagerEditableField(
-                            title: "Email link",
-                            placeholder: "https://mail.google.com",
-                            text: $emailLinkDraft,
-                            isSaveEnabled: isEmailLinkSaveEnabled(for: snapshot),
-                            onSave: {
-                                saveEmailLinkDraft(for: snapshot)
-                            }
-                        ) {
-                            ProfileManagerEmailLinkButton(
-                                presentation: ProfileManagerEmailLinkButtonPresentation(profile: snapshot.profile),
-                                action: {
-                                    openEmailLink(for: snapshot.profile)
-                                }
-                            )
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        profileDetailsForm(for: snapshot)
 
                         ProfileTagAssignmentSection(
                             selectedTags: snapshot.tags,
@@ -500,6 +489,130 @@ struct ProfileManagerWindowView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+
+    private func profileDetailsForm(for snapshot: PlusProfileSnapshot) -> some View {
+        let formPresentation = ProfileManagerDetailsFormPresentation(
+            draft: detailsDraft,
+            profile: snapshot.profile,
+            isSaved: showsSavedConfirmation
+        )
+
+        return VStack(alignment: .leading, spacing: 12) {
+            if formPresentation.isSaveEnabled || showsSavedConfirmation {
+                HStack(spacing: 8) {
+                    Spacer(minLength: 0)
+
+                    Button {
+                        saveDetailsDraft(for: snapshot)
+                    } label: {
+                        Label(formPresentation.saveTitle, systemImage: formPresentation.saveSymbolName)
+                    }
+                    .buttonStyle(ProfileManagerSecondaryButtonStyle())
+                    .disabled(formPresentation.isSaveEnabled == false)
+                }
+            }
+
+            ProfileManagerDetailsTextField(
+                title: "Profile label",
+                placeholder: "Email or label",
+                text: $detailsDraft.label,
+                onSubmit: {
+                    saveDetailsDraftIfNeeded(for: snapshot)
+                }
+            ) {
+                ProfileManagerLabelCopyButton(
+                    presentation: labelCopyButtonPresentation(),
+                    action: copyLabelDraft
+                )
+            }
+
+            ProfileManagerDetailsTextField(
+                title: "Email link",
+                placeholder: "https://mail.google.com",
+                text: $detailsDraft.emailLink,
+                onSubmit: {
+                    saveDetailsDraftIfNeeded(for: snapshot)
+                }
+            ) {
+                ProfileManagerEmailLinkButton(
+                    presentation: ProfileManagerEmailLinkButtonPresentation(profile: snapshot.profile),
+                    action: {
+                        openEmailLink(for: snapshot.profile)
+                    }
+                )
+            }
+
+            ProfileManagerPrivateDetailsField(
+                title: "Password",
+                placeholder: "Saved only in this local profile file",
+                text: $detailsDraft.password,
+                presentation: ProfileManagerPrivateFieldPresentation(
+                    title: "Password",
+                    value: detailsDraft.password,
+                    isRevealed: revealedPrivateFields.contains(.password),
+                    isCopied: copiedField == .password
+                ),
+                onSubmit: {
+                    saveDetailsDraftIfNeeded(for: snapshot)
+                },
+                toggleReveal: {
+                    togglePrivateField(.password)
+                },
+                copy: {
+                    copy(detailsDraft.password, field: .password)
+                }
+            )
+
+            ProfileManagerPrivateDetailsField(
+                title: "2FA codes",
+                placeholder: "Text to paste into 2fa.live",
+                text: $detailsDraft.twoFactorCode,
+                presentation: ProfileManagerPrivateFieldPresentation(
+                    title: "2FA codes",
+                    value: detailsDraft.twoFactorCode,
+                    isRevealed: revealedPrivateFields.contains(.twoFactorCode),
+                    isCopied: copiedField == .twoFactorCode
+                ),
+                onSubmit: {
+                    saveDetailsDraftIfNeeded(for: snapshot)
+                },
+                toggleReveal: {
+                    togglePrivateField(.twoFactorCode)
+                },
+                copy: {
+                    copy(detailsDraft.twoFactorCode, field: .twoFactorCode)
+                }
+            )
+
+            ProfileManagerDetailsTextField(
+                title: "Phone number",
+                placeholder: "+62 812 3456",
+                text: $detailsDraft.phoneNumber,
+                onSubmit: {
+                    saveDetailsDraftIfNeeded(for: snapshot)
+                }
+            ) {
+                ProfileManagerInlineFieldActionButton(
+                    title: copiedField == .phoneNumber ? "Copied" : "Copy",
+                    symbolName: copiedField == .phoneNumber ? "checkmark" : "doc.on.doc",
+                    helpText: phoneNumberCopyText.isEmpty ? "Add a phone number before copying it." : "Copy phone number",
+                    accessibilityLabel: copiedField == .phoneNumber ? "Phone number copied" : "Copy phone number",
+                    isDisabled: phoneNumberCopyText.isEmpty,
+                    isConfirmed: copiedField == .phoneNumber,
+                    action: {
+                        copy(phoneNumberCopyText, field: .phoneNumber)
+                    }
+                )
+            }
+
+            ProfileManagerNotesDetailsField(
+                title: "Notes",
+                placeholder: "Short note for this account",
+                text: $detailsDraft.notes
+            )
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func usagePanel(
@@ -747,14 +860,6 @@ struct ProfileManagerWindowView: View {
         return snapshot.state == .ready ? nil : snapshot.state.tone.foregroundColor
     }
 
-    private func isLabelSaveEnabled(for snapshot: PlusProfileSnapshot) -> Bool {
-        labelDraft != snapshot.profile.label
-    }
-
-    private func isEmailLinkSaveEnabled(for snapshot: PlusProfileSnapshot) -> Bool {
-        PlusProfile.normalizedEmailLink(emailLinkDraft) != snapshot.profile.normalizedEmailLink
-    }
-
     private func isMoveUpDisabled(for snapshot: PlusProfileSnapshot) -> Bool {
         controller.profiles.first?.id == snapshot.id
     }
@@ -798,54 +903,117 @@ struct ProfileManagerWindowView: View {
     }
 
     private func syncDrafts(with snapshot: PlusProfileSnapshot?) {
-        labelDraft = snapshot?.profile.label ?? ""
-        emailLinkDraft = snapshot?.profile.emailLink ?? ""
+        detailsDraft = snapshot.map { PlusProfileDetailsDraft(profile: $0.profile) } ?? .init()
     }
 
-    private func saveLabelDraft(for snapshot: PlusProfileSnapshot) {
-        controller.updateLabel(for: snapshot.id, label: labelDraft)
-        labelDraft = controller.profiles.first(where: { $0.id == snapshot.id })?.profile.label ?? labelDraft
+    private func isDetailsSaveEnabled(for snapshot: PlusProfileSnapshot) -> Bool {
+        ProfileManagerDetailsFormPresentation(
+            draft: detailsDraft,
+            profile: snapshot.profile,
+            isSaved: showsSavedConfirmation
+        ).isSaveEnabled
     }
 
-    private func saveEmailLinkDraft(for snapshot: PlusProfileSnapshot) {
-        controller.updateEmailLink(for: snapshot.id, link: emailLinkDraft)
-        emailLinkDraft = controller.profiles.first(where: { $0.id == snapshot.id })?.profile.emailLink ?? ""
+    private func saveDetailsDraftIfNeeded(for snapshot: PlusProfileSnapshot) {
+        guard isDetailsSaveEnabled(for: snapshot) else {
+            return
+        }
+
+        saveDetailsDraft(for: snapshot)
     }
 
-    private func labelCopyButtonPresentation(for snapshot: PlusProfileSnapshot) -> ProfileManagerLabelCopyButtonPresentation {
+    private func saveDetailsDraft(for snapshot: PlusProfileSnapshot) {
+        let didSave = controller.updateDetails(for: snapshot.id, draft: detailsDraft)
+        guard didSave else {
+            return
+        }
+
+        detailsDraft = controller.profiles
+            .first(where: { $0.id == snapshot.id })
+            .map { PlusProfileDetailsDraft(profile: $0.profile) } ?? detailsDraft
+        showsSavedConfirmation = true
+        scheduleSaveReset()
+    }
+
+    private func labelCopyButtonPresentation() -> ProfileManagerLabelCopyButtonPresentation {
         ProfileManagerLabelCopyButtonPresentation(
-            labelDraft: labelDraft,
-            isCopied: copiedProfileID == snapshot.id
+            labelDraft: detailsDraft.label,
+            isCopied: copiedField == .label
         )
     }
 
-    private func copyLabelDraft(for snapshot: PlusProfileSnapshot) {
-        let presentation = labelCopyButtonPresentation(for: snapshot)
+    private var phoneNumberCopyText: String {
+        detailsDraft.phoneNumber.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func copyLabelDraft() {
+        let presentation = labelCopyButtonPresentation()
         guard presentation.isDisabled == false else {
+            return
+        }
+
+        copy(presentation.copyText, field: .label)
+    }
+
+    private func copy(_ text: String, field: ProfileDetailsCopyField) {
+        guard text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
             return
         }
 
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
-        pasteboard.setString(presentation.copyText, forType: .string)
+        pasteboard.setString(text, forType: .string)
 
-        copiedProfileID = snapshot.id
-        labelCopyResetTask?.cancel()
-        labelCopyResetTask = Task { @MainActor [profileID = snapshot.id] in
+        copiedField = field
+        scheduleCopyReset(for: field)
+    }
+
+    private func scheduleCopyReset(for field: ProfileDetailsCopyField) {
+        copyResetTask?.cancel()
+        copyResetTask = Task { @MainActor [field] in
             try? await Task.sleep(for: .milliseconds(1_400))
-            guard Task.isCancelled == false, copiedProfileID == profileID else {
+            guard Task.isCancelled == false, copiedField == field else {
                 return
             }
 
-            copiedProfileID = nil
-            labelCopyResetTask = nil
+            copiedField = nil
+            copyResetTask = nil
         }
     }
 
-    private func resetLabelCopyFeedback() {
-        labelCopyResetTask?.cancel()
-        labelCopyResetTask = nil
-        copiedProfileID = nil
+    private func scheduleSaveReset() {
+        saveResetTask?.cancel()
+        saveResetTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(1_400))
+            guard Task.isCancelled == false else {
+                return
+            }
+
+            showsSavedConfirmation = false
+            saveResetTask = nil
+        }
+    }
+
+    private func togglePrivateField(_ field: ProfilePrivateField) {
+        if revealedPrivateFields.contains(field) {
+            revealedPrivateFields.remove(field)
+        } else {
+            revealedPrivateFields.insert(field)
+        }
+    }
+
+    private func resetSaveFeedback() {
+        saveResetTask?.cancel()
+        saveResetTask = nil
+        showsSavedConfirmation = false
+    }
+
+    private func resetDetailsFeedback() {
+        copyResetTask?.cancel()
+        copyResetTask = nil
+        copiedField = nil
+        revealedPrivateFields.removeAll()
+        resetSaveFeedback()
     }
 
     private func openEmailLink(for profile: PlusProfile) {
@@ -962,32 +1130,29 @@ private struct ProfileTagAssignmentSection: View {
     }
 }
 
-private struct ProfileManagerEditableField<TrailingContent: View>: View {
+private struct ProfileManagerDetailsTextField<TrailingContent: View>: View {
     let title: String
     let placeholder: String
     @Binding var text: String
-    let isSaveEnabled: Bool
-    let onSave: () -> Void
+    let onSubmit: () -> Void
     let trailingContent: TrailingContent
 
     init(
         title: String,
         placeholder: String,
         text: Binding<String>,
-        isSaveEnabled: Bool,
-        onSave: @escaping () -> Void,
+        onSubmit: @escaping () -> Void,
         @ViewBuilder trailingContent: () -> TrailingContent
     ) {
         self.title = title
         self.placeholder = placeholder
         _text = text
-        self.isSaveEnabled = isSaveEnabled
-        self.onSave = onSave
+        self.onSubmit = onSubmit
         self.trailingContent = trailingContent()
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             Text(title)
                 .font(ProfileManagerTypography.caption)
                 .foregroundStyle(CodexTheme.supportText)
@@ -999,54 +1164,124 @@ private struct ProfileManagerEditableField<TrailingContent: View>: View {
                     .padding(.horizontal, 12)
                     .padding(.vertical, 10)
                     .frame(maxWidth: .infinity)
-                    .background(
-                        RoundedRectangle(
-                            cornerRadius: CodexTheme.fieldCornerRadius,
-                            style: .continuous
-                        )
-                        .fill(CodexTheme.surfaceFill(for: .nested))
-                        .overlay {
-                            RoundedRectangle(
-                                cornerRadius: CodexTheme.fieldCornerRadius,
-                                style: .continuous
-                            )
-                            .stroke(CodexTheme.surfaceBorder(for: .nested), lineWidth: 1)
-                        }
-                    )
+                    .background(ProfileManagerFieldBackground())
                     .foregroundStyle(CodexTheme.primaryText)
                     .submitLabel(.done)
-                    .onSubmit {
-                        if isSaveEnabled {
-                            onSave()
-                        }
-                    }
+                    .onSubmit(onSubmit)
 
                 trailingContent
-
-                Button("Save", action: onSave)
-                    .buttonStyle(ProfileManagerInlineSaveButtonStyle())
-                    .disabled(isSaveEnabled == false)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
-private extension ProfileManagerEditableField where TrailingContent == EmptyView {
-    init(
-        title: String,
-        placeholder: String,
-        text: Binding<String>,
-        isSaveEnabled: Bool,
-        onSave: @escaping () -> Void
-    ) {
-        self.init(
-            title: title,
-            placeholder: placeholder,
-            text: text,
-            isSaveEnabled: isSaveEnabled,
-            onSave: onSave
-        ) {
-            EmptyView()
+private struct ProfileManagerPrivateDetailsField: View {
+    let title: String
+    let placeholder: String
+    @Binding var text: String
+    let presentation: ProfileManagerPrivateFieldPresentation
+    let onSubmit: () -> Void
+    let toggleReveal: () -> Void
+    let copy: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(ProfileManagerTypography.caption)
+                .foregroundStyle(CodexTheme.supportText)
+
+            HStack(alignment: .center, spacing: 10) {
+                Group {
+                    if presentation.isRevealed {
+                        TextField(placeholder, text: $text)
+                    } else {
+                        SecureField(placeholder, text: $text)
+                    }
+                }
+                .font(ProfileManagerTypography.body)
+                .textFieldStyle(.plain)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity)
+                .background(ProfileManagerFieldBackground())
+                .foregroundStyle(CodexTheme.primaryText)
+                .submitLabel(.done)
+                .onSubmit(onSubmit)
+
+                ProfileManagerInlineFieldActionButton(
+                    title: presentation.revealTitle,
+                    symbolName: presentation.revealSymbolName,
+                    helpText: "\(presentation.revealTitle) \(presentation.title.lowercased())",
+                    accessibilityLabel: "\(presentation.revealTitle) \(presentation.title)",
+                    isDisabled: false,
+                    isConfirmed: presentation.isRevealed,
+                    action: toggleReveal
+                )
+
+                ProfileManagerInlineFieldActionButton(
+                    title: presentation.copyTitle,
+                    symbolName: presentation.copySymbolName,
+                    helpText: presentation.isCopyDisabled ? "Add \(presentation.title.lowercased()) before copying it." : "Copy \(presentation.title.lowercased())",
+                    accessibilityLabel: presentation.isCopied ? "\(presentation.title) copied" : "Copy \(presentation.title)",
+                    isDisabled: presentation.isCopyDisabled,
+                    isConfirmed: presentation.isCopied,
+                    action: copy
+                )
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct ProfileManagerNotesDetailsField: View {
+    let title: String
+    let placeholder: String
+    @Binding var text: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(ProfileManagerTypography.caption)
+                .foregroundStyle(CodexTheme.supportText)
+
+            ZStack(alignment: .topLeading) {
+                TextEditor(text: $text)
+                    .font(ProfileManagerTypography.body)
+                    .scrollContentBackground(.hidden)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 8)
+                    .frame(minHeight: 72, maxHeight: 108)
+                    .background(ProfileManagerFieldBackground())
+                    .foregroundStyle(CodexTheme.primaryText)
+
+                if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Text(placeholder)
+                        .font(ProfileManagerTypography.body)
+                        .foregroundStyle(CodexTheme.quietText)
+                        .padding(.horizontal, 13)
+                        .padding(.vertical, 16)
+                        .allowsHitTesting(false)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct ProfileManagerFieldBackground: View {
+    var body: some View {
+        RoundedRectangle(
+            cornerRadius: CodexTheme.fieldCornerRadius,
+            style: .continuous
+        )
+        .fill(CodexTheme.surfaceFill(for: .nested))
+        .overlay {
+            RoundedRectangle(
+                cornerRadius: CodexTheme.fieldCornerRadius,
+                style: .continuous
+            )
+            .stroke(CodexTheme.surfaceBorder(for: .nested), lineWidth: 1)
         }
     }
 }
@@ -1213,38 +1448,6 @@ private struct ProfileManagerStatusBanner: View {
                         .stroke(tone.borderColor, lineWidth: 1)
                 )
         )
-    }
-}
-
-private struct ProfileManagerInlineSaveButtonStyle: ButtonStyle {
-    @Environment(\.isEnabled) private var isEnabled
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(ProfileManagerTypography.caption)
-            .foregroundStyle(isEnabled ? CodexTheme.accentOrange : CodexTheme.quietText)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(
-                RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
-                    .fill(CodexTheme.surfaceFill(for: .subtle))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
-                            .fill(CodexTheme.surfaceSheen(for: .subtle))
-                    )
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
-                    .stroke(
-                        isEnabled
-                            ? CodexTheme.accentOrange.opacity(0.24)
-                            : CodexTheme.surfaceBorder(for: .subtle),
-                        lineWidth: 1
-                    )
-            )
-            .opacity(isEnabled ? (configuration.isPressed ? 0.92 : 1) : 0.46)
-            .scaleEffect(configuration.isPressed ? 0.99 : 1)
-            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
     }
 }
 

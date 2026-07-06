@@ -307,7 +307,7 @@ struct PlusProfileControllerTests {
     }
 
     @Test
-    func updateEmailLinkPersistsTrimmedValueWithoutChangingOrdering() throws {
+    func updateDetailsPersistsTrimmedEmailLinkWithoutChangingOrdering() throws {
         let tempDirectory = makeTemporaryDirectory()
         let store = ProfileCatalogStore(
             fileURL: tempDirectory.appendingPathComponent("profiles.json", isDirectory: false)
@@ -322,12 +322,12 @@ struct PlusProfileControllerTests {
             autoStart: false
         )
 
-        controller.updateEmailLink(
-            for: first.id,
-            link: "  mail.google.com/mail/u/0/#inbox  "
-        )
+        var draft = PlusProfileDetailsDraft(profile: first)
+        draft.emailLink = "  mail.google.com/mail/u/0/#inbox  "
+        let didSave = controller.updateDetails(for: first.id, draft: draft)
 
         let persisted = try store.loadProfiles()
+        #expect(didSave)
         #expect(persisted.map(\.id) == [first.id, second.id])
         #expect(controller.profiles.first?.profile.emailLink == "mail.google.com/mail/u/0/#inbox")
         #expect(persisted.first?.emailLink == "mail.google.com/mail/u/0/#inbox")
@@ -335,7 +335,7 @@ struct PlusProfileControllerTests {
     }
 
     @Test
-    func updateEmailLinkNormalizesBlankInputToNil() throws {
+    func updateDetailsNormalizesBlankEmailLinkToNil() throws {
         let tempDirectory = makeTemporaryDirectory()
         let store = ProfileCatalogStore(
             fileURL: tempDirectory.appendingPathComponent("profiles.json", isDirectory: false)
@@ -353,8 +353,11 @@ struct PlusProfileControllerTests {
             autoStart: false
         )
 
-        controller.updateEmailLink(for: profile.id, link: "   ")
+        var draft = PlusProfileDetailsDraft(profile: profile)
+        draft.emailLink = "   "
+        let didSave = controller.updateDetails(for: profile.id, draft: draft)
 
+        #expect(didSave)
         #expect(controller.profiles.first?.profile.emailLink == nil)
         #expect(try store.loadProfiles().first?.emailLink == nil)
     }

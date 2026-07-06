@@ -33,7 +33,7 @@ struct ProfileManagerWindowViewTests {
     }
 
     @Test
-    func selectedProfileHeaderBuildsTwoEditableFields() throws {
+    func selectedProfileBuildsSixEditableProfileFields() throws {
         let tempDirectory = makeTemporaryDirectory()
         let store = ProfileCatalogStore(
             fileURL: tempDirectory.appendingPathComponent("profiles.json", isDirectory: false)
@@ -58,7 +58,8 @@ struct ProfileManagerWindowViewTests {
 
         flushViewHierarchy(for: hostingView)
 
-        #expect(editableTextFieldCount(in: hostingView) == 2)
+        #expect(editableTextFieldCount(in: hostingView) >= 5)
+        #expect(textEditorCount(in: hostingView) == 1)
     }
 
     @Test
@@ -411,6 +412,14 @@ private extension NSView {
 private func editableTextFieldCount(in rootView: NSView) -> Int {
     rootView.allSubviews()
         .compactMap { $0 as? NSTextField }
+        .filter(\.isEditable)
+        .count
+}
+
+@MainActor
+private func textEditorCount(in rootView: NSView) -> Int {
+    rootView.allSubviews()
+        .compactMap { $0 as? NSTextView }
         .filter(\.isEditable)
         .count
 }
