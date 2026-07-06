@@ -243,6 +243,24 @@ final class PlusProfileController {
         persistProfiles()
     }
 
+    @discardableResult
+    func updateDetails(for profileID: UUID, draft: PlusProfileDetailsDraft) -> Bool {
+        guard let index = indexOfProfile(profileID) else {
+            return false
+        }
+
+        let previousProfiles = profiles
+        let snapshot = profiles[index]
+        profiles[index] = snapshot.updating(profile: draft.applying(to: snapshot.profile))
+
+        guard persistProfiles() else {
+            profiles = previousProfiles
+            return false
+        }
+
+        return true
+    }
+
     func setTags(_ tags: [PlusProfileTag], for profileID: UUID) {
         guard let index = indexOfProfile(profileID) else { return }
         var updatedProfile = profiles[index].profile
@@ -721,7 +739,8 @@ final class PlusProfileController {
         profiles.firstIndex(where: { $0.id == profileID })
     }
 
-    private func persistProfiles() {
+    @discardableResult
+    private func persistProfiles() -> Bool {
         profiles = profiles.enumerated().map { index, snapshot in
             var updatedProfile = snapshot.profile
             updatedProfile.sortOrder = index
@@ -730,8 +749,10 @@ final class PlusProfileController {
 
         do {
             try catalogStore.saveProfiles(profiles.map(\.profile))
+            return true
         } catch {
             statusMessage = "The profile list could not be saved locally."
+            return false
         }
     }
 }

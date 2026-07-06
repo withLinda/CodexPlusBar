@@ -242,6 +242,71 @@ struct PlusProfileControllerTests {
     }
 
     @Test
+    func updateDetailsPersistsAllFieldsWithoutChangingRuntimeStateOrOrder() throws {
+        let tempDirectory = makeTemporaryDirectory()
+        let store = ProfileCatalogStore(
+            fileURL: tempDirectory.appendingPathComponent("profiles.json", isDirectory: false)
+        )
+        let first = sampleProfile(label: "old@example.com", sortOrder: 0)
+        let second = sampleProfile(label: "second@example.com", sortOrder: 1)
+        try store.saveProfiles([first, second])
+        let controller = PlusProfileController(
+            catalogStore: store,
+            dataService: StubPlusProfileDataService(refreshResults: [:]),
+            autoStart: false
+        )
+        let originalState = try #require(controller.profiles.first?.state)
+
+        let didSave = controller.updateDetails(
+            for: first.id,
+            draft: PlusProfileDetailsDraft(
+                label: "new@example.com",
+                emailLink: " mail.example.com ",
+                password: "secret",
+                twoFactorCode: "JBSWY3DP",
+                phoneNumber: "+62 812",
+                notes: "Temporary"
+            )
+        )
+
+        let row = try #require(controller.profiles.first)
+        let persisted = try store.loadProfiles()
+        #expect(didSave)
+        #expect(persisted.map(\.id) == [first.id, second.id])
+        #expect(row.state == originalState)
+        #expect(row.profile.label == "new@example.com")
+        #expect(row.profile.emailLink == "mail.example.com")
+        #expect(row.profile.password == "secret")
+        #expect(persisted.first?.twoFactorCode == "JBSWY3DP")
+        #expect(persisted.first?.phoneNumber == "+62 812")
+        #expect(persisted.first?.notes == "Temporary")
+    }
+
+    @Test
+    func updateDetailsKeepsSavedProfileAndReportsFailureWhenDiskWriteFails() throws {
+        let tempDirectory = makeTemporaryDirectory()
+        let fileURL = tempDirectory.appendingPathComponent("profiles.json", isDirectory: false)
+        let store = ProfileCatalogStore(fileURL: fileURL)
+        let profile = sampleProfile(label: "old@example.com", sortOrder: 0)
+        try store.saveProfiles([profile])
+        let controller = PlusProfileController(
+            catalogStore: store,
+            dataService: StubPlusProfileDataService(refreshResults: [:]),
+            autoStart: false
+        )
+        try FileManager.default.removeItem(at: tempDirectory)
+        try Data().write(to: tempDirectory)
+
+        var draft = PlusProfileDetailsDraft(profile: profile)
+        draft.label = "new@example.com"
+        let didSave = controller.updateDetails(for: profile.id, draft: draft)
+
+        #expect(didSave == false)
+        #expect(controller.profiles.first?.profile.label == "old@example.com")
+        #expect(controller.statusMessage == "The profile list could not be saved locally.")
+    }
+
+    @Test
     func updateEmailLinkPersistsTrimmedValueWithoutChangingOrdering() throws {
         let tempDirectory = makeTemporaryDirectory()
         let store = ProfileCatalogStore(
