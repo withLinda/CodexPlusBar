@@ -39,6 +39,64 @@ struct ProfileManagerEmailLinkButtonPresentation: Equatable, Sendable {
     }
 }
 
+struct ProfileManagerPrivateFieldPresentation: Equatable, Sendable {
+    let title: String
+    let copyText: String
+    let isRevealed: Bool
+    let isCopied: Bool
+
+    init(title: String, value: String, isRevealed: Bool, isCopied: Bool) {
+        self.title = title
+        copyText = value
+        self.isRevealed = isRevealed
+        self.isCopied = isCopied
+    }
+
+    var isCopyDisabled: Bool {
+        copyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var copyTitle: String {
+        isCopied ? "Copied" : "Copy"
+    }
+
+    var copySymbolName: String {
+        isCopied ? "checkmark" : "doc.on.doc"
+    }
+
+    var revealTitle: String {
+        isRevealed ? "Hide" : "Show"
+    }
+
+    var revealSymbolName: String {
+        isRevealed ? "eye.slash" : "eye"
+    }
+}
+
+struct ProfileManagerDetailsFormPresentation: Equatable, Sendable {
+    let draft: PlusProfileDetailsDraft
+    let savedDraft: PlusProfileDetailsDraft
+    let isSaved: Bool
+
+    init(draft: PlusProfileDetailsDraft, profile: PlusProfile, isSaved: Bool) {
+        self.draft = draft
+        savedDraft = PlusProfileDetailsDraft(profile: profile)
+        self.isSaved = isSaved
+    }
+
+    var isSaveEnabled: Bool {
+        draft != savedDraft
+    }
+
+    var saveTitle: String {
+        isSaved ? "Saved" : "Save changes"
+    }
+
+    var saveSymbolName: String {
+        isSaved ? "checkmark" : "square.and.arrow.down"
+    }
+}
+
 struct ProfileManagerDetailLayoutMetrics: Equatable {
     let detailStackSpacing: CGFloat
     let topGridSpacing: CGFloat

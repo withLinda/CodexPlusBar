@@ -119,6 +119,57 @@ struct ProfileManagerWindowViewTests {
     }
 
     @Test
+    func privateFieldPresentationCopiesRealValueWithoutRevealingIt() {
+        let hidden = ProfileManagerPrivateFieldPresentation(
+            title: "Password",
+            value: "secret-value",
+            isRevealed: false,
+            isCopied: false
+        )
+        let revealed = ProfileManagerPrivateFieldPresentation(
+            title: "Password",
+            value: "secret-value",
+            isRevealed: true,
+            isCopied: true
+        )
+
+        #expect(hidden.copyText == "secret-value")
+        #expect(hidden.revealTitle == "Show")
+        #expect(hidden.revealSymbolName == "eye")
+        #expect(revealed.copyTitle == "Copied")
+        #expect(revealed.revealTitle == "Hide")
+        #expect(revealed.revealSymbolName == "eye.slash")
+    }
+
+    @Test
+    func detailsFormPresentationShowsOneSaveActionOnlyWhenDirty() {
+        let profile = sampleProfile(label: "alpha@example.com", sortOrder: 0)
+        let clean = ProfileManagerDetailsFormPresentation(
+            draft: PlusProfileDetailsDraft(profile: profile),
+            profile: profile,
+            isSaved: false
+        )
+        var changedDraft = PlusProfileDetailsDraft(profile: profile)
+        changedDraft.notes = "Temporary"
+        let changed = ProfileManagerDetailsFormPresentation(
+            draft: changedDraft,
+            profile: profile,
+            isSaved: false
+        )
+        let saved = ProfileManagerDetailsFormPresentation(
+            draft: PlusProfileDetailsDraft(profile: profile),
+            profile: profile,
+            isSaved: true
+        )
+
+        #expect(clean.isSaveEnabled == false)
+        #expect(changed.isSaveEnabled)
+        #expect(changed.saveTitle == "Save changes")
+        #expect(saved.saveTitle == "Saved")
+        #expect(saved.saveSymbolName == "checkmark")
+    }
+
+    @Test
     func detailLayoutKeepsChromeSignInCardCompact() {
         let metrics = ProfileManagerDetailLayoutMetrics.chromeSignIn
 
