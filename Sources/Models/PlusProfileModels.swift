@@ -67,6 +67,10 @@ struct PlusProfile: Identifiable, Codable, Equatable, Sendable {
     var label: String
     var emailLink: String?
     var detectedNote: String?
+    var password: String?
+    var twoFactorCode: String?
+    var phoneNumber: String?
+    var notes: String?
     var expiresAt: Date?
     var tags: [PlusProfileTag]
     let webDataStoreID: UUID
@@ -80,6 +84,10 @@ struct PlusProfile: Identifiable, Codable, Equatable, Sendable {
         case label
         case emailLink
         case detectedNote
+        case password
+        case twoFactorCode
+        case phoneNumber
+        case notes
         case expiresAt
         case tags
         case webDataStoreID
@@ -94,6 +102,10 @@ struct PlusProfile: Identifiable, Codable, Equatable, Sendable {
         label: String,
         emailLink: String?,
         detectedNote: String?,
+        password: String? = nil,
+        twoFactorCode: String? = nil,
+        phoneNumber: String? = nil,
+        notes: String? = nil,
         expiresAt: Date? = nil,
         tags: [PlusProfileTag] = [],
         webDataStoreID: UUID,
@@ -106,6 +118,10 @@ struct PlusProfile: Identifiable, Codable, Equatable, Sendable {
         self.label = label
         self.emailLink = emailLink
         self.detectedNote = detectedNote
+        self.password = password
+        self.twoFactorCode = twoFactorCode
+        self.phoneNumber = phoneNumber
+        self.notes = notes
         self.expiresAt = expiresAt
         self.tags = Self.normalizedTags(tags)
         self.webDataStoreID = webDataStoreID
@@ -122,6 +138,10 @@ struct PlusProfile: Identifiable, Codable, Equatable, Sendable {
         label = try container.decode(String.self, forKey: .label)
         emailLink = try container.decodeIfPresent(String.self, forKey: .emailLink)
         detectedNote = try container.decodeIfPresent(String.self, forKey: .detectedNote)
+        password = try container.decodeIfPresent(String.self, forKey: .password)
+        twoFactorCode = try container.decodeIfPresent(String.self, forKey: .twoFactorCode)
+        phoneNumber = try container.decodeIfPresent(String.self, forKey: .phoneNumber)
+        notes = try container.decodeIfPresent(String.self, forKey: .notes)
         expiresAt = try container.decodeIfPresent(Date.self, forKey: .expiresAt)
         webDataStoreID = try container.decode(UUID.self, forKey: .webDataStoreID)
         sortOrder = try container.decode(Int.self, forKey: .sortOrder)
@@ -140,6 +160,10 @@ struct PlusProfile: Identifiable, Codable, Equatable, Sendable {
         try container.encode(label, forKey: .label)
         try container.encodeIfPresent(emailLink, forKey: .emailLink)
         try container.encodeIfPresent(detectedNote, forKey: .detectedNote)
+        try container.encodeIfPresent(password, forKey: .password)
+        try container.encodeIfPresent(twoFactorCode, forKey: .twoFactorCode)
+        try container.encodeIfPresent(phoneNumber, forKey: .phoneNumber)
+        try container.encodeIfPresent(notes, forKey: .notes)
         try container.encodeIfPresent(expiresAt, forKey: .expiresAt)
         try container.encode(Self.normalizedTags(tags).map(\.rawValue), forKey: .tags)
         try container.encode(webDataStoreID, forKey: .webDataStoreID)
@@ -212,6 +236,62 @@ struct PlusProfile: Identifiable, Codable, Equatable, Sendable {
         }
 
         return components.url
+    }
+}
+
+struct PlusProfileDetailsDraft: Equatable, Sendable {
+    var label: String
+    var emailLink: String
+    var password: String
+    var twoFactorCode: String
+    var phoneNumber: String
+    var notes: String
+
+    init(
+        label: String = "",
+        emailLink: String = "",
+        password: String = "",
+        twoFactorCode: String = "",
+        phoneNumber: String = "",
+        notes: String = ""
+    ) {
+        self.label = label
+        self.emailLink = emailLink
+        self.password = password
+        self.twoFactorCode = twoFactorCode
+        self.phoneNumber = phoneNumber
+        self.notes = notes
+    }
+
+    init(profile: PlusProfile) {
+        self.init(
+            label: profile.label,
+            emailLink: profile.emailLink ?? "",
+            password: profile.password ?? "",
+            twoFactorCode: profile.twoFactorCode ?? "",
+            phoneNumber: profile.phoneNumber ?? "",
+            notes: profile.notes ?? ""
+        )
+    }
+
+    func applying(to profile: PlusProfile) -> PlusProfile {
+        var updated = profile
+        updated.label = label
+        updated.emailLink = PlusProfile.normalizedEmailLink(emailLink)
+        updated.password = normalizedPrivateValue(password)
+        updated.twoFactorCode = normalizedPrivateValue(twoFactorCode)
+        updated.phoneNumber = normalizedTrimmedValue(phoneNumber)
+        updated.notes = normalizedTrimmedValue(notes)
+        return updated
+    }
+
+    private func normalizedPrivateValue(_ value: String) -> String? {
+        value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : value
+    }
+
+    private func normalizedTrimmedValue(_ value: String) -> String? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 }
 

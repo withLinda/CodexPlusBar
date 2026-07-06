@@ -70,6 +70,10 @@ struct PlusProfileModelsTests {
         let profile = try JSONDecoder().decode(PlusProfile.self, from: try #require(json.data(using: .utf8)))
 
         #expect(profile.tags == [])
+        #expect(profile.password == nil)
+        #expect(profile.twoFactorCode == nil)
+        #expect(profile.phoneNumber == nil)
+        #expect(profile.notes == nil)
     }
 
     @Test
@@ -116,6 +120,43 @@ struct PlusProfileModelsTests {
         #expect(sampleProfile(emailLink: "   ").normalizedEmailLink == nil)
         #expect(sampleProfile(emailLink: "   ").resolvedEmailLinkURL == nil)
         #expect(sampleProfile(emailLink: "https:///").resolvedEmailLinkURL == nil)
+    }
+
+    @Test
+    func detailsDraftPreservesPrivateTextAndNormalizesOptionalValues() {
+        let updated = PlusProfileDetailsDraft(
+            label: "owner@example.com",
+            emailLink: "  mail.example.com  ",
+            password: " pass with spaces ",
+            twoFactorCode: " JBSW Y3DP ",
+            phoneNumber: "  +62 812 3456  ",
+            notes: "  Temporary account  "
+        ).applying(to: sampleProfile(emailLink: nil))
+
+        #expect(updated.label == "owner@example.com")
+        #expect(updated.emailLink == "mail.example.com")
+        #expect(updated.password == " pass with spaces ")
+        #expect(updated.twoFactorCode == " JBSW Y3DP ")
+        #expect(updated.phoneNumber == "+62 812 3456")
+        #expect(updated.notes == "Temporary account")
+    }
+
+    @Test
+    func detailsDraftNormalizesWhitespaceOnlyOptionalValuesToNil() {
+        let updated = PlusProfileDetailsDraft(
+            label: "owner@example.com",
+            emailLink: " ",
+            password: "\n",
+            twoFactorCode: "\t",
+            phoneNumber: "  ",
+            notes: "\n "
+        ).applying(to: sampleProfile(emailLink: "https://mail.example.com"))
+
+        #expect(updated.emailLink == nil)
+        #expect(updated.password == nil)
+        #expect(updated.twoFactorCode == nil)
+        #expect(updated.phoneNumber == nil)
+        #expect(updated.notes == nil)
     }
 
     @Test

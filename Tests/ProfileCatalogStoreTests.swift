@@ -34,6 +34,27 @@ struct ProfileCatalogStoreTests {
     }
 
     @Test
+    func saveAndLoadProfilesPreservesOptionalDetails() throws {
+        let tempDirectory = makeTemporaryDirectory()
+        let store = ProfileCatalogStore(
+            fileURL: tempDirectory.appendingPathComponent("profiles.json", isDirectory: false)
+        )
+        var profile = sampleProfile(label: "owner@example.com", sortOrder: 0)
+        profile.password = "temporary-password"
+        profile.twoFactorCode = "JBSWY3DPEHPK3PXP"
+        profile.phoneNumber = "+62 812 3456"
+        profile.notes = "Expires after handoff"
+
+        try store.saveProfiles([profile])
+        let loaded = try #require(store.loadProfiles().first)
+
+        #expect(loaded.password == profile.password)
+        #expect(loaded.twoFactorCode == profile.twoFactorCode)
+        #expect(loaded.phoneNumber == profile.phoneNumber)
+        #expect(loaded.notes == profile.notes)
+    }
+
+    @Test
     func loadProfilesDecodesOlderJSONWithoutEmailLink() throws {
         let tempDirectory = makeTemporaryDirectory()
         let fileURL = tempDirectory.appendingPathComponent("profiles.json", isDirectory: false)
