@@ -49,7 +49,7 @@ struct ProfileSummaryRowPresentation: Equatable, Sendable {
         referenceDate: Date = .now,
         mode: ProfileSummaryRowMode
     ) {
-        title = snapshot.label
+        title = DisplayFormatter.privateProfileLabel(snapshot.label)
         tags = snapshot.tags
         compactTagSummary = ProfileTagSummary(tags: snapshot.tags)
         let usageSummary = snapshot.usageSummary(referenceDate: referenceDate)

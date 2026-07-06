@@ -3,6 +3,18 @@ import Testing
 @testable import CodexPlusBar
 
 struct DisplayFormatterTests {
+    @Test(arguments: [
+        ("putrigildarahimah13@gmail.com", "putrig**ah13@gmail.com"),
+        ("abcdefghij@outlook.com", "abc**ij@outlook.com"),
+        ("abcdef@icloud.com", "a**f@icloud.com"),
+        ("ab@hotmail.com", "**@hotmail.com"),
+        ("Work account", "Work account"),
+        ("not-an-email@", "not-an-email@"),
+    ])
+    func privateProfileLabelMasksEmailLocalPart(input: String, expected: String) {
+        #expect(DisplayFormatter.privateProfileLabel(input) == expected)
+    }
+
     @Test
     func expiryValueUsesLabelForCalmActiveDates() {
         let referenceDate = Date(timeIntervalSince1970: 1_700_000_000)

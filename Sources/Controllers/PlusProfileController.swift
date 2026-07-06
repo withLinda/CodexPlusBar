@@ -719,6 +719,11 @@ final class PlusProfileController {
             return "Profile"
         }
 
+        let privateLabel = DisplayFormatter.privateProfileLabel(trimmed)
+        if privateLabel != trimmed {
+            return privateLabel
+        }
+
         let compactSource: String
         if let atSignIndex = trimmed.firstIndex(of: "@"),
            atSignIndex > trimmed.startIndex {

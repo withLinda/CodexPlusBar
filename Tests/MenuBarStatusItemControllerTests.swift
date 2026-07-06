@@ -46,7 +46,7 @@ struct MenuBarStatusItemControllerTests {
         let store = ProfileCatalogStore(
             fileURL: tempDirectory.appendingPathComponent("profiles.json", isDirectory: false)
         )
-        let preferred = sampleStoredProfile(label: "monijoa@example.com", sortOrder: 0)
+        let preferred = sampleStoredProfile(label: "putrigildarahimah13@gmail.com", sortOrder: 0)
         let urgent = sampleStoredProfile(label: "urgent@example.com", sortOrder: 1)
         try store.saveProfiles([preferred, urgent])
         MenuBarProfilePreference.setPreferredProfileID(preferred.id, defaults: defaults)
@@ -98,12 +98,12 @@ struct MenuBarStatusItemControllerTests {
         )
         let visibleTitle = attributedTitle.string
 
-        #expect(visibleTitle.contains("monijoa"))
+        #expect(visibleTitle.contains("putrig**ah13@gmail.com"))
         #expect(visibleTitle.contains("74%"))
         #expect(visibleTitle.contains("42%"))
         #expect(visibleTitle.contains("5H") == false)
         #expect(visibleTitle.contains("7D") == false)
-        #expect(button.accessibilityLabel() == "CodexPlusBar monijoa, 5 hour 74%, 7 day 42%")
+        #expect(button.accessibilityLabel() == "CodexPlusBar putrig**ah13@gmail.com, 5 hour 74%, 7 day 42%")
         #expect(titleColor == nil)
     }
 
@@ -114,7 +114,7 @@ struct MenuBarStatusItemControllerTests {
         let store = ProfileCatalogStore(
             fileURL: tempDirectory.appendingPathComponent("profiles.json", isDirectory: false)
         )
-        let urgent = sampleStoredProfile(label: "urgent@example.com", sortOrder: 0)
+        let urgent = sampleStoredProfile(label: "urgentprofile@example.com", sortOrder: 0)
         try store.saveProfiles([urgent])
         MenuBarProfilePreference.setPreferredProfileID(UUID(), defaults: defaults)
 
@@ -153,12 +153,12 @@ struct MenuBarStatusItemControllerTests {
         let button = try #require(statusItem.button)
         let visibleTitle = button.attributedTitle.string
 
-        #expect(visibleTitle.contains("urgent"))
+        #expect(visibleTitle.contains("urgent**file@example.com"))
         #expect(visibleTitle.contains("11%"))
         #expect(visibleTitle.contains("35%"))
         #expect(visibleTitle.contains("5H") == false)
         #expect(visibleTitle.contains("7D") == false)
-        #expect(button.accessibilityLabel() == "CodexPlusBar urgent, 5 hour 11%, 7 day 35%")
+        #expect(button.accessibilityLabel() == "CodexPlusBar urgent**file@example.com, 5 hour 11%, 7 day 35%")
         #expect(MenuBarProfilePreference.preferredProfileID(defaults: defaults, validProfileIDs: [urgent.id]) == nil)
     }
 }

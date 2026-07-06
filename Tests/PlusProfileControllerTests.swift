@@ -439,7 +439,7 @@ struct PlusProfileControllerTests {
             sortOrder: 0
         )
         let preferred = menuBarSnapshot(
-            label: "monijoa@example.com",
+            label: "putrigildarahimah13@gmail.com",
             state: .ready,
             fiveHourRemainingPercent: 74,
             sevenDayRemainingPercent: 42,
@@ -452,16 +452,16 @@ struct PlusProfileControllerTests {
             preferredProfileID: preferred.id,
             referenceDate: Date(timeIntervalSince1970: 1_776_000_000)
         )
-        #expect(content.profileLabel == "monijoa")
+        #expect(content.profileLabel == "putrig**ah13@gmail.com")
         #expect(content.fiveHourText == "74%")
         #expect(content.sevenDayText == "42%")
-        #expect(content.plainText == "monijoa 5H 74% 7D 42%")
-        #expect(content.accessibilityText == "monijoa, 5 hour 74%, 7 day 42%")
+        #expect(content.plainText == "putrig**ah13@gmail.com 5H 74% 7D 42%")
+        #expect(content.accessibilityText == "putrig**ah13@gmail.com, 5 hour 74%, 7 day 42%")
         #expect(
             controller.statusBarText(
                 preferredProfileID: preferred.id,
                 referenceDate: Date(timeIntervalSince1970: 1_776_000_000)
-            ) == "monijoa 5H 74% 7D 42%"
+            ) == "putrig**ah13@gmail.com 5H 74% 7D 42%"
         )
     }
 
@@ -485,7 +485,7 @@ struct PlusProfileControllerTests {
     func preferredStatusProfileFallsBackWhenPreferredProfileIsMissingOrNotReady() {
         let controller = PlusProfileController(dataService: StubPlusProfileDataService(refreshResults: [:]), autoStart: false)
         let urgent = menuBarSnapshot(
-            label: "urgent@example.com",
+            label: "UrgentProfile",
             state: .ready,
             fiveHourRemainingPercent: 18,
             sevenDayRemainingPercent: 51,
@@ -506,7 +506,7 @@ struct PlusProfileControllerTests {
             controller.statusBarText(
                 preferredProfileID: needsLogin.id,
                 referenceDate: Date(timeIntervalSince1970: 1_776_000_000)
-            ) == "urgent 5H 18% 7D 51%"
+            ) == "UrgentP 5H 18% 7D 51%"
         )
     }
 

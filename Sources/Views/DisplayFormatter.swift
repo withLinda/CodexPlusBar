@@ -6,6 +6,37 @@ enum DisplayFormatter {
         let value: String
     }
 
+    static func privateProfileLabel(_ label: String) -> String {
+        let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let atIndex = trimmed.lastIndex(of: "@"),
+              atIndex > trimmed.startIndex,
+              atIndex < trimmed.index(before: trimmed.endIndex) else {
+            return trimmed
+        }
+
+        let local = String(trimmed[..<atIndex])
+        let domain = String(trimmed[trimmed.index(after: atIndex)...])
+        guard local.contains(where: \.isWhitespace) == false,
+              domain.contains("."),
+              domain.contains(where: \.isWhitespace) == false else {
+            return trimmed
+        }
+
+        let maskedLocal: String
+        switch local.count {
+        case 11...:
+            maskedLocal = "\(local.prefix(6))**\(local.suffix(4))"
+        case 7...10:
+            maskedLocal = "\(local.prefix(3))**\(local.suffix(2))"
+        case 3...6:
+            maskedLocal = "\(local.prefix(1))**\(local.suffix(1))"
+        default:
+            maskedLocal = "**"
+        }
+
+        return "\(maskedLocal)@\(domain)"
+    }
+
     static func duration(seconds: Int) -> String {
         let totalSeconds = max(0, seconds)
         let hours = totalSeconds / 3_600

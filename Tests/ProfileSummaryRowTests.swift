@@ -180,6 +180,32 @@ struct ProfileSummaryRowTests {
         #expect(untaggedPresentation.showsTags == false)
         #expect(untaggedPresentation.compactTagSummary.primaryTag == nil)
     }
+
+    @Test
+    func rowPresentationMasksEmailTitleInSidebarAndMenuBar() {
+        let snapshot = sampleSnapshot(
+            state: .ready,
+            usage: nil,
+            note: nil,
+            expiresAt: nil,
+            statusMessage: nil,
+            isRefreshing: false,
+            emailLink: nil,
+            label: "alphaexample@example.com"
+        )
+
+        let sidebarPresentation = ProfileSummaryRowPresentation(
+            snapshot: snapshot,
+            mode: .sidebar(isSelected: false)
+        )
+        let menuPresentation = ProfileSummaryRowPresentation(
+            snapshot: snapshot,
+            mode: .menuBar(isPinned: false)
+        )
+
+        #expect(sidebarPresentation.title == "alphae**mple@example.com")
+        #expect(menuPresentation.title == "alphae**mple@example.com")
+    }
 }
 
 private func sampleSnapshot(
@@ -190,12 +216,13 @@ private func sampleSnapshot(
     statusMessage: String?,
     isRefreshing: Bool,
     emailLink: String?,
-    tags: [PlusProfileTag] = []
+    tags: [PlusProfileTag] = [],
+    label: String = "alpha@example.com"
 ) -> PlusProfileSnapshot {
     PlusProfileSnapshot(
         profile: PlusProfile(
             id: UUID(),
-            label: "alpha@example.com",
+            label: label,
             emailLink: emailLink,
             detectedNote: note,
             expiresAt: expiresAt,
