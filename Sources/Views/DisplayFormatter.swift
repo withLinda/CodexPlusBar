@@ -8,33 +8,73 @@ enum DisplayFormatter {
 
     static func privateProfileLabel(_ label: String) -> String {
         let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let atIndex = trimmed.lastIndex(of: "@"),
-              atIndex > trimmed.startIndex,
-              atIndex < trimmed.index(before: trimmed.endIndex) else {
+        guard let emailParts = parsedEmailParts(from: trimmed) else {
             return trimmed
         }
 
-        let local = String(trimmed[..<atIndex])
-        let domain = String(trimmed[trimmed.index(after: atIndex)...])
+        return "\(maskedEmailLocal(emailParts.local))@\(emailParts.domain)"
+    }
+
+    static func compactStatusProfileLabel(_ label: String) -> String {
+        let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false else {
+            return "Profile"
+        }
+
+        if let emailParts = parsedEmailParts(from: trimmed) {
+            return "\(maskedEmailLocal(emailParts.local))@\(emailParts.domain.prefix(3))"
+        }
+
+        let compactSource: String
+        if let atSignIndex = trimmed.firstIndex(of: "@"),
+           atSignIndex > trimmed.startIndex {
+            compactSource = String(trimmed[..<atSignIndex])
+        } else {
+            compactSource = trimmed
+        }
+
+        let cleanSource = compactSource.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard cleanSource.count > 7 else {
+            return cleanSource.isEmpty ? "Profile" : cleanSource
+        }
+
+        return String(cleanSource.prefix(7))
+    }
+
+    private struct EmailParts {
+        let local: String
+        let domain: String
+    }
+
+    private static func parsedEmailParts(from label: String) -> EmailParts? {
+        guard let atIndex = label.lastIndex(of: "@"),
+              atIndex > label.startIndex,
+              atIndex < label.index(before: label.endIndex) else {
+            return nil
+        }
+
+        let local = String(label[..<atIndex])
+        let domain = String(label[label.index(after: atIndex)...])
         guard local.contains(where: \.isWhitespace) == false,
               domain.contains("."),
               domain.contains(where: \.isWhitespace) == false else {
-            return trimmed
+            return nil
         }
 
-        let maskedLocal: String
+        return EmailParts(local: local, domain: domain)
+    }
+
+    private static func maskedEmailLocal(_ local: String) -> String {
         switch local.count {
         case 11...:
-            maskedLocal = "\(local.prefix(6))**\(local.suffix(4))"
+            return "\(local.prefix(6))**\(local.suffix(4))"
         case 7...10:
-            maskedLocal = "\(local.prefix(3))**\(local.suffix(2))"
+            return "\(local.prefix(3))**\(local.suffix(2))"
         case 3...6:
-            maskedLocal = "\(local.prefix(1))**\(local.suffix(1))"
+            return "\(local.prefix(1))**\(local.suffix(1))"
         default:
-            maskedLocal = "**"
+            return "**"
         }
-
-        return "\(maskedLocal)@\(domain)"
     }
 
     static func duration(seconds: Int) -> String {

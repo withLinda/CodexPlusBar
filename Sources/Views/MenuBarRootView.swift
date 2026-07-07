@@ -3,24 +3,28 @@ import SwiftUI
 
 struct MenuBarRootView: View {
     @Bindable var controller: PlusProfileController
+    @Environment(\.openSettings) private var openSettings
     @AppStorage(MenuBarProfilePreference.preferredProfileIDKey) private var preferredProfileIDStorage = ""
     @AppStorage(MenuBarPanelTextScalePreference.textScaleKey) private var panelTextScaleStorage = MenuBarPanelTextScalePreference.defaultScale
     @State var tagFilter = ProfileTagFilter()
     let currentTime: AppMinuteClock
     let openManagerWindow: @MainActor (UUID?) -> Void
     let openEmailToolsWindow: @MainActor () -> Void
+    let closePanel: @MainActor () -> Void
 
     init(
         controller: PlusProfileController,
         currentTime: AppMinuteClock,
         userDefaults: UserDefaults = .standard,
         openManagerWindow: @escaping @MainActor (UUID?) -> Void,
-        openEmailToolsWindow: @escaping @MainActor () -> Void
+        openEmailToolsWindow: @escaping @MainActor () -> Void,
+        closePanel: @escaping @MainActor () -> Void = {}
     ) {
         self.controller = controller
         self.currentTime = currentTime
         self.openManagerWindow = openManagerWindow
         self.openEmailToolsWindow = openEmailToolsWindow
+        self.closePanel = closePanel
         _preferredProfileIDStorage = AppStorage(
             wrappedValue: "",
             MenuBarProfilePreference.preferredProfileIDKey,
@@ -197,38 +201,17 @@ struct MenuBarRootView: View {
 
     private var footer: some View {
         HStack(spacing: 8) {
-            CodexIconButton(
-                symbolName: "arrow.clockwise",
-                helpText: "Refresh all profiles",
-                tone: .primary,
-                isDisabled: controller.isRefreshing,
-                action: refreshAll
-            )
-
-            CodexIconButton(
-                symbolName: "rectangle.on.rectangle",
-                helpText: "Open manager window",
-                tone: .secondary,
-                action: {
-                    openManagerWindow(preferredManagerProfileID)
-                }
-            )
-
-            CodexIconButton(
-                symbolName: "envelope.badge.fill",
-                helpText: "Open email tools",
-                tone: .secondary,
-                action: {
-                    openEmailToolsWindow()
-                }
-            )
-
-            CodexIconButton(
-                symbolName: "power",
-                helpText: "Quit CodexPlusBar",
-                tone: .quiet,
-                action: quitApp
-            )
+            ForEach(MenuBarFooterAction.allCases) { footerAction in
+                CodexIconButton(
+                    symbolName: footerAction.symbolName,
+                    helpText: footerAction.helpText,
+                    tone: footerAction.tone,
+                    isDisabled: footerAction == .refreshAll && controller.isRefreshing,
+                    action: {
+                        performFooterAction(footerAction)
+                    }
+                )
+            }
 
             Spacer(minLength: 0)
         }
@@ -274,6 +257,22 @@ struct MenuBarRootView: View {
     private func refreshAll() {
         Task {
             await controller.refreshAll()
+        }
+    }
+
+    private func performFooterAction(_ footerAction: MenuBarFooterAction) {
+        switch footerAction {
+        case .refreshAll:
+            refreshAll()
+        case .openManager:
+            openManagerWindow(preferredManagerProfileID)
+        case .openEmailTools:
+            openEmailToolsWindow()
+        case .openThemeSettings:
+            closePanel()
+            openSettings()
+        case .quit:
+            quitApp()
         }
     }
 
@@ -342,6 +341,57 @@ struct MenuBarRootView: View {
 
     private func quitApp() {
         NSApplication.shared.terminate(nil)
+    }
+}
+
+enum MenuBarFooterAction: CaseIterable, Identifiable {
+    case refreshAll
+    case openManager
+    case openEmailTools
+    case openThemeSettings
+    case quit
+
+    var id: Self { self }
+
+    var symbolName: String {
+        switch self {
+        case .refreshAll:
+            return "arrow.clockwise"
+        case .openManager:
+            return "rectangle.on.rectangle"
+        case .openEmailTools:
+            return "envelope.badge.fill"
+        case .openThemeSettings:
+            return "gearshape"
+        case .quit:
+            return "power"
+        }
+    }
+
+    var helpText: String {
+        switch self {
+        case .refreshAll:
+            return "Refresh all profiles"
+        case .openManager:
+            return "Open manager window"
+        case .openEmailTools:
+            return "Open email tools"
+        case .openThemeSettings:
+            return "Open theme settings"
+        case .quit:
+            return "Quit CodexPlusBar"
+        }
+    }
+
+    var tone: CodexControlTone {
+        switch self {
+        case .refreshAll:
+            return .primary
+        case .openManager, .openEmailTools, .openThemeSettings:
+            return .secondary
+        case .quit:
+            return .quiet
+        }
     }
 }
 

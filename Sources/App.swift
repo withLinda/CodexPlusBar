@@ -16,7 +16,7 @@ struct CodexPlusBar: App {
 
     var body: some Scene {
         Settings {
-            EmptyView()
+            CodexSettingsView()
         }
     }
 }

@@ -240,7 +240,7 @@ struct ProfileManagerWindowView: View {
                 .frame(width: 0, height: 0)
                 .allowsHitTesting(false)
         }
-        .preferredColorScheme(.dark)
+        .codexThemeRefreshScope()
         .onAppear {
             syncDrafts(with: controller.selectedProfile)
         }
@@ -1529,10 +1529,12 @@ struct AccountWindowTitleBarGlass: View {
     let seamOverlap: CGFloat
 
     private var warmTintGradient: LinearGradient {
-        LinearGradient(
+        let palette = CodexTheme.activePalette
+
+        return LinearGradient(
             colors: [
-                CodexTheme.Palette.bg1.color(alpha: 0.02),
-                CodexTheme.Palette.bg0.color(alpha: 0.07),
+                palette.bg1.color(alpha: palette.isDark ? 0.02 : 0.10),
+                palette.bgDim.color(alpha: palette.isDark ? 0.07 : 0.18),
             ],
             startPoint: .top,
             endPoint: .bottom
@@ -1551,7 +1553,7 @@ struct AccountWindowTitleBarGlass: View {
                         Rectangle()
                             .fill(.clear)
                             .glassEffect(
-                                Glass.clear.tint(CodexTheme.Palette.bg2.color(alpha: 0.035)),
+                                Glass.clear.tint(CodexTheme.activePalette.bg1.color(alpha: CodexTheme.isDarkTheme ? 0.035 : 0.10)),
                                 in: shape
                             )
                             .overlay {

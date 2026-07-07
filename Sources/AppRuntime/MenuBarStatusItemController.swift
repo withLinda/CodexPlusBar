@@ -66,6 +66,9 @@ final class MenuBarStatusItemController: NSObject, NSPopoverDelegate {
                 openEmailToolsWindow: { [weak self] in
                     self?.popover.performClose(nil)
                     self?.openEmailToolsWindow()
+                },
+                closePanel: { [weak self] in
+                    self?.popover.performClose(nil)
                 }
             )
         )

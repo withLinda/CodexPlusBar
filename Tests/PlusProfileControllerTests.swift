@@ -455,17 +455,42 @@ struct PlusProfileControllerTests {
             preferredProfileID: preferred.id,
             referenceDate: Date(timeIntervalSince1970: 1_776_000_000)
         )
-        #expect(content.profileLabel == "putrig**ah13@gmail.com")
+        #expect(content.profileLabel == "putrig**ah13@gma")
         #expect(content.fiveHourText == "74%")
         #expect(content.sevenDayText == "42%")
-        #expect(content.plainText == "putrig**ah13@gmail.com 5H 74% 7D 42%")
-        #expect(content.accessibilityText == "putrig**ah13@gmail.com, 5 hour 74%, 7 day 42%")
+        #expect(content.plainText == "putrig**ah13@gma 5H 74% 7D 42%")
+        #expect(content.accessibilityText == "putrig**ah13@gma, 5 hour 74%, 7 day 42%")
         #expect(
             controller.statusBarText(
                 preferredProfileID: preferred.id,
                 referenceDate: Date(timeIntervalSince1970: 1_776_000_000)
-            ) == "putrig**ah13@gmail.com 5H 74% 7D 42%"
+            ) == "putrig**ah13@gma 5H 74% 7D 42%"
         )
+    }
+
+    @Test(arguments: [
+        ("alphaaccount@outlook.com", "alphaa**ount@out"),
+        ("alphaaccount@icloud.com", "alphaa**ount@icl"),
+        ("alphaaccount@hotmail.com", "alphaa**ount@hot"),
+        ("alphaaccount@gmail.com", "alphaa**ount@gma"),
+    ])
+    func statusBarTextUsesOnlyThreeDomainCharactersForEmails(label: String, expectedLabel: String) {
+        let controller = PlusProfileController(dataService: StubPlusProfileDataService(refreshResults: [:]), autoStart: false)
+        let profile = menuBarSnapshot(
+            label: label,
+            state: .ready,
+            fiveHourRemainingPercent: 83,
+            sevenDayRemainingPercent: 72,
+            sortOrder: 0
+        )
+        controller.profiles = [profile]
+
+        let content = controller.statusBarContent(
+            preferredProfileID: profile.id,
+            referenceDate: Date(timeIntervalSince1970: 1_776_000_000)
+        )
+
+        #expect(content.profileLabel == expectedLabel)
     }
 
     @Test

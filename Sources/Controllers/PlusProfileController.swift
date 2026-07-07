@@ -698,30 +698,7 @@ final class PlusProfileController {
     }
 
     private func compactStatusLabel(for label: String) -> String {
-        let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.isEmpty == false else {
-            return "Profile"
-        }
-
-        let privateLabel = DisplayFormatter.privateProfileLabel(trimmed)
-        if privateLabel != trimmed {
-            return privateLabel
-        }
-
-        let compactSource: String
-        if let atSignIndex = trimmed.firstIndex(of: "@"),
-           atSignIndex > trimmed.startIndex {
-            compactSource = String(trimmed[..<atSignIndex])
-        } else {
-            compactSource = trimmed
-        }
-
-        let cleanSource = compactSource.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard cleanSource.count > 7 else {
-            return cleanSource.isEmpty ? "Profile" : cleanSource
-        }
-
-        return String(cleanSource.prefix(7))
+        DisplayFormatter.compactStatusProfileLabel(label)
     }
 
     private func indexOfProfile(_ profileID: UUID) -> Int? {

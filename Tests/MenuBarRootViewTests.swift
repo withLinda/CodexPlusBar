@@ -86,6 +86,16 @@ struct MenuBarRootViewTests {
     }
 
     @Test
+    func menuBarFooterExposesThemeSettingsAction() {
+        let themeSettingsAction = MenuBarFooterAction.openThemeSettings
+
+        #expect(MenuBarFooterAction.allCases.contains(themeSettingsAction))
+        #expect(themeSettingsAction.symbolName == "gearshape")
+        #expect(themeSettingsAction.helpText == "Open theme settings")
+        #expect(themeSettingsAction.tone == .secondary)
+    }
+
+    @Test
     func tagFilterPresentationUsesAllStateForMenuBarPanel() {
         let presentation = ProfileTagFilterBarPresentation(
             filter: ProfileTagFilter(),
