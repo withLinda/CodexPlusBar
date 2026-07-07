@@ -229,7 +229,7 @@ private struct ProfileTagSegmentButton: View {
             return tag.statusTone.borderColor.opacity(0.82)
         }
 
-        return CodexTheme.accentAqua.opacity(0.28)
+        return CodexTheme.accentBlue.opacity(0.28)
     }
 
     private var helpText: String {
@@ -484,7 +484,7 @@ struct ProfileTagToggleChip: View {
     }
 
     private var accentColor: Color {
-        tone?.foregroundColor ?? CodexTheme.accentAqua
+        tone?.foregroundColor ?? CodexTheme.accentBlue
     }
 
     private var foregroundColor: Color {
@@ -514,7 +514,7 @@ struct ProfileTagToggleChip: View {
     private var borderColor: Color {
         guard let tone else {
             return isSelected
-                ? CodexTheme.accentAqua.opacity(0.38)
+                ? CodexTheme.accentBlue.opacity(0.38)
                 : CodexTheme.surfaceBorder(for: .subtle)
         }
 

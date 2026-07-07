@@ -275,7 +275,7 @@ struct ProfileSummaryRow: View {
         HStack(alignment: .top, spacing: 8) {
             Text(presentation.title)
                 .font(ProfileManagerTypography.smallStrong)
-                .foregroundStyle(CodexTheme.primaryText)
+                .foregroundStyle(CodexTheme.dataValueText)
                 .lineLimit(1)
                 .allowsTightening(true)
                 .minimumScaleFactor(0.88)
@@ -299,7 +299,7 @@ struct ProfileSummaryRow: View {
     private var menuBarTitleLabel: some View {
         Text(presentation.title)
             .font(ProfileManagerTypography.smallStrong(scale: effectiveTextScale))
-            .foregroundStyle(CodexTheme.primaryText)
+            .foregroundStyle(CodexTheme.dataValueText)
             .lineLimit(1)
             .truncationMode(.middle)
             .minimumScaleFactor(0.9)
@@ -416,7 +416,7 @@ struct ProfileSummaryRow: View {
         let isSelected = if case let .sidebar(isSelected) = mode { isSelected } else { false }
 
         return RoundedRectangle(cornerRadius: CodexTheme.fieldCornerRadius, style: .continuous)
-            .fill(isSelected ? CodexTheme.surfaceFill(for: .strong) : CodexTheme.surfaceFill(for: .nested))
+            .fill(CodexTheme.cardFill(for: isSelected ? .strong : .nested))
             .overlay {
                 RoundedRectangle(cornerRadius: CodexTheme.fieldCornerRadius, style: .continuous)
                     .stroke(
@@ -495,11 +495,11 @@ private struct ProfileSummaryInlineIconButton: View {
 
         switch tone {
         case .quiet:
-            return CodexTheme.primaryText
+            return CodexTheme.utilityActionText
         case .accent:
-            return CodexTheme.accentOrange
+            return CodexTheme.actionText
         case .selected:
-            return CodexTheme.primaryText
+            return CodexTheme.dataValueText
         }
     }
 
@@ -564,16 +564,16 @@ private struct ProfileSummaryExpiryLine: View {
             if let label = presentation.label {
                 (
                     Text(label + " ")
-                        .foregroundStyle(CodexTheme.mutedText)
+                        .foregroundStyle(CodexTheme.dataLabelText)
                     + Text(presentation.value)
-                        .foregroundStyle(emphasisToken?.color ?? CodexTheme.mutedText)
+                        .foregroundStyle(emphasisToken?.color ?? CodexTheme.dataValueText)
                         .monospacedDigit()
                 )
                 .font(ProfileManagerTypography.caption(scale: textScale))
             } else {
                 Text(presentation.value)
                     .font(ProfileManagerTypography.caption(scale: textScale))
-                    .foregroundStyle(emphasisToken?.color ?? CodexTheme.mutedText)
+                    .foregroundStyle(emphasisToken?.color ?? CodexTheme.dataValueText)
             }
         }
         .lineLimit(1)
@@ -615,7 +615,7 @@ struct ProfileUsageMetricBlock: View {
                     HStack(alignment: .firstTextBaseline, spacing: 6 * CGFloat(textScale)) {
                         Text(summary.shortTitle)
                             .font(ProfileManagerTypography.caption(scale: textScale))
-                            .foregroundStyle(CodexTheme.supportText)
+                            .foregroundStyle(CodexTheme.dataLabelText)
 
                         Text(summary.valueText)
                             .font(ProfileManagerTypography.metricCompact(scale: textScale))
@@ -627,7 +627,7 @@ struct ProfileUsageMetricBlock: View {
                 } else {
                     Text(summary.shortTitle)
                         .font(ProfileManagerTypography.caption(scale: textScale))
-                        .foregroundStyle(CodexTheme.supportText)
+                        .foregroundStyle(CodexTheme.dataLabelText)
 
                     Text(summary.valueText)
                         .font(ProfileManagerTypography.metricExpanded(scale: textScale))
@@ -637,7 +637,7 @@ struct ProfileUsageMetricBlock: View {
 
                 if summary.isAvailable {
                     (Text("Reset ")
-                        .foregroundStyle(CodexTheme.mutedText)
+                        .foregroundStyle(CodexTheme.dataLabelText)
                      + Text(summary.resetText)
                         .foregroundStyle(CodexTheme.resetCountdownEmphasisColor))
                     .font(density.resetFont(scale: textScale))

@@ -267,12 +267,12 @@ struct ProfileManagerWindowView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text("CodexPlusBar")
                     .font(ProfileManagerTypography.micro)
-                    .foregroundStyle(CodexTheme.supportText)
+                    .foregroundStyle(CodexTheme.utilityActionText)
                     .kerning(1.4)
 
                 Text("Profile Manager")
                     .font(ProfileManagerTypography.title)
-                    .foregroundStyle(CodexTheme.primaryText)
+                    .foregroundStyle(CodexTheme.headingText)
 
                 Text(headerMetaText)
                     .font(ProfileManagerTypography.body)
@@ -330,7 +330,7 @@ struct ProfileManagerWindowView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Saved profiles")
                             .font(ProfileManagerTypography.bodyStrong)
-                            .foregroundStyle(CodexTheme.primaryText)
+                            .foregroundStyle(CodexTheme.headingText)
 
                         Text(sidebarMetaText)
                             .font(ProfileManagerTypography.caption)
@@ -407,7 +407,7 @@ struct ProfileManagerWindowView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Choose a profile")
                         .font(ProfileManagerTypography.bodyStrong)
-                        .foregroundStyle(CodexTheme.primaryText)
+                        .foregroundStyle(CodexTheme.headingText)
 
                     Text("Pick a profile from the left to inspect usage, repair login, or remove it.")
                         .font(ProfileManagerTypography.small)
@@ -623,7 +623,7 @@ struct ProfileManagerWindowView: View {
             VStack(alignment: .leading, spacing: 10) {
                 Text("Usage")
                     .font(ProfileManagerTypography.bodyStrong)
-                    .foregroundStyle(CodexTheme.primaryText)
+                    .foregroundStyle(CodexTheme.headingText)
 
                 if let usageSummary = snapshot.usageSummary(referenceDate: currentTime.now) {
                     HStack(spacing: metrics.usageMetricSpacing) {
@@ -661,7 +661,7 @@ struct ProfileManagerWindowView: View {
             VStack(alignment: .leading, spacing: 10) {
                 Text("Actions")
                     .font(ProfileManagerTypography.bodyStrong)
-                    .foregroundStyle(CodexTheme.primaryText)
+                    .foregroundStyle(CodexTheme.headingText)
 
                 LazyVGrid(
                     columns: metrics.actionGridColumns,
@@ -747,7 +747,7 @@ struct ProfileManagerWindowView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(presentation.title)
                         .font(ProfileManagerTypography.bodyStrong)
-                        .foregroundStyle(CodexTheme.primaryText)
+                        .foregroundStyle(CodexTheme.headingText)
 
                     Text(presentation.summaryText)
                         .font(ProfileManagerTypography.small)
@@ -887,16 +887,16 @@ struct ProfileManagerWindowView: View {
             if let label = presentation.label {
                 (
                     Text(label + " ")
-                        .foregroundStyle(CodexTheme.mutedText)
+                        .foregroundStyle(CodexTheme.dataLabelText)
                     + Text(presentation.value)
-                        .foregroundStyle(emphasisToken?.color ?? CodexTheme.mutedText)
+                        .foregroundStyle(emphasisToken?.color ?? CodexTheme.dataValueText)
                         .monospacedDigit()
                 )
                 .font(ProfileManagerTypography.small)
             } else {
                 Text(presentation.value)
                     .font(ProfileManagerTypography.small)
-                    .foregroundStyle(emphasisToken?.color ?? CodexTheme.mutedText)
+                    .foregroundStyle(emphasisToken?.color ?? CodexTheme.dataValueText)
             }
         }
         .lineLimit(1)
@@ -1155,7 +1155,7 @@ private struct ProfileManagerDetailsTextField<TrailingContent: View>: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
                 .font(ProfileManagerTypography.caption)
-                .foregroundStyle(CodexTheme.supportText)
+                .foregroundStyle(CodexTheme.dataLabelText)
 
             HStack(alignment: .center, spacing: 10) {
                 TextField(placeholder, text: $text)
@@ -1165,7 +1165,7 @@ private struct ProfileManagerDetailsTextField<TrailingContent: View>: View {
                     .padding(.vertical, 10)
                     .frame(maxWidth: .infinity)
                     .background(ProfileManagerFieldBackground())
-                    .foregroundStyle(CodexTheme.primaryText)
+                    .foregroundStyle(CodexTheme.dataValueText)
                     .submitLabel(.done)
                     .onSubmit(onSubmit)
 
@@ -1189,7 +1189,7 @@ private struct ProfileManagerPrivateDetailsField: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
                 .font(ProfileManagerTypography.caption)
-                .foregroundStyle(CodexTheme.supportText)
+                .foregroundStyle(CodexTheme.dataLabelText)
 
             HStack(alignment: .center, spacing: 10) {
                 Group {
@@ -1205,7 +1205,7 @@ private struct ProfileManagerPrivateDetailsField: View {
                 .padding(.vertical, 10)
                 .frame(maxWidth: .infinity)
                 .background(ProfileManagerFieldBackground())
-                .foregroundStyle(CodexTheme.primaryText)
+                .foregroundStyle(CodexTheme.dataValueText)
                 .submitLabel(.done)
                 .onSubmit(onSubmit)
 
@@ -1243,7 +1243,7 @@ private struct ProfileManagerNotesDetailsField: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
                 .font(ProfileManagerTypography.caption)
-                .foregroundStyle(CodexTheme.supportText)
+                .foregroundStyle(CodexTheme.dataLabelText)
 
             ZStack(alignment: .topLeading) {
                 TextEditor(text: $text)
@@ -1253,7 +1253,7 @@ private struct ProfileManagerNotesDetailsField: View {
                     .padding(.vertical, 8)
                     .frame(minHeight: 72, maxHeight: 108)
                     .background(ProfileManagerFieldBackground())
-                    .foregroundStyle(CodexTheme.primaryText)
+                    .foregroundStyle(CodexTheme.dataValueText)
 
                 if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     Text(placeholder)
@@ -1380,7 +1380,7 @@ private struct ProfileManagerInlineFieldActionButtonStyle: ButtonStyle {
             return CodexTheme.quietText
         }
 
-        return isConfirmed ? CodexTheme.accentGreen : CodexTheme.primaryText
+        return isConfirmed ? CodexTheme.successText : CodexTheme.utilityActionText
     }
 
     private var borderColor: Color {
@@ -1389,13 +1389,13 @@ private struct ProfileManagerInlineFieldActionButtonStyle: ButtonStyle {
         }
 
         return isConfirmed
-            ? CodexTheme.accentGreen.opacity(0.34)
+            ? CodexTheme.accentAqua.opacity(0.34)
             : CodexTheme.surfaceBorder(for: .subtle)
     }
 
     private func backgroundColor(isPressed: Bool) -> Color {
         if isConfirmed {
-            return CodexTheme.accentGreen.opacity(isPressed ? 0.16 : 0.12)
+            return CodexTheme.accentAqua.opacity(isPressed ? 0.16 : 0.12)
         }
 
         return CodexTheme.surfaceFill(for: .subtle).opacity(isPressed ? 0.98 : 0.92)
@@ -1427,7 +1427,7 @@ private struct ProfileManagerStatusBanner: View {
             VStack(alignment: .leading, spacing: CodexTheme.Spacing.micro) {
                 Text(title)
                     .font(ProfileManagerTypography.smallStrong)
-                    .foregroundStyle(CodexTheme.primaryText)
+                    .foregroundStyle(CodexTheme.headingText)
 
                 Text(message)
                     .font(ProfileManagerTypography.small)
@@ -1481,7 +1481,7 @@ private struct ProfileManagerSecondaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(ProfileManagerTypography.smallStrong)
-            .foregroundStyle(CodexTheme.primaryText)
+            .foregroundStyle(CodexTheme.actionText)
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .background(
@@ -1509,7 +1509,7 @@ private struct ProfileManagerDangerButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(ProfileManagerTypography.smallStrong)
-            .foregroundStyle(CodexTheme.accentRed)
+            .foregroundStyle(CodexTheme.dangerText)
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .background(

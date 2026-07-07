@@ -213,12 +213,12 @@ struct EmailToolsWindowView: View {
     private func variationList(for session: DotTrickSession) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             // Detail header card
-            CodexCard(tier: .strong, accent: CodexTheme.accentAqua) {
+            CodexCard(tier: .strong, accent: CodexTheme.accentBlue) {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(alignment: .center, spacing: 12) {
                         Image(systemName: "envelope.badge.fill")
                             .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(CodexTheme.accentAqua)
+                            .foregroundStyle(CodexTheme.accentBlue)
                             .frame(width: 24, height: 24)
                             .accessibilityHidden(true)
 
@@ -466,12 +466,12 @@ private struct EmailToolsSidebarRow: View {
         .padding(.vertical, 10)
         .background(
             RoundedRectangle(cornerRadius: CodexTheme.fieldCornerRadius, style: .continuous)
-                .fill(isSelected ? CodexTheme.surfaceFill(for: .strong) : CodexTheme.surfaceFill(for: .nested))
+                .fill(CodexTheme.cardFill(for: isSelected ? .strong : .nested))
                 .overlay(
                     RoundedRectangle(cornerRadius: CodexTheme.fieldCornerRadius, style: .continuous)
                         .stroke(
                             isSelected
-                                ? CodexTheme.accentAqua.opacity(0.35)
+                                ? CodexTheme.accentBlue.opacity(0.35)
                                 : CodexTheme.surfaceBorder(for: .nested),
                             lineWidth: 1
                         )
@@ -541,7 +541,7 @@ private struct EmailToolsVariationRow: View {
                         Text(isCopied ? "Copied" : "Copy")
                             .font(ProfileManagerTypography.caption)
                     }
-                    .foregroundStyle(isCopied ? CodexTheme.accentGreen : CodexTheme.primaryText)
+                    .foregroundStyle(isCopied ? CodexTheme.accentAqua : CodexTheme.primaryText)
                 }
                 .buttonStyle(EmailToolsCopyButtonStyle(isCopied: isCopied))
                 .disabled(isCopied)
@@ -574,7 +574,7 @@ private struct EmailToolsVariationRow: View {
 
         // Highlight the dot in a different color.
         if let dotRange = attributed.range(of: ".") {
-            attributed[dotRange].foregroundColor = CodexTheme.accentAqua
+            attributed[dotRange].foregroundColor = CodexTheme.accentBlue
             attributed[dotRange].font = .codexUtility(size: 14, weight: .bold, relativeTo: .body)
         }
 
@@ -648,14 +648,14 @@ private struct EmailToolsCopyButtonStyle: ButtonStyle {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(
                         isCopied
-                            ? CodexTheme.accentGreen.opacity(0.12)
+                            ? CodexTheme.accentAqua.opacity(0.12)
                             : CodexTheme.surfaceFill(for: .subtle)
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 8, style: .continuous)
                             .stroke(
                                 isCopied
-                                    ? CodexTheme.accentGreen.opacity(0.28)
+                                    ? CodexTheme.accentAqua.opacity(0.28)
                                     : CodexTheme.surfaceBorder(for: .subtle),
                                 lineWidth: 1
                             )

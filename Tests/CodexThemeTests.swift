@@ -13,6 +13,10 @@ struct CodexThemeTests {
         #expect(CodexTheme.Palette.accOrange.hex == "#E69875")
         #expect(CodexTheme.Palette.accRed.hex == "#E67E80")
         #expect(CodexTheme.Palette.accYellow.hex == "#DBBC7F")
+        #expect(CodexTheme.Palette.accGreen.hex == "#A7C080")
+        #expect(CodexTheme.Palette.accAqua.hex == "#83C092")
+        #expect(CodexTheme.Palette.accBlue.hex == "#7FBBB3")
+        #expect(CodexTheme.Palette.accPurple.hex == "#D699B6")
     }
 
     @Test
@@ -33,6 +37,12 @@ struct CodexThemeTests {
         #expect(CodexTheme.palette(for: lightHardPreset).bg0.hex == "#FFFBEF")
         #expect(CodexTheme.palette(for: CodexThemePreset(variant: .light, contrast: .medium)).bg0.hex == "#FDF6E3")
         #expect(CodexTheme.palette(for: CodexThemePreset(variant: .light, contrast: .soft)).bg0.hex == "#F3EAD3")
+        #expect(CodexTheme.palette(for: darkHardPreset).accGreen.hex == "#A7C080")
+        #expect(CodexTheme.palette(for: darkHardPreset).accAqua.hex == "#83C092")
+        #expect(CodexTheme.palette(for: darkHardPreset).accBlue.hex == "#7FBBB3")
+        #expect(CodexTheme.palette(for: lightHardPreset).accGreen.hex == "#8DA101")
+        #expect(CodexTheme.palette(for: lightHardPreset).accAqua.hex == "#35A77C")
+        #expect(CodexTheme.palette(for: lightHardPreset).accBlue.hex == "#3A94C5")
     }
 
     @Test
@@ -64,6 +74,46 @@ struct CodexThemeTests {
     }
 
     @Test
+    func cardFillTokensUseEverforestBg0ForEveryPreset() {
+        for preset in CodexThemePreset.allCases {
+            let palette = CodexTheme.palette(for: preset)
+
+            for cardTier in cardSurfaceTiers {
+                #expect(
+                    CodexTheme.cardFillToken(for: cardTier.tier, preset: preset).hex == palette.bg0.hex,
+                    "\(preset.id) \(cardTier.name) cards should use the preset bg0 token"
+                )
+            }
+        }
+    }
+
+    @Test
+    func cardTextRolesPassWCAGOnBg0CardsForEveryPreset() {
+        for preset in CodexThemePreset.allCases {
+            let palette = CodexTheme.palette(for: preset)
+            let textRoles: [(name: String, token: CodexColorToken)] = [
+                ("primary", palette.primaryText),
+                ("support", palette.supportText),
+                ("dataLabel", palette.dataLabelText),
+                ("dataValue", palette.dataValueText),
+                ("action", CodexTheme.actionTextToken(preset: preset)),
+                ("danger", CodexTheme.dangerTextToken(preset: preset)),
+            ]
+
+            for cardTier in cardSurfaceTiers {
+                let cardFill = CodexTheme.cardFillToken(for: cardTier.tier, preset: preset)
+
+                for textRole in textRoles {
+                    #expect(
+                        contrastRatio(textRole.token, cardFill) >= 4.5,
+                        "\(preset.id) \(textRole.name) on \(cardTier.name) card fill should pass WCAG normal text contrast"
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
     func themeRefreshContextChangesTokensWithoutResettingViewIdentity() {
         let hardContext = CodexThemeRefreshContext(appearanceMode: .dark, contrast: .hard)
         let mediumContext = CodexThemeRefreshContext(appearanceMode: .dark, contrast: .medium)
@@ -84,6 +134,8 @@ struct CodexThemeTests {
                 ("primary", palette.primaryText),
                 ("muted", palette.mutedText),
                 ("support", palette.supportText),
+                ("dataLabel", palette.dataLabelText),
+                ("dataValue", palette.dataValueText),
             ]
 
             for textRole in textRoles {
@@ -95,6 +147,91 @@ struct CodexThemeTests {
                 }
             }
         }
+    }
+
+    @Test
+    func dataLabelsAndValuesStaySemanticallySeparatedForEveryPreset() {
+        for preset in CodexThemePreset.allCases {
+            let palette = CodexTheme.palette(for: preset)
+
+            #expect(
+                palette.dataLabelText != palette.dataValueText,
+                "\(preset.id) data labels and data values should not use the same token"
+            )
+
+            #expect(
+                deltaLStar(palette.dataLabelText, palette.dataValueText) >= 12,
+                "\(preset.id) data label and value should have enough perceptual lightness separation"
+            )
+        }
+    }
+
+    @Test
+    func lightThemeKeepsNormalLabelsInTheEverforestFgFamily() {
+        for contrast in CodexThemeContrast.allCases {
+            let preset = CodexThemePreset(variant: .light, contrast: contrast)
+            let palette = CodexTheme.palette(for: preset)
+
+            #expect(
+                palette.primaryText != palette.strongText,
+                "\(preset.id) normal labels should not use black strong text"
+            )
+            #expect(
+                deltaLStar(palette.primaryText, palette.fg) <= 8,
+                "\(preset.id) normal labels should stay visually close to Everforest fg"
+            )
+            #expect(
+                deltaLStar(palette.primaryText, palette.strongText) >= 18,
+                "\(preset.id) normal labels should stay perceptually separate from dense values"
+            )
+            #expect(
+                palette.dataLabelText == palette.primaryText,
+                "\(preset.id) data labels should stay calm like normal labels"
+            )
+            #expect(
+                palette.dataValueText.hex == palette.strongText.hex,
+                "\(preset.id) dense values can use strong text"
+            )
+        }
+    }
+
+    @Test
+    func lightThemeAccentTextStaysColorfulButReadable() {
+        for contrast in CodexThemeContrast.allCases {
+            let preset = CodexThemePreset(variant: .light, contrast: contrast)
+            let palette = CodexTheme.palette(for: preset)
+            let textRoles: [(name: String, token: CodexColorToken)] = [
+                ("action", CodexTheme.actionTextToken(preset: preset)),
+                ("success", CodexTheme.readableAccentToken(palette.accAqua, preset: preset)),
+                ("info", CodexTheme.readableAccentToken(palette.accBlue, preset: preset)),
+                ("healthyData", CodexTheme.progressTextToken(forRemainingPercent: 90, preset: preset)),
+                ("warningData", CodexTheme.resetEmphasisToken(forRemainingPercent: 82, preset: preset)),
+                ("dangerData", CodexTheme.progressTextToken(forRemainingPercent: 12, preset: preset)),
+            ]
+
+            for textRole in textRoles {
+                #expect(
+                    textRole.token != palette.strongText,
+                    "\(preset.id) \(textRole.name) should keep a visible Everforest hue"
+                )
+
+                for surface in mainSurfaceTokens(for: preset) {
+                    #expect(
+                        contrastRatio(textRole.token, surface.token) >= 4.5,
+                        "\(preset.id) \(textRole.name) on \(surface.name) should pass WCAG normal text contrast"
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
+    func statusAndDataAccentsUseSeparateEverforestRoles() {
+        let darkPalette = CodexTheme.palette(for: darkHardPreset)
+
+        #expect(CodexTheme.statusAccentToken(for: .success).hex == darkPalette.accAqua.hex)
+        #expect(CodexTheme.statusAccentToken(for: .info).hex == darkPalette.accBlue.hex)
+        #expect(CodexTheme.progressAccentToken(forRemainingPercent: 90, preset: darkHardPreset).hex == darkPalette.accGreen.hex)
     }
 
     @Test
@@ -151,10 +288,24 @@ struct CodexThemeTests {
     }
 
     @Test
-    func lightPresetKeepsDenseMetricTextReadableInsteadOfAccentColored() {
-        #expect(CodexTheme.progressTextToken(forRemainingPercent: 90, preset: lightHardPreset).hex == "#1E2326")
-        #expect(CodexTheme.resetEmphasisToken(forRemainingPercent: 12, preset: lightHardPreset).hex == "#1E2326")
-        #expect(CodexTheme.resetCountdownEmphasisToken(preset: lightHardPreset).hex == "#1E2326")
+    func lightPresetUsesReadableTintedAccentForDenseMetricText() {
+        let palette = CodexTheme.palette(for: lightHardPreset)
+
+        #expect(CodexTheme.progressTextToken(forRemainingPercent: 90, preset: lightHardPreset) != palette.strongText)
+        #expect(CodexTheme.resetEmphasisToken(forRemainingPercent: 12, preset: lightHardPreset) != palette.strongText)
+        #expect(CodexTheme.resetCountdownEmphasisToken(preset: lightHardPreset) != palette.strongText)
+        #expect(
+            CodexTheme.progressTextToken(forRemainingPercent: 90, preset: lightHardPreset)
+                == CodexTheme.readableAccentToken(palette.accGreen, preset: lightHardPreset)
+        )
+        #expect(
+            CodexTheme.resetEmphasisToken(forRemainingPercent: 12, preset: lightHardPreset)
+                == CodexTheme.readableAccentToken(palette.accRed, preset: lightHardPreset)
+        )
+        #expect(
+            CodexTheme.resetCountdownEmphasisToken(preset: lightHardPreset)
+                == CodexTheme.readableAccentToken(palette.accBlue, preset: lightHardPreset)
+        )
     }
 
     @Test
@@ -176,20 +327,20 @@ struct CodexThemeTests {
 
     @Test
     func progressPaletteGetsWarmerAsRemainingDrops() {
-        #expect(CodexTheme.progressTextToken(forRemainingPercent: 90).hex == CodexTheme.Palette.accGreen.hex)
-        #expect(CodexTheme.progressTextToken(forRemainingPercent: 70).hex == CodexTheme.Palette.accYellow.hex)
-        #expect(CodexTheme.progressTextToken(forRemainingPercent: 40).hex == CodexTheme.Palette.accOrange.hex)
-        #expect(CodexTheme.progressTextToken(forRemainingPercent: 10).hex == CodexTheme.Palette.accRed.hex)
+        #expect(CodexTheme.progressTextToken(forRemainingPercent: 90) == CodexTheme.readableAccentToken(CodexTheme.Palette.accGreen))
+        #expect(CodexTheme.progressTextToken(forRemainingPercent: 70) == CodexTheme.readableAccentToken(CodexTheme.Palette.accYellow))
+        #expect(CodexTheme.progressTextToken(forRemainingPercent: 40) == CodexTheme.readableAccentToken(CodexTheme.Palette.accOrange))
+        #expect(CodexTheme.progressTextToken(forRemainingPercent: 10) == CodexTheme.readableAccentToken(CodexTheme.Palette.accRed))
     }
 
     @Test
     func progressPaletteUsesExactBoundaryThresholds() {
-        #expect(CodexTheme.progressTextToken(forRemainingPercent: 24).hex == CodexTheme.Palette.accRed.hex)
-        #expect(CodexTheme.progressTextToken(forRemainingPercent: 25).hex == CodexTheme.Palette.accOrange.hex)
-        #expect(CodexTheme.progressTextToken(forRemainingPercent: 49).hex == CodexTheme.Palette.accOrange.hex)
-        #expect(CodexTheme.progressTextToken(forRemainingPercent: 50).hex == CodexTheme.Palette.accYellow.hex)
-        #expect(CodexTheme.progressTextToken(forRemainingPercent: 74).hex == CodexTheme.Palette.accYellow.hex)
-        #expect(CodexTheme.progressTextToken(forRemainingPercent: 75).hex == CodexTheme.Palette.accGreen.hex)
+        #expect(CodexTheme.progressTextToken(forRemainingPercent: 24) == CodexTheme.readableAccentToken(CodexTheme.Palette.accRed))
+        #expect(CodexTheme.progressTextToken(forRemainingPercent: 25) == CodexTheme.readableAccentToken(CodexTheme.Palette.accOrange))
+        #expect(CodexTheme.progressTextToken(forRemainingPercent: 49) == CodexTheme.readableAccentToken(CodexTheme.Palette.accOrange))
+        #expect(CodexTheme.progressTextToken(forRemainingPercent: 50) == CodexTheme.readableAccentToken(CodexTheme.Palette.accYellow))
+        #expect(CodexTheme.progressTextToken(forRemainingPercent: 74) == CodexTheme.readableAccentToken(CodexTheme.Palette.accYellow))
+        #expect(CodexTheme.progressTextToken(forRemainingPercent: 75) == CodexTheme.readableAccentToken(CodexTheme.Palette.accGreen))
     }
 
     @Test
@@ -212,24 +363,24 @@ struct CodexThemeTests {
             referenceDate: referenceDate
         )
 
-        #expect(calm?.hex == CodexTheme.Palette.accYellow.hex)
-        #expect(warning?.hex == CodexTheme.Palette.accOrange.hex)
-        #expect(critical?.hex == CodexTheme.Palette.accRed.hex)
-        #expect(expired?.hex == CodexTheme.Palette.accRed.hex)
+        #expect(calm == CodexTheme.readableAccentToken(CodexTheme.Palette.accYellow))
+        #expect(warning == CodexTheme.readableAccentToken(CodexTheme.Palette.accOrange))
+        #expect(critical == CodexTheme.readableAccentToken(CodexTheme.Palette.accRed))
+        #expect(expired == CodexTheme.readableAccentToken(CodexTheme.Palette.accRed))
         #expect(CodexTheme.expiryEmphasisToken(for: nil, referenceDate: referenceDate) == nil)
     }
 
     @Test
     func resetPaletteStaysWarmForHighlightedResetValues() {
-        #expect(CodexTheme.resetEmphasisToken(forRemainingPercent: nil).hex == CodexTheme.Palette.accYellow.hex)
-        #expect(CodexTheme.resetEmphasisToken(forRemainingPercent: 82).hex == CodexTheme.Palette.accYellow.hex)
-        #expect(CodexTheme.resetEmphasisToken(forRemainingPercent: 44).hex == CodexTheme.Palette.accOrange.hex)
-        #expect(CodexTheme.resetEmphasisToken(forRemainingPercent: 12).hex == CodexTheme.Palette.accRed.hex)
+        #expect(CodexTheme.resetEmphasisToken(forRemainingPercent: nil) == CodexTheme.readableAccentToken(CodexTheme.Palette.accYellow))
+        #expect(CodexTheme.resetEmphasisToken(forRemainingPercent: 82) == CodexTheme.readableAccentToken(CodexTheme.Palette.accYellow))
+        #expect(CodexTheme.resetEmphasisToken(forRemainingPercent: 44) == CodexTheme.readableAccentToken(CodexTheme.Palette.accOrange))
+        #expect(CodexTheme.resetEmphasisToken(forRemainingPercent: 12) == CodexTheme.readableAccentToken(CodexTheme.Palette.accRed))
     }
 
     @Test
-    func resetCountdownPaletteAlwaysUsesAqua() {
-        #expect(CodexTheme.resetCountdownEmphasisToken().hex == CodexTheme.Palette.accAqua.hex)
+    func resetCountdownPaletteUsesInfoBlueInDarkThemes() {
+        #expect(CodexTheme.resetCountdownEmphasisToken().hex == CodexTheme.Palette.accBlue.hex)
     }
 }
 
@@ -243,6 +394,13 @@ private func mainSurfaceTokens(for preset: CodexThemePreset) -> [(name: String, 
         ("subtle", CodexTheme.surfaceToken(for: .subtle, preset: preset)),
     ]
 }
+
+private let cardSurfaceTiers: [(name: String, tier: CodexSurfaceTier)] = [
+    ("strong", .strong),
+    ("regular", .regular),
+    ("nested", .nested),
+    ("subtle", .subtle),
+]
 
 private func contrastRatio(_ foreground: CodexColorToken, _ background: CodexColorToken) -> Double {
     let foregroundLuminance = relativeLuminance(foreground)

@@ -262,18 +262,34 @@ struct CodexEverforestPalette: Sendable, Equatable {
     let accYellow: CodexColorToken
     let accGreen: CodexColorToken
     let accAqua: CodexColorToken
-    let accPink: CodexColorToken
+    let accBlue: CodexColorToken
+    let accPurple: CodexColorToken
 
     var isDark: Bool {
         variant == .dark
     }
 
     var primaryText: CodexColorToken {
-        isDark ? fg : strongText
+        switch (variant, contrast) {
+        case (.light, .medium):
+            return fg.mixed(with: strongText, fraction: 0.06)
+        case (.light, .soft):
+            return fg.mixed(with: strongText, fraction: 0.18)
+        default:
+            return fg
+        }
+    }
+
+    var dataLabelText: CodexColorToken {
+        primaryText
+    }
+
+    var dataValueText: CodexColorToken {
+        strongText
     }
 
     var mutedText: CodexColorToken {
-        isDark ? fg : strongText
+        dataLabelText
     }
 
     var quietText: CodexColorToken {
@@ -281,11 +297,15 @@ struct CodexEverforestPalette: Sendable, Equatable {
     }
 
     var supportText: CodexColorToken {
-        isDark ? fg : strongText
+        dataLabelText
     }
 
     var onAccentText: CodexColorToken {
         CodexColorToken(hex: "#1E2326")
+    }
+
+    var accPink: CodexColorToken {
+        accPurple
     }
 }
 
@@ -313,9 +333,11 @@ enum CodexTheme {
         static let accOrange = CodexColorToken(hex: "#E69875")
         static let accRed = CodexColorToken(hex: "#E67E80")
         static let accYellow = CodexColorToken(hex: "#DBBC7F")
-        static let accGreen = CodexColorToken(hex: "#83C092")
-        static let accAqua = CodexColorToken(hex: "#7FBBB3")
-        static let accPink = CodexColorToken(hex: "#D699B6")
+        static let accGreen = CodexColorToken(hex: "#A7C080")
+        static let accAqua = CodexColorToken(hex: "#83C092")
+        static let accBlue = CodexColorToken(hex: "#7FBBB3")
+        static let accPurple = CodexColorToken(hex: "#D699B6")
+        static let accPink = accPurple
     }
 
     static func palette(for preset: CodexThemePreset) -> CodexEverforestPalette {
@@ -345,9 +367,10 @@ enum CodexTheme {
                 accOrange: CodexColorToken(hex: "#E69875"),
                 accRed: CodexColorToken(hex: "#E67E80"),
                 accYellow: CodexColorToken(hex: "#DBBC7F"),
-                accGreen: CodexColorToken(hex: "#83C092"),
-                accAqua: CodexColorToken(hex: "#7FBBB3"),
-                accPink: CodexColorToken(hex: "#D699B6")
+                accGreen: CodexColorToken(hex: "#A7C080"),
+                accAqua: CodexColorToken(hex: "#83C092"),
+                accBlue: CodexColorToken(hex: "#7FBBB3"),
+                accPurple: CodexColorToken(hex: "#D699B6")
             )
         case (.dark, .medium):
             return CodexEverforestPalette(
@@ -374,9 +397,10 @@ enum CodexTheme {
                 accOrange: CodexColorToken(hex: "#E69875"),
                 accRed: CodexColorToken(hex: "#E67E80"),
                 accYellow: CodexColorToken(hex: "#DBBC7F"),
-                accGreen: CodexColorToken(hex: "#83C092"),
-                accAqua: CodexColorToken(hex: "#7FBBB3"),
-                accPink: CodexColorToken(hex: "#D699B6")
+                accGreen: CodexColorToken(hex: "#A7C080"),
+                accAqua: CodexColorToken(hex: "#83C092"),
+                accBlue: CodexColorToken(hex: "#7FBBB3"),
+                accPurple: CodexColorToken(hex: "#D699B6")
             )
         case (.dark, .soft):
             return CodexEverforestPalette(
@@ -403,9 +427,10 @@ enum CodexTheme {
                 accOrange: CodexColorToken(hex: "#E69875"),
                 accRed: CodexColorToken(hex: "#E67E80"),
                 accYellow: CodexColorToken(hex: "#DBBC7F"),
-                accGreen: CodexColorToken(hex: "#83C092"),
-                accAqua: CodexColorToken(hex: "#7FBBB3"),
-                accPink: CodexColorToken(hex: "#D699B6")
+                accGreen: CodexColorToken(hex: "#A7C080"),
+                accAqua: CodexColorToken(hex: "#83C092"),
+                accBlue: CodexColorToken(hex: "#7FBBB3"),
+                accPurple: CodexColorToken(hex: "#D699B6")
             )
         case (.light, .hard):
             return CodexEverforestPalette(
@@ -432,9 +457,10 @@ enum CodexTheme {
                 accOrange: CodexColorToken(hex: "#F57D26"),
                 accRed: CodexColorToken(hex: "#F85552"),
                 accYellow: CodexColorToken(hex: "#DFA000"),
-                accGreen: CodexColorToken(hex: "#35A77C"),
-                accAqua: CodexColorToken(hex: "#3A94C5"),
-                accPink: CodexColorToken(hex: "#DF69BA")
+                accGreen: CodexColorToken(hex: "#8DA101"),
+                accAqua: CodexColorToken(hex: "#35A77C"),
+                accBlue: CodexColorToken(hex: "#3A94C5"),
+                accPurple: CodexColorToken(hex: "#DF69BA")
             )
         case (.light, .medium):
             return CodexEverforestPalette(
@@ -461,9 +487,10 @@ enum CodexTheme {
                 accOrange: CodexColorToken(hex: "#F57D26"),
                 accRed: CodexColorToken(hex: "#F85552"),
                 accYellow: CodexColorToken(hex: "#DFA000"),
-                accGreen: CodexColorToken(hex: "#35A77C"),
-                accAqua: CodexColorToken(hex: "#3A94C5"),
-                accPink: CodexColorToken(hex: "#DF69BA")
+                accGreen: CodexColorToken(hex: "#8DA101"),
+                accAqua: CodexColorToken(hex: "#35A77C"),
+                accBlue: CodexColorToken(hex: "#3A94C5"),
+                accPurple: CodexColorToken(hex: "#DF69BA")
             )
         case (.light, .soft):
             return CodexEverforestPalette(
@@ -490,9 +517,10 @@ enum CodexTheme {
                 accOrange: CodexColorToken(hex: "#F57D26"),
                 accRed: CodexColorToken(hex: "#F85552"),
                 accYellow: CodexColorToken(hex: "#DFA000"),
-                accGreen: CodexColorToken(hex: "#35A77C"),
-                accAqua: CodexColorToken(hex: "#3A94C5"),
-                accPink: CodexColorToken(hex: "#DF69BA")
+                accGreen: CodexColorToken(hex: "#8DA101"),
+                accAqua: CodexColorToken(hex: "#35A77C"),
+                accBlue: CodexColorToken(hex: "#3A94C5"),
+                accPurple: CodexColorToken(hex: "#DF69BA")
             )
         }
     }
@@ -553,22 +581,34 @@ enum CodexTheme {
     static var bg3: Color { activePalette.bg2.color }
     static var bg4: Color { activePalette.bg3.color }
     static var primaryTextToken: CodexColorToken { activePalette.primaryText }
+    static var headingTextToken: CodexColorToken { activePalette.strongText }
     static var mutedTextToken: CodexColorToken { activePalette.mutedText }
     static var quietTextToken: CodexColorToken { activePalette.quietText }
     static var supportTextToken: CodexColorToken { activePalette.supportText }
+    static var dataLabelTextToken: CodexColorToken { activePalette.dataLabelText }
+    static var dataValueTextToken: CodexColorToken { activePalette.dataValueText }
     static var canvasFillToken: CodexColorToken { canvasFillToken(for: activePreset) }
     static var shellFillToken: CodexColorToken { shellFillToken(for: activePreset) }
     static var shellDialogFillToken: CodexColorToken { shellFillToken(for: activePreset) }
 
     static var primaryText: Color { primaryTextToken.color }
+    static var headingText: Color { headingTextToken.color }
     static var mutedText: Color { mutedTextToken.color }
     static var quietText: Color { quietTextToken.color }
     static var supportText: Color { supportTextToken.color }
+    static var dataLabelText: Color { dataLabelTextToken.color }
+    static var dataValueText: Color { dataValueTextToken.color }
+    static var actionText: Color { actionTextToken().color }
+    static var utilityActionText: Color { utilityActionTextToken().color }
+    static var successText: Color { successTextToken().color }
+    static var dangerText: Color { dangerTextToken().color }
     static var accentOrange: Color { activePalette.accOrange.color }
     static var accentRed: Color { activePalette.accRed.color }
     static var accentYellow: Color { activePalette.accYellow.color }
     static var accentGreen: Color { activePalette.accGreen.color }
     static var accentAqua: Color { activePalette.accAqua.color }
+    static var accentBlue: Color { activePalette.accBlue.color }
+    static var accentPurple: Color { activePalette.accPurple.color }
     static var accentPink: Color { activePalette.accPink.color }
     static var accentInk: Color { activePalette.onAccentText.color }
 
@@ -592,6 +632,44 @@ enum CodexTheme {
     static var shadowPrimary: Color { Color.black.opacity(isDarkTheme ? 0.34 : 0.12) }
     static var primaryActionTokens: [CodexColorToken] {
         [activePalette.accOrange, activePalette.accRed]
+    }
+
+    static func readableAccentToken(
+        _ token: CodexColorToken,
+        preset: CodexThemePreset = activePreset
+    ) -> CodexColorToken {
+        let palette = palette(for: preset)
+        let backgrounds = readableAccentBackgroundTokens(for: preset)
+        let minimumNormalTextContrast = 4.5
+
+        if token.passesContrast(minimumNormalTextContrast, against: backgrounds) {
+            return token
+        }
+
+        for step in 1...16 {
+            let candidate = token.mixed(with: palette.strongText, fraction: Double(step) * 0.05)
+            if candidate.passesContrast(minimumNormalTextContrast, against: backgrounds) {
+                return candidate
+            }
+        }
+
+        return palette.strongText
+    }
+
+    static func actionTextToken(preset: CodexThemePreset = activePreset) -> CodexColorToken {
+        readableAccentToken(palette(for: preset).accOrange, preset: preset)
+    }
+
+    static func utilityActionTextToken(preset: CodexThemePreset = activePreset) -> CodexColorToken {
+        readableAccentToken(palette(for: preset).accBlue, preset: preset)
+    }
+
+    static func successTextToken(preset: CodexThemePreset = activePreset) -> CodexColorToken {
+        readableAccentToken(palette(for: preset).accAqua, preset: preset)
+    }
+
+    static func dangerTextToken(preset: CodexThemePreset = activePreset) -> CodexColorToken {
+        readableAccentToken(palette(for: preset).accRed, preset: preset)
     }
 
     static var accentGradient: LinearGradient {
@@ -635,6 +713,21 @@ enum CodexTheme {
 
     static func surfaceFill(for tier: CodexSurfaceTier) -> Color {
         surfaceToken(for: tier).color
+    }
+
+    static func cardFill(for tier: CodexSurfaceTier) -> Color {
+        cardFillToken(for: tier).color
+    }
+
+    static func cardFillToken(for tier: CodexSurfaceTier) -> CodexColorToken {
+        cardFillToken(for: tier, preset: activePreset)
+    }
+
+    static func cardFillToken(
+        for _: CodexSurfaceTier,
+        preset: CodexThemePreset
+    ) -> CodexColorToken {
+        palette(for: preset).bg0
     }
 
     static func surfaceToken(for tier: CodexSurfaceTier) -> CodexColorToken {
@@ -789,9 +882,9 @@ enum CodexTheme {
         case .neutral:
             activePalette.gray1
         case .info:
-            activePalette.accAqua
+            activePalette.accBlue
         case .success:
-            activePalette.accGreen
+            activePalette.accAqua
         case .warning:
             activePalette.accYellow
         case .critical:
@@ -800,11 +893,7 @@ enum CodexTheme {
     }
 
     static func statusForegroundToken(for tone: CodexStatusTone) -> CodexColorToken {
-        if isDarkTheme {
-            return tone == .neutral ? primaryTextToken : statusAccentToken(for: tone)
-        }
-
-        return primaryTextToken
+        tone == .neutral ? primaryTextToken : readableAccentToken(statusAccentToken(for: tone))
     }
 
     static func progressAccentToken(forRemainingPercent remainingPercent: Int, preset: CodexThemePreset = activePreset) -> CodexColorToken {
@@ -825,9 +914,8 @@ enum CodexTheme {
         forRemainingPercent remainingPercent: Int,
         preset: CodexThemePreset = activePreset
     ) -> CodexColorToken {
-        let palette = palette(for: preset)
         let accent = progressAccentToken(forRemainingPercent: remainingPercent, preset: preset)
-        return palette.isDark ? accent : palette.strongText
+        return readableAccentToken(accent, preset: preset)
     }
 
     static func usagePercentageColor(forRemainingPercent remainingPercent: Int) -> Color {
@@ -872,23 +960,19 @@ enum CodexTheme {
         let criticalThresholdSeconds = 3 * 24 * 3_600
         let warningThresholdSeconds = 7 * 24 * 3_600
 
-        if palette.isDark == false {
-            return palette.strongText
-        }
-
         if remainingSeconds <= 0 {
-            return palette.accRed
+            return readableAccentToken(palette.accRed, preset: preset)
         }
 
         if remainingSeconds >= warningThresholdSeconds {
-            return palette.accYellow
+            return readableAccentToken(palette.accYellow, preset: preset)
         }
 
         if remainingSeconds >= criticalThresholdSeconds {
-            return palette.accOrange
+            return readableAccentToken(palette.accOrange, preset: preset)
         }
 
-        return palette.accRed
+        return readableAccentToken(palette.accRed, preset: preset)
     }
 
     static func resetEmphasisToken(
@@ -897,27 +981,22 @@ enum CodexTheme {
     ) -> CodexColorToken {
         let palette = palette(for: preset)
 
-        if palette.isDark == false {
-            return palette.strongText
-        }
-
         guard let remainingPercent else {
-            return palette.accYellow
+            return readableAccentToken(palette.accYellow, preset: preset)
         }
 
         switch clamped(remainingPercent) {
         case 0..<25:
-            return palette.accRed
+            return readableAccentToken(palette.accRed, preset: preset)
         case 25..<50:
-            return palette.accOrange
+            return readableAccentToken(palette.accOrange, preset: preset)
         default:
-            return palette.accYellow
+            return readableAccentToken(palette.accYellow, preset: preset)
         }
     }
 
     static func resetCountdownEmphasisToken(preset: CodexThemePreset = activePreset) -> CodexColorToken {
-        let palette = palette(for: preset)
-        return palette.isDark ? palette.accAqua : palette.strongText
+        readableAccentToken(palette(for: preset).accBlue, preset: preset)
     }
 
     static var resetCountdownEmphasisColor: Color {
@@ -1040,6 +1119,57 @@ enum CodexTheme {
 
     private static func clamped(_ value: Int) -> Int {
         min(max(value, 0), 100)
+    }
+
+    private static func readableAccentBackgroundTokens(for preset: CodexThemePreset) -> [CodexColorToken] {
+        [
+            canvasFillToken(for: preset),
+            shellFillToken(for: preset),
+            surfaceToken(for: .regular, preset: preset),
+            surfaceToken(for: .nested, preset: preset),
+            surfaceToken(for: .strong, preset: preset),
+            surfaceToken(for: .subtle, preset: preset),
+            cardFillToken(for: .regular, preset: preset),
+        ]
+    }
+
+    fileprivate static func contrastRatio(_ foreground: CodexColorToken, _ background: CodexColorToken) -> Double {
+        let foregroundLuminance = relativeLuminance(foreground)
+        let backgroundLuminance = relativeLuminance(background)
+        let lighter = max(foregroundLuminance, backgroundLuminance)
+        let darker = min(foregroundLuminance, backgroundLuminance)
+        return (lighter + 0.05) / (darker + 0.05)
+    }
+
+    private static func relativeLuminance(_ token: CodexColorToken) -> Double {
+        let rgb = rgbComponents(token)
+        return (0.2126 * linearSRGB(rgb.red))
+            + (0.7152 * linearSRGB(rgb.green))
+            + (0.0722 * linearSRGB(rgb.blue))
+    }
+
+    private static func linearSRGB(_ component: Double) -> Double {
+        component <= 0.04045
+            ? component / 12.92
+            : pow((component + 0.055) / 1.055, 2.4)
+    }
+
+    private static func rgbComponents(_ token: CodexColorToken) -> (red: Double, green: Double, blue: Double) {
+        let hex = token.hex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
+        let value = Int(hex, radix: 16) ?? 0
+        return (
+            Double((value >> 16) & 0xFF) / 255.0,
+            Double((value >> 8) & 0xFF) / 255.0,
+            Double(value & 0xFF) / 255.0
+        )
+    }
+}
+
+private extension CodexColorToken {
+    func passesContrast(_ minimumRatio: Double, against backgrounds: [CodexColorToken]) -> Bool {
+        backgrounds.allSatisfy { background in
+            CodexTheme.contrastRatio(self, background) >= minimumRatio
+        }
     }
 }
 
@@ -1295,7 +1425,7 @@ struct CodexCard<Content: View>: View {
             .padding(padding)
             .background(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(CodexTheme.surfaceToken(for: tier, preset: themeContext.preset).color)
+                    .fill(CodexTheme.cardFillToken(for: tier, preset: themeContext.preset).color)
                     .overlay(
                         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                             .fill(CodexTheme.surfaceSheen(for: tier, preset: themeContext.preset))
@@ -1376,7 +1506,7 @@ struct CodexStatusBanner: View {
             VStack(alignment: .leading, spacing: CodexTheme.Spacing.micro) {
                 Text(title)
                     .font(.codexSmallStrong)
-                    .foregroundStyle(CodexTheme.primaryText)
+                    .foregroundStyle(CodexTheme.headingText)
 
                 Text(message)
                     .font(.codexSmall)
@@ -1448,9 +1578,9 @@ struct CodexIconButtonStyle: ButtonStyle {
         case .primary:
             return CodexTheme.accentInk
         case .secondary:
-            return CodexTheme.primaryText
+            return CodexTheme.utilityActionText
         case .danger:
-            return CodexTheme.accentRed
+            return CodexTheme.dangerText
         case .quiet:
             return CodexTheme.mutedText
         }
@@ -1596,7 +1726,7 @@ struct CodexSecondaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.codexSmallStrong)
-            .foregroundStyle(CodexTheme.primaryText)
+            .foregroundStyle(CodexTheme.actionText)
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .background(
@@ -1645,7 +1775,7 @@ struct CodexDangerButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.codexSmallStrong)
-            .foregroundStyle(CodexTheme.isDarkTheme ? CodexTheme.accentRed : CodexTheme.primaryText)
+            .foregroundStyle(CodexTheme.dangerText)
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .background(

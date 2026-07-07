@@ -137,7 +137,7 @@ struct ProfileSummaryRowTests {
         #expect(presentation.pinActionSymbolName == "pin.circle.fill")
         #expect(presentation.pinActionAccessibilityLabel == "On top")
         #expect(presentation.expiryValue == DisplayFormatter.LabeledValue(label: "Expires in", value: "2d"))
-        #expect(presentation.expiryEmphasisToken?.hex == CodexTheme.Palette.accRed.hex)
+        #expect(presentation.expiryEmphasisToken == CodexTheme.readableAccentToken(CodexTheme.Palette.accRed))
     }
 
     @Test
