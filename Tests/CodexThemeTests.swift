@@ -129,20 +129,41 @@ struct CodexThemeTests {
     @Test
     func usefulTextRolesPassWCAGContrastOnMainSurfacesForEveryPreset() {
         for preset in CodexThemePreset.allCases {
-            let palette = CodexTheme.palette(for: preset)
-            let textRoles: [(name: String, token: CodexColorToken)] = [
-                ("primary", palette.primaryText),
-                ("muted", palette.mutedText),
-                ("support", palette.supportText),
-                ("dataLabel", palette.dataLabelText),
-                ("dataValue", palette.dataValueText),
-            ]
-
-            for textRole in textRoles {
+            for textRole in usefulTextRoles(for: preset) {
                 for surface in mainSurfaceTokens(for: preset) {
                     #expect(
                         contrastRatio(textRole.token, surface.token) >= 4.5,
                         "\(preset.id) \(textRole.name) on \(surface.name) should pass WCAG normal text contrast"
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
+    func readableAccentTextTargetsDensePanelContrastForEveryPreset() {
+        for preset in CodexThemePreset.allCases {
+            for textRole in densePanelAccentTextRoles(for: preset) {
+                for surface in mainSurfaceTokens(for: preset) {
+                    #expect(
+                        contrastRatio(textRole.token, surface.token) >= 5.0,
+                        "\(preset.id) \(textRole.name) on \(surface.name) should target 5:1 for dense compact-panel text"
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
+    func textRolesKeepPerceptualDeltaLStarSeparationOnMainSurfacesForEveryPreset() {
+        for preset in CodexThemePreset.allCases {
+            let textRoles = usefulTextRoles(for: preset) + densePanelAccentTextRoles(for: preset)
+
+            for textRole in textRoles {
+                for surface in mainSurfaceTokens(for: preset) {
+                    #expect(
+                        deltaLStar(textRole.token, surface.token) >= 40.0,
+                        "\(preset.id) \(textRole.name) on \(surface.name) should keep enough perceptual lightness separation"
                     )
                 }
             }
@@ -380,7 +401,7 @@ struct CodexThemeTests {
 
     @Test
     func resetCountdownPaletteUsesInfoBlueInDarkThemes() {
-        #expect(CodexTheme.resetCountdownEmphasisToken().hex == CodexTheme.Palette.accBlue.hex)
+        #expect(CodexTheme.resetCountdownEmphasisToken() == CodexTheme.readableAccentToken(CodexTheme.Palette.accBlue))
     }
 }
 
@@ -401,6 +422,32 @@ private let cardSurfaceTiers: [(name: String, tier: CodexSurfaceTier)] = [
     ("nested", .nested),
     ("subtle", .subtle),
 ]
+
+private func usefulTextRoles(for preset: CodexThemePreset) -> [(name: String, token: CodexColorToken)] {
+    let palette = CodexTheme.palette(for: preset)
+    return [
+        ("primary", palette.primaryText),
+        ("muted", palette.mutedText),
+        ("quiet", palette.quietText),
+        ("support", palette.supportText),
+        ("dataLabel", palette.dataLabelText),
+        ("dataValue", palette.dataValueText),
+    ]
+}
+
+private func densePanelAccentTextRoles(for preset: CodexThemePreset) -> [(name: String, token: CodexColorToken)] {
+    let palette = CodexTheme.palette(for: preset)
+    return [
+        ("action", CodexTheme.actionTextToken(preset: preset)),
+        ("success", CodexTheme.successTextToken(preset: preset)),
+        ("danger", CodexTheme.dangerTextToken(preset: preset)),
+        ("info", CodexTheme.readableAccentToken(palette.accBlue, preset: preset)),
+        ("healthyData", CodexTheme.progressTextToken(forRemainingPercent: 90, preset: preset)),
+        ("warningData", CodexTheme.progressTextToken(forRemainingPercent: 62, preset: preset)),
+        ("dangerData", CodexTheme.progressTextToken(forRemainingPercent: 12, preset: preset)),
+        ("resetCountdown", CodexTheme.resetCountdownEmphasisToken(preset: preset)),
+    ]
+}
 
 private func contrastRatio(_ foreground: CodexColorToken, _ background: CodexColorToken) -> Double {
     let foregroundLuminance = relativeLuminance(foreground)

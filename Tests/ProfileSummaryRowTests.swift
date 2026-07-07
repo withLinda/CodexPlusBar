@@ -26,7 +26,7 @@ struct ProfileSummaryRowTests {
         #expect(usageSummary.primary.valueText == "78%")
         #expect(usageSummary.secondary.valueText == "62%")
         #expect(presentation.expiryValue == DisplayFormatter.LabeledValue(label: "Expires in", value: "17d 5h"))
-        #expect(presentation.expiryEmphasisToken?.hex == CodexTheme.Palette.accYellow.hex)
+        #expect(presentation.expiryEmphasisToken == CodexTheme.readableAccentToken(CodexTheme.Palette.accYellow))
         #expect(presentation.supportStyle == .muted)
         #expect(presentation.showsStatusBadge == false)
         #expect(presentation.showsInlineSecondaryActions == true)
@@ -61,7 +61,7 @@ struct ProfileSummaryRowTests {
         #expect(usageSummary.secondary.resetText == "Unavailable")
         #expect(presentation.supportText == "Plus · Beta")
         #expect(presentation.expiryValue == DisplayFormatter.LabeledValue(label: "Expires in", value: "5d"))
-        #expect(presentation.expiryEmphasisToken?.hex == CodexTheme.Palette.accOrange.hex)
+        #expect(presentation.expiryEmphasisToken == CodexTheme.readableAccentToken(CodexTheme.Palette.accOrange))
         #expect(presentation.supportStyle == .muted)
     }
 

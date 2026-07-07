@@ -441,7 +441,7 @@ private struct MenuBarZoomButton: View {
                 .frame(minWidth: 30, minHeight: 28)
         }
         .buttonStyle(.plain)
-        .foregroundStyle(isDisabled ? CodexTheme.quietText : CodexTheme.primaryText)
+        .foregroundStyle(isDisabled ? CodexTheme.disabledText : CodexTheme.primaryText)
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(CodexTheme.surfaceFill(for: .subtle))
@@ -450,7 +450,6 @@ private struct MenuBarZoomButton: View {
                         .stroke(CodexTheme.surfaceBorder(for: .subtle), lineWidth: 1)
                 )
         )
-        .opacity(isDisabled ? 0.46 : 1)
         .accessibilityLabel(helpText)
         .help(helpText)
         .disabled(isDisabled)

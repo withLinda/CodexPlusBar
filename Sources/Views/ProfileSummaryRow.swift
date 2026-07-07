@@ -337,7 +337,6 @@ struct ProfileSummaryRow: View {
                         : "Show this profile in the top menu bar summary.",
                     tone: presentation.isPinned ? .selected : .accent,
                     isDisabled: presentation.isPinned || pinAction == nil,
-                    disabledOpacity: presentation.isPinned ? 1 : 0.48,
                     size: 24,
                     action: pinAction ?? {}
                 )
@@ -441,7 +440,6 @@ private struct ProfileSummaryInlineIconButton: View {
     let helpText: String
     let tone: Tone
     let isDisabled: Bool
-    let disabledOpacity: Double
     let size: CGFloat
     let action: () -> Void
 
@@ -451,7 +449,6 @@ private struct ProfileSummaryInlineIconButton: View {
         helpText: String,
         tone: Tone = .quiet,
         isDisabled: Bool,
-        disabledOpacity: Double = 0.48,
         size: CGFloat = 28,
         action: @escaping () -> Void
     ) {
@@ -460,7 +457,6 @@ private struct ProfileSummaryInlineIconButton: View {
         self.helpText = helpText
         self.tone = tone
         self.isDisabled = isDisabled
-        self.disabledOpacity = disabledOpacity
         self.size = size
         self.action = action
     }
@@ -481,7 +477,6 @@ private struct ProfileSummaryInlineIconButton: View {
                         .stroke(borderColor, lineWidth: 1)
                 )
         )
-        .opacity(isDisabled ? disabledOpacity : 1)
         .accessibilityLabel(label)
         .accessibilityHint(helpText)
         .help(helpText)
@@ -490,7 +485,7 @@ private struct ProfileSummaryInlineIconButton: View {
 
     private var foregroundStyle: Color {
         if isDisabled, tone != .selected {
-            return CodexTheme.quietText
+            return CodexTheme.disabledText
         }
 
         switch tone {

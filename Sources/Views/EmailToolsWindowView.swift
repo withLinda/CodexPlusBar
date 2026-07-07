@@ -235,7 +235,7 @@ struct EmailToolsWindowView: View {
                                 if session.usedCount > 0 {
                                     Text(" · \(session.usedCount) used")
                                         .font(ProfileManagerTypography.caption)
-                                        .foregroundStyle(CodexTheme.accentRed)
+                                        .foregroundStyle(CodexTheme.dangerText)
                                 }
                             }
                         }
@@ -420,7 +420,7 @@ private struct EmailToolsSidebarRow: View {
                             if session.usedCount > 0 {
                                 Text(" · \(session.usedCount) used")
                                     .font(ProfileManagerTypography.caption)
-                                    .foregroundStyle(CodexTheme.accentRed)
+                                    .foregroundStyle(CodexTheme.dangerText)
                             }
                         }
                     }
@@ -443,7 +443,7 @@ private struct EmailToolsSidebarRow: View {
                     HStack(spacing: 6) {
                         Text("Delete?")
                             .font(ProfileManagerTypography.caption)
-                            .foregroundStyle(CodexTheme.accentRed)
+                            .foregroundStyle(CodexTheme.dangerText)
 
                         Spacer(minLength: 0)
 
@@ -541,7 +541,7 @@ private struct EmailToolsVariationRow: View {
                         Text(isCopied ? "Copied" : "Copy")
                             .font(ProfileManagerTypography.caption)
                     }
-                    .foregroundStyle(isCopied ? CodexTheme.accentAqua : CodexTheme.primaryText)
+                    .foregroundStyle(isCopied ? CodexTheme.successText : CodexTheme.primaryText)
                 }
                 .buttonStyle(EmailToolsCopyButtonStyle(isCopied: isCopied))
                 .disabled(isCopied)
@@ -590,19 +590,28 @@ private struct EmailToolsPrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(ProfileManagerTypography.smallStrong)
-            .foregroundStyle(CodexTheme.accentInk)
+            .foregroundStyle(isEnabled ? CodexTheme.accentInk : CodexTheme.disabledText)
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
-                    .fill(CodexTheme.accentGradient)
+                    .fill(
+                        isEnabled
+                            ? AnyShapeStyle(CodexTheme.accentGradient)
+                            : AnyShapeStyle(CodexTheme.surfaceFill(for: .subtle))
+                    )
                     .overlay(
                         RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
-                            .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                            .stroke(
+                                isEnabled
+                                    ? Color.white.opacity(0.08)
+                                    : CodexTheme.surfaceBorder(for: .subtle),
+                                lineWidth: 1
+                            )
                     )
             )
-            .shadow(color: CodexTheme.accentOrange.opacity(0.20), radius: 12, y: 6)
-            .opacity(isEnabled ? (configuration.isPressed ? 0.92 : 1) : 0.46)
+            .shadow(color: isEnabled ? CodexTheme.accentOrange.opacity(0.20) : .clear, radius: 12, y: 6)
+            .opacity(configuration.isPressed ? 0.92 : 1)
             .scaleEffect(configuration.isPressed ? 0.99 : 1)
             .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
     }
@@ -614,7 +623,7 @@ private struct EmailToolsSecondaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(ProfileManagerTypography.smallStrong)
-            .foregroundStyle(CodexTheme.primaryText)
+            .foregroundStyle(isEnabled ? CodexTheme.primaryText : CodexTheme.disabledText)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .background(
@@ -629,8 +638,8 @@ private struct EmailToolsSecondaryButtonStyle: ButtonStyle {
                 RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
                     .stroke(CodexTheme.surfaceBorder(for: .subtle), lineWidth: 1)
             )
-            .shadow(color: .black.opacity(0.16), radius: 8, y: 4)
-            .opacity(isEnabled ? (configuration.isPressed ? 0.92 : 1) : 0.46)
+            .shadow(color: isEnabled ? .black.opacity(0.16) : .clear, radius: 8, y: 4)
+            .opacity(configuration.isPressed ? 0.92 : 1)
             .scaleEffect(configuration.isPressed ? 0.99 : 1)
             .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
     }
@@ -638,7 +647,6 @@ private struct EmailToolsSecondaryButtonStyle: ButtonStyle {
 
 private struct EmailToolsCopyButtonStyle: ButtonStyle {
     let isCopied: Bool
-    @Environment(\.isEnabled) private var isEnabled
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -661,7 +669,7 @@ private struct EmailToolsCopyButtonStyle: ButtonStyle {
                             )
                     )
             )
-            .opacity(isEnabled ? (configuration.isPressed ? 0.92 : 1) : 1)
+            .opacity(configuration.isPressed ? 0.92 : 1)
             .scaleEffect(configuration.isPressed ? 0.98 : 1)
             .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
     }
@@ -671,7 +679,7 @@ private struct EmailToolsDangerButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(ProfileManagerTypography.caption)
-            .foregroundStyle(CodexTheme.accentRed)
+            .foregroundStyle(CodexTheme.dangerText)
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
             .background(

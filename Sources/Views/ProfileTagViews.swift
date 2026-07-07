@@ -192,7 +192,6 @@ private struct ProfileTagSegmentButton: View {
         .background(backgroundShape)
         .foregroundStyle(foregroundStyle)
         .buttonStyle(.plain)
-        .opacity(segment.isEnabled ? 1 : 0.48)
         .disabled(segment.isEnabled == false)
         .help(helpText)
         .accessibilityLabel(segment.accessibilityLabel)

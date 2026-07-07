@@ -1369,7 +1369,7 @@ private struct ProfileManagerInlineFieldActionButtonStyle: ButtonStyle {
                 RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
                     .stroke(borderColor, lineWidth: 1)
             )
-            .opacity(isEnabled ? (configuration.isPressed ? 0.92 : 1) : 0.46)
+            .opacity(configuration.isPressed ? 0.92 : 1)
             .scaleEffect(configuration.isPressed ? 0.99 : 1)
             .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
             .animation(.easeInOut(duration: 0.16), value: isConfirmed)
@@ -1377,7 +1377,7 @@ private struct ProfileManagerInlineFieldActionButtonStyle: ButtonStyle {
 
     private var foregroundColor: Color {
         guard isEnabled else {
-            return CodexTheme.quietText
+            return CodexTheme.disabledText
         }
 
         return isConfirmed ? CodexTheme.successText : CodexTheme.utilityActionText
@@ -1457,19 +1457,28 @@ private struct ProfileManagerPrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(ProfileManagerTypography.smallStrong)
-            .foregroundStyle(CodexTheme.accentInk)
+            .foregroundStyle(isEnabled ? CodexTheme.accentInk : CodexTheme.disabledText)
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
-                    .fill(CodexTheme.accentGradient)
+                    .fill(
+                        isEnabled
+                            ? AnyShapeStyle(CodexTheme.accentGradient)
+                            : AnyShapeStyle(CodexTheme.surfaceFill(for: .subtle))
+                    )
                     .overlay(
                         RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
-                            .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                            .stroke(
+                                isEnabled
+                                    ? Color.white.opacity(0.08)
+                                    : CodexTheme.surfaceBorder(for: .subtle),
+                                lineWidth: 1
+                            )
                     )
             )
-            .shadow(color: CodexTheme.accentOrange.opacity(0.20), radius: 12, y: 6)
-            .opacity(isEnabled ? (configuration.isPressed ? 0.92 : 1) : 0.46)
+            .shadow(color: isEnabled ? CodexTheme.accentOrange.opacity(0.20) : .clear, radius: 12, y: 6)
+            .opacity(configuration.isPressed ? 0.92 : 1)
             .scaleEffect(configuration.isPressed ? 0.99 : 1)
             .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
     }
@@ -1481,7 +1490,7 @@ private struct ProfileManagerSecondaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(ProfileManagerTypography.smallStrong)
-            .foregroundStyle(CodexTheme.actionText)
+            .foregroundStyle(isEnabled ? CodexTheme.actionText : CodexTheme.disabledText)
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .background(
@@ -1496,8 +1505,8 @@ private struct ProfileManagerSecondaryButtonStyle: ButtonStyle {
                 RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
                     .stroke(CodexTheme.surfaceBorder(for: .subtle), lineWidth: 1)
             )
-            .shadow(color: .black.opacity(0.16), radius: 8, y: 4)
-            .opacity(isEnabled ? (configuration.isPressed ? 0.92 : 1) : 0.46)
+            .shadow(color: isEnabled ? .black.opacity(0.16) : .clear, radius: 8, y: 4)
+            .opacity(configuration.isPressed ? 0.92 : 1)
             .scaleEffect(configuration.isPressed ? 0.99 : 1)
             .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
     }
@@ -1509,18 +1518,26 @@ private struct ProfileManagerDangerButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(ProfileManagerTypography.smallStrong)
-            .foregroundStyle(CodexTheme.dangerText)
+            .foregroundStyle(isEnabled ? CodexTheme.dangerText : CodexTheme.disabledText)
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
-                    .fill(CodexTheme.accentRed.opacity(configuration.isPressed ? 0.16 : 0.10))
+                    .fill(
+                        isEnabled
+                            ? CodexTheme.accentRed.opacity(configuration.isPressed ? 0.16 : 0.10)
+                            : CodexTheme.surfaceFill(for: .subtle)
+                    )
             )
             .overlay(
                 RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
-                    .stroke(CodexTheme.accentRed.opacity(0.24), lineWidth: 1)
+                    .stroke(
+                        isEnabled
+                            ? CodexTheme.accentRed.opacity(0.24)
+                            : CodexTheme.surfaceBorder(for: .subtle),
+                        lineWidth: 1
+                    )
             )
-            .opacity(isEnabled ? 1 : 0.46)
     }
 }
 

@@ -293,7 +293,7 @@ struct CodexEverforestPalette: Sendable, Equatable {
     }
 
     var quietText: CodexColorToken {
-        isDark ? gray1 : gray2
+        dataLabelText
     }
 
     var supportText: CodexColorToken {
@@ -584,6 +584,7 @@ enum CodexTheme {
     static var headingTextToken: CodexColorToken { activePalette.strongText }
     static var mutedTextToken: CodexColorToken { activePalette.mutedText }
     static var quietTextToken: CodexColorToken { activePalette.quietText }
+    static var disabledTextToken: CodexColorToken { activePalette.quietText }
     static var supportTextToken: CodexColorToken { activePalette.supportText }
     static var dataLabelTextToken: CodexColorToken { activePalette.dataLabelText }
     static var dataValueTextToken: CodexColorToken { activePalette.dataValueText }
@@ -595,6 +596,7 @@ enum CodexTheme {
     static var headingText: Color { headingTextToken.color }
     static var mutedText: Color { mutedTextToken.color }
     static var quietText: Color { quietTextToken.color }
+    static var disabledText: Color { disabledTextToken.color }
     static var supportText: Color { supportTextToken.color }
     static var dataLabelText: Color { dataLabelTextToken.color }
     static var dataValueText: Color { dataValueTextToken.color }
@@ -640,7 +642,7 @@ enum CodexTheme {
     ) -> CodexColorToken {
         let palette = palette(for: preset)
         let backgrounds = readableAccentBackgroundTokens(for: preset)
-        let minimumNormalTextContrast = 4.5
+        let minimumNormalTextContrast = 5.0
 
         if token.passesContrast(minimumNormalTextContrast, against: backgrounds) {
             return token
@@ -1568,12 +1570,16 @@ struct CodexIconButtonStyle: ButtonStyle {
             .background(backgroundShape(configuration: configuration))
             .overlay(borderShape)
             .shadow(color: shadowColor, radius: shadowRadius, y: shadowYOffset)
-            .opacity(isEnabled ? (configuration.isPressed ? 0.92 : 1) : 0.46)
+            .opacity(configuration.isPressed ? 0.92 : 1)
             .scaleEffect(configuration.isPressed ? 0.98 : 1)
             .animation(.easeOut(duration: 0.16), value: configuration.isPressed)
     }
 
     private var foregroundColor: Color {
+        guard isEnabled else {
+            return CodexTheme.disabledText
+        }
+
         switch tone {
         case .primary:
             return CodexTheme.accentInk
@@ -1590,27 +1596,36 @@ struct CodexIconButtonStyle: ButtonStyle {
     private func backgroundShape(configuration: Configuration) -> some View {
         let shape = RoundedRectangle(cornerRadius: CodexTheme.iconCornerRadius, style: .continuous)
 
-        switch tone {
-        case .primary:
+        if isEnabled == false {
             shape
-                .fill(CodexTheme.accentGradient)
-                .overlay(
-                    shape
-                        .fill(
-                            LinearGradient(
-                                colors: [Color.white.opacity(0.08), .clear],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                )
-        case .secondary, .danger, .quiet:
-            shape
-                .fill(fillColor(isPressed: configuration.isPressed))
+                .fill(CodexTheme.surfaceFill(for: .subtle))
                 .overlay(
                     shape
                         .fill(CodexTheme.surfaceSheen(for: .subtle))
                 )
+        } else {
+            switch tone {
+            case .primary:
+                shape
+                    .fill(CodexTheme.accentGradient)
+                    .overlay(
+                        shape
+                            .fill(
+                                LinearGradient(
+                                    colors: [Color.white.opacity(0.08), .clear],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                    )
+            case .secondary, .danger, .quiet:
+                shape
+                    .fill(fillColor(isPressed: configuration.isPressed))
+                    .overlay(
+                        shape
+                            .fill(CodexTheme.surfaceSheen(for: .subtle))
+                    )
+            }
         }
     }
 
@@ -1620,6 +1635,10 @@ struct CodexIconButtonStyle: ButtonStyle {
     }
 
     private var borderColor: Color {
+        guard isEnabled else {
+            return CodexTheme.surfaceBorder(for: .subtle)
+        }
+
         switch tone {
         case .primary:
             return Color.white.opacity(0.08)
@@ -1646,6 +1665,10 @@ struct CodexIconButtonStyle: ButtonStyle {
     }
 
     private var shadowColor: Color {
+        guard isEnabled else {
+            return .clear
+        }
+
         switch tone {
         case .primary:
             return CodexTheme.accentOrange.opacity(0.24)
@@ -1702,19 +1725,28 @@ struct CodexPrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.codexSmallStrong)
-            .foregroundStyle(CodexTheme.accentInk)
+            .foregroundStyle(isEnabled ? CodexTheme.accentInk : CodexTheme.disabledText)
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
-                    .fill(CodexTheme.accentGradient)
+                    .fill(
+                        isEnabled
+                            ? AnyShapeStyle(CodexTheme.accentGradient)
+                            : AnyShapeStyle(CodexTheme.surfaceFill(for: .subtle))
+                    )
                     .overlay(
                         RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
-                            .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                            .stroke(
+                                isEnabled
+                                    ? Color.white.opacity(0.08)
+                                    : CodexTheme.surfaceBorder(for: .subtle),
+                                lineWidth: 1
+                            )
                     )
             )
-            .shadow(color: CodexTheme.accentOrange.opacity(0.20), radius: 12, y: 6)
-            .opacity(isEnabled ? (configuration.isPressed ? 0.92 : 1) : 0.46)
+            .shadow(color: isEnabled ? CodexTheme.accentOrange.opacity(0.20) : .clear, radius: 12, y: 6)
+            .opacity(configuration.isPressed ? 0.92 : 1)
             .scaleEffect(configuration.isPressed ? 0.99 : 1)
             .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
     }
@@ -1726,7 +1758,7 @@ struct CodexSecondaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.codexSmallStrong)
-            .foregroundStyle(CodexTheme.actionText)
+            .foregroundStyle(isEnabled ? CodexTheme.actionText : CodexTheme.disabledText)
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .background(
@@ -1741,8 +1773,8 @@ struct CodexSecondaryButtonStyle: ButtonStyle {
                 RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
                     .stroke(CodexTheme.surfaceBorder(for: .subtle), lineWidth: 1)
             )
-            .shadow(color: .black.opacity(0.16), radius: 8, y: 4)
-            .opacity(isEnabled ? (configuration.isPressed ? 0.92 : 1) : 0.46)
+            .shadow(color: isEnabled ? .black.opacity(0.16) : .clear, radius: 8, y: 4)
+            .opacity(configuration.isPressed ? 0.92 : 1)
             .scaleEffect(configuration.isPressed ? 0.99 : 1)
             .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
     }
@@ -1754,7 +1786,7 @@ struct CodexQuietButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.codexCaption)
-            .foregroundStyle(CodexTheme.mutedText)
+            .foregroundStyle(isEnabled ? CodexTheme.mutedText : CodexTheme.disabledText)
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
             .background(
@@ -1765,7 +1797,6 @@ struct CodexQuietButtonStyle: ButtonStyle {
                 RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
                     .stroke(CodexTheme.surfaceBorder(for: .subtle), lineWidth: 1)
             )
-            .opacity(isEnabled ? 1 : 0.46)
     }
 }
 
@@ -1775,17 +1806,25 @@ struct CodexDangerButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.codexSmallStrong)
-            .foregroundStyle(CodexTheme.dangerText)
+            .foregroundStyle(isEnabled ? CodexTheme.dangerText : CodexTheme.disabledText)
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
-                    .fill(CodexTheme.accentRed.opacity(configuration.isPressed ? 0.16 : 0.10))
+                    .fill(
+                        isEnabled
+                            ? CodexTheme.accentRed.opacity(configuration.isPressed ? 0.16 : 0.10)
+                            : CodexTheme.surfaceFill(for: .subtle)
+                    )
             )
             .overlay(
                 RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
-                    .stroke(CodexTheme.accentRed.opacity(0.24), lineWidth: 1)
+                    .stroke(
+                        isEnabled
+                            ? CodexTheme.accentRed.opacity(0.24)
+                            : CodexTheme.surfaceBorder(for: .subtle),
+                        lineWidth: 1
+                    )
             )
-            .opacity(isEnabled ? 1 : 0.46)
     }
 }
