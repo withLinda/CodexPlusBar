@@ -13,7 +13,11 @@ struct PlusProfileModelsTests {
         #expect(PlusProfileTag.active.statusTone == .success)
         #expect(PlusProfileTag.needAction.statusTone == .critical)
         #expect(PlusProfileTag.pending.statusTone == .info)
+        #expect(PlusProfileTag.active.profileTagTone == .active)
+        #expect(PlusProfileTag.needAction.profileTagTone == .needAction)
+        #expect(PlusProfileTag.pending.profileTagTone == .pending)
         #expect(PlusProfileTag.needAction.systemImage == "exclamationmark.triangle")
+        #expect(PlusProfileTag.active.systemImage != PlusProfileTag.pending.systemImage)
     }
 
     @Test

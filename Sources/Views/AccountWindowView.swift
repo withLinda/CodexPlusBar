@@ -1113,7 +1113,7 @@ private struct ProfileTagAssignmentSection: View {
                         title: tag.displayName,
                         systemImage: tag.systemImage,
                         isSelected: selectedTags.contains(tag),
-                        tone: tag.statusTone,
+                        tagTone: tag.profileTagTone,
                         helpText: selectedTags.contains(tag)
                             ? "Remove \(tag.displayName) tag"
                             : "Mark as \(tag.displayName)"

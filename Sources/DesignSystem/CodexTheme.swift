@@ -68,6 +68,28 @@ enum CodexStatusTone: String, Sendable, Equatable {
     }
 }
 
+enum CodexProfileTagTone: String, CaseIterable, Sendable, Equatable {
+    case active
+    case needAction
+    case pending
+
+    var accentColor: Color {
+        CodexTheme.profileTagAccentToken(for: self).color
+    }
+
+    var foregroundColor: Color {
+        CodexTheme.profileTagTextToken(for: self).color
+    }
+
+    func fillColor(isSelected: Bool = true) -> Color {
+        CodexTheme.profileTagFillToken(for: self, isSelected: isSelected).color
+    }
+
+    func borderColor(isSelected: Bool = true) -> Color {
+        CodexTheme.profileTagBorderToken(for: self, isSelected: isSelected).color
+    }
+}
+
 enum CodexControlTone: Sendable {
     case primary
     case secondary
@@ -638,10 +660,11 @@ enum CodexTheme {
 
     static func readableAccentToken(
         _ token: CodexColorToken,
-        preset: CodexThemePreset = activePreset
+        preset: CodexThemePreset = activePreset,
+        additionalBackgrounds: [CodexColorToken] = []
     ) -> CodexColorToken {
         let palette = palette(for: preset)
-        let backgrounds = readableAccentBackgroundTokens(for: preset)
+        let backgrounds = readableAccentBackgroundTokens(for: preset) + additionalBackgrounds
         let minimumNormalTextContrast = 5.0
 
         if token.passesContrast(minimumNormalTextContrast, against: backgrounds) {
@@ -896,6 +919,65 @@ enum CodexTheme {
 
     static func statusForegroundToken(for tone: CodexStatusTone) -> CodexColorToken {
         tone == .neutral ? primaryTextToken : readableAccentToken(statusAccentToken(for: tone))
+    }
+
+    static func profileTagAccentToken(
+        for tone: CodexProfileTagTone,
+        preset: CodexThemePreset = activePreset
+    ) -> CodexColorToken {
+        let palette = palette(for: preset)
+
+        switch tone {
+        case .active:
+            return palette.accGreen
+        case .needAction:
+            return palette.accRed
+        case .pending:
+            return palette.accYellow
+        }
+    }
+
+    static func profileTagTextToken(
+        for tone: CodexProfileTagTone,
+        preset: CodexThemePreset = activePreset
+    ) -> CodexColorToken {
+        readableAccentToken(
+            profileTagAccentToken(for: tone, preset: preset),
+            preset: preset,
+            additionalBackgrounds: [
+                profileTagFillToken(for: tone, isSelected: true, preset: preset),
+                profileTagFillToken(for: tone, isSelected: false, preset: preset),
+            ]
+        )
+    }
+
+    static func profileTagFillToken(
+        for tone: CodexProfileTagTone,
+        isSelected: Bool,
+        preset: CodexThemePreset = activePreset
+    ) -> CodexColorToken {
+        let palette = palette(for: preset)
+
+        guard isSelected else {
+            return surfaceToken(for: .subtle, preset: preset)
+        }
+
+        switch tone {
+        case .active:
+            return palette.bgGreen
+        case .needAction:
+            return palette.bgRed
+        case .pending:
+            return palette.bgYellow
+        }
+    }
+
+    static func profileTagBorderToken(
+        for tone: CodexProfileTagTone,
+        isSelected: Bool,
+        preset: CodexThemePreset = activePreset
+    ) -> CodexColorToken {
+        profileTagTextToken(for: tone, preset: preset)
     }
 
     static func progressAccentToken(forRemainingPercent remainingPercent: Int, preset: CodexThemePreset = activePreset) -> CodexColorToken {

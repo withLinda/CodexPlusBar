@@ -50,6 +50,17 @@ enum PlusProfileTag: String, Codable, CaseIterable, Equatable, Hashable, Identif
         }
     }
 
+    var profileTagTone: CodexProfileTagTone {
+        switch self {
+        case .active:
+            return .active
+        case .needAction:
+            return .needAction
+        case .pending:
+            return .pending
+        }
+    }
+
     var systemImage: String {
         switch self {
         case .active:

@@ -256,6 +256,44 @@ struct CodexThemeTests {
     }
 
     @Test
+    func profileTagAccentsUseRequestedEverforestRoles() {
+        let darkPalette = CodexTheme.palette(for: darkHardPreset)
+
+        #expect(CodexTheme.profileTagAccentToken(for: .active, preset: darkHardPreset).hex == darkPalette.accGreen.hex)
+        #expect(CodexTheme.profileTagAccentToken(for: .needAction, preset: darkHardPreset).hex == darkPalette.accRed.hex)
+        #expect(CodexTheme.profileTagAccentToken(for: .pending, preset: darkHardPreset).hex == darkPalette.accYellow.hex)
+        #expect(CodexTheme.profileTagAccentToken(for: .active, preset: darkHardPreset).hex != CodexTheme.profileTagAccentToken(for: .pending, preset: darkHardPreset).hex)
+        #expect(CodexTheme.profileTagAccentToken(for: .needAction, preset: darkHardPreset).hex != CodexTheme.profileTagAccentToken(for: .pending, preset: darkHardPreset).hex)
+    }
+
+    @Test
+    func profileTagTextPassesWCAGAndDeltaLStarOnItsOwnFillForEveryPreset() {
+        for preset in CodexThemePreset.allCases {
+            for tone in CodexProfileTagTone.allCases {
+                let text = CodexTheme.profileTagTextToken(for: tone, preset: preset)
+
+                for isSelected in [true, false] {
+                    let fill = CodexTheme.profileTagFillToken(for: tone, isSelected: isSelected, preset: preset)
+                    let border = CodexTheme.profileTagBorderToken(for: tone, isSelected: isSelected, preset: preset)
+
+                    #expect(
+                        contrastRatio(text, fill) >= 4.5,
+                        "\(preset.id) \(tone.rawValue) tag text should pass WCAG normal text contrast on its own fill"
+                    )
+                    #expect(
+                        deltaLStar(text, fill) >= 40.0,
+                        "\(preset.id) \(tone.rawValue) tag text should keep enough perceptual lightness separation on its own fill"
+                    )
+                    #expect(
+                        contrastRatio(border, fill) >= 3.0,
+                        "\(preset.id) \(tone.rawValue) tag border should pass WCAG non-text contrast on its own fill"
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
     func surfaceTokensKeepPerceptualDeltaLStarSeparationForEveryPreset() {
         for preset in CodexThemePreset.allCases {
             let pairs: [(name: String, front: CodexColorToken, back: CodexColorToken, minimumDelta: Double)] = [

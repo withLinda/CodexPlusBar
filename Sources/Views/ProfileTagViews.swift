@@ -173,9 +173,10 @@ private struct ProfileTagSegmentButton: View {
         Button(action: action) {
             HStack(spacing: 4 * CGFloat(textScale)) {
                 if segment.isSelected, let tag = segment.tag {
-                    Circle()
-                        .fill(tag.statusTone.foregroundColor)
-                        .frame(width: 5 * CGFloat(textScale), height: 5 * CGFloat(textScale))
+                    Image(systemName: tag.systemImage)
+                        .font(.system(size: 8 * CGFloat(textScale), weight: .semibold))
+                        .frame(width: 9 * CGFloat(textScale), height: 9 * CGFloat(textScale))
+                        .foregroundStyle(tag.profileTagTone.foregroundColor)
                 }
 
                 Text(segment.title)
@@ -225,7 +226,7 @@ private struct ProfileTagSegmentButton: View {
         }
 
         if let tag = segment.tag {
-            return tag.statusTone.borderColor.opacity(0.82)
+            return tag.profileTagTone.borderColor(isSelected: true)
         }
 
         return CodexTheme.accentBlue.opacity(0.28)
@@ -398,24 +399,24 @@ private struct ProfileTagSummaryChip: View {
 
     var body: some View {
         HStack(spacing: 4 * CGFloat(textScale)) {
-            Circle()
-                .fill(tag.statusTone.foregroundColor)
-                .frame(width: 5 * CGFloat(textScale), height: 5 * CGFloat(textScale))
+            Image(systemName: tag.systemImage)
+                .font(.system(size: 8.5 * CGFloat(textScale), weight: .semibold))
+                .frame(width: 9 * CGFloat(textScale), height: 9 * CGFloat(textScale))
 
             Text(tag.shortDisplayName)
                 .lineLimit(1)
                 .minimumScaleFactor(0.9)
         }
         .font(ProfileManagerTypography.micro(scale: textScale))
-        .foregroundStyle(tag.statusTone.foregroundColor)
+        .foregroundStyle(tag.profileTagTone.foregroundColor)
         .padding(.horizontal, 6 * CGFloat(textScale))
         .padding(.vertical, 3 * CGFloat(textScale))
         .background(
             RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(tag.statusTone.backgroundColor.opacity(0.72))
+                .fill(tag.profileTagTone.fillColor(isSelected: true))
                 .overlay(
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .stroke(tag.statusTone.borderColor.opacity(0.82), lineWidth: 1)
+                        .stroke(tag.profileTagTone.borderColor(isSelected: true), lineWidth: 1)
                 )
         )
         .accessibilityLabel(tag.displayName)
@@ -426,7 +427,7 @@ struct ProfileTagToggleChip: View {
     let title: String
     let systemImage: String
     let isSelected: Bool
-    let tone: CodexStatusTone?
+    let tagTone: CodexProfileTagTone?
     let textScale: Double
     let helpText: String?
     let action: () -> Void
@@ -435,7 +436,7 @@ struct ProfileTagToggleChip: View {
         title: String,
         systemImage: String = "tag",
         isSelected: Bool,
-        tone: CodexStatusTone? = nil,
+        tagTone: CodexProfileTagTone? = nil,
         textScale: Double = 1,
         helpText: String? = nil,
         action: @escaping () -> Void
@@ -443,7 +444,7 @@ struct ProfileTagToggleChip: View {
         self.title = title
         self.systemImage = systemImage
         self.isSelected = isSelected
-        self.tone = tone
+        self.tagTone = tagTone
         self.textScale = textScale
         self.helpText = helpText
         self.action = action
@@ -483,7 +484,7 @@ struct ProfileTagToggleChip: View {
     }
 
     private var accentColor: Color {
-        tone?.foregroundColor ?? CodexTheme.accentBlue
+        tagTone?.foregroundColor ?? CodexTheme.accentBlue
     }
 
     private var foregroundColor: Color {
@@ -491,11 +492,11 @@ struct ProfileTagToggleChip: View {
             return accentColor
         }
 
-        return tone == nil ? CodexTheme.supportText : CodexTheme.quietText
+        return tagTone == nil ? CodexTheme.supportText : CodexTheme.quietText
     }
 
     private var iconColor: Color {
-        if isSelected || tone != nil {
+        if isSelected || tagTone != nil {
             return accentColor
         }
 
@@ -503,21 +504,21 @@ struct ProfileTagToggleChip: View {
     }
 
     private var backgroundColor: Color {
-        guard let tone else {
+        guard let tagTone else {
             return isSelected ? CodexTheme.surfaceFill(for: .strong) : CodexTheme.surfaceFill(for: .subtle)
         }
 
-        return isSelected ? tone.backgroundColor : CodexTheme.surfaceFill(for: .subtle)
+        return tagTone.fillColor(isSelected: isSelected)
     }
 
     private var borderColor: Color {
-        guard let tone else {
+        guard let tagTone else {
             return isSelected
                 ? CodexTheme.accentBlue.opacity(0.38)
                 : CodexTheme.surfaceBorder(for: .subtle)
         }
 
-        return isSelected ? tone.borderColor : tone.borderColor.opacity(0.46)
+        return tagTone.borderColor(isSelected: isSelected)
     }
 }
 
@@ -555,15 +556,15 @@ private struct ProfileTagChip: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.9)
         }
-        .foregroundStyle(tag.statusTone.foregroundColor)
+        .foregroundStyle(tag.profileTagTone.foregroundColor)
         .padding(.horizontal, 7 * CGFloat(textScale))
         .padding(.vertical, 4 * CGFloat(textScale))
         .background(
             RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .fill(tag.statusTone.backgroundColor)
+                .fill(tag.profileTagTone.fillColor(isSelected: true))
                 .overlay(
                     RoundedRectangle(cornerRadius: 7, style: .continuous)
-                        .stroke(tag.statusTone.borderColor, lineWidth: 1)
+                        .stroke(tag.profileTagTone.borderColor(isSelected: true), lineWidth: 1)
                 )
         )
         .accessibilityLabel(tag.displayName)
