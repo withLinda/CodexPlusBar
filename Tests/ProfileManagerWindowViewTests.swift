@@ -171,6 +171,44 @@ struct ProfileManagerWindowViewTests {
     }
 
     @Test
+    func bulkImportSheetPresentationKeepsSubmitStateObvious() {
+        let empty = ProfileManagerBulkImportSheetPresentation(
+            preview: BulkProfileImporter.preview(from: "")
+        )
+        let valid = ProfileManagerBulkImportSheetPresentation(
+            preview: BulkProfileImporter.preview(
+                from: """
+                alpha@example.com|password-a|SECRETONE
+                beta@example.com|password-b|SECRETTWO
+                """
+            )
+        )
+        let invalid = ProfileManagerBulkImportSheetPresentation(
+            preview: BulkProfileImporter.preview(
+                from: """
+                alpha@example.com|password-a|SECRETONE
+                beta@example.com|password-b
+                """
+            )
+        )
+
+        #expect(empty.summaryText == "Paste account rows")
+        #expect(empty.submitTitle == "Import")
+        #expect(empty.isSubmitDisabled)
+        #expect(empty.tone == .neutral)
+
+        #expect(valid.summaryText == "2 profiles ready")
+        #expect(valid.submitTitle == "Import 2 profiles")
+        #expect(valid.isSubmitDisabled == false)
+        #expect(valid.tone == .success)
+
+        #expect(invalid.summaryText == "Fix line 2")
+        #expect(invalid.submitTitle == "Import 1 profile")
+        #expect(invalid.isSubmitDisabled)
+        #expect(invalid.tone == .warning)
+    }
+
+    @Test
     func detailLayoutKeepsChromeSignInCardCompact() {
         let metrics = ProfileManagerDetailLayoutMetrics.chromeSignIn
 

@@ -335,6 +335,77 @@ struct PlusProfileControllerTests {
     }
 
     @Test
+    func importProfilesCreatesSavedRowsWithTwoFactorLiveLinkAndPrivateFields() throws {
+        let tempDirectory = makeTemporaryDirectory()
+        let store = ProfileCatalogStore(
+            fileURL: tempDirectory.appendingPathComponent("profiles.json", isDirectory: false)
+        )
+        let existing = sampleProfile(label: "existing@example.com", sortOrder: 0)
+        try store.saveProfiles([existing])
+        let controller = PlusProfileController(
+            catalogStore: store,
+            dataService: StubPlusProfileDataService(refreshResults: [:]),
+            autoStart: false
+        )
+
+        let preview = controller.importProfiles(
+            from: """
+            alpha+one@icloud.com|first-password|FIRST2FASECRET
+            beta-two@icloud.com|second-password|SECOND2FASECRET
+            """
+        )
+
+        let rows = controller.profiles
+        let persisted = try store.loadProfiles()
+        #expect(preview.canSubmit)
+        #expect(preview.entries.count == 2)
+        #expect(rows.map(\.label) == [
+            "existing@example.com",
+            "alpha+one@icloud.com",
+            "beta-two@icloud.com",
+        ])
+        #expect(rows[1].profile.emailLink == BulkProfileImporter.twoFactorLiveLink)
+        #expect(rows[1].profile.password == "first-password")
+        #expect(rows[1].profile.twoFactorCode == "FIRST2FASECRET")
+        #expect(rows[1].state == .idle)
+        #expect(rows[1].statusMessage == "Open Chrome to sign in with this account.")
+        #expect(controller.selectedProfileID == rows[1].id)
+        #expect(controller.statusMessage == "Imported 2 profiles.")
+        #expect(persisted.map(\.sortOrder) == [0, 1, 2])
+        #expect(persisted[2].emailLink == BulkProfileImporter.twoFactorLiveLink)
+        #expect(persisted[2].password == "second-password")
+        #expect(persisted[2].twoFactorCode == "SECOND2FASECRET")
+    }
+
+    @Test
+    func importProfilesDoesNotPersistWhenAnyLineNeedsFixing() throws {
+        let tempDirectory = makeTemporaryDirectory()
+        let store = ProfileCatalogStore(
+            fileURL: tempDirectory.appendingPathComponent("profiles.json", isDirectory: false)
+        )
+        let existing = sampleProfile(label: "existing@example.com", sortOrder: 0)
+        try store.saveProfiles([existing])
+        let controller = PlusProfileController(
+            catalogStore: store,
+            dataService: StubPlusProfileDataService(refreshResults: [:]),
+            autoStart: false
+        )
+
+        let preview = controller.importProfiles(
+            from: """
+            alpha+one@icloud.com|first-password|FIRST2FASECRET
+            beta-two@icloud.com|second-password
+            """
+        )
+
+        #expect(preview.canSubmit == false)
+        #expect(preview.issueSummary == "Fix line 2")
+        #expect(controller.profiles.map(\.label) == ["existing@example.com"])
+        #expect(try store.loadProfiles().map(\.label) == ["existing@example.com"])
+        #expect(controller.statusMessage == "Fix line 2")
+    }
+
+    @Test
     func updateDetailsNormalizesBlankEmailLinkToNil() throws {
         let tempDirectory = makeTemporaryDirectory()
         let store = ProfileCatalogStore(

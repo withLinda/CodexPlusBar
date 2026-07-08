@@ -17,6 +17,7 @@ When you use more than one ChatGPT profile, checking limits can become slow and 
 - Menu bar status with 5H and 7D remaining usage.
 - Separate saved profiles, each with its own sign-in session.
 - Profile manager for adding, renaming, reordering, and removing profiles.
+- Bulk import for adding many profiles from `email|password|2FA` rows.
 - One-click refresh for all profiles or a single profile.
 - Pin an important profile so it stays easy to watch.
 - Save a label and email link for each profile.
@@ -30,19 +31,20 @@ When you use more than one ChatGPT profile, checking limits can become slow and 
 1. Open CodexPlusBar.
 2. Open the manager window from the menu bar panel.
 3. Add a profile.
-4. Sign in to ChatGPT in that profile's session view.
-5. Save a clear label and optional email link.
-6. Refresh usage.
-7. Pin the profile you care about most.
-8. Check 5H and 7D usage from the menu bar.
+4. Or use Import to paste many `email|password|2FA` rows at once.
+5. Sign in to ChatGPT in each profile's session view.
+6. Save a clear label and optional email link.
+7. Refresh usage.
+8. Pin the profile you care about most.
+9. Check 5H and 7D usage from the menu bar.
 
 ## Install
 
 Download the latest notarized DMG from GitHub:
 
 - [Latest release page](https://github.com/withLinda/CodexPlusBar/releases/latest)
-- [Direct notarized DMG download](https://github.com/withLinda/CodexPlusBar/releases/download/snapshot-2026-07-08-profile-detail-polish/CodexPlusBar-snapshot-2026-07-08-profile-detail-polish.dmg)
-- [SHA-256 checksum](https://github.com/withLinda/CodexPlusBar/releases/download/snapshot-2026-07-08-profile-detail-polish/CodexPlusBar-snapshot-2026-07-08-profile-detail-polish.dmg.sha256)
+- [Direct notarized DMG download](https://github.com/withLinda/CodexPlusBar/releases/download/snapshot-2026-07-08-bulk-profile-import/CodexPlusBar-snapshot-2026-07-08-bulk-profile-import.dmg)
+- [SHA-256 checksum](https://github.com/withLinda/CodexPlusBar/releases/download/snapshot-2026-07-08-bulk-profile-import/CodexPlusBar-snapshot-2026-07-08-bulk-profile-import.dmg.sha256)
 
 1. Download and open the DMG.
 2. Drag `CodexPlusBar.app` onto the `Applications` folder inside the DMG.

@@ -97,6 +97,41 @@ struct ProfileManagerDetailsFormPresentation: Equatable, Sendable {
     }
 }
 
+struct ProfileManagerBulkImportSheetPresentation: Equatable, Sendable {
+    let preview: BulkProfileImportPreview
+
+    var summaryText: String {
+        if let issueSummary = preview.issueSummary {
+            return issueSummary
+        }
+
+        return preview.entries.isEmpty ? "Paste account rows" : preview.countText
+    }
+
+    var submitTitle: String {
+        switch preview.entries.count {
+        case 0:
+            return "Import"
+        case 1:
+            return "Import 1 profile"
+        default:
+            return "Import \(preview.entries.count) profiles"
+        }
+    }
+
+    var isSubmitDisabled: Bool {
+        preview.canSubmit == false
+    }
+
+    var tone: CodexStatusTone {
+        if preview.issues.isEmpty == false {
+            return .warning
+        }
+
+        return preview.entries.isEmpty ? .neutral : .success
+    }
+}
+
 enum ProfilePrivateField: Hashable {
     case password
     case twoFactorCode
@@ -193,6 +228,8 @@ struct ProfileManagerWindowView: View {
     @State private var copyResetTask: Task<Void, Never>?
     @State private var showsSavedConfirmation = false
     @State private var saveResetTask: Task<Void, Never>?
+    @State private var showsBulkImportSheet = false
+    @State private var bulkImportText = ""
 
     init(
         controller: PlusProfileController,
@@ -241,6 +278,15 @@ struct ProfileManagerWindowView: View {
                 .allowsHitTesting(false)
         }
         .codexThemeRefreshScope()
+        .sheet(isPresented: $showsBulkImportSheet) {
+            ProfileManagerBulkImportSheet(
+                rawText: $bulkImportText,
+                cancel: {
+                    showsBulkImportSheet = false
+                },
+                submit: importBulkProfiles
+            )
+        }
         .onAppear {
             syncDrafts(with: controller.selectedProfile)
         }
@@ -305,6 +351,11 @@ struct ProfileManagerWindowView: View {
 
                     Button(action: addProfile) {
                         Label("Add profile", systemImage: "plus")
+                    }
+                    .buttonStyle(ProfileManagerSecondaryButtonStyle())
+
+                    Button(action: showBulkImport) {
+                        Label("Import", systemImage: "tray.and.arrow.down")
                     }
                     .buttonStyle(ProfileManagerSecondaryButtonStyle())
                 }
@@ -1034,6 +1085,21 @@ struct ProfileManagerWindowView: View {
         controller.addProfile()
     }
 
+    private func showBulkImport() {
+        showsBulkImportSheet = true
+    }
+
+    private func importBulkProfiles() {
+        let preview = controller.importProfiles(from: bulkImportText)
+        guard preview.canSubmit else {
+            return
+        }
+
+        bulkImportText = ""
+        showsBulkImportSheet = false
+        syncDrafts(with: controller.selectedProfile)
+    }
+
     private func clearSidebarFilter() {
         sidebarTagFilter.clear()
     }
@@ -1087,6 +1153,156 @@ struct ProfileManagerWindowView: View {
     private func closeChromeSignIn(_ profileID: UUID) {
         Task {
             await controller.closeChromeSignIn(for: profileID)
+        }
+    }
+}
+
+private struct ProfileManagerBulkImportSheet: View {
+    @Binding var rawText: String
+    let cancel: () -> Void
+    let submit: () -> Void
+    @FocusState private var isEditorFocused: Bool
+
+    private var preview: BulkProfileImportPreview {
+        BulkProfileImporter.preview(from: rawText)
+    }
+
+    private var presentation: ProfileManagerBulkImportSheetPresentation {
+        ProfileManagerBulkImportSheetPresentation(preview: preview)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            header
+
+            importEditor
+
+            if preview.issues.isEmpty == false {
+                issueList
+            }
+
+            footer
+        }
+        .padding(22)
+        .frame(width: 560, alignment: .topLeading)
+        .background(CodexTheme.shellFill(for: .dialog))
+        .onAppear {
+            isEditorFocused = true
+        }
+    }
+
+    private var header: some View {
+        HStack(alignment: .center, spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: CodexTheme.iconCornerRadius, style: .continuous)
+                    .fill(presentation.tone.backgroundColor)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: CodexTheme.iconCornerRadius, style: .continuous)
+                            .stroke(presentation.tone.borderColor, lineWidth: 1)
+                    )
+
+                Image(systemName: "tray.and.arrow.down")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(presentation.tone.foregroundColor)
+            }
+            .frame(width: 34, height: 34)
+            .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Import profiles")
+                    .font(ProfileManagerTypography.bodyStrong)
+                    .foregroundStyle(CodexTheme.headingText)
+
+                Text(presentation.summaryText)
+                    .font(ProfileManagerTypography.small)
+                    .foregroundStyle(presentation.tone == .warning ? CodexTheme.dangerText : CodexTheme.mutedText)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var importEditor: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Account rows")
+                .font(ProfileManagerTypography.caption)
+                .foregroundStyle(CodexTheme.dataLabelText)
+
+            ZStack(alignment: .topLeading) {
+                TextEditor(text: $rawText)
+                    .font(.system(size: 13, weight: .regular, design: .monospaced))
+                    .scrollContentBackground(.hidden)
+                    .padding(10)
+                    .foregroundStyle(CodexTheme.dataValueText)
+                    .focused($isEditorFocused)
+
+                if rawText.isEmpty {
+                    Text("email|password|2FA")
+                        .font(.system(size: 13, weight: .regular, design: .monospaced))
+                        .foregroundStyle(CodexTheme.quietText)
+                        .padding(.horizontal, 15)
+                        .padding(.vertical, 18)
+                        .allowsHitTesting(false)
+                }
+            }
+            .frame(minHeight: 210, maxHeight: 210)
+            .background(ProfileManagerFieldBackground())
+            .accessibilityLabel("Account rows")
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var issueList: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(preview.issues.prefix(3), id: \.lineNumber) { issue in
+                Label("Line \(issue.lineNumber): \(issue.message)", systemImage: "exclamationmark.triangle")
+                    .font(ProfileManagerTypography.caption)
+                    .foregroundStyle(CodexTheme.dangerText)
+            }
+
+            if preview.issues.count > 3 {
+                Text("\(preview.issues.count - 3) more lines need a fix")
+                    .font(ProfileManagerTypography.caption)
+                    .foregroundStyle(CodexTheme.mutedText)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: CodexTheme.cornerRadius(for: .subtle), style: .continuous)
+                .fill(CodexTheme.surfaceFill(for: .subtle))
+                .overlay(
+                    RoundedRectangle(cornerRadius: CodexTheme.cornerRadius(for: .subtle), style: .continuous)
+                        .stroke(CodexTheme.accentRed.opacity(0.28), lineWidth: 1)
+                )
+        )
+    }
+
+    private var footer: some View {
+        HStack(spacing: 10) {
+            Text(BulkProfileImporter.twoFactorLiveLink)
+                .font(ProfileManagerTypography.caption)
+                .foregroundStyle(CodexTheme.utilityActionText)
+                .lineLimit(1)
+
+            Spacer(minLength: 0)
+
+            Button("Cancel") {
+                cancel()
+            }
+            .buttonStyle(ProfileManagerSecondaryButtonStyle())
+            .keyboardShortcut(.cancelAction)
+
+            Button {
+                submit()
+            } label: {
+                Label(presentation.submitTitle, systemImage: "checkmark")
+            }
+            .buttonStyle(ProfileManagerPrimaryButtonStyle())
+            .disabled(presentation.isSubmitDisabled)
+            .keyboardShortcut(.defaultAction)
         }
     }
 }

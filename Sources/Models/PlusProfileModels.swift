@@ -250,6 +250,124 @@ struct PlusProfile: Identifiable, Codable, Equatable, Sendable {
     }
 }
 
+struct BulkProfileImportEntry: Equatable, Sendable {
+    let email: String
+    let password: String
+    let twoFactorCode: String
+    let sourceLineNumber: Int
+}
+
+struct BulkProfileImportIssue: Equatable, Sendable {
+    let lineNumber: Int
+    let message: String
+}
+
+struct BulkProfileImportPreview: Equatable, Sendable {
+    let entries: [BulkProfileImportEntry]
+    let issues: [BulkProfileImportIssue]
+
+    var canSubmit: Bool {
+        entries.isEmpty == false && issues.isEmpty
+    }
+
+    var countText: String {
+        switch entries.count {
+        case 0:
+            return "No profiles ready"
+        case 1:
+            return "1 profile ready"
+        default:
+            return "\(entries.count) profiles ready"
+        }
+    }
+
+    var issueSummary: String? {
+        guard issues.isEmpty == false else {
+            return nil
+        }
+
+        let lineNumbers = issues.map(\.lineNumber)
+        if lineNumbers.count == 1, let lineNumber = lineNumbers.first {
+            return "Fix line \(lineNumber)"
+        }
+
+        return "Fix lines \(lineNumbers.map(String.init).joined(separator: ", "))"
+    }
+}
+
+enum BulkProfileImporter {
+    static let twoFactorLiveLink = "https://2fa.live"
+
+    static func preview(from rawText: String) -> BulkProfileImportPreview {
+        var entries: [BulkProfileImportEntry] = []
+        var issues: [BulkProfileImportIssue] = []
+        let lines = rawText.components(separatedBy: .newlines)
+
+        for (offset, line) in lines.enumerated() {
+            let lineNumber = offset + 1
+            let trimmedLine = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard trimmedLine.isEmpty == false else {
+                continue
+            }
+
+            let fields = line
+                .split(separator: "|", omittingEmptySubsequences: false)
+                .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+
+            guard fields.count == 3 else {
+                issues.append(BulkProfileImportIssue(lineNumber: lineNumber, message: "Use email|password|2FA"))
+                continue
+            }
+
+            guard fields[0].isEmpty == false else {
+                issues.append(BulkProfileImportIssue(lineNumber: lineNumber, message: "Email is empty"))
+                continue
+            }
+
+            guard isPlausibleEmail(fields[0]) else {
+                issues.append(BulkProfileImportIssue(lineNumber: lineNumber, message: "Email looks wrong"))
+                continue
+            }
+
+            guard fields[1].isEmpty == false else {
+                issues.append(BulkProfileImportIssue(lineNumber: lineNumber, message: "Password is empty"))
+                continue
+            }
+
+            guard fields[2].isEmpty == false else {
+                issues.append(BulkProfileImportIssue(lineNumber: lineNumber, message: "2FA code is empty"))
+                continue
+            }
+
+            entries.append(
+                BulkProfileImportEntry(
+                    email: fields[0],
+                    password: fields[1],
+                    twoFactorCode: fields[2],
+                    sourceLineNumber: lineNumber
+                )
+            )
+        }
+
+        return BulkProfileImportPreview(entries: entries, issues: issues)
+    }
+
+    private static func isPlausibleEmail(_ value: String) -> Bool {
+        let parts = value.split(separator: "@", omittingEmptySubsequences: false)
+        guard parts.count == 2,
+              let localPart = parts.first,
+              let domain = parts.last,
+              localPart.isEmpty == false,
+              domain.contains("."),
+              domain.hasPrefix(".") == false,
+              domain.hasSuffix(".") == false else {
+            return false
+        }
+
+        return value.contains(" ") == false
+    }
+}
+
 struct PlusProfileDetailsDraft: Equatable, Sendable {
     var label: String
     var emailLink: String

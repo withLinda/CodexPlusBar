@@ -223,6 +223,60 @@ final class PlusProfileController {
         updateDashboardStatus()
     }
 
+    @discardableResult
+    func importProfiles(from rawText: String) -> BulkProfileImportPreview {
+        let preview = BulkProfileImporter.preview(from: rawText)
+        guard preview.canSubmit else {
+            statusMessage = preview.issueSummary ?? "Paste at least one profile row."
+            updateDashboardStatus()
+            return preview
+        }
+
+        let previousProfiles = profiles
+        let previousSelectedProfileID = selectedProfileID
+        let createdAt = Date()
+        let startSortOrder = profiles.count
+        let importedProfiles = preview.entries.enumerated().map { offset, entry in
+            PlusProfile(
+                id: UUID(),
+                label: entry.email,
+                emailLink: BulkProfileImporter.twoFactorLiveLink,
+                detectedNote: nil,
+                password: entry.password,
+                twoFactorCode: entry.twoFactorCode,
+                webDataStoreID: UUID(),
+                sortOrder: startSortOrder + offset,
+                createdAt: createdAt.addingTimeInterval(Double(offset) / 1_000),
+                lastRefreshAt: nil,
+                lastKnownState: .unknown
+            )
+        }
+
+        profiles.append(contentsOf: importedProfiles.map { profile in
+            PlusProfileSnapshot(
+                profile: profile,
+                state: .idle,
+                usage: nil,
+                statusMessage: "Open Chrome to sign in with this account.",
+                isRefreshing: false
+            )
+        })
+        selectedProfileID = importedProfiles.first?.id
+
+        guard persistProfiles() else {
+            profiles = previousProfiles
+            selectedProfileID = previousSelectedProfileID
+            updateDashboardStatus()
+            return preview
+        }
+
+        statusMessage = importedProfiles.count == 1
+            ? "Imported 1 profile."
+            : "Imported \(importedProfiles.count) profiles."
+        updateDashboardStatus()
+        return preview
+    }
+
     func selectProfile(id: UUID?) {
         selectedProfileID = id ?? profiles.first?.id
     }

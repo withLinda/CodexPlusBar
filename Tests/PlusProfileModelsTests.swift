@@ -127,6 +127,54 @@ struct PlusProfileModelsTests {
     }
 
     @Test
+    func bulkProfileImportParsesPipeSeparatedRowsAndSkipsBlankLines() throws {
+        let preview = BulkProfileImporter.preview(
+            from: """
+
+            denture-soggier.7q+28mxc@icloud.com|KSEt7!LpF7&c|Y2GWFRZO6MYAX7M6DMVVUNTKDF47T5YP
+
+            62-turtle-hibachi+dzfobh@icloud.com | 8jub31^kHeuB | XHIONYU4LL74C2F5PBHR6YD5DF7ZF3BD
+            swipes.risings-9o+fa7yn@icloud.com|5^VAP%%WnjaO|4H6EJROBQMAE6TIKBL3IUW4ZKIGR2QIZ
+            """
+        )
+
+        #expect(preview.issues == [])
+        #expect(preview.canSubmit)
+        #expect(preview.countText == "3 profiles ready")
+        #expect(preview.entries.map(\.email) == [
+            "denture-soggier.7q+28mxc@icloud.com",
+            "62-turtle-hibachi+dzfobh@icloud.com",
+            "swipes.risings-9o+fa7yn@icloud.com",
+        ])
+        let second = try #require(preview.entries.dropFirst().first)
+        #expect(second.password == "8jub31^kHeuB")
+        #expect(second.twoFactorCode == "XHIONYU4LL74C2F5PBHR6YD5DF7ZF3BD")
+    }
+
+    @Test
+    func bulkProfileImportReportsLineIssuesBeforeImport() {
+        let preview = BulkProfileImporter.preview(
+            from: """
+            valid@example.com|password|JBSWY3DPEHPK3PXP
+            missing-pipes@example.com password JBSWY3DPEHPK3PXP
+            |blank-email|JBSWY3DPEHPK3PXP
+            empty-code@example.com|password|
+            """
+        )
+
+        #expect(preview.entries.map(\.email) == ["valid@example.com"])
+        #expect(preview.canSubmit == false)
+        #expect(preview.countText == "1 profile ready")
+        #expect(preview.issues.map(\.lineNumber) == [2, 3, 4])
+        #expect(preview.issues.map(\.message) == [
+            "Use email|password|2FA",
+            "Email is empty",
+            "2FA code is empty",
+        ])
+        #expect(preview.issueSummary == "Fix lines 2, 3, 4")
+    }
+
+    @Test
     func detailsDraftPreservesPrivateTextAndNormalizesOptionalValues() {
         let updated = PlusProfileDetailsDraft(
             label: "owner@example.com",
