@@ -382,6 +382,16 @@ struct CodexThemeTests {
     }
 
     @Test
+    func oneTimePasswordTextRolesUseCalmValueAndSupportTokensForEveryPreset() {
+        for preset in CodexThemePreset.allCases {
+            let palette = CodexTheme.palette(for: preset)
+
+            #expect(CodexTheme.oneTimePasswordCodeTextToken(preset: preset) == palette.dataValueText)
+            #expect(CodexTheme.oneTimePasswordStatusTextToken(preset: preset) == palette.supportText)
+        }
+    }
+
+    @Test
     func primaryActionGradientStaysOrangeToSalmon() {
         #expect(CodexTheme.primaryActionTokens.count == 2)
         #expect(CodexTheme.primaryActionTokens[0] == CodexTheme.Palette.accOrange)
@@ -484,6 +494,8 @@ private func usefulTextRoles(for preset: CodexThemePreset) -> [(name: String, to
         ("support", palette.supportText),
         ("dataLabel", palette.dataLabelText),
         ("dataValue", palette.dataValueText),
+        ("oneTimePasswordCode", CodexTheme.oneTimePasswordCodeTextToken(preset: preset)),
+        ("oneTimePasswordStatus", CodexTheme.oneTimePasswordStatusTextToken(preset: preset)),
     ]
 }
 

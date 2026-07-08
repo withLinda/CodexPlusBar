@@ -73,6 +73,59 @@ struct ProfileManagerPrivateFieldPresentation: Equatable, Sendable {
     }
 }
 
+struct ProfileManagerOneTimePasswordPresentation: Equatable, Sendable {
+    let isVisible: Bool
+    let codeText: String
+    let statusText: String
+    let copyText: String
+    let copyTitle: String
+    let copySymbolName: String
+    let isCopyDisabled: Bool
+    let accessibilityValue: String
+    let tone: CodexStatusTone
+
+    init(secret: String, isCopied: Bool, referenceDate: Date) {
+        let trimmedSecret = secret.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmedSecret.isEmpty == false else {
+            isVisible = false
+            codeText = ""
+            statusText = ""
+            copyText = ""
+            copyTitle = "Copy code"
+            copySymbolName = "doc.on.doc"
+            isCopyDisabled = true
+            accessibilityValue = ""
+            tone = .neutral
+            return
+        }
+
+        do {
+            let generator = try TOTPGenerator(secret: trimmedSecret)
+            let generatedCode = generator.code(at: referenceDate)
+            let secondsRemaining = generator.secondsRemaining(at: referenceDate)
+            isVisible = true
+            codeText = generatedCode
+            statusText = "Expires in \(secondsRemaining)s"
+            copyText = generatedCode
+            copyTitle = isCopied ? "Copied" : "Copy code"
+            copySymbolName = isCopied ? "checkmark" : "doc.on.doc"
+            isCopyDisabled = false
+            accessibilityValue = "Current OTP \(generatedCode), expires in \(secondsRemaining) \(secondsRemaining == 1 ? "second" : "seconds")."
+            tone = .info
+        } catch {
+            isVisible = true
+            codeText = "------"
+            statusText = "Check 2FA key"
+            copyText = ""
+            copyTitle = "Copy code"
+            copySymbolName = "doc.on.doc"
+            isCopyDisabled = true
+            accessibilityValue = "2FA key is not valid."
+            tone = .warning
+        }
+    }
+}
+
 struct ProfileManagerDetailsFormPresentation: Equatable, Sendable {
     let draft: PlusProfileDetailsDraft
     let savedDraft: PlusProfileDetailsDraft
@@ -141,6 +194,7 @@ enum ProfileDetailsCopyField: Hashable {
     case label
     case password
     case twoFactorCode
+    case oneTimePassword
     case phoneNumber
 }
 
@@ -613,10 +667,10 @@ struct ProfileManagerWindowView: View {
             )
 
             ProfileManagerPrivateDetailsField(
-                title: "2FA codes",
+                title: "2FA key",
                 text: $detailsDraft.twoFactorCode,
                 presentation: ProfileManagerPrivateFieldPresentation(
-                    title: "2FA codes",
+                    title: "2FA key",
                     value: detailsDraft.twoFactorCode,
                     isRevealed: revealedPrivateFields.contains(.twoFactorCode),
                     isCopied: copiedField == .twoFactorCode
@@ -631,6 +685,25 @@ struct ProfileManagerWindowView: View {
                     copy(detailsDraft.twoFactorCode, field: .twoFactorCode)
                 }
             )
+
+            if detailsDraft.twoFactorCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    let presentation = ProfileManagerOneTimePasswordPresentation(
+                        secret: detailsDraft.twoFactorCode,
+                        isCopied: copiedField == .oneTimePassword,
+                        referenceDate: context.date
+                    )
+
+                    if presentation.isVisible {
+                        ProfileManagerOneTimePasswordPanel(
+                            presentation: presentation,
+                            copy: {
+                                copy(presentation.copyText, field: .oneTimePassword)
+                            }
+                        )
+                    }
+                }
+            }
 
             ProfileManagerDetailsTextField(
                 title: "Phone number",
@@ -1437,6 +1510,82 @@ private struct ProfileManagerPrivateDetailsField: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct ProfileManagerOneTimePasswordPanel: View {
+    let presentation: ProfileManagerOneTimePasswordPresentation
+    let copy: () -> Void
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: CodexTheme.Radius.badge, style: .continuous)
+                    .fill(CodexTheme.surfaceFill(for: .subtle))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: CodexTheme.Radius.badge, style: .continuous)
+                            .stroke(presentation.tone.borderColor, lineWidth: 1)
+                    )
+
+                Image(systemName: presentation.isCopyDisabled ? "key.slash" : "number")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(presentation.tone.foregroundColor)
+            }
+            .frame(width: 32, height: 32)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Current OTP")
+                    .font(ProfileManagerTypography.caption)
+                    .foregroundStyle(CodexTheme.dataLabelText)
+
+                Text(presentation.statusText)
+                    .font(ProfileManagerTypography.small)
+                    .foregroundStyle(
+                        presentation.isCopyDisabled
+                            ? presentation.tone.foregroundColor
+                            : CodexTheme.oneTimePasswordStatusText
+                    )
+            }
+
+            Spacer(minLength: 12)
+
+            Text(presentation.codeText)
+                .font(.system(size: 24, weight: .semibold, design: .monospaced))
+                .monospacedDigit()
+                .foregroundStyle(
+                    presentation.isCopyDisabled
+                        ? CodexTheme.disabledText
+                        : CodexTheme.oneTimePasswordCodeText
+                )
+                .frame(minWidth: 112, alignment: .trailing)
+                .accessibilityLabel(presentation.accessibilityValue)
+
+            ProfileManagerInlineFieldActionButton(
+                title: presentation.copyTitle,
+                symbolName: presentation.copySymbolName,
+                helpText: presentation.isCopyDisabled ? "Add a valid 2FA key before copying the OTP." : "Copy current OTP",
+                accessibilityLabel: presentation.copyTitle,
+                isDisabled: presentation.isCopyDisabled,
+                isConfirmed: presentation.copyTitle == "Copied",
+                action: copy
+            )
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: CodexTheme.cornerRadius(for: .nested), style: .continuous)
+                .fill(CodexTheme.surfaceFill(for: .subtle))
+                .overlay(
+                    RoundedRectangle(cornerRadius: CodexTheme.cornerRadius(for: .nested), style: .continuous)
+                        .fill(CodexTheme.surfaceSheen(for: .subtle))
+                )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: CodexTheme.cornerRadius(for: .nested), style: .continuous)
+                .stroke(CodexTheme.surfaceBorder(for: .subtle), lineWidth: 1)
+        )
+        .accessibilityElement(children: .contain)
     }
 }
 

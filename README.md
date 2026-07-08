@@ -18,6 +18,7 @@ When you use more than one ChatGPT profile, checking limits can become slow and 
 - Separate saved profiles, each with its own sign-in session.
 - Profile manager for adding, renaming, reordering, and removing profiles.
 - Bulk import for adding many profiles from `email|password|2FA` rows.
+- Generate and copy the current OTP from a saved 2FA key.
 - One-click refresh for all profiles or a single profile.
 - Pin an important profile so it stays easy to watch.
 - Save a label and email link for each profile.
@@ -43,8 +44,8 @@ When you use more than one ChatGPT profile, checking limits can become slow and 
 Download the latest notarized DMG from GitHub:
 
 - [Latest release page](https://github.com/withLinda/CodexPlusBar/releases/latest)
-- [Direct notarized DMG download](https://github.com/withLinda/CodexPlusBar/releases/download/snapshot-2026-07-08-chrome-sync-sign-in/CodexPlusBar-snapshot-2026-07-08-chrome-sync-sign-in.dmg)
-- [SHA-256 checksum](https://github.com/withLinda/CodexPlusBar/releases/download/snapshot-2026-07-08-chrome-sync-sign-in/CodexPlusBar-snapshot-2026-07-08-chrome-sync-sign-in.dmg.sha256)
+- [Direct notarized DMG download](https://github.com/withLinda/CodexPlusBar/releases/download/snapshot-2026-07-08-profile-otp/CodexPlusBar-snapshot-2026-07-08-profile-otp.dmg)
+- [SHA-256 checksum](https://github.com/withLinda/CodexPlusBar/releases/download/snapshot-2026-07-08-profile-otp/CodexPlusBar-snapshot-2026-07-08-profile-otp.dmg.sha256)
 
 1. Download and open the DMG.
 2. Drag `CodexPlusBar.app` onto the `Applications` folder inside the DMG.
