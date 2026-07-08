@@ -67,7 +67,10 @@ final class DefaultChromeSessionManager: ChromeSessionManaging {
         let session = try await launcher.launch(
             profile: profile,
             mode: .visible,
-            initialURL: ChatGPTWebURLs.loginPage,
+            initialURLs: [
+                ChromeBrowserSignInURLs.googleSyncSignInPage,
+                ChatGPTWebURLs.loginPage,
+            ],
             requiresDevTools: false
         )
         activeSessionsByProfileID[profile.id] = ActiveSession(session: session, purpose: .signIn)

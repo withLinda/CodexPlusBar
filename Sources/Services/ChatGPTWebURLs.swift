@@ -7,3 +7,28 @@ enum ChatGPTWebURLs {
     static let cookieScope = URL(string: "https://chatgpt.com/")!
     static let passkeySetupPage = URL(string: "chrome://password-manager/settings")!
 }
+
+enum ChromeBrowserSignInURLs {
+    static let googleAccountEmail = "linda.fitriani@gmail.com"
+
+    static var googleSyncSignInPage: URL {
+        googleSyncSignInPage(
+            email: googleAccountEmail
+        )
+    }
+
+    static func googleSyncSignInPage(email: String) -> URL {
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = "accounts.google.com"
+        components.path = "/signin/v2/identifier"
+        components.queryItems = [
+            URLQueryItem(name: "service", value: "chromiumsync"),
+            URLQueryItem(name: "login_hint", value: email),
+            URLQueryItem(name: "flowName", value: "GlifWebSignIn"),
+            URLQueryItem(name: "flowEntry", value: "ServiceLogin"),
+        ]
+
+        return components.url!
+    }
+}

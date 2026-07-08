@@ -82,6 +82,20 @@ final class ChromeLauncher {
         initialURL: URL = ChatGPTWebURLs.loginPage,
         requiresDevTools: Bool = true
     ) async throws -> ChromeLaunchedSession {
+        try await launch(
+            profile: profile,
+            mode: mode,
+            initialURLs: [initialURL],
+            requiresDevTools: requiresDevTools
+        )
+    }
+
+    func launch(
+        profile: PlusProfile,
+        mode: LaunchMode,
+        initialURLs: [URL],
+        requiresDevTools: Bool
+    ) async throws -> ChromeLaunchedSession {
         guard let chromeExecutableURL = appLocator.chromeExecutableURL() else {
             throw ChatGPTAPIError.unsupported("Google Chrome is not installed on this Mac.")
         }
@@ -94,7 +108,7 @@ final class ChromeLauncher {
             arguments(
                 profileDirectory: profileDirectory,
                 mode: mode,
-                initialURL: initialURL,
+                initialURLs: initialURLs,
                 requiresDevTools: requiresDevTools
             )
         )
@@ -144,7 +158,7 @@ final class ChromeLauncher {
     private func arguments(
         profileDirectory: URL,
         mode: LaunchMode,
-        initialURL: URL,
+        initialURLs: [URL],
         requiresDevTools: Bool
     ) -> [String] {
         var arguments = [
@@ -160,7 +174,7 @@ final class ChromeLauncher {
         switch mode {
         case .visible:
             arguments.append("--new-window")
-            arguments.append(initialURL.absoluteString)
+            arguments.append(contentsOf: initialURLs.map(\.absoluteString))
         case .headless:
             arguments.append("--headless=new")
             arguments.append("--disable-gpu")

@@ -103,6 +103,51 @@ struct ChromeLauncherTests {
     }
 
     @Test
+    func openSignInStartsGoogleAccountHintAndChatGPTLoginTabs() async throws {
+        let profile = sampleProfile()
+        let recorder = LaunchRecorder()
+        let launcher = ChromeLauncher(
+            appLocator: StubChromeLocator(executableURL: URL(fileURLWithPath: "/tmp/fake-chrome")),
+            profileStore: ChromeProfileStore(rootDirectory: makeTemporaryDirectory()),
+            launchProcess: { _, arguments in
+                recorder.arguments = arguments
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: "/usr/bin/true")
+                try process.run()
+                return process
+            },
+            sleep: { _ in }
+        )
+        let manager = DefaultChromeSessionManager(launcher: launcher)
+
+        try await manager.openSignIn(for: profile)
+
+        let launchedURLs = recorder.arguments.compactMap(URL.init(string:))
+        let googleURL = try #require(
+            launchedURLs.first { $0.host == "accounts.google.com" }
+        )
+        let components = try #require(URLComponents(url: googleURL, resolvingAgainstBaseURL: false))
+        let queryItems = components.queryItems ?? []
+        let queryValues = Dictionary(
+            uniqueKeysWithValues: queryItems.compactMap { item -> (String, String)? in
+                guard let value = item.value else {
+                    return nil
+                }
+
+                return (item.name, value)
+            }
+        )
+
+        #expect(components.scheme == "https")
+        #expect(components.host == "accounts.google.com")
+        #expect(queryValues["login_hint"] == "linda.fitriani@gmail.com")
+        #expect(queryValues["service"] == "chromiumsync")
+        #expect(queryValues["continue"] == nil)
+        #expect(launchedURLs.contains(ChatGPTWebURLs.loginPage))
+        #expect(recorder.arguments.contains("--remote-debugging-port=0") == false)
+    }
+
+    @Test
     func passkeySetupLaunchUsesVisibleDedicatedProfileWithoutDevTools() async throws {
         let profile = sampleProfile()
         let recorder = LaunchRecorder()
