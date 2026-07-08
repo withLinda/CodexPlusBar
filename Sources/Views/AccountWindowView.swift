@@ -515,7 +515,6 @@ struct ProfileManagerWindowView: View {
 
             ProfileManagerDetailsTextField(
                 title: "Profile label",
-                placeholder: "Email or label",
                 text: $detailsDraft.label,
                 onSubmit: {
                     saveDetailsDraftIfNeeded(for: snapshot)
@@ -529,7 +528,6 @@ struct ProfileManagerWindowView: View {
 
             ProfileManagerDetailsTextField(
                 title: "Email link",
-                placeholder: "https://mail.google.com",
                 text: $detailsDraft.emailLink,
                 onSubmit: {
                     saveDetailsDraftIfNeeded(for: snapshot)
@@ -545,7 +543,6 @@ struct ProfileManagerWindowView: View {
 
             ProfileManagerPrivateDetailsField(
                 title: "Password",
-                placeholder: "Saved only in this local profile file",
                 text: $detailsDraft.password,
                 presentation: ProfileManagerPrivateFieldPresentation(
                     title: "Password",
@@ -566,7 +563,6 @@ struct ProfileManagerWindowView: View {
 
             ProfileManagerPrivateDetailsField(
                 title: "2FA codes",
-                placeholder: "Text to paste into 2fa.live",
                 text: $detailsDraft.twoFactorCode,
                 presentation: ProfileManagerPrivateFieldPresentation(
                     title: "2FA codes",
@@ -587,7 +583,6 @@ struct ProfileManagerWindowView: View {
 
             ProfileManagerDetailsTextField(
                 title: "Phone number",
-                placeholder: "+62 812 3456",
                 text: $detailsDraft.phoneNumber,
                 onSubmit: {
                     saveDetailsDraftIfNeeded(for: snapshot)
@@ -608,7 +603,6 @@ struct ProfileManagerWindowView: View {
 
             ProfileManagerNotesDetailsField(
                 title: "Notes",
-                placeholder: "Short note for this account",
                 text: $detailsDraft.notes
             )
         }
@@ -1132,20 +1126,17 @@ private struct ProfileTagAssignmentSection: View {
 
 private struct ProfileManagerDetailsTextField<TrailingContent: View>: View {
     let title: String
-    let placeholder: String
     @Binding var text: String
     let onSubmit: () -> Void
     let trailingContent: TrailingContent
 
     init(
         title: String,
-        placeholder: String,
         text: Binding<String>,
         onSubmit: @escaping () -> Void,
         @ViewBuilder trailingContent: () -> TrailingContent
     ) {
         self.title = title
-        self.placeholder = placeholder
         _text = text
         self.onSubmit = onSubmit
         self.trailingContent = trailingContent()
@@ -1158,7 +1149,7 @@ private struct ProfileManagerDetailsTextField<TrailingContent: View>: View {
                 .foregroundStyle(CodexTheme.dataLabelText)
 
             HStack(alignment: .center, spacing: 10) {
-                TextField(placeholder, text: $text)
+                TextField("", text: $text)
                     .font(ProfileManagerTypography.body)
                     .textFieldStyle(.plain)
                     .padding(.horizontal, 12)
@@ -1178,7 +1169,6 @@ private struct ProfileManagerDetailsTextField<TrailingContent: View>: View {
 
 private struct ProfileManagerPrivateDetailsField: View {
     let title: String
-    let placeholder: String
     @Binding var text: String
     let presentation: ProfileManagerPrivateFieldPresentation
     let onSubmit: () -> Void
@@ -1194,9 +1184,9 @@ private struct ProfileManagerPrivateDetailsField: View {
             HStack(alignment: .center, spacing: 10) {
                 Group {
                     if presentation.isRevealed {
-                        TextField(placeholder, text: $text)
+                        TextField("", text: $text)
                     } else {
-                        SecureField(placeholder, text: $text)
+                        SecureField("", text: $text)
                     }
                 }
                 .font(ProfileManagerTypography.body)
@@ -1236,7 +1226,6 @@ private struct ProfileManagerPrivateDetailsField: View {
 
 private struct ProfileManagerNotesDetailsField: View {
     let title: String
-    let placeholder: String
     @Binding var text: String
 
     var body: some View {
@@ -1245,25 +1234,14 @@ private struct ProfileManagerNotesDetailsField: View {
                 .font(ProfileManagerTypography.caption)
                 .foregroundStyle(CodexTheme.dataLabelText)
 
-            ZStack(alignment: .topLeading) {
-                TextEditor(text: $text)
-                    .font(ProfileManagerTypography.body)
-                    .scrollContentBackground(.hidden)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 8)
-                    .frame(minHeight: 72, maxHeight: 108)
-                    .background(ProfileManagerFieldBackground())
-                    .foregroundStyle(CodexTheme.dataValueText)
-
-                if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    Text(placeholder)
-                        .font(ProfileManagerTypography.body)
-                        .foregroundStyle(CodexTheme.quietText)
-                        .padding(.horizontal, 13)
-                        .padding(.vertical, 16)
-                        .allowsHitTesting(false)
-                }
-            }
+            TextEditor(text: $text)
+                .font(ProfileManagerTypography.body)
+                .scrollContentBackground(.hidden)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 8)
+                .frame(minHeight: 72, maxHeight: 108)
+                .background(ProfileManagerFieldBackground())
+                .foregroundStyle(CodexTheme.dataValueText)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

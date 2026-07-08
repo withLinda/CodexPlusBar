@@ -208,7 +208,7 @@ private struct ProfileTagSegmentButton: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .stroke(borderColor, lineWidth: 1)
+                    .stroke(borderColor, lineWidth: CodexTheme.profileTagBorderLineWidth)
             )
     }
 
@@ -416,7 +416,10 @@ private struct ProfileTagSummaryChip: View {
                 .fill(tag.profileTagTone.fillColor(isSelected: true))
                 .overlay(
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .stroke(tag.profileTagTone.borderColor(isSelected: true), lineWidth: 1)
+                        .stroke(
+                            tag.profileTagTone.borderColor(isSelected: true),
+                            lineWidth: CodexTheme.profileTagBorderLineWidth
+                        )
                 )
         )
         .accessibilityLabel(tag.displayName)
@@ -475,7 +478,7 @@ struct ProfileTagToggleChip: View {
                 .fill(backgroundColor)
                 .overlay(
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .stroke(borderColor, lineWidth: 1)
+                        .stroke(borderColor, lineWidth: CodexTheme.profileTagBorderLineWidth)
                 )
         )
         .help(helpText ?? (isSelected ? "Remove \(title) filter" : "Filter by \(title)"))
@@ -564,7 +567,10 @@ private struct ProfileTagChip: View {
                 .fill(tag.profileTagTone.fillColor(isSelected: true))
                 .overlay(
                     RoundedRectangle(cornerRadius: 7, style: .continuous)
-                        .stroke(tag.profileTagTone.borderColor(isSelected: true), lineWidth: 1)
+                        .stroke(
+                            tag.profileTagTone.borderColor(isSelected: true),
+                            lineWidth: CodexTheme.profileTagBorderLineWidth
+                        )
                 )
         )
         .accessibilityLabel(tag.displayName)

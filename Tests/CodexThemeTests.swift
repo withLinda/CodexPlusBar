@@ -267,7 +267,7 @@ struct CodexThemeTests {
     }
 
     @Test
-    func profileTagTextPassesWCAGAndDeltaLStarOnItsOwnFillForEveryPreset() {
+    func profileTagTextStaysReadableWhileBordersStaySubtleForEveryPreset() {
         for preset in CodexThemePreset.allCases {
             for tone in CodexProfileTagTone.allCases {
                 let text = CodexTheme.profileTagTextToken(for: tone, preset: preset)
@@ -275,9 +275,11 @@ struct CodexThemeTests {
                 for isSelected in [true, false] {
                     let fill = CodexTheme.profileTagFillToken(for: tone, isSelected: isSelected, preset: preset)
                     let border = CodexTheme.profileTagBorderToken(for: tone, isSelected: isSelected, preset: preset)
+                    let textContrast = contrastRatio(text, fill)
+                    let borderContrast = contrastRatio(border, fill)
 
                     #expect(
-                        contrastRatio(text, fill) >= 4.5,
+                        textContrast >= 4.5,
                         "\(preset.id) \(tone.rawValue) tag text should pass WCAG normal text contrast on its own fill"
                     )
                     #expect(
@@ -285,8 +287,20 @@ struct CodexThemeTests {
                         "\(preset.id) \(tone.rawValue) tag text should keep enough perceptual lightness separation on its own fill"
                     )
                     #expect(
-                        contrastRatio(border, fill) >= 3.0,
-                        "\(preset.id) \(tone.rawValue) tag border should pass WCAG non-text contrast on its own fill"
+                        borderContrast >= (isSelected ? 1.14 : 1.04),
+                        "\(preset.id) \(tone.rawValue) tag border should remain visible as a quiet edge"
+                    )
+                    #expect(
+                        borderContrast <= (isSelected ? 2.10 : 1.45),
+                        "\(preset.id) \(tone.rawValue) tag border should stay subtler than the readable text"
+                    )
+                    #expect(
+                        borderContrast < textContrast,
+                        "\(preset.id) \(tone.rawValue) tag border should not compete with tag text"
+                    )
+                    #expect(
+                        deltaLStar(border, fill) < deltaLStar(text, fill),
+                        "\(preset.id) \(tone.rawValue) tag border should use less lightness contrast than tag text"
                     )
                 }
             }

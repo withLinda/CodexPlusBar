@@ -642,6 +642,7 @@ enum CodexTheme {
     static let controlCornerRadius = Radius.button
     static let iconCornerRadius = Radius.icon
     static let thinBarCornerRadius = Radius.progress
+    static let profileTagBorderLineWidth: CGFloat = 0.75
 
     static let panelPadding = Spacing.panel
     static let sectionSpacing = Spacing.section
@@ -977,7 +978,14 @@ enum CodexTheme {
         isSelected: Bool,
         preset: CodexThemePreset = activePreset
     ) -> CodexColorToken {
-        profileTagTextToken(for: tone, preset: preset)
+        let palette = palette(for: preset)
+        let fill = profileTagFillToken(for: tone, isSelected: isSelected, preset: preset)
+        let accent = profileTagAccentToken(for: tone, preset: preset)
+        let fraction = isSelected
+            ? (palette.isDark ? 0.32 : 0.28)
+            : (palette.isDark ? 0.12 : 0.10)
+
+        return fill.mixed(with: accent, fraction: fraction)
     }
 
     static func progressAccentToken(forRemainingPercent remainingPercent: Int, preset: CodexThemePreset = activePreset) -> CodexColorToken {
