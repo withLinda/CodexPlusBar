@@ -75,7 +75,10 @@ struct ProfileManagerPrivateFieldPresentation: Equatable, Sendable {
 
 struct ProfileManagerOneTimePasswordPresentation: Equatable, Sendable {
     let isVisible: Bool
+    let isRevealed: Bool
+    let titleText: String
     let codeText: String
+    let isCodeMasked: Bool
     let statusText: String
     let copyText: String
     let copyTitle: String
@@ -83,19 +86,41 @@ struct ProfileManagerOneTimePasswordPresentation: Equatable, Sendable {
     let isCopyDisabled: Bool
     let accessibilityValue: String
     let tone: CodexStatusTone
+    let symbolName: String
 
-    init(secret: String, isCopied: Bool, referenceDate: Date) {
+    init(secret: String, isRevealed: Bool = false, isCopied: Bool, referenceDate: Date) {
         let trimmedSecret = secret.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmedSecret.isEmpty == false else {
             isVisible = false
+            self.isRevealed = false
+            titleText = ""
             codeText = ""
+            isCodeMasked = false
             statusText = ""
             copyText = ""
-            copyTitle = "Copy code"
-            copySymbolName = "doc.on.doc"
+            copyTitle = "Show OTP"
+            copySymbolName = "eye"
             isCopyDisabled = true
             accessibilityValue = ""
             tone = .neutral
+            symbolName = "eye.slash"
+            return
+        }
+
+        guard isRevealed else {
+            isVisible = true
+            self.isRevealed = false
+            titleText = "Current OTP"
+            codeText = ""
+            isCodeMasked = true
+            statusText = "2FA key saved"
+            copyText = ""
+            copyTitle = "Show OTP"
+            copySymbolName = "eye"
+            isCopyDisabled = false
+            accessibilityValue = "OTP covered. 2FA key saved."
+            tone = .info
+            symbolName = "eye.slash"
             return
         }
 
@@ -104,7 +129,10 @@ struct ProfileManagerOneTimePasswordPresentation: Equatable, Sendable {
             let generatedCode = generator.code(at: referenceDate)
             let secondsRemaining = generator.secondsRemaining(at: referenceDate)
             isVisible = true
+            self.isRevealed = true
+            titleText = "Current OTP"
             codeText = generatedCode
+            isCodeMasked = false
             statusText = "Expires in \(secondsRemaining)s"
             copyText = generatedCode
             copyTitle = isCopied ? "Copied" : "Copy code"
@@ -112,9 +140,13 @@ struct ProfileManagerOneTimePasswordPresentation: Equatable, Sendable {
             isCopyDisabled = false
             accessibilityValue = "Current OTP \(generatedCode), expires in \(secondsRemaining) \(secondsRemaining == 1 ? "second" : "seconds")."
             tone = .info
+            symbolName = "number"
         } catch {
             isVisible = true
+            self.isRevealed = true
+            titleText = "Current OTP"
             codeText = "------"
+            isCodeMasked = false
             statusText = "Check 2FA key"
             copyText = ""
             copyTitle = "Copy code"
@@ -122,6 +154,7 @@ struct ProfileManagerOneTimePasswordPresentation: Equatable, Sendable {
             isCopyDisabled = true
             accessibilityValue = "2FA key is not valid."
             tone = .warning
+            symbolName = "key.slash"
         }
     }
 }
@@ -278,6 +311,7 @@ struct ProfileManagerWindowView: View {
     @State private var detailsDraft = PlusProfileDetailsDraft()
     @State private var sidebarTagFilter = ProfileTagFilter()
     @State private var revealedPrivateFields: Set<ProfilePrivateField> = []
+    @State private var isOneTimePasswordRevealed = false
     @State private var copiedField: ProfileDetailsCopyField?
     @State private var copyResetTask: Task<Void, Never>?
     @State private var showsSavedConfirmation = false
@@ -348,9 +382,13 @@ struct ProfileManagerWindowView: View {
             resetDetailsFeedback()
             syncDrafts(with: controller.selectedProfile)
         }
-        .onChange(of: detailsDraft) { _, newDraft in
+        .onChange(of: detailsDraft) { oldDraft, newDraft in
             guard let snapshot = controller.selectedProfile else {
                 return
+            }
+
+            if oldDraft.twoFactorCode != newDraft.twoFactorCode {
+                hideOneTimePassword()
             }
 
             if newDraft != PlusProfileDetailsDraft(profile: snapshot.profile) {
@@ -687,22 +725,7 @@ struct ProfileManagerWindowView: View {
             )
 
             if detailsDraft.twoFactorCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
-                TimelineView(.periodic(from: .now, by: 1)) { context in
-                    let presentation = ProfileManagerOneTimePasswordPresentation(
-                        secret: detailsDraft.twoFactorCode,
-                        isCopied: copiedField == .oneTimePassword,
-                        referenceDate: context.date
-                    )
-
-                    if presentation.isVisible {
-                        ProfileManagerOneTimePasswordPanel(
-                            presentation: presentation,
-                            copy: {
-                                copy(presentation.copyText, field: .oneTimePassword)
-                            }
-                        )
-                    }
-                }
+                oneTimePasswordPanel
             }
 
             ProfileManagerDetailsTextField(
@@ -731,6 +754,38 @@ struct ProfileManagerWindowView: View {
             )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private var oneTimePasswordPanel: some View {
+        if isOneTimePasswordRevealed {
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                oneTimePasswordPanelContent(referenceDate: context.date)
+            }
+        } else {
+            oneTimePasswordPanelContent(referenceDate: currentTime.now)
+        }
+    }
+
+    @ViewBuilder
+    private func oneTimePasswordPanelContent(referenceDate: Date) -> some View {
+        let presentation = ProfileManagerOneTimePasswordPresentation(
+            secret: detailsDraft.twoFactorCode,
+            isRevealed: isOneTimePasswordRevealed,
+            isCopied: copiedField == .oneTimePassword,
+            referenceDate: referenceDate
+        )
+
+        if presentation.isVisible {
+            ProfileManagerOneTimePasswordPanel(
+                presentation: presentation,
+                reveal: revealOneTimePassword,
+                hide: hideOneTimePassword,
+                copy: {
+                    copy(presentation.copyText, field: .oneTimePassword)
+                }
+            )
+        }
     }
 
     private func usagePanel(
@@ -1131,7 +1186,19 @@ struct ProfileManagerWindowView: View {
         copyResetTask = nil
         copiedField = nil
         revealedPrivateFields.removeAll()
+        isOneTimePasswordRevealed = false
         resetSaveFeedback()
+    }
+
+    private func revealOneTimePassword() {
+        isOneTimePasswordRevealed = true
+    }
+
+    private func hideOneTimePassword() {
+        isOneTimePasswordRevealed = false
+        if copiedField == .oneTimePassword {
+            copiedField = nil
+        }
     }
 
     private func openEmailLink(for profile: PlusProfile) {
@@ -1515,6 +1582,8 @@ private struct ProfileManagerPrivateDetailsField: View {
 
 private struct ProfileManagerOneTimePasswordPanel: View {
     let presentation: ProfileManagerOneTimePasswordPresentation
+    let reveal: () -> Void
+    let hide: () -> Void
     let copy: () -> Void
 
     var body: some View {
@@ -1527,14 +1596,14 @@ private struct ProfileManagerOneTimePasswordPanel: View {
                             .stroke(presentation.tone.borderColor, lineWidth: 1)
                     )
 
-                Image(systemName: presentation.isCopyDisabled ? "key.slash" : "number")
+                Image(systemName: presentation.symbolName)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(presentation.tone.foregroundColor)
             }
             .frame(width: 32, height: 32)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("Current OTP")
+                Text(presentation.titleText)
                     .font(ProfileManagerTypography.caption)
                     .foregroundStyle(CodexTheme.dataLabelText)
 
@@ -1549,25 +1618,44 @@ private struct ProfileManagerOneTimePasswordPanel: View {
 
             Spacer(minLength: 12)
 
-            Text(presentation.codeText)
-                .font(.system(size: 24, weight: .semibold, design: .monospaced))
-                .monospacedDigit()
-                .foregroundStyle(
-                    presentation.isCopyDisabled
-                        ? CodexTheme.disabledText
-                        : CodexTheme.oneTimePasswordCodeText
+            ZStack(alignment: .trailing) {
+                if presentation.isCodeMasked {
+                    ProfileManagerOneTimePasswordMask()
+                } else {
+                    Text(presentation.codeText)
+                        .font(.system(size: 24, weight: .semibold, design: .monospaced))
+                        .monospacedDigit()
+                        .foregroundStyle(
+                            presentation.isCopyDisabled
+                                ? CodexTheme.disabledText
+                                : CodexTheme.oneTimePasswordCodeText
+                        )
+                }
+            }
+            .frame(minWidth: 112, minHeight: 32, alignment: .trailing)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(presentation.accessibilityValue)
+
+            if presentation.isRevealed {
+                ProfileManagerInlineFieldActionButton(
+                    title: "Hide",
+                    symbolName: "eye.slash",
+                    helpText: "Hide current OTP",
+                    accessibilityLabel: "Hide current OTP",
+                    isDisabled: false,
+                    isConfirmed: false,
+                    action: hide
                 )
-                .frame(minWidth: 112, alignment: .trailing)
-                .accessibilityLabel(presentation.accessibilityValue)
+            }
 
             ProfileManagerInlineFieldActionButton(
                 title: presentation.copyTitle,
                 symbolName: presentation.copySymbolName,
-                helpText: presentation.isCopyDisabled ? "Add a valid 2FA key before copying the OTP." : "Copy current OTP",
-                accessibilityLabel: presentation.copyTitle,
+                helpText: oneTimePasswordActionHelpText,
+                accessibilityLabel: oneTimePasswordActionAccessibilityLabel,
                 isDisabled: presentation.isCopyDisabled,
-                isConfirmed: presentation.copyTitle == "Copied",
-                action: copy
+                isConfirmed: presentation.isRevealed && presentation.copyTitle == "Copied",
+                action: presentation.isRevealed ? copy : reveal
             )
         }
         .padding(.horizontal, 12)
@@ -1586,6 +1674,43 @@ private struct ProfileManagerOneTimePasswordPanel: View {
                 .stroke(CodexTheme.surfaceBorder(for: .subtle), lineWidth: 1)
         )
         .accessibilityElement(children: .contain)
+    }
+
+    private var oneTimePasswordActionHelpText: String {
+        if presentation.isRevealed == false {
+            return "Show current OTP"
+        }
+
+        return presentation.isCopyDisabled ? "Add a valid 2FA key before copying the OTP." : "Copy current OTP"
+    }
+
+    private var oneTimePasswordActionAccessibilityLabel: String {
+        presentation.isRevealed ? presentation.copyTitle : "Show current OTP"
+    }
+}
+
+private struct ProfileManagerOneTimePasswordMask: View {
+    private let segmentWidths: [CGFloat] = [14, 12, 13, 12, 14, 12]
+
+    var body: some View {
+        HStack(spacing: 5) {
+            ForEach(segmentWidths.indices, id: \.self) { index in
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(CodexTheme.oneTimePasswordMaskFill)
+                    .frame(width: segmentWidths[index], height: 18)
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: CodexTheme.Radius.field, style: .continuous)
+                .fill(CodexTheme.surfaceFill(for: .nested))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: CodexTheme.Radius.field, style: .continuous)
+                .stroke(CodexTheme.surfaceBorder(for: .subtle), lineWidth: 1)
+        )
+        .accessibilityHidden(true)
     }
 }
 

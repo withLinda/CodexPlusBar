@@ -388,6 +388,7 @@ struct CodexThemeTests {
 
             #expect(CodexTheme.oneTimePasswordCodeTextToken(preset: preset) == palette.dataValueText)
             #expect(CodexTheme.oneTimePasswordStatusTextToken(preset: preset) == palette.supportText)
+            #expect(CodexTheme.oneTimePasswordMaskFillToken(preset: preset) == palette.supportText)
         }
     }
 
@@ -496,6 +497,7 @@ private func usefulTextRoles(for preset: CodexThemePreset) -> [(name: String, to
         ("dataValue", palette.dataValueText),
         ("oneTimePasswordCode", CodexTheme.oneTimePasswordCodeTextToken(preset: preset)),
         ("oneTimePasswordStatus", CodexTheme.oneTimePasswordStatusTextToken(preset: preset)),
+        ("oneTimePasswordMask", CodexTheme.oneTimePasswordMaskFillToken(preset: preset)),
     ]
 }
 

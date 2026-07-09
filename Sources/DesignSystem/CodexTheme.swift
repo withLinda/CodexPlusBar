@@ -624,6 +624,7 @@ enum CodexTheme {
     static var dataValueText: Color { dataValueTextToken.color }
     static var oneTimePasswordCodeText: Color { oneTimePasswordCodeTextToken().color }
     static var oneTimePasswordStatusText: Color { oneTimePasswordStatusTextToken().color }
+    static var oneTimePasswordMaskFill: Color { oneTimePasswordMaskFillToken().color }
     static var actionText: Color { actionTextToken().color }
     static var utilityActionText: Color { utilityActionTextToken().color }
     static var successText: Color { successTextToken().color }
@@ -701,6 +702,10 @@ enum CodexTheme {
     }
 
     static func oneTimePasswordStatusTextToken(preset: CodexThemePreset = activePreset) -> CodexColorToken {
+        palette(for: preset).supportText
+    }
+
+    static func oneTimePasswordMaskFillToken(preset: CodexThemePreset = activePreset) -> CodexColorToken {
         palette(for: preset).supportText
     }
 
