@@ -9,7 +9,6 @@ protocol ChatGPTAuthContextWritable: AnyObject {
 final class CookieBackedTransport: HTTPTransport, ChatGPTAuthContextWritable {
     private let sessionStore: WebSessionStore
     private let urlSession: URLSession
-    private let cookieStorage: HTTPCookieStorage
     private let logger: NetworkTraceLogger
     private var authContext: ChatGPTAuthContext?
 
@@ -21,14 +20,12 @@ final class CookieBackedTransport: HTTPTransport, ChatGPTAuthContextWritable {
         self.sessionStore = sessionStore
         if let urlSession {
             self.urlSession = urlSession
-            self.cookieStorage = urlSession.configuration.httpCookieStorage ?? .shared
         } else {
             let configuration = URLSessionConfiguration.ephemeral
-            configuration.httpCookieAcceptPolicy = .always
-            configuration.httpShouldSetCookies = true
+            configuration.httpCookieStorage = nil
+            configuration.httpShouldSetCookies = false
             configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
             configuration.timeoutIntervalForRequest = 30
-            self.cookieStorage = configuration.httpCookieStorage ?? .shared
             self.urlSession = URLSession(configuration: configuration)
         }
         self.logger = logger
@@ -44,15 +41,11 @@ final class CookieBackedTransport: HTTPTransport, ChatGPTAuthContextWritable {
         }
 
         let cookies = await sessionStore.cookies(for: url)
-        seedCookieStorage(with: cookies)
-
-        var signedRequest = ChatGPTRequestSigner.sign(
+        let signedRequest = Self.makeSignedRequest(
             request,
             cookies: cookies,
             authContext: authContext
         )
-        signedRequest.setValue(nil, forHTTPHeaderField: "Cookie")
-        signedRequest.httpShouldHandleCookies = true
 
         logger.logRequest(signedRequest)
 
@@ -62,7 +55,10 @@ final class CookieBackedTransport: HTTPTransport, ChatGPTAuthContextWritable {
                 throw ChatGPTAPIError.invalidResponse
             }
 
-            await sessionStore.storeCookies(cookieStorage.cookies ?? [])
+            await sessionStore.storeResponseCookies(
+                from: httpResponse,
+                for: httpResponse.url ?? url
+            )
             logger.logResponse(httpResponse, data: data)
 
             switch httpResponse.statusCode {
@@ -83,9 +79,15 @@ final class CookieBackedTransport: HTTPTransport, ChatGPTAuthContextWritable {
         }
     }
 
-    private func seedCookieStorage(with cookies: [HTTPCookie]) {
-        for cookie in cookies {
-            cookieStorage.setCookie(cookie)
-        }
+    static func makeSignedRequest(
+        _ request: URLRequest,
+        cookies: [HTTPCookie],
+        authContext: ChatGPTAuthContext?
+    ) -> URLRequest {
+        ChatGPTRequestSigner.sign(
+            request,
+            cookies: cookies,
+            authContext: authContext
+        )
     }
 }

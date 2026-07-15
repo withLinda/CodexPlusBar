@@ -131,6 +131,73 @@ struct ChromeCookieImporterTests {
     }
 
     @Test
+    func storingSingleSessionCookieRemovesStaleChunks() async throws {
+        let sessionStore = WebSessionStore(dataStore: .nonPersistent())
+        await sessionStore.storeCookies(try [
+            makeHTTPCookie(name: "__Secure-next-auth.session-token.0", value: "stale-a"),
+            makeHTTPCookie(name: "__Secure-next-auth.session-token.1", value: "stale-b"),
+        ])
+
+        _ = try await ChromeCookieImporter.storeChatGPTCookies(
+            from: [
+                ChromeDevToolsCookie(
+                    name: "__Secure-next-auth.session-token",
+                    value: "fresh",
+                    domain: ".chatgpt.com",
+                    path: "/",
+                    expires: nil,
+                    httpOnly: true,
+                    secure: true
+                ),
+            ],
+            in: sessionStore
+        )
+
+        let cookies = await sessionStore.cookies(for: ChatGPTWebURLs.cookieScope)
+        #expect(cookies.map(\.name) == ["__Secure-next-auth.session-token"])
+        #expect(cookies.first?.value == "fresh")
+    }
+
+    @Test
+    func storingChunkedSessionCookieRemovesStaleSingleCookie() async throws {
+        let sessionStore = WebSessionStore(dataStore: .nonPersistent())
+        await sessionStore.storeCookies(try [
+            makeHTTPCookie(name: "__Secure-next-auth.session-token", value: "stale"),
+        ])
+
+        _ = try await ChromeCookieImporter.storeChatGPTCookies(
+            from: [
+                ChromeDevToolsCookie(
+                    name: "__Secure-next-auth.session-token.0",
+                    value: "fresh-a",
+                    domain: ".chatgpt.com",
+                    path: "/",
+                    expires: nil,
+                    httpOnly: true,
+                    secure: true
+                ),
+                ChromeDevToolsCookie(
+                    name: "__Secure-next-auth.session-token.1",
+                    value: "fresh-b",
+                    domain: ".chatgpt.com",
+                    path: "/",
+                    expires: nil,
+                    httpOnly: true,
+                    secure: true
+                ),
+            ],
+            in: sessionStore
+        )
+
+        let cookies = await sessionStore.cookies(for: ChatGPTWebURLs.cookieScope)
+        #expect(Set(cookies.map(\.name)) == [
+            "__Secure-next-auth.session-token.0",
+            "__Secure-next-auth.session-token.1",
+        ])
+        #expect(Set(cookies.map(\.value)) == ["fresh-a", "fresh-b"])
+    }
+
+    @Test
     func chatGPTCookiesRejectsFakeChunkedSessionTokenNames() {
         let cookies = [
             ChromeDevToolsCookie(
@@ -148,4 +215,18 @@ struct ChromeCookieImporterTests {
             _ = try ChromeCookieImporter.chatGPTHTTPCookies(from: cookies)
         }
     }
+}
+
+private func makeHTTPCookie(name: String, value: String) throws -> HTTPCookie {
+    try #require(
+        HTTPCookie(
+            properties: [
+                .name: name,
+                .value: value,
+                .domain: ".chatgpt.com",
+                .path: "/",
+                .secure: "TRUE",
+            ]
+        )
+    )
 }

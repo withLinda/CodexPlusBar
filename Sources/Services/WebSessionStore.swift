@@ -75,6 +75,20 @@ final class WebSessionStore {
         }
     }
 
+    func replaceCookies(_ cookies: [HTTPCookie], for url: URL) async {
+        guard let host = url.host?.lowercased() else {
+            await storeCookies(cookies)
+            return
+        }
+
+        let existingCookies = await dataStore.httpCookieStore.allCookies()
+        for cookie in existingCookies where Self.normalizedDomain(cookie.domain) == host {
+            await dataStore.httpCookieStore.deleteCookieAsync(cookie)
+        }
+
+        await storeCookies(cookies)
+    }
+
     func clear() async {
         let allTypes = WKWebsiteDataStore.allWebsiteDataTypes()
         await withCheckedContinuation { continuation in
@@ -87,6 +101,13 @@ final class WebSessionStore {
     private func matchingCookies(named name: String, for url: URL) async -> [HTTPCookie] {
         let cookies = await cookies(for: url)
         return cookies.filter { $0.name == name }
+    }
+
+    private static func normalizedDomain(_ domain: String) -> String {
+        let lowercasedDomain = domain.lowercased()
+        return lowercasedDomain.hasPrefix(".")
+            ? String(lowercasedDomain.dropFirst())
+            : lowercasedDomain
     }
 
     private static func makeCurrentAccountCookie(

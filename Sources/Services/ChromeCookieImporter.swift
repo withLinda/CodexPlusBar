@@ -42,7 +42,7 @@ enum ChromeCookieImporter {
         in sessionStore: WebSessionStore
     ) async throws -> Int {
         let importedCookies = try chatGPTHTTPCookies(from: cookies)
-        await sessionStore.storeCookies(importedCookies)
+        await sessionStore.replaceCookies(importedCookies, for: ChatGPTWebURLs.cookieScope)
         return importedCookies.count
     }
 
