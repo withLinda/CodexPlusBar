@@ -72,7 +72,7 @@ final class PlusProfileController {
         autoRefreshInterval: TimeInterval = 300,
         maxConcurrentProfileRefreshes: Int = 3,
         autoRefreshSleep: @escaping @Sendable (UInt64) async throws -> Void = {
-            try await Task.sleep(nanoseconds: $0)
+            try await Task.sleep(for: .nanoseconds(Int64(clamping: $0)))
         },
         autoStart: Bool = true
     ) {
@@ -234,7 +234,7 @@ final class PlusProfileController {
 
         let previousProfiles = profiles
         let previousSelectedProfileID = selectedProfileID
-        let createdAt = Date()
+        let createdAt = Date.now
         let startSortOrder = profiles.count
         let importedProfiles = preview.entries.enumerated().map { offset, entry in
             PlusProfile(

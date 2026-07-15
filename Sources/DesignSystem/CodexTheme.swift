@@ -1622,6 +1622,24 @@ struct CodexStatusBanner: View {
     let message: String
     let tone: CodexStatusTone
     let symbolName: String
+    let titleFont: Font
+    let messageFont: Font
+
+    init(
+        title: String,
+        message: String,
+        tone: CodexStatusTone,
+        symbolName: String,
+        titleFont: Font = .codexSmallStrong,
+        messageFont: Font = .codexSmall
+    ) {
+        self.title = title
+        self.message = message
+        self.tone = tone
+        self.symbolName = symbolName
+        self.titleFont = titleFont
+        self.messageFont = messageFont
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -1641,11 +1659,11 @@ struct CodexStatusBanner: View {
 
             VStack(alignment: .leading, spacing: CodexTheme.Spacing.micro) {
                 Text(title)
-                    .font(.codexSmallStrong)
+                    .font(titleFont)
                     .foregroundStyle(CodexTheme.headingText)
 
                 Text(message)
-                    .font(.codexSmall)
+                    .font(messageFont)
                     .foregroundStyle(CodexTheme.mutedText)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -1663,31 +1681,6 @@ struct CodexStatusBanner: View {
                         .stroke(tone.borderColor, lineWidth: 1)
                 )
         )
-    }
-}
-
-struct CodexProgressBar: View {
-    let remainingPercent: Int
-
-    var body: some View {
-        GeometryReader { proxy in
-            let clamped = min(max(remainingPercent, 0), 100)
-            let width = proxy.size.width * CGFloat(clamped) / 100
-
-            ZStack(alignment: .leading) {
-                RoundedRectangle(cornerRadius: CodexTheme.thinBarCornerRadius, style: .continuous)
-                    .fill(CodexTheme.surfaceFill(for: .subtle))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: CodexTheme.thinBarCornerRadius, style: .continuous)
-                            .stroke(CodexTheme.surfaceBorder(for: .subtle), lineWidth: 1)
-                    )
-
-                RoundedRectangle(cornerRadius: CodexTheme.thinBarCornerRadius, style: .continuous)
-                    .fill(CodexTheme.progressGradient(forRemainingPercent: clamped))
-                    .frame(width: max(width, 10))
-            }
-        }
-        .frame(height: 8)
     }
 }
 
@@ -1856,12 +1849,26 @@ struct CodexIconButton: View {
 struct CodexPrimaryButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
 
+    let font: Font
+    let horizontalPadding: CGFloat
+    let verticalPadding: CGFloat
+
+    init(
+        font: Font = .codexSmallStrong,
+        horizontalPadding: CGFloat = 14,
+        verticalPadding: CGFloat = 10
+    ) {
+        self.font = font
+        self.horizontalPadding = horizontalPadding
+        self.verticalPadding = verticalPadding
+    }
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.codexSmallStrong)
+            .font(font)
             .foregroundStyle(isEnabled ? CodexTheme.accentInk : CodexTheme.disabledText)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .padding(.horizontal, horizontalPadding)
+            .padding(.vertical, verticalPadding)
             .background(
                 RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
                     .fill(
@@ -1889,12 +1896,29 @@ struct CodexPrimaryButtonStyle: ButtonStyle {
 struct CodexSecondaryButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
 
+    let font: Font
+    let foregroundColor: Color
+    let horizontalPadding: CGFloat
+    let verticalPadding: CGFloat
+
+    init(
+        font: Font = .codexSmallStrong,
+        foregroundColor: Color = CodexTheme.actionText,
+        horizontalPadding: CGFloat = 14,
+        verticalPadding: CGFloat = 10
+    ) {
+        self.font = font
+        self.foregroundColor = foregroundColor
+        self.horizontalPadding = horizontalPadding
+        self.verticalPadding = verticalPadding
+    }
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.codexSmallStrong)
-            .foregroundStyle(isEnabled ? CodexTheme.actionText : CodexTheme.disabledText)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .font(font)
+            .foregroundStyle(isEnabled ? foregroundColor : CodexTheme.disabledText)
+            .padding(.horizontal, horizontalPadding)
+            .padding(.vertical, verticalPadding)
             .background(
                 RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
                     .fill(CodexTheme.surfaceFill(for: .subtle))
@@ -1917,18 +1941,35 @@ struct CodexSecondaryButtonStyle: ButtonStyle {
 struct CodexQuietButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
 
+    let font: Font
+    let horizontalPadding: CGFloat
+    let verticalPadding: CGFloat
+    let cornerRadius: CGFloat
+
+    init(
+        font: Font = .codexCaption,
+        horizontalPadding: CGFloat = 10,
+        verticalPadding: CGFloat = 8,
+        cornerRadius: CGFloat = CodexTheme.controlCornerRadius
+    ) {
+        self.font = font
+        self.horizontalPadding = horizontalPadding
+        self.verticalPadding = verticalPadding
+        self.cornerRadius = cornerRadius
+    }
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.codexCaption)
+            .font(font)
             .foregroundStyle(isEnabled ? CodexTheme.mutedText : CodexTheme.disabledText)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
+            .padding(.horizontal, horizontalPadding)
+            .padding(.vertical, verticalPadding)
             .background(
-                RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .fill(CodexTheme.surfaceFill(for: .subtle).opacity(configuration.isPressed ? 0.98 : 0.84))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .stroke(CodexTheme.surfaceBorder(for: .subtle), lineWidth: 1)
             )
     }
@@ -1937,14 +1978,31 @@ struct CodexQuietButtonStyle: ButtonStyle {
 struct CodexDangerButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
 
+    let font: Font
+    let horizontalPadding: CGFloat
+    let verticalPadding: CGFloat
+    let cornerRadius: CGFloat
+
+    init(
+        font: Font = .codexSmallStrong,
+        horizontalPadding: CGFloat = 14,
+        verticalPadding: CGFloat = 10,
+        cornerRadius: CGFloat = CodexTheme.controlCornerRadius
+    ) {
+        self.font = font
+        self.horizontalPadding = horizontalPadding
+        self.verticalPadding = verticalPadding
+        self.cornerRadius = cornerRadius
+    }
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.codexSmallStrong)
+            .font(font)
             .foregroundStyle(isEnabled ? CodexTheme.dangerText : CodexTheme.disabledText)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .padding(.horizontal, horizontalPadding)
+            .padding(.vertical, verticalPadding)
             .background(
-                RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .fill(
                         isEnabled
                             ? CodexTheme.accentRed.opacity(configuration.isPressed ? 0.16 : 0.10)
@@ -1952,7 +2010,7 @@ struct CodexDangerButtonStyle: ButtonStyle {
                     )
             )
             .overlay(
-                RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .stroke(
                         isEnabled
                             ? CodexTheme.accentRed.opacity(0.24)

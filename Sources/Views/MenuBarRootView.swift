@@ -72,12 +72,13 @@ struct MenuBarRootView: View {
                     )
                 }
 
-                ScrollView(.vertical, showsIndicators: false) {
+                ScrollView(.vertical) {
                     VStack(alignment: .leading, spacing: MenuBarPanelMetrics.rowSpacing) {
                         content
                     }
                     .frame(width: panelContentWidth, alignment: .leading)
                 }
+                .scrollIndicators(.hidden)
                 .frame(width: panelContentWidth, alignment: .topLeading)
                 .frame(maxHeight: .infinity, alignment: .topLeading)
 
@@ -542,75 +543,6 @@ private struct MenuBarZoomButton: View {
         .accessibilityLabel(helpText)
         .help(helpText)
         .disabled(isDisabled)
-    }
-}
-
-struct MenuBarStatusLabel: View {
-    let controller: PlusProfileController
-    @AppStorage(MenuBarProfilePreference.preferredProfileIDKey) private var preferredProfileIDStorage = ""
-    let currentTime: AppMinuteClock
-
-    var body: some View {
-        let content = controller.statusBarContent(
-            preferredProfileID: MenuBarProfilePreference.normalizedProfileID(from: preferredProfileIDStorage),
-            referenceDate: currentTime.now
-        )
-        let labelColor = statusLabelColor
-
-        HStack(spacing: 5) {
-            Image(systemName: controller.statusBarSymbolName)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(labelColor)
-
-            if content.showsUsageSummary {
-                Text(content.profileLabel)
-                    .font(.codexMenuBarLabel)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .foregroundStyle(labelColor)
-
-                Image(systemName: "hourglass.circle")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(labelColor)
-
-                Text(content.fiveHourText)
-                    .font(.codexMenuBarLabel)
-                    .lineLimit(1)
-                    .monospacedDigit()
-                    .foregroundStyle(labelColor)
-
-                Image(systemName: "7.calendar")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(labelColor)
-
-                Text(content.sevenDayText)
-                    .font(.codexMenuBarLabel)
-                    .lineLimit(1)
-                    .monospacedDigit()
-                    .foregroundStyle(labelColor)
-            } else {
-                Text(content.plainText)
-                    .font(.codexMenuBarLabel)
-                    .lineLimit(1)
-                    .monospacedDigit()
-                    .foregroundStyle(labelColor)
-            }
-        }
-        .accessibilityLabel("CodexPlusBar \(content.accessibilityText)")
-    }
-
-    private var statusLabelColor: Color {
-        if controller.dashboardStatus == .ready,
-           let urgent = controller.readyProfiles.min(by: {
-               ($0.usage?.fiveHourRemainingPercent ?? 101) < ($1.usage?.fiveHourRemainingPercent ?? 101)
-           }),
-           let remaining = urgent.usage?.fiveHourRemainingPercent {
-            return remaining <= 20
-                ? CodexTheme.accentOrange
-                : CodexTheme.accentGreen
-        }
-
-        return controller.dashboardStatus.tone.foregroundColor
     }
 }
 

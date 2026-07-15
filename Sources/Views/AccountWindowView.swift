@@ -223,7 +223,7 @@ enum ProfilePrivateField: Hashable {
     case twoFactorCode
 }
 
-enum ProfileDetailsCopyField: Hashable {
+enum ProfileDetailsCopyField: Hashable, Sendable {
     case label
     case password
     case twoFactorCode
@@ -306,16 +306,13 @@ struct ProfileManagerSessionPanelPresentation: Equatable, Sendable {
 struct ProfileManagerWindowView: View {
     @Bindable var controller: PlusProfileController
     let currentTime: AppMinuteClock
-    @Environment(\.displayScale) private var displayScale
-    @State private var windowChromeMetrics = WindowChromeMetrics()
     @State private var detailsDraft = PlusProfileDetailsDraft()
     @State private var sidebarTagFilter = ProfileTagFilter()
     @State private var profileSearchQuery = ""
     @State private var isProfileSearchPresented = false
     @State private var revealedPrivateFields: Set<ProfilePrivateField> = []
     @State private var isOneTimePasswordRevealed = false
-    @State private var copiedField: ProfileDetailsCopyField?
-    @State private var copyResetTask: Task<Void, Never>?
+    @State private var copyFeedback = TransientValue<ProfileDetailsCopyField>()
     @State private var showsSavedConfirmation = false
     @State private var saveResetTask: Task<Void, Never>?
     @State private var showsBulkImportSheet = false
@@ -330,44 +327,28 @@ struct ProfileManagerWindowView: View {
     }
 
     var body: some View {
-        let seamOverlap = 1 / max(displayScale, 1)
+        CodexWindowChromeContainer(minimumSize: CGSize(width: 1080, height: 760)) {
+            VStack(alignment: .leading, spacing: CodexTheme.sectionSpacing) {
+                header
 
-        VStack(spacing: 0) {
-            AccountWindowTitleBarGlass(
-                height: windowChromeMetrics.titleBarObscuredHeight,
-                seamOverlap: seamOverlap
-            )
-
-            AccountWindowBodyShell(seamOverlap: seamOverlap) {
-                VStack(alignment: .leading, spacing: CodexTheme.sectionSpacing) {
-                    header
-
-                    if let message = controller.statusMessage {
-                        ProfileManagerStatusBanner(
-                            title: controller.dashboardStatus.title,
-                            message: message,
-                            tone: controller.dashboardStatus.tone,
-                            symbolName: controller.dashboardStatus.symbolName
-                        )
-                    }
-
-                    bodyContent
+                if let message = controller.statusMessage {
+                    CodexStatusBanner(
+                        title: controller.dashboardStatus.title,
+                        message: message,
+                        tone: controller.dashboardStatus.tone,
+                        symbolName: controller.dashboardStatus.symbolName,
+                        titleFont: ProfileManagerTypography.smallStrong,
+                        messageFont: ProfileManagerTypography.small
+                    )
                 }
-                .padding(.top, CodexTheme.chromePadding)
-                .padding(.horizontal, CodexTheme.chromePadding)
-                .padding(.bottom, CodexTheme.chromePadding)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+
+                bodyContent
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.top, CodexTheme.chromePadding)
+            .padding(.horizontal, CodexTheme.chromePadding)
+            .padding(.bottom, CodexTheme.chromePadding)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
-        .frame(minWidth: 1080, minHeight: 760)
-        .background(Color.clear)
-        .overlay(alignment: .topLeading) {
-            WindowChromeMetricsReader(metrics: $windowChromeMetrics)
-                .frame(width: 0, height: 0)
-                .allowsHitTesting(false)
-        }
-        .codexThemeRefreshScope()
         .sheet(isPresented: $showsBulkImportSheet) {
             ProfileManagerBulkImportSheet(
                 rawText: $bulkImportText,
@@ -448,18 +429,18 @@ struct ProfileManagerWindowView: View {
                     Button(action: refreshAll) {
                         Label("Refresh all", systemImage: "arrow.clockwise")
                     }
-                    .buttonStyle(ProfileManagerPrimaryButtonStyle())
+                    .buttonStyle(CodexPrimaryButtonStyle(font: ProfileManagerTypography.smallStrong))
                     .disabled(controller.isRefreshing || controller.profiles.isEmpty)
 
                     Button(action: addProfile) {
                         Label("Add profile", systemImage: "plus")
                     }
-                    .buttonStyle(ProfileManagerSecondaryButtonStyle())
+                    .buttonStyle(CodexSecondaryButtonStyle(font: ProfileManagerTypography.smallStrong))
 
                     Button(action: showBulkImport) {
                         Label("Import", systemImage: "tray.and.arrow.down")
                     }
-                    .buttonStyle(ProfileManagerSecondaryButtonStyle())
+                    .buttonStyle(CodexSecondaryButtonStyle(font: ProfileManagerTypography.smallStrong))
                 }
             }
         }
@@ -545,7 +526,7 @@ struct ProfileManagerWindowView: View {
                     } else if filteredSidebarProfiles.isEmpty {
                         ProfileTagEmptyState(clearFilter: clearSidebarFilter)
                     } else {
-                        ScrollView(.vertical, showsIndicators: true) {
+                        ScrollView(.vertical) {
                             VStack(alignment: .leading, spacing: 10) {
                                 ForEach(filteredSidebarProfiles) { snapshot in
                                     Button {
@@ -577,7 +558,7 @@ struct ProfileManagerWindowView: View {
         if let snapshot = controller.selectedProfile {
             let metrics = ProfileManagerDetailLayoutMetrics.chromeSignIn
 
-            ScrollView(.vertical, showsIndicators: true) {
+            ScrollView(.vertical) {
                 VStack(alignment: .leading, spacing: metrics.detailStackSpacing) {
                     detailTopGrid(for: snapshot, metrics: metrics)
                     usagePanel(for: snapshot, metrics: metrics)
@@ -692,7 +673,7 @@ struct ProfileManagerWindowView: View {
                     } label: {
                         Label(formPresentation.saveTitle, systemImage: formPresentation.saveSymbolName)
                     }
-                    .buttonStyle(ProfileManagerSecondaryButtonStyle())
+                    .buttonStyle(CodexSecondaryButtonStyle(font: ProfileManagerTypography.smallStrong))
                     .disabled(formPresentation.isSaveEnabled == false)
                 }
             }
@@ -732,7 +713,7 @@ struct ProfileManagerWindowView: View {
                     title: "Password",
                     value: detailsDraft.password,
                     isRevealed: revealedPrivateFields.contains(.password),
-                    isCopied: copiedField == .password
+                    isCopied: copyFeedback.current == .password
                 ),
                 onSubmit: {
                     saveDetailsDraftIfNeeded(for: snapshot)
@@ -752,7 +733,7 @@ struct ProfileManagerWindowView: View {
                     title: "2FA key",
                     value: detailsDraft.twoFactorCode,
                     isRevealed: revealedPrivateFields.contains(.twoFactorCode),
-                    isCopied: copiedField == .twoFactorCode
+                    isCopied: copyFeedback.current == .twoFactorCode
                 ),
                 onSubmit: {
                     saveDetailsDraftIfNeeded(for: snapshot)
@@ -777,12 +758,12 @@ struct ProfileManagerWindowView: View {
                 }
             ) {
                 ProfileManagerInlineFieldActionButton(
-                    title: copiedField == .phoneNumber ? "Copied" : "Copy",
-                    symbolName: copiedField == .phoneNumber ? "checkmark" : "doc.on.doc",
+                    title: copyFeedback.current == .phoneNumber ? "Copied" : "Copy",
+                    symbolName: copyFeedback.current == .phoneNumber ? "checkmark" : "doc.on.doc",
                     helpText: phoneNumberCopyText.isEmpty ? "Add a phone number before copying it." : "Copy phone number",
-                    accessibilityLabel: copiedField == .phoneNumber ? "Phone number copied" : "Copy phone number",
+                    accessibilityLabel: copyFeedback.current == .phoneNumber ? "Phone number copied" : "Copy phone number",
                     isDisabled: phoneNumberCopyText.isEmpty,
-                    isConfirmed: copiedField == .phoneNumber,
+                    isConfirmed: copyFeedback.current == .phoneNumber,
                     action: {
                         copy(phoneNumberCopyText, field: .phoneNumber)
                     }
@@ -813,7 +794,7 @@ struct ProfileManagerWindowView: View {
         let presentation = ProfileManagerOneTimePasswordPresentation(
             secret: detailsDraft.twoFactorCode,
             isRevealed: isOneTimePasswordRevealed,
-            isCopied: copiedField == .oneTimePassword,
+            isCopied: copyFeedback.current == .oneTimePassword,
             referenceDate: referenceDate
         )
 
@@ -978,7 +959,7 @@ struct ProfileManagerWindowView: View {
                     } label: {
                         Label(presentation.primaryTitle, systemImage: "globe")
                     }
-                    .buttonStyle(ProfileManagerPrimaryButtonStyle())
+                    .buttonStyle(CodexPrimaryButtonStyle(font: ProfileManagerTypography.smallStrong))
                     .disabled(snapshot.isRefreshing)
 
                     CodexIconButton(
@@ -993,14 +974,14 @@ struct ProfileManagerWindowView: View {
                     Button(presentation.syncTitle) {
                         syncChromeSession(snapshot.id)
                     }
-                    .buttonStyle(ProfileManagerSecondaryButtonStyle())
+                    .buttonStyle(CodexSecondaryButtonStyle(font: ProfileManagerTypography.smallStrong))
                     .disabled(presentation.isSyncDisabled)
 
                     if presentation.showsCancel {
                         Button(presentation.cancelTitle) {
                             closeChromeSignIn(snapshot.id)
                         }
-                        .buttonStyle(ProfileManagerSecondaryButtonStyle())
+                        .buttonStyle(CodexSecondaryButtonStyle(font: ProfileManagerTypography.smallStrong))
                     }
                 }
             }
@@ -1153,7 +1134,7 @@ struct ProfileManagerWindowView: View {
     private func labelCopyButtonPresentation() -> ProfileManagerLabelCopyButtonPresentation {
         ProfileManagerLabelCopyButtonPresentation(
             labelDraft: detailsDraft.label,
-            isCopied: copiedField == .label
+            isCopied: copyFeedback.current == .label
         )
     }
 
@@ -1179,21 +1160,7 @@ struct ProfileManagerWindowView: View {
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
 
-        copiedField = field
-        scheduleCopyReset(for: field)
-    }
-
-    private func scheduleCopyReset(for field: ProfileDetailsCopyField) {
-        copyResetTask?.cancel()
-        copyResetTask = Task { @MainActor [field] in
-            try? await Task.sleep(for: .milliseconds(1_400))
-            guard Task.isCancelled == false, copiedField == field else {
-                return
-            }
-
-            copiedField = nil
-            copyResetTask = nil
-        }
+        copyFeedback.show(field)
     }
 
     private func scheduleSaveReset() {
@@ -1224,9 +1191,7 @@ struct ProfileManagerWindowView: View {
     }
 
     private func resetDetailsFeedback() {
-        copyResetTask?.cancel()
-        copyResetTask = nil
-        copiedField = nil
+        copyFeedback.clear()
         revealedPrivateFields.removeAll()
         isOneTimePasswordRevealed = false
         resetSaveFeedback()
@@ -1238,8 +1203,8 @@ struct ProfileManagerWindowView: View {
 
     private func hideOneTimePassword() {
         isOneTimePasswordRevealed = false
-        if copiedField == .oneTimePassword {
-            copiedField = nil
+        if copyFeedback.current == .oneTimePassword {
+            copyFeedback.clear()
         }
     }
 
@@ -1496,7 +1461,7 @@ private struct ProfileManagerBulkImportSheet: View {
             Button("Cancel") {
                 cancel()
             }
-            .buttonStyle(ProfileManagerSecondaryButtonStyle())
+            .buttonStyle(CodexSecondaryButtonStyle(font: ProfileManagerTypography.smallStrong))
             .keyboardShortcut(.cancelAction)
 
             Button {
@@ -1504,7 +1469,7 @@ private struct ProfileManagerBulkImportSheet: View {
             } label: {
                 Label(presentation.submitTitle, systemImage: "checkmark")
             }
-            .buttonStyle(ProfileManagerPrimaryButtonStyle())
+            .buttonStyle(CodexPrimaryButtonStyle(font: ProfileManagerTypography.smallStrong))
             .disabled(presentation.isSubmitDisabled)
             .keyboardShortcut(.defaultAction)
         }
@@ -1931,376 +1896,5 @@ private struct ProfileManagerInlineFieldActionButtonStyle: ButtonStyle {
         }
 
         return CodexTheme.surfaceFill(for: .subtle).opacity(isPressed ? 0.98 : 0.92)
-    }
-}
-
-private struct ProfileManagerStatusBanner: View {
-    let title: String
-    let message: String
-    let tone: CodexStatusTone
-    let symbolName: String
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: CodexTheme.Radius.badge, style: .continuous)
-                    .fill(CodexTheme.surfaceFill(for: .subtle))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: CodexTheme.Radius.badge, style: .continuous)
-                            .stroke(tone.borderColor, lineWidth: 1)
-                    )
-
-                Image(systemName: symbolName)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(tone.foregroundColor)
-            }
-            .frame(width: 32, height: 32)
-
-            VStack(alignment: .leading, spacing: CodexTheme.Spacing.micro) {
-                Text(title)
-                    .font(ProfileManagerTypography.smallStrong)
-                    .foregroundStyle(CodexTheme.headingText)
-
-                Text(message)
-                    .font(ProfileManagerTypography.small)
-                    .foregroundStyle(CodexTheme.mutedText)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .padding(CodexTheme.panelPadding)
-        .background(
-            RoundedRectangle(cornerRadius: CodexTheme.cornerRadius(for: .nested), style: .continuous)
-                .fill(CodexTheme.surfaceFill(for: .nested))
-                .overlay(
-                    RoundedRectangle(cornerRadius: CodexTheme.cornerRadius(for: .nested), style: .continuous)
-                        .fill(tone.backgroundColor.opacity(0.52))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: CodexTheme.cornerRadius(for: .nested), style: .continuous)
-                        .stroke(tone.borderColor, lineWidth: 1)
-                )
-        )
-    }
-}
-
-private struct ProfileManagerPrimaryButtonStyle: ButtonStyle {
-    @Environment(\.isEnabled) private var isEnabled
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(ProfileManagerTypography.smallStrong)
-            .foregroundStyle(isEnabled ? CodexTheme.accentInk : CodexTheme.disabledText)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(
-                RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
-                    .fill(
-                        isEnabled
-                            ? AnyShapeStyle(CodexTheme.accentGradient)
-                            : AnyShapeStyle(CodexTheme.surfaceFill(for: .subtle))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
-                            .stroke(
-                                isEnabled
-                                    ? Color.white.opacity(0.08)
-                                    : CodexTheme.surfaceBorder(for: .subtle),
-                                lineWidth: 1
-                            )
-                    )
-            )
-            .shadow(color: isEnabled ? CodexTheme.accentOrange.opacity(0.20) : .clear, radius: 12, y: 6)
-            .opacity(configuration.isPressed ? 0.92 : 1)
-            .scaleEffect(configuration.isPressed ? 0.99 : 1)
-            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
-    }
-}
-
-private struct ProfileManagerSecondaryButtonStyle: ButtonStyle {
-    @Environment(\.isEnabled) private var isEnabled
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(ProfileManagerTypography.smallStrong)
-            .foregroundStyle(isEnabled ? CodexTheme.actionText : CodexTheme.disabledText)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(
-                RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
-                    .fill(CodexTheme.surfaceFill(for: .subtle))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
-                            .fill(CodexTheme.surfaceSheen(for: .subtle))
-                    )
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
-                    .stroke(CodexTheme.surfaceBorder(for: .subtle), lineWidth: 1)
-            )
-            .shadow(color: isEnabled ? .black.opacity(0.16) : .clear, radius: 8, y: 4)
-            .opacity(configuration.isPressed ? 0.92 : 1)
-            .scaleEffect(configuration.isPressed ? 0.99 : 1)
-            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
-    }
-}
-
-private struct ProfileManagerDangerButtonStyle: ButtonStyle {
-    @Environment(\.isEnabled) private var isEnabled
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(ProfileManagerTypography.smallStrong)
-            .foregroundStyle(isEnabled ? CodexTheme.dangerText : CodexTheme.disabledText)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(
-                RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
-                    .fill(
-                        isEnabled
-                            ? CodexTheme.accentRed.opacity(configuration.isPressed ? 0.16 : 0.10)
-                            : CodexTheme.surfaceFill(for: .subtle)
-                    )
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
-                    .stroke(
-                        isEnabled
-                            ? CodexTheme.accentRed.opacity(0.24)
-                            : CodexTheme.surfaceBorder(for: .subtle),
-                        lineWidth: 1
-                    )
-            )
-    }
-}
-
-struct AccountWindowTitleBarGlass: View {
-    let height: CGFloat
-    let seamOverlap: CGFloat
-
-    private var warmTintGradient: LinearGradient {
-        let palette = CodexTheme.activePalette
-
-        return LinearGradient(
-            colors: [
-                palette.bg1.color(alpha: palette.isDark ? 0.02 : 0.10),
-                palette.bgDim.color(alpha: palette.isDark ? 0.07 : 0.18),
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-    }
-
-    private var shape: some Shape {
-        AccountWindowTitleBarGlassShape(cornerRadius: CodexTheme.shellCornerRadius)
-    }
-
-    var body: some View {
-        Color.clear
-            .overlay(alignment: .top) {
-                Group {
-                    if #available(macOS 26.0, *) {
-                        Rectangle()
-                            .fill(.clear)
-                            .glassEffect(
-                                Glass.clear.tint(CodexTheme.activePalette.bg1.color(alpha: CodexTheme.isDarkTheme ? 0.035 : 0.10)),
-                                in: shape
-                            )
-                            .overlay {
-                                warmTintGradient
-                            }
-                    } else {
-                        WindowTitleBarVisualEffectView()
-                            .overlay {
-                                warmTintGradient
-                            }
-                    }
-                }
-                .clipShape(shape)
-                .frame(maxWidth: .infinity)
-                .frame(height: height + seamOverlap)
-            }
-        .frame(maxWidth: .infinity)
-        .frame(height: height)
-        .allowsHitTesting(false)
-    }
-}
-
-struct AccountWindowTitleBarGlassShape: Shape {
-    let cornerRadius: CGFloat
-
-    func path(in rect: CGRect) -> Path {
-        if #available(macOS 14.0, *) {
-            return UnevenRoundedRectangle(
-                topLeadingRadius: cornerRadius,
-                bottomLeadingRadius: 0,
-                bottomTrailingRadius: 0,
-                topTrailingRadius: cornerRadius,
-                style: .continuous
-            )
-            .path(in: rect)
-        } else {
-            return legacyPath(in: rect)
-        }
-    }
-
-    private func legacyPath(in rect: CGRect) -> Path {
-        let radius = max(min(cornerRadius, rect.width / 2, rect.height / 2), 0)
-        let minX = rect.minX
-        let maxX = rect.maxX
-        let minY = rect.minY
-        let maxY = rect.maxY
-
-        var path = Path()
-        path.move(to: CGPoint(x: minX, y: maxY))
-        path.addLine(to: CGPoint(x: minX, y: minY + radius))
-        path.addQuadCurve(
-            to: CGPoint(x: minX + radius, y: minY),
-            control: CGPoint(x: minX, y: minY)
-        )
-        path.addLine(to: CGPoint(x: maxX - radius, y: minY))
-        path.addQuadCurve(
-            to: CGPoint(x: maxX, y: minY + radius),
-            control: CGPoint(x: maxX, y: minY)
-        )
-        path.addLine(to: CGPoint(x: maxX, y: maxY))
-        path.closeSubpath()
-        return path
-    }
-}
-
-struct AccountWindowBodyShell<Content: View>: View {
-    let seamOverlap: CGFloat
-    let content: Content
-
-    init(
-        seamOverlap: CGFloat,
-        @ViewBuilder content: () -> Content
-    ) {
-        self.seamOverlap = seamOverlap
-        self.content = content()
-    }
-
-    var body: some View {
-        let shadow = CodexTheme.shadow(for: .strong)
-        let shellShape = AccountWindowBodyMask(cornerRadius: CodexTheme.shellCornerRadius)
-        let borderShape = AccountWindowBodyBorderShape(cornerRadius: CodexTheme.shellCornerRadius)
-
-        GeometryReader { proxy in
-            let bodyHeight = proxy.size.height + seamOverlap
-
-            ZStack(alignment: .topLeading) {
-                shellShape
-                    .fill(Color.black.opacity(0.018))
-                    .shadow(color: shadow.color, radius: shadow.radius, y: shadow.y)
-                    .mask(alignment: .top) {
-                        VStack(spacing: 0) {
-                            Color.clear.frame(height: 12)
-                            Rectangle()
-                                .fill(Color.white)
-                        }
-                    }
-
-                CodexBackdrop()
-                    .mask(shellShape)
-
-                Rectangle()
-                    .fill(CodexTheme.shellFill(for: .dialog))
-                    .mask(shellShape)
-                    .overlay {
-                        Rectangle()
-                            .fill(CodexTheme.surfaceSheen(for: .strong))
-                            .mask(shellShape)
-                    }
-                    .overlay {
-                        borderShape
-                            .stroke(CodexTheme.surfaceBorder(for: .strong), lineWidth: 1)
-                    }
-                    .overlay(alignment: .topLeading) {
-                        content
-                            .frame(
-                                width: proxy.size.width,
-                                height: bodyHeight,
-                                alignment: .topLeading
-                            )
-                    }
-            }
-            .frame(width: proxy.size.width, height: bodyHeight, alignment: .topLeading)
-            .offset(y: -seamOverlap)
-            .clipped()
-        }
-    }
-}
-
-struct AccountWindowBodyMask: Shape {
-    let cornerRadius: CGFloat
-
-    func path(in rect: CGRect) -> Path {
-        if #available(macOS 14.0, *) {
-            return UnevenRoundedRectangle(
-                topLeadingRadius: 0,
-                bottomLeadingRadius: cornerRadius,
-                bottomTrailingRadius: cornerRadius,
-                topTrailingRadius: 0,
-                style: .continuous
-            )
-            .path(in: rect)
-        } else {
-            return legacyPath(in: rect)
-        }
-    }
-
-    private func legacyPath(in rect: CGRect) -> Path {
-        let radius = max(min(cornerRadius, rect.width / 2, rect.height / 2), 0)
-        let minX = rect.minX
-        let maxX = rect.maxX
-        let minY = rect.minY
-        let maxY = rect.maxY
-
-        var path = Path()
-        path.move(to: CGPoint(x: minX, y: minY))
-        path.addLine(to: CGPoint(x: maxX, y: minY))
-        path.addLine(to: CGPoint(x: maxX, y: maxY - radius))
-        path.addQuadCurve(
-            to: CGPoint(x: maxX - radius, y: maxY),
-            control: CGPoint(x: maxX, y: maxY)
-        )
-        path.addLine(to: CGPoint(x: minX + radius, y: maxY))
-        path.addQuadCurve(
-            to: CGPoint(x: minX, y: maxY - radius),
-            control: CGPoint(x: minX, y: maxY)
-        )
-        path.closeSubpath()
-        return path
-    }
-}
-
-struct AccountWindowBodyBorderShape: Shape {
-    let cornerRadius: CGFloat
-
-    func path(in rect: CGRect) -> Path {
-        legacyPath(in: rect)
-    }
-
-    private func legacyPath(in rect: CGRect) -> Path {
-        let radius = max(min(cornerRadius, rect.width / 2, rect.height / 2), 0)
-        let minX = rect.minX + 0.5
-        let maxX = rect.maxX - 0.5
-        let minY = rect.minY + 0.5
-        let maxY = rect.maxY - 0.5
-
-        var path = Path()
-        path.move(to: CGPoint(x: minX, y: minY))
-        path.addLine(to: CGPoint(x: minX, y: maxY - radius))
-        path.addQuadCurve(
-            to: CGPoint(x: minX + radius, y: maxY),
-            control: CGPoint(x: minX, y: maxY)
-        )
-        path.addLine(to: CGPoint(x: maxX - radius, y: maxY))
-        path.addQuadCurve(
-            to: CGPoint(x: maxX, y: maxY - radius),
-            control: CGPoint(x: maxX, y: maxY)
-        )
-        path.addLine(to: CGPoint(x: maxX, y: minY))
-        return path
     }
 }

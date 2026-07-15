@@ -67,7 +67,7 @@ final class ChromeLauncher {
         profileStore: ChromeProfileStore = ChromeProfileStore(),
         launchProcess: @escaping @MainActor @Sendable (URL, [String]) throws -> Process = ChromeLauncher.defaultLaunchProcess,
         sleep: @escaping @Sendable (UInt64) async throws -> Void = {
-            try await Task.sleep(nanoseconds: $0)
+            try await Task.sleep(for: .nanoseconds(Int64(clamping: $0)))
         }
     ) {
         self.appLocator = appLocator

@@ -48,7 +48,8 @@ struct TOTPGenerator: Sendable {
         let divisor = Int(pow(10.0, Double(digits)))
         let value = binaryCode % divisor
 
-        return String(format: "%0\(digits)d", value)
+        let rawCode = String(value)
+        return String(repeating: "0", count: max(digits - rawCode.count, 0)) + rawCode
     }
 
     func secondsRemaining(at date: Date = .now) -> Int {

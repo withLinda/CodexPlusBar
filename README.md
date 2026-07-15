@@ -45,15 +45,16 @@ When you use more than one ChatGPT profile, checking limits can become slow and 
 Download the latest notarized DMG from GitHub:
 
 - [Latest release page](https://github.com/withLinda/CodexPlusBar/releases/latest)
-- [Direct notarized DMG download](https://github.com/withLinda/CodexPlusBar/releases/download/snapshot-2026-07-15-on-demand-profile-search/CodexPlusBar-snapshot-2026-07-15-on-demand-profile-search.dmg)
-- [SHA-256 checksum](https://github.com/withLinda/CodexPlusBar/releases/download/snapshot-2026-07-15-on-demand-profile-search/CodexPlusBar-snapshot-2026-07-15-on-demand-profile-search.dmg.sha256)
+- [Direct notarized DMG download](https://github.com/withLinda/CodexPlusBar/releases/download/snapshot-2026-07-15-shared-ui-foundations/CodexPlusBar-snapshot-2026-07-15-shared-ui-foundations.dmg)
+- [SHA-256 checksum](https://github.com/withLinda/CodexPlusBar/releases/download/snapshot-2026-07-15-shared-ui-foundations/CodexPlusBar-snapshot-2026-07-15-shared-ui-foundations.dmg.sha256)
 
-1. Download `CodexPlusBar-snapshot-2026-07-15-on-demand-profile-search.dmg`.
+1. Download `CodexPlusBar-snapshot-2026-07-15-shared-ui-foundations.dmg`.
 2. Double-click the downloaded DMG to open it.
 3. Drag `CodexPlusBar.app` onto the `Applications` folder inside the DMG.
 4. If macOS asks, replace the older copy in Applications.
 5. Wait for the copy to finish.
-6. Open CodexPlusBar from your Applications folder.
+6. Eject the CodexPlusBar DMG in Finder.
+7. Open CodexPlusBar from your Applications folder.
 
 The DMG and app are signed and notarized for macOS distribution, so macOS should be able to verify them normally.
 

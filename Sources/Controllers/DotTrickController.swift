@@ -29,10 +29,8 @@ final class DotTrickController {
         }
 
         // Avoid duplicates with the same canonical local part.
-        if sessions.contains(where: { $0.localPart == canonical }) {
-            if let existing = sessions.first(where: { $0.localPart == canonical }) {
-                selectedSessionID = existing.id
-            }
+        if let existing = sessions.first(where: { $0.localPart == canonical }) {
+            selectedSessionID = existing.id
             return
         }
 

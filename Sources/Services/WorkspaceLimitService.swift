@@ -69,7 +69,7 @@ struct WorkspaceLimitService {
             limitReached: payload.rateLimit.limitReached,
             primaryWindow: try payload.rateLimit.primaryWindow.requireWindow(),
             secondaryWindow: try payload.rateLimit.secondaryWindow?.requireWindow(),
-            fetchedAt: Date()
+            fetchedAt: .now
         )
     }
 
@@ -105,7 +105,7 @@ struct WorkspaceLimitService {
             limitReached: rateLimit.limitReached,
             primaryWindow: try rateLimit.primaryWindow.requireWindow(),
             secondaryWindow: try rateLimit.secondaryWindow?.requireWindow(),
-            fetchedAt: Date()
+            fetchedAt: .now
         )
     }
 

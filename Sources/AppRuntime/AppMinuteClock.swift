@@ -13,7 +13,9 @@ final class AppMinuteClock {
     init(
         now: Date = .now,
         nowProvider: @escaping @Sendable () async -> Date = { .now },
-        sleep: @escaping @Sendable (UInt64) async throws -> Void = { try await Task.sleep(nanoseconds: $0) }
+        sleep: @escaping @Sendable (UInt64) async throws -> Void = {
+            try await Task.sleep(for: .nanoseconds(Int64(clamping: $0)))
+        }
     ) {
         self.now = now
         self.nowProvider = nowProvider

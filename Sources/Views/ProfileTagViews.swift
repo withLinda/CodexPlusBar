@@ -91,20 +91,6 @@ struct ProfileTagFilterSegment: Identifiable, Equatable, Sendable {
     }
 }
 
-enum ProfileTagChipLabelStyle: Sendable, Equatable {
-    case full
-    case short
-
-    func title(for tag: PlusProfileTag) -> String {
-        switch self {
-        case .full:
-            return tag.displayName
-        case .short:
-            return tag.shortDisplayName
-        }
-    }
-}
-
 struct ProfileTagFilterBar: View {
     let presentation: ProfileTagFilterBarPresentation
     let textScale: Double
@@ -326,35 +312,6 @@ private struct ProfileTagFilterMenu: View {
     }
 }
 
-struct ProfileTagStrip: View {
-    let tags: [PlusProfileTag]
-    let textScale: Double
-    let labelStyle: ProfileTagChipLabelStyle
-
-    init(
-        tags: [PlusProfileTag],
-        textScale: Double = 1,
-        labelStyle: ProfileTagChipLabelStyle = .full
-    ) {
-        self.tags = PlusProfile.normalizedTags(tags)
-        self.textScale = textScale
-        self.labelStyle = labelStyle
-    }
-
-    var body: some View {
-        if tags.isEmpty == false {
-            HStack(spacing: 5 * CGFloat(textScale)) {
-                ForEach(tags) { tag in
-                    ProfileTagChip(tag: tag, textScale: textScale, labelStyle: labelStyle)
-                }
-            }
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("Profile tags")
-            .accessibilityValue(tags.map(\.displayName).joined(separator: ", "))
-        }
-    }
-}
-
 struct ProfileTagSummaryStrip: View {
     let summary: ProfileTagSummary
     let textScale: Double
@@ -540,39 +497,5 @@ struct ProfileTagEmptyState: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, 4)
-    }
-}
-
-private struct ProfileTagChip: View {
-    let tag: PlusProfileTag
-    let textScale: Double
-    let labelStyle: ProfileTagChipLabelStyle
-
-    var body: some View {
-        HStack(spacing: 4 * CGFloat(textScale)) {
-            Image(systemName: tag.systemImage)
-                .font(.system(size: 8.5 * CGFloat(textScale), weight: .semibold))
-                .frame(width: 9 * CGFloat(textScale), height: 9 * CGFloat(textScale))
-
-            Text(labelStyle.title(for: tag))
-                .font(ProfileManagerTypography.micro(scale: textScale))
-                .lineLimit(1)
-                .minimumScaleFactor(0.9)
-        }
-        .foregroundStyle(tag.profileTagTone.foregroundColor)
-        .padding(.horizontal, 7 * CGFloat(textScale))
-        .padding(.vertical, 4 * CGFloat(textScale))
-        .background(
-            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .fill(tag.profileTagTone.fillColor(isSelected: true))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 7, style: .continuous)
-                        .stroke(
-                            tag.profileTagTone.borderColor(isSelected: true),
-                            lineWidth: CodexTheme.profileTagBorderLineWidth
-                        )
-                )
-        )
-        .accessibilityLabel(tag.displayName)
     }
 }

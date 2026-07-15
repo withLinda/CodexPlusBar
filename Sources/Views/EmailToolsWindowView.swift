@@ -3,46 +3,25 @@ import SwiftUI
 
 struct EmailToolsWindowView: View {
     @Bindable var controller: DotTrickController
-    @Environment(\.displayScale) private var displayScale
-    @State private var windowChromeMetrics = WindowChromeMetrics()
     @State private var inputDraft = ""
     @State private var searchQuery = ""
-    @State private var copiedVariation: String?
-    @State private var copyResetTask: Task<Void, Never>?
+    @State private var copyFeedback = TransientValue<String>()
     @State private var confirmingDeleteID: UUID?
 
     var body: some View {
-        let seamOverlap = 1 / max(displayScale, 1)
+        CodexWindowChromeContainer(minimumSize: CGSize(width: 780, height: 560)) {
+            VStack(alignment: .leading, spacing: CodexTheme.sectionSpacing) {
+                header
 
-        VStack(spacing: 0) {
-            AccountWindowTitleBarGlass(
-                height: windowChromeMetrics.titleBarObscuredHeight,
-                seamOverlap: seamOverlap
-            )
-
-            AccountWindowBodyShell(seamOverlap: seamOverlap) {
-                VStack(alignment: .leading, spacing: CodexTheme.sectionSpacing) {
-                    header
-
-                    bodyContent
-                }
-                .padding(.top, CodexTheme.chromePadding)
-                .padding(.horizontal, CodexTheme.chromePadding)
-                .padding(.bottom, CodexTheme.chromePadding)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                bodyContent
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.top, CodexTheme.chromePadding)
+            .padding(.horizontal, CodexTheme.chromePadding)
+            .padding(.bottom, CodexTheme.chromePadding)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
-        .frame(minWidth: 780, minHeight: 560)
-        .background(Color.clear)
-        .overlay(alignment: .topLeading) {
-            WindowChromeMetricsReader(metrics: $windowChromeMetrics)
-                .frame(width: 0, height: 0)
-                .allowsHitTesting(false)
-        }
-        .codexThemeRefreshScope()
         .onDisappear {
-            resetCopyFeedback()
+            copyFeedback.clear()
         }
     }
 
@@ -85,7 +64,12 @@ struct EmailToolsWindowView: View {
                 Button("Generate") {
                     generateFromDraft()
                 }
-                .buttonStyle(EmailToolsPrimaryButtonStyle())
+                .buttonStyle(
+                    CodexPrimaryButtonStyle(
+                        font: ProfileManagerTypography.smallStrong,
+                        verticalPadding: 8
+                    )
+                )
                 .disabled(isInputValid == false)
             }
             .padding(.horizontal, 14)
@@ -150,7 +134,7 @@ struct EmailToolsWindowView: View {
                         .font(ProfileManagerTypography.caption)
                         .foregroundStyle(CodexTheme.mutedText)
 
-                    ScrollView(.vertical, showsIndicators: true) {
+                    ScrollView(.vertical) {
                         VStack(alignment: .leading, spacing: 10) {
                             ForEach(controller.sessions) { session in
                                 EmailToolsSidebarRow(
@@ -246,7 +230,7 @@ struct EmailToolsWindowView: View {
                             copyAllVariations(for: session)
                         } label: {
                             let marker = "__all_\(session.id.uuidString)"
-                            let isCopied = copiedVariation == marker
+                            let isCopied = copyFeedback.current == marker
                             let hasUsed = session.usedCount > 0
                             Label(
                                 isCopied
@@ -255,7 +239,14 @@ struct EmailToolsWindowView: View {
                                 systemImage: isCopied ? "checkmark" : "doc.on.doc.fill"
                             )
                         }
-                        .buttonStyle(EmailToolsSecondaryButtonStyle())
+                        .buttonStyle(
+                            CodexSecondaryButtonStyle(
+                                font: ProfileManagerTypography.smallStrong,
+                                foregroundColor: CodexTheme.primaryText,
+                                horizontalPadding: 12,
+                                verticalPadding: 8
+                            )
+                        )
                         .help(session.usedCount > 0 ? "Copies only variations not marked as used" : "Copy all variations")
                     }
                 }
@@ -295,14 +286,14 @@ struct EmailToolsWindowView: View {
             }
 
             // Variation list
-            ScrollView(.vertical, showsIndicators: true) {
+            ScrollView(.vertical) {
                 LazyVStack(alignment: .leading, spacing: 6) {
                     ForEach(Array(filtered.enumerated()), id: \.offset) { index, variation in
                         EmailToolsVariationRow(
                             variation: variation,
                             index: index + 1,
                             isUsed: session.isUsed(variation),
-                            isCopied: copiedVariation == variation,
+                            isCopied: copyFeedback.current == variation,
                             onToggleUsed: {
                                 controller.toggleUsed(variation: variation, inSession: session.id)
                             },
@@ -334,30 +325,23 @@ struct EmailToolsWindowView: View {
 
     private func filteredVariations(for session: DotTrickSession) -> [String] {
         let all = session.variations
-        let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         guard query.isEmpty == false else {
             return all
         }
 
-        return all.filter { $0.lowercased().contains(query) }
+        return all.filter { $0.localizedStandardContains(query) }
     }
 
     private func copyVariation(_ variation: String) {
+        copyToPasteboard(variation, feedback: variation)
+    }
+
+    private func copyToPasteboard(_ text: String, feedback: String) {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
-        pasteboard.setString(variation, forType: .string)
-
-        copiedVariation = variation
-        copyResetTask?.cancel()
-        copyResetTask = Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(1_400))
-            guard Task.isCancelled == false, copiedVariation == variation else {
-                return
-            }
-
-            copiedVariation = nil
-            copyResetTask = nil
-        }
+        pasteboard.setString(text, forType: .string)
+        copyFeedback.show(feedback)
     }
 
     private func copyAllVariations(for session: DotTrickSession) {
@@ -365,28 +349,8 @@ struct EmailToolsWindowView: View {
         let toCopy = session.variations.filter { session.isUsed($0) == false }
         guard toCopy.isEmpty == false else { return }
 
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(toCopy.joined(separator: "\n"), forType: .string)
-
         let marker = "__all_\(session.id.uuidString)"
-        copiedVariation = marker
-        copyResetTask?.cancel()
-        copyResetTask = Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(1_400))
-            guard Task.isCancelled == false, copiedVariation == marker else {
-                return
-            }
-
-            copiedVariation = nil
-            copyResetTask = nil
-        }
-    }
-
-    private func resetCopyFeedback() {
-        copyResetTask?.cancel()
-        copyResetTask = nil
-        copiedVariation = nil
+        copyToPasteboard(toCopy.joined(separator: "\n"), feedback: marker)
     }
 }
 
@@ -450,12 +414,26 @@ private struct EmailToolsSidebarRow: View {
                         Button("Yes") {
                             onConfirmDelete()
                         }
-                        .buttonStyle(EmailToolsDangerButtonStyle())
+                        .buttonStyle(
+                            CodexDangerButtonStyle(
+                                font: ProfileManagerTypography.caption,
+                                horizontalPadding: 10,
+                                verticalPadding: 5,
+                                cornerRadius: 7
+                            )
+                        )
 
                         Button("No") {
                             onCancelDelete()
                         }
-                        .buttonStyle(EmailToolsQuietButtonStyle())
+                        .buttonStyle(
+                            CodexQuietButtonStyle(
+                                font: ProfileManagerTypography.caption,
+                                horizontalPadding: 10,
+                                verticalPadding: 5,
+                                cornerRadius: 7
+                            )
+                        )
                     }
                 }
             }
@@ -582,69 +560,6 @@ private struct EmailToolsVariationRow: View {
     }
 }
 
-// MARK: - Button Styles
-
-private struct EmailToolsPrimaryButtonStyle: ButtonStyle {
-    @Environment(\.isEnabled) private var isEnabled
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(ProfileManagerTypography.smallStrong)
-            .foregroundStyle(isEnabled ? CodexTheme.accentInk : CodexTheme.disabledText)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .background(
-                RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
-                    .fill(
-                        isEnabled
-                            ? AnyShapeStyle(CodexTheme.accentGradient)
-                            : AnyShapeStyle(CodexTheme.surfaceFill(for: .subtle))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
-                            .stroke(
-                                isEnabled
-                                    ? Color.white.opacity(0.08)
-                                    : CodexTheme.surfaceBorder(for: .subtle),
-                                lineWidth: 1
-                            )
-                    )
-            )
-            .shadow(color: isEnabled ? CodexTheme.accentOrange.opacity(0.20) : .clear, radius: 12, y: 6)
-            .opacity(configuration.isPressed ? 0.92 : 1)
-            .scaleEffect(configuration.isPressed ? 0.99 : 1)
-            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
-    }
-}
-
-private struct EmailToolsSecondaryButtonStyle: ButtonStyle {
-    @Environment(\.isEnabled) private var isEnabled
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(ProfileManagerTypography.smallStrong)
-            .foregroundStyle(isEnabled ? CodexTheme.primaryText : CodexTheme.disabledText)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(
-                RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
-                    .fill(CodexTheme.surfaceFill(for: .subtle))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
-                            .fill(CodexTheme.surfaceSheen(for: .subtle))
-                    )
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
-                    .stroke(CodexTheme.surfaceBorder(for: .subtle), lineWidth: 1)
-            )
-            .shadow(color: isEnabled ? .black.opacity(0.16) : .clear, radius: 8, y: 4)
-            .opacity(configuration.isPressed ? 0.92 : 1)
-            .scaleEffect(configuration.isPressed ? 0.99 : 1)
-            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
-    }
-}
-
 private struct EmailToolsCopyButtonStyle: ButtonStyle {
     let isCopied: Bool
 
@@ -672,41 +587,5 @@ private struct EmailToolsCopyButtonStyle: ButtonStyle {
             .opacity(configuration.isPressed ? 0.92 : 1)
             .scaleEffect(configuration.isPressed ? 0.98 : 1)
             .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
-    }
-}
-
-private struct EmailToolsDangerButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(ProfileManagerTypography.caption)
-            .foregroundStyle(CodexTheme.dangerText)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(CodexTheme.accentRed.opacity(configuration.isPressed ? 0.16 : 0.10))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .stroke(CodexTheme.accentRed.opacity(0.24), lineWidth: 1)
-            )
-    }
-}
-
-private struct EmailToolsQuietButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(ProfileManagerTypography.caption)
-            .foregroundStyle(CodexTheme.mutedText)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(CodexTheme.surfaceFill(for: .subtle).opacity(configuration.isPressed ? 0.98 : 0.84))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .stroke(CodexTheme.surfaceBorder(for: .subtle), lineWidth: 1)
-            )
     }
 }
