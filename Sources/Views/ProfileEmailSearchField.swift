@@ -4,10 +4,16 @@ struct ProfileEmailSearchField: View {
     @Binding var text: String
     @FocusState private var isFocused: Bool
     let textScale: Double
+    let close: () -> Void
 
-    init(text: Binding<String>, textScale: Double = 1) {
+    init(
+        text: Binding<String>,
+        textScale: Double = 1,
+        close: @escaping () -> Void
+    ) {
         _text = text
         self.textScale = textScale
+        self.close = close
     }
 
     var body: some View {
@@ -29,25 +35,27 @@ struct ProfileEmailSearchField: View {
             .focused($isFocused)
             .accessibilityLabel("Search profiles by email")
             .accessibilityHint("Type a full email or any part of an email.")
+            .onExitCommand(perform: closeSearch)
 
-            if text.isEmpty == false {
-                Button(action: clearSearch) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: scaled(12), weight: .semibold))
-                        .frame(width: scaled(22), height: scaled(22))
-                        .contentShape(.rect)
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(CodexTheme.searchAction)
-                .help("Clear email search")
-                .accessibilityLabel("Clear email search")
+            Button(action: closeSearch) {
+                Image(systemName: "xmark")
+                    .font(.system(size: scaled(11), weight: .semibold))
+                    .frame(width: scaled(22), height: scaled(22))
+                    .contentShape(.rect)
             }
+            .buttonStyle(.plain)
+            .foregroundStyle(CodexTheme.searchAction)
+            .help("Close search")
+            .accessibilityLabel("Close profile search")
         }
         .padding(.leading, scaled(10))
         .padding(.trailing, scaled(6))
         .frame(minHeight: scaled(34))
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(fieldBackground)
+        .onAppear {
+            isFocused = true
+        }
     }
 
     private var fieldBackground: some View {
@@ -68,9 +76,10 @@ struct ProfileEmailSearchField: View {
         value * CGFloat(textScale)
     }
 
-    private func clearSearch() {
+    private func closeSearch() {
         text = ""
-        isFocused = true
+        isFocused = false
+        close()
     }
 }
 

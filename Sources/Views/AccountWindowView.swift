@@ -311,6 +311,7 @@ struct ProfileManagerWindowView: View {
     @State private var detailsDraft = PlusProfileDetailsDraft()
     @State private var sidebarTagFilter = ProfileTagFilter()
     @State private var profileSearchQuery = ""
+    @State private var isProfileSearchPresented = false
     @State private var revealedPrivateFields: Set<ProfilePrivateField> = []
     @State private var isOneTimePasswordRevealed = false
     @State private var copiedField: ProfileDetailsCopyField?
@@ -382,6 +383,11 @@ struct ProfileManagerWindowView: View {
         .onChange(of: controller.selectedProfileID) { _, _ in
             resetDetailsFeedback()
             syncDrafts(with: controller.selectedProfile)
+        }
+        .onChange(of: controller.profiles.map(\.id)) { _, _ in
+            if controller.profiles.isEmpty {
+                closeProfileSearch()
+            }
         }
         .onChange(of: profileSearchQuery) { _, _ in
             keepSelectedProfileVisible()
@@ -486,6 +492,23 @@ struct ProfileManagerWindowView: View {
 
                     Spacer(minLength: 0)
 
+                    if controller.profiles.isEmpty == false {
+                        Button(action: showProfileSearch) {
+                            Image(systemName: "magnifyingglass")
+                        }
+                        .buttonStyle(CodexSecondaryButtonStyle())
+                        .foregroundStyle(
+                            isProfileSearchPresented
+                                ? CodexTheme.searchAction
+                                : CodexTheme.actionText
+                        )
+                        .accessibilityLabel("Search profiles")
+                        .help("Search profiles")
+                        .opacity(isProfileSearchPresented ? 0 : 1)
+                        .allowsHitTesting(isProfileSearchPresented == false)
+                        .accessibilityHidden(isProfileSearchPresented)
+                    }
+
                     Button(action: addProfile) {
                         Image(systemName: "plus")
                     }
@@ -499,7 +522,12 @@ struct ProfileManagerWindowView: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
-                    ProfileEmailSearchField(text: $profileSearchQuery)
+                    if isProfileSearchPresented {
+                        ProfileEmailSearchField(
+                            text: $profileSearchQuery,
+                            close: closeProfileSearch
+                        )
+                    }
 
                     ProfileTagFilterBar(
                         presentation: sidebarFilterPresentation,
@@ -1261,6 +1289,16 @@ struct ProfileManagerWindowView: View {
     private func clearSearchAndSidebarFilter() {
         profileSearchQuery = ""
         sidebarTagFilter.clear()
+        keepSelectedProfileVisible()
+    }
+
+    private func showProfileSearch() {
+        isProfileSearchPresented = true
+    }
+
+    private func closeProfileSearch() {
+        profileSearchQuery = ""
+        isProfileSearchPresented = false
         keepSelectedProfileVisible()
     }
 

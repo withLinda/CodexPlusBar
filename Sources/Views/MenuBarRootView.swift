@@ -8,6 +8,7 @@ struct MenuBarRootView: View {
     @AppStorage(MenuBarPanelTextScalePreference.textScaleKey) private var panelTextScaleStorage = MenuBarPanelTextScalePreference.defaultScale
     @State private var tagFilter = ProfileTagFilter()
     @State private var profileSearchQuery = ""
+    @State private var isProfileSearchPresented = false
     let currentTime: AppMinuteClock
     let openManagerWindow: @MainActor (UUID?) -> Void
     let openEmailToolsWindow: @MainActor () -> Void
@@ -46,10 +47,13 @@ struct MenuBarRootView: View {
                 header
 
                 if controller.profiles.isEmpty == false {
-                    ProfileEmailSearchField(
-                        text: $profileSearchQuery,
-                        textScale: panelTextScale
-                    )
+                    if isProfileSearchPresented {
+                        ProfileEmailSearchField(
+                            text: $profileSearchQuery,
+                            textScale: panelTextScale,
+                            close: closeProfileSearch
+                        )
+                    }
 
                     ProfileTagFilterBar(
                         presentation: tagFilterPresentation,
@@ -91,6 +95,9 @@ struct MenuBarRootView: View {
         .onAppear(perform: clearStalePreferredProfileID)
         .onChange(of: controller.profiles.map(\.id)) { _, _ in
             clearStalePreferredProfileID()
+            if controller.profiles.isEmpty {
+                closeProfileSearch()
+            }
         }
     }
 
@@ -106,6 +113,14 @@ struct MenuBarRootView: View {
                     .foregroundStyle(CodexTheme.primaryText)
 
                 Spacer(minLength: 0)
+
+                if controller.profiles.isEmpty == false {
+                    MenuBarSearchButton(
+                        isActive: isProfileSearchPresented,
+                        textScale: panelTextScale,
+                        action: showProfileSearch
+                    )
+                }
 
                 MenuBarZoomControls(
                     textScale: panelTextScale,
@@ -327,6 +342,15 @@ struct MenuBarRootView: View {
         tagFilter.clear()
     }
 
+    private func showProfileSearch() {
+        isProfileSearchPresented = true
+    }
+
+    private func closeProfileSearch() {
+        profileSearchQuery = ""
+        isProfileSearchPresented = false
+    }
+
     private func toggleTagFilter(_ tag: PlusProfileTag) {
         tagFilter.toggle(tag)
     }
@@ -450,6 +474,44 @@ private struct MenuBarZoomControls: View {
         .fixedSize(horizontal: true, vertical: false)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Menu bar panel zoom")
+    }
+}
+
+private struct MenuBarSearchButton: View {
+    let isActive: Bool
+    let textScale: Double
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 12 * CGFloat(textScale), weight: .semibold))
+                .frame(minWidth: 30, minHeight: 28)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(isActive ? CodexTheme.searchAction : CodexTheme.primaryText)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(
+                    isActive
+                        ? CodexTheme.searchFieldFill
+                        : CodexTheme.surfaceFill(for: .subtle)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(
+                            isActive
+                                ? CodexTheme.searchFocusBorder
+                                : CodexTheme.surfaceBorder(for: .subtle),
+                            lineWidth: 1
+                        )
+                )
+        )
+        .accessibilityLabel("Search profiles")
+        .help("Search profiles")
+        .opacity(isActive ? 0 : 1)
+        .allowsHitTesting(isActive == false)
+        .accessibilityHidden(isActive)
     }
 }
 
