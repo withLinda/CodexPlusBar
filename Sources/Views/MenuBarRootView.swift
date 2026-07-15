@@ -6,7 +6,8 @@ struct MenuBarRootView: View {
     @Environment(\.openSettings) private var openSettings
     @AppStorage(MenuBarProfilePreference.preferredProfileIDKey) private var preferredProfileIDStorage = ""
     @AppStorage(MenuBarPanelTextScalePreference.textScaleKey) private var panelTextScaleStorage = MenuBarPanelTextScalePreference.defaultScale
-    @State var tagFilter = ProfileTagFilter()
+    @State private var tagFilter = ProfileTagFilter()
+    @State private var profileSearchQuery = ""
     let currentTime: AppMinuteClock
     let openManagerWindow: @MainActor (UUID?) -> Void
     let openEmailToolsWindow: @MainActor () -> Void
@@ -45,6 +46,11 @@ struct MenuBarRootView: View {
                 header
 
                 if controller.profiles.isEmpty == false {
+                    ProfileEmailSearchField(
+                        text: $profileSearchQuery,
+                        textScale: panelTextScale
+                    )
+
                     ProfileTagFilterBar(
                         presentation: tagFilterPresentation,
                         textScale: panelTextScale,
@@ -151,6 +157,14 @@ struct MenuBarRootView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+        } else if filteredProfiles.isEmpty,
+                  ProfileEmailSearch.normalizedQuery(profileSearchQuery).isEmpty == false {
+            ProfileSearchEmptyState(
+                query: profileSearchQuery,
+                clearsTagFilter: tagFilter.isEmpty == false,
+                textScale: panelTextScale,
+                clear: clearSearchAndActiveFilters
+            )
         } else if filteredProfiles.isEmpty {
             ProfileTagEmptyState(clearFilter: clearTagFilter)
         } else {
@@ -232,13 +246,21 @@ struct MenuBarRootView: View {
     }
 
     var filteredProfiles: [PlusProfileSnapshot] {
-        displayProfiles(for: tagFilter)
+        displayProfiles(for: tagFilter, query: profileSearchQuery)
     }
 
     func displayProfiles(for filter: ProfileTagFilter) -> [PlusProfileSnapshot] {
-        PlusProfileSnapshot.expiryFirstDisplayOrder(
+        displayProfiles(for: filter, query: "")
+    }
+
+    func displayProfiles(
+        for filter: ProfileTagFilter,
+        query: String
+    ) -> [PlusProfileSnapshot] {
+        let orderedProfiles = PlusProfileSnapshot.expiryFirstDisplayOrder(
             filter.apply(to: controller.profiles)
         )
+        return ProfileEmailSearch.filter(orderedProfiles, query: query)
     }
 
     private var profileTagCounts: ProfileTagCounts {
@@ -297,6 +319,11 @@ struct MenuBarRootView: View {
     }
 
     private func clearTagFilter() {
+        tagFilter.clear()
+    }
+
+    private func clearSearchAndActiveFilters() {
+        profileSearchQuery = ""
         tagFilter.clear()
     }
 

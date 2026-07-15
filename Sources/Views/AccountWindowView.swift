@@ -310,6 +310,7 @@ struct ProfileManagerWindowView: View {
     @State private var windowChromeMetrics = WindowChromeMetrics()
     @State private var detailsDraft = PlusProfileDetailsDraft()
     @State private var sidebarTagFilter = ProfileTagFilter()
+    @State private var profileSearchQuery = ""
     @State private var revealedPrivateFields: Set<ProfilePrivateField> = []
     @State private var isOneTimePasswordRevealed = false
     @State private var copiedField: ProfileDetailsCopyField?
@@ -381,6 +382,9 @@ struct ProfileManagerWindowView: View {
         .onChange(of: controller.selectedProfileID) { _, _ in
             resetDetailsFeedback()
             syncDrafts(with: controller.selectedProfile)
+        }
+        .onChange(of: profileSearchQuery) { _, _ in
+            keepSelectedProfileVisible()
         }
         .onChange(of: detailsDraft) { oldDraft, newDraft in
             guard let snapshot = controller.selectedProfile else {
@@ -495,13 +499,22 @@ struct ProfileManagerWindowView: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
+                    ProfileEmailSearchField(text: $profileSearchQuery)
+
                     ProfileTagFilterBar(
                         presentation: sidebarFilterPresentation,
                         clearFilter: clearSidebarFilter,
                         toggleTag: toggleSidebarFilter
                     )
 
-                    if filteredSidebarProfiles.isEmpty {
+                    if filteredSidebarProfiles.isEmpty,
+                       ProfileEmailSearch.normalizedQuery(profileSearchQuery).isEmpty == false {
+                        ProfileSearchEmptyState(
+                            query: profileSearchQuery,
+                            clearsTagFilter: sidebarTagFilter.isEmpty == false,
+                            clear: clearSearchAndSidebarFilter
+                        )
+                    } else if filteredSidebarProfiles.isEmpty {
                         ProfileTagEmptyState(clearFilter: clearSidebarFilter)
                     } else {
                         ScrollView(.vertical, showsIndicators: true) {
@@ -980,9 +993,10 @@ struct ProfileManagerWindowView: View {
     }
 
     var filteredSidebarProfiles: [PlusProfileSnapshot] {
-        PlusProfileSnapshot.expiryFirstDisplayOrder(
+        let orderedProfiles = PlusProfileSnapshot.expiryFirstDisplayOrder(
             sidebarTagFilter.apply(to: controller.profiles)
         )
+        return ProfileEmailSearch.filter(orderedProfiles, query: profileSearchQuery)
     }
 
     private var profileTagCounts: ProfileTagCounts {
@@ -1244,12 +1258,24 @@ struct ProfileManagerWindowView: View {
         sidebarTagFilter.clear()
     }
 
+    private func clearSearchAndSidebarFilter() {
+        profileSearchQuery = ""
+        sidebarTagFilter.clear()
+        keepSelectedProfileVisible()
+    }
+
     private func toggleSidebarFilter(_ tag: PlusProfileTag) {
         sidebarTagFilter.toggle(tag)
+        keepSelectedProfileVisible()
+    }
 
-        guard let selectedProfileID = controller.selectedProfileID,
-              filteredSidebarProfiles.isEmpty == false,
-              filteredSidebarProfiles.contains(where: { $0.id == selectedProfileID }) == false else {
+    private func keepSelectedProfileVisible() {
+        guard filteredSidebarProfiles.isEmpty == false else {
+            return
+        }
+
+        if let selectedProfileID = controller.selectedProfileID,
+           filteredSidebarProfiles.contains(where: { $0.id == selectedProfileID }) {
             return
         }
 

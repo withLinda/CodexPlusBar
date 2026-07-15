@@ -22,6 +22,7 @@ When you use more than one ChatGPT profile, checking limits can become slow and 
 - One-click refresh for all profiles or a single profile.
 - Pin an important profile so it stays easy to watch.
 - Save a label and email link for each profile.
+- Search saved profiles by full or partial email address.
 - Open the saved email link from the menu bar or manager.
 - Repair a profile by opening its sign-in session view.
 - Clear a profile session when you want to sign in again.
@@ -44,8 +45,8 @@ When you use more than one ChatGPT profile, checking limits can become slow and 
 Download the latest notarized DMG from GitHub:
 
 - [Latest release page](https://github.com/withLinda/CodexPlusBar/releases/latest)
-- [Direct notarized DMG download](https://github.com/withLinda/CodexPlusBar/releases/download/snapshot-2026-07-15-cookie-session-fix/CodexPlusBar-snapshot-2026-07-15-cookie-session-fix.dmg)
-- [SHA-256 checksum](https://github.com/withLinda/CodexPlusBar/releases/download/snapshot-2026-07-15-cookie-session-fix/CodexPlusBar-snapshot-2026-07-15-cookie-session-fix.dmg.sha256)
+- [Direct notarized DMG download](https://github.com/withLinda/CodexPlusBar/releases/download/snapshot-2026-07-15-profile-email-search/CodexPlusBar-snapshot-2026-07-15-profile-email-search.dmg)
+- [SHA-256 checksum](https://github.com/withLinda/CodexPlusBar/releases/download/snapshot-2026-07-15-profile-email-search/CodexPlusBar-snapshot-2026-07-15-profile-email-search.dmg.sha256)
 
 1. Download and open the DMG.
 2. Drag `CodexPlusBar.app` onto the `Applications` folder inside the DMG.

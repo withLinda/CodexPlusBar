@@ -60,6 +60,12 @@ struct ProfileManagerWindowViewTests {
 
         #expect(editableTextFieldCount(in: hostingView) >= 5)
         #expect(textEditorCount(in: hostingView) == 1)
+
+        let rootView = ProfileManagerWindowView(
+            controller: controller,
+            currentTime: AppMinuteClock(now: Date(timeIntervalSince1970: 1_776_000_000))
+        )
+        #expect(String(reflecting: type(of: rootView.body)).contains("ProfileEmailSearchField"))
     }
 
     @Test

@@ -88,6 +88,7 @@ update_policy:
 - 2026-04-21: The same view-scraping trap also applies to inline `Save` buttons inside `ProfileManagerWindowView`. Even when the buttons are visible in SwiftUI, the hosted `NSView` tree here may expose neither `NSButton.title` nor a matching `NSTextField`. Prevent flaky tests by asserting editable-field structure or shared presentation/state, not visible button copy.
 - 2026-04-28: `xcodebuild -only-testing:CodexPlusBarTests/...` can compile this Swift Testing target but run `0 tests`, which is a false green for focused checks. Use `make test` for final verification, and confirm the Swift Testing summary shows the expected test count.
 - 2026-07-08: A failed `make test` can report the Swift Testing failure and then leave `make`/`xcodebuild` hanging. Confirm the failure first, then kill only the stuck `make`/`xcodebuild` PIDs before continuing; do not leave the session open.
+- 2026-07-15: Swift 6 could not type-check one chained `enumerated` + `compactMap` + `sorted` + `map` email-ranking expression. Build the typed ranked array in a small loop, then sort and map in separate steps; this compiles faster and keeps ranking logic readable.
 
 ## UI And Data Flow Notes
 - 2026-03-18: The app now uses a dashboard-first account flow, not a selection-first workspace flow. Keep names and expiry dates visible for all returned accounts, and keep raw account IDs internal where possible.

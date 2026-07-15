@@ -622,6 +622,11 @@ enum CodexTheme {
     static var supportText: Color { supportTextToken.color }
     static var dataLabelText: Color { dataLabelTextToken.color }
     static var dataValueText: Color { dataValueTextToken.color }
+    static var searchInputText: Color { searchInputTextToken().color }
+    static var searchPromptText: Color { searchPromptTextToken().color }
+    static var searchAction: Color { searchActionToken().color }
+    static var searchFieldFill: Color { searchFieldFillToken().color }
+    static var searchFocusBorder: Color { searchFocusBorderToken().color }
     static var oneTimePasswordCodeText: Color { oneTimePasswordCodeTextToken().color }
     static var oneTimePasswordStatusText: Color { oneTimePasswordStatusTextToken().color }
     static var oneTimePasswordMaskFill: Color { oneTimePasswordMaskFillToken().color }
@@ -691,6 +696,30 @@ enum CodexTheme {
 
     static func utilityActionTextToken(preset: CodexThemePreset = activePreset) -> CodexColorToken {
         readableAccentToken(palette(for: preset).accBlue, preset: preset)
+    }
+
+    static func searchInputTextToken(preset: CodexThemePreset = activePreset) -> CodexColorToken {
+        palette(for: preset).dataValueText
+    }
+
+    static func searchPromptTextToken(preset: CodexThemePreset = activePreset) -> CodexColorToken {
+        palette(for: preset).supportText
+    }
+
+    static func searchFieldFillToken(preset: CodexThemePreset = activePreset) -> CodexColorToken {
+        surfaceToken(for: .nested, preset: preset)
+    }
+
+    static func searchActionToken(preset: CodexThemePreset = activePreset) -> CodexColorToken {
+        readableAccentToken(
+            palette(for: preset).accBlue,
+            preset: preset,
+            additionalBackgrounds: [searchFieldFillToken(preset: preset)]
+        )
+    }
+
+    static func searchFocusBorderToken(preset: CodexThemePreset = activePreset) -> CodexColorToken {
+        searchActionToken(preset: preset)
     }
 
     static func successTextToken(preset: CodexThemePreset = activePreset) -> CodexColorToken {

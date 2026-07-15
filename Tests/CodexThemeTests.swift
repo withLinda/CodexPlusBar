@@ -171,6 +171,41 @@ struct CodexThemeTests {
     }
 
     @Test
+    func emailSearchTokensPassWCAGAndDeltaLStarForEveryPreset() {
+        for preset in CodexThemePreset.allCases {
+            let fieldFill = CodexTheme.searchFieldFillToken(preset: preset)
+            let inputText = CodexTheme.searchInputTextToken(preset: preset)
+            let promptText = CodexTheme.searchPromptTextToken(preset: preset)
+            let searchAction = CodexTheme.searchActionToken(preset: preset)
+            let focusBorder = CodexTheme.searchFocusBorderToken(preset: preset)
+
+            for textRole in [inputText, promptText] {
+                #expect(
+                    contrastRatio(textRole, fieldFill) >= 4.5,
+                    "\(preset.id) search text should pass WCAG normal text contrast"
+                )
+                #expect(
+                    deltaLStar(textRole, fieldFill) >= 40,
+                    "\(preset.id) search text should keep enough perceptual lightness separation"
+                )
+            }
+
+            #expect(
+                contrastRatio(searchAction, fieldFill) >= 3,
+                "\(preset.id) search icon should pass WCAG non-text contrast"
+            )
+            #expect(
+                contrastRatio(focusBorder, fieldFill) >= 3,
+                "\(preset.id) search focus border should pass WCAG non-text contrast"
+            )
+            #expect(
+                searchAction != CodexTheme.actionTextToken(preset: preset),
+                "\(preset.id) search should keep the blue navigation role separate from orange primary actions"
+            )
+        }
+    }
+
+    @Test
     func dataLabelsAndValuesStaySemanticallySeparatedForEveryPreset() {
         for preset in CodexThemePreset.allCases {
             let palette = CodexTheme.palette(for: preset)

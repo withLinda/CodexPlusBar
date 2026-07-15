@@ -49,6 +49,7 @@ struct MenuBarRootViewTests {
 
         let bodyDescription = String(reflecting: type(of: rootView.body))
         #expect(bodyDescription.contains("MenuBarProfileRow") == true)
+        #expect(bodyDescription.contains("ProfileEmailSearchField") == true)
     }
 
     @Test
@@ -187,6 +188,13 @@ struct MenuBarRootViewTests {
             "later@example.com",
             "unknown@example.com",
         ])
+
+        #expect(
+            view.displayProfiles(
+                for: ProfileTagFilter([.active]),
+                query: "soonest@"
+            ).map(\.label) == ["soonest@example.com"]
+        )
     }
 }
 
