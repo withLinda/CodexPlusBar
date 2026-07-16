@@ -48,7 +48,7 @@ struct MenuBarRootView: View {
 
                 if controller.profiles.isEmpty == false {
                     if isProfileSearchPresented {
-                        ProfileEmailSearchField(
+                        ProfileSearchField(
                             text: $profileSearchQuery,
                             textScale: panelTextScale,
                             close: closeProfileSearch
@@ -174,7 +174,7 @@ struct MenuBarRootView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         } else if filteredProfiles.isEmpty,
-                  ProfileEmailSearch.normalizedQuery(profileSearchQuery).isEmpty == false {
+                  ProfileSearch.normalizedQuery(profileSearchQuery).isEmpty == false {
             ProfileSearchEmptyState(
                 query: profileSearchQuery,
                 clearsTagFilter: tagFilter.isEmpty == false,
@@ -192,6 +192,10 @@ struct MenuBarRootView: View {
                     referenceDate: currentTime.now,
                     isPinned: isPinned,
                     textScale: panelTextScale,
+                    searchPhoneNumber: ProfileSearch.matchingPhoneNumber(
+                        in: snapshot,
+                        query: profileSearchQuery
+                    ),
                     openManagerWindow: {
                         openManagerWindow(snapshot.id)
                     },
@@ -276,7 +280,7 @@ struct MenuBarRootView: View {
         let orderedProfiles = PlusProfileSnapshot.expiryFirstDisplayOrder(
             filter.apply(to: controller.profiles)
         )
-        return ProfileEmailSearch.filter(orderedProfiles, query: query)
+        return ProfileSearch.filter(orderedProfiles, query: query)
     }
 
     private var profileTagCounts: ProfileTagCounts {
@@ -551,6 +555,7 @@ private struct MenuBarProfileRow: View {
     let referenceDate: Date
     let isPinned: Bool
     let textScale: Double
+    let searchPhoneNumber: String?
     let openManagerWindow: () -> Void
     let copyProfileLabel: () -> Void
     let openEmailLink: () -> Void
@@ -562,6 +567,7 @@ private struct MenuBarProfileRow: View {
             referenceDate: referenceDate,
             mode: .menuBar(isPinned: isPinned),
             textScale: textScale,
+            searchPhoneNumber: searchPhoneNumber,
             primaryAction: openManagerWindow,
             copyAction: copyProfileLabel,
             emailAction: openEmailLink,

@@ -171,7 +171,7 @@ struct CodexThemeTests {
     }
 
     @Test
-    func emailSearchTokensPassWCAGAndDeltaLStarForEveryPreset() {
+    func profileSearchTokensPassWCAGAndDeltaLStarForEveryPreset() {
         for preset in CodexThemePreset.allCases {
             let fieldFill = CodexTheme.searchFieldFillToken(preset: preset)
             let inputText = CodexTheme.searchInputTextToken(preset: preset)

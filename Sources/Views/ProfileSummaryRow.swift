@@ -43,15 +43,25 @@ struct ProfileSummaryRowPresentation: Equatable, Sendable {
     let showsPinAction: Bool
     let pinActionSymbolName: String
     let pinActionAccessibilityLabel: String
+    let searchPhoneNumber: String?
 
     init(
         snapshot: PlusProfileSnapshot,
         referenceDate: Date = .now,
-        mode: ProfileSummaryRowMode
+        mode: ProfileSummaryRowMode,
+        searchPhoneNumber: String? = nil
     ) {
         title = DisplayFormatter.privateProfileLabel(snapshot.label)
         tags = snapshot.tags
         compactTagSummary = ProfileTagSummary(tags: snapshot.tags)
+        let trimmedSearchPhoneNumber = searchPhoneNumber?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        self.searchPhoneNumber = if let trimmedSearchPhoneNumber,
+                                    trimmedSearchPhoneNumber.isEmpty == false {
+            trimmedSearchPhoneNumber
+        } else {
+            nil
+        }
         let usageSummary = snapshot.usageSummary(referenceDate: referenceDate)
         self.usageSummary = usageSummary
         let showsExpirySupportLine = usageSummary != nil
@@ -139,6 +149,7 @@ struct ProfileSummaryRow: View {
         referenceDate: Date = .now,
         mode: ProfileSummaryRowMode,
         textScale: Double = 1,
+        searchPhoneNumber: String? = nil,
         primaryAction: (() -> Void)? = nil,
         copyAction: (() -> Void)? = nil,
         emailAction: (() -> Void)? = nil,
@@ -148,7 +159,8 @@ struct ProfileSummaryRow: View {
             presentation: ProfileSummaryRowPresentation(
                 snapshot: snapshot,
                 referenceDate: referenceDate,
-                mode: mode
+                mode: mode,
+                searchPhoneNumber: searchPhoneNumber
             ),
             mode: mode,
             textScale: textScale,
@@ -220,6 +232,10 @@ struct ProfileSummaryRow: View {
         VStack(alignment: .leading, spacing: 9) {
             titleRow
 
+            if let searchPhoneNumber = presentation.searchPhoneNumber {
+                phoneSearchContextLine(searchPhoneNumber)
+            }
+
             if let usageSummary = presentation.usageSummary {
                 usageSummaryView(usageSummary, spacing: 8)
             }
@@ -251,6 +267,10 @@ struct ProfileSummaryRow: View {
 
             wrappedPrimaryAction {
                 VStack(alignment: .leading, spacing: scaled(8)) {
+                    if let searchPhoneNumber = presentation.searchPhoneNumber {
+                        phoneSearchContextLine(searchPhoneNumber)
+                    }
+
                     if presentation.showsTags {
                         ProfileTagSummaryStrip(
                             summary: presentation.compactTagSummary,
@@ -304,6 +324,23 @@ struct ProfileSummaryRow: View {
             .truncationMode(.middle)
             .minimumScaleFactor(0.9)
             .frame(minWidth: 40, alignment: .leading)
+    }
+
+    private func phoneSearchContextLine(_ phoneNumber: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Image(systemName: "phone")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(CodexTheme.searchAction)
+                .accessibilityHidden(true)
+
+            Text(phoneNumber)
+                .font(ProfileManagerTypography.caption)
+                .foregroundStyle(CodexTheme.supportText)
+                .lineLimit(1)
+                .monospacedDigit()
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Phone number \(phoneNumber)")
     }
 
     private var topActionRail: some View {

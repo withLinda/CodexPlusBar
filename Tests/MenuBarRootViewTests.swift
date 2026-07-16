@@ -49,7 +49,7 @@ struct MenuBarRootViewTests {
 
         let bodyDescription = String(reflecting: type(of: rootView.body))
         #expect(bodyDescription.contains("MenuBarProfileRow") == true)
-        #expect(bodyDescription.contains("ProfileEmailSearchField") == true)
+        #expect(bodyDescription.contains("ProfileSearchField") == true)
     }
 
     @Test

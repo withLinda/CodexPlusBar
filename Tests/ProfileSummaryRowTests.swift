@@ -206,6 +206,32 @@ struct ProfileSummaryRowTests {
         #expect(sidebarPresentation.title == "alphae**mple@example.com")
         #expect(menuPresentation.title == "alphae**mple@example.com")
     }
+
+    @Test
+    func phoneSearchContextAppearsOnlyForPhoneSearchResults() {
+        let snapshot = sampleSnapshot(
+            state: .ready,
+            usage: nil,
+            note: nil,
+            expiresAt: nil,
+            statusMessage: nil,
+            isRefreshing: false,
+            emailLink: nil
+        )
+
+        let matched = ProfileSummaryRowPresentation(
+            snapshot: snapshot,
+            mode: .sidebar(isSelected: false),
+            searchPhoneNumber: "  +63 966 894 3311  "
+        )
+        let normal = ProfileSummaryRowPresentation(
+            snapshot: snapshot,
+            mode: .sidebar(isSelected: false)
+        )
+
+        #expect(matched.searchPhoneNumber == "+63 966 894 3311")
+        #expect(normal.searchPhoneNumber == nil)
+    }
 }
 
 private func sampleSnapshot(

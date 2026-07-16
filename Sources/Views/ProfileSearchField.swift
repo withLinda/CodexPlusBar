@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct ProfileEmailSearchField: View {
+struct ProfileSearchField: View {
     @Binding var text: String
     @FocusState private var isFocused: Bool
     let textScale: Double
@@ -26,15 +26,15 @@ struct ProfileEmailSearchField: View {
             TextField(
                 "",
                 text: $text,
-                prompt: Text("Email address")
+                prompt: Text("Email or phone number")
                     .foregroundStyle(CodexTheme.searchPromptText)
             )
             .font(ProfileManagerTypography.small(scale: textScale))
             .textFieldStyle(.plain)
             .foregroundStyle(CodexTheme.searchInputText)
             .focused($isFocused)
-            .accessibilityLabel("Search profiles by email")
-            .accessibilityHint("Type a full email or any part of an email.")
+            .accessibilityLabel("Search profiles by email or phone number")
+            .accessibilityHint("Type all or part of an email address or phone number.")
             .onExitCommand(perform: closeSearch)
 
             Button(action: closeSearch) {
@@ -107,7 +107,7 @@ struct ProfileSearchEmptyState: View {
                 .font(ProfileManagerTypography.smallStrong(scale: textScale))
                 .foregroundStyle(CodexTheme.primaryText)
 
-            Text("No saved email contains “\(query.trimmingCharacters(in: .whitespacesAndNewlines))”.")
+            Text("No saved email or phone number contains “\(query.trimmingCharacters(in: .whitespacesAndNewlines))”.")
                 .font(ProfileManagerTypography.small(scale: textScale))
                 .foregroundStyle(CodexTheme.supportText)
                 .fixedSize(horizontal: false, vertical: true)

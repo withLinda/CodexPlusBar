@@ -504,7 +504,7 @@ struct ProfileManagerWindowView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
                     if isProfileSearchPresented {
-                        ProfileEmailSearchField(
+                        ProfileSearchField(
                             text: $profileSearchQuery,
                             close: closeProfileSearch
                         )
@@ -517,7 +517,7 @@ struct ProfileManagerWindowView: View {
                     )
 
                     if filteredSidebarProfiles.isEmpty,
-                       ProfileEmailSearch.normalizedQuery(profileSearchQuery).isEmpty == false {
+                       ProfileSearch.normalizedQuery(profileSearchQuery).isEmpty == false {
                         ProfileSearchEmptyState(
                             query: profileSearchQuery,
                             clearsTagFilter: sidebarTagFilter.isEmpty == false,
@@ -537,6 +537,10 @@ struct ProfileManagerWindowView: View {
                                             referenceDate: currentTime.now,
                                             mode: .sidebar(
                                                 isSelected: snapshot.id == controller.selectedProfileID
+                                            ),
+                                            searchPhoneNumber: ProfileSearch.matchingPhoneNumber(
+                                                in: snapshot,
+                                                query: profileSearchQuery
                                             )
                                         )
                                     }
@@ -750,9 +754,10 @@ struct ProfileManagerWindowView: View {
                 oneTimePasswordPanel
             }
 
-            ProfileManagerDetailsTextField(
+            ProfileManagerPhoneNumberField(
                 title: "Phone number",
                 text: $detailsDraft.phoneNumber,
+                savedNumbers: savedPhoneNumbers,
                 onSubmit: {
                     saveDetailsDraftIfNeeded(for: snapshot)
                 }
@@ -1005,7 +1010,11 @@ struct ProfileManagerWindowView: View {
         let orderedProfiles = PlusProfileSnapshot.expiryFirstDisplayOrder(
             sidebarTagFilter.apply(to: controller.profiles)
         )
-        return ProfileEmailSearch.filter(orderedProfiles, query: profileSearchQuery)
+        return ProfileSearch.filter(orderedProfiles, query: profileSearchQuery)
+    }
+
+    private var savedPhoneNumbers: [String] {
+        ProfilePhoneNumberCatalog.savedNumbers(in: controller.profiles)
     }
 
     private var profileTagCounts: ProfileTagCounts {
@@ -1504,6 +1513,61 @@ private struct ProfileTagAssignmentSection: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityElement(children: .contain)
             .accessibilityLabel("Profile tags")
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct ProfileManagerPhoneNumberField<TrailingContent: View>: View {
+    let title: String
+    @Binding var text: String
+    let savedNumbers: [String]
+    let onSubmit: () -> Void
+    let trailingContent: TrailingContent
+
+    init(
+        title: String,
+        text: Binding<String>,
+        savedNumbers: [String],
+        onSubmit: @escaping () -> Void,
+        @ViewBuilder trailingContent: () -> TrailingContent
+    ) {
+        self.title = title
+        _text = text
+        self.savedNumbers = savedNumbers
+        self.onSubmit = onSubmit
+        self.trailingContent = trailingContent()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(title)
+                    .font(ProfileManagerTypography.caption)
+                    .foregroundStyle(CodexTheme.dataLabelText)
+
+                Spacer(minLength: 0)
+
+                if savedNumbers.isEmpty == false {
+                    Text(savedNumbers.count == 1 ? "1 saved" : "\(savedNumbers.count) saved")
+                        .font(ProfileManagerTypography.micro)
+                        .foregroundStyle(CodexTheme.supportText)
+                        .accessibilityHidden(true)
+                }
+            }
+
+            HStack(alignment: .center, spacing: 10) {
+                ProfilePhoneNumberComboBox(
+                    text: $text,
+                    savedNumbers: savedNumbers,
+                    onSubmit: onSubmit
+                )
+                .padding(.leading, 6)
+                .frame(maxWidth: .infinity, minHeight: 38, maxHeight: 38)
+                .background(ProfileManagerFieldBackground())
+
+                trailingContent
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

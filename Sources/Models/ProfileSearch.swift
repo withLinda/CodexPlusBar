@@ -1,6 +1,6 @@
 import Foundation
 
-enum ProfileEmailSearch {
+enum ProfileSearch {
     private struct MatchRank: Comparable {
         let tier: Int
         let offset: Int
@@ -17,6 +17,14 @@ enum ProfileEmailSearch {
 
             return lhs.remainingLength < rhs.remainingLength
         }
+
+        func shifted(by amount: Int) -> MatchRank {
+            MatchRank(
+                tier: tier + amount,
+                offset: offset,
+                remainingLength: remainingLength
+            )
+        }
     }
 
     private struct RankedProfile {
@@ -26,7 +34,7 @@ enum ProfileEmailSearch {
     }
 
     static func normalizedQuery(_ rawValue: String) -> String {
-        var normalized = normalize(rawValue)
+        var normalized = normalizeText(rawValue)
         if normalized.hasPrefix("mailto:") {
             normalized.removeFirst("mailto:".count)
         }
@@ -43,11 +51,21 @@ enum ProfileEmailSearch {
             return orderedProfiles
         }
 
+        let phoneDigits = ProfilePhoneNumberCatalog.normalizedDigits(rawQuery)
+        let prefersPhoneMatches = isPhoneLikeQuery(rawQuery)
         var matches: [RankedProfile] = []
         matches.reserveCapacity(orderedProfiles.count)
 
         for (index, snapshot) in orderedProfiles.enumerated() {
-            guard let rank = matchRank(label: snapshot.profile.label, query: query) else {
+            let emailRank = emailMatchRank(label: snapshot.profile.label, query: query)
+                .map { prefersPhoneMatches ? $0.shifted(by: 4) : $0 }
+            let phoneRank = prefersPhoneMatches
+                ? phoneMatchRank(
+                    phoneNumber: snapshot.profile.phoneNumber,
+                    queryDigits: phoneDigits
+                )
+                : nil
+            guard let rank = [emailRank, phoneRank].compactMap({ $0 }).min() else {
                 continue
             }
 
@@ -71,14 +89,32 @@ enum ProfileEmailSearch {
         return matches.map(\.snapshot)
     }
 
-    private static func matchRank(label: String, query: String) -> MatchRank? {
+    static func matchingPhoneNumber(
+        in snapshot: PlusProfileSnapshot,
+        query rawQuery: String
+    ) -> String? {
+        let queryDigits = ProfilePhoneNumberCatalog.normalizedDigits(rawQuery)
+        guard isPhoneLikeQuery(rawQuery),
+              phoneMatchRank(
+                phoneNumber: snapshot.profile.phoneNumber,
+                queryDigits: queryDigits
+              ) != nil,
+              let phoneNumber = snapshot.profile.phoneNumber?.trimmingCharacters(in: .whitespacesAndNewlines),
+              phoneNumber.isEmpty == false else {
+            return nil
+        }
+
+        return phoneNumber
+    }
+
+    private static func emailMatchRank(label: String, query: String) -> MatchRank? {
         emailCandidates(in: label)
-            .compactMap { rank(candidate: $0, query: query) }
+            .compactMap { emailRank(candidate: $0, query: query) }
             .min()
     }
 
-    private static func rank(candidate rawCandidate: String, query: String) -> MatchRank? {
-        let candidate = normalize(rawCandidate)
+    private static func emailRank(candidate rawCandidate: String, query: String) -> MatchRank? {
+        let candidate = normalizeText(rawCandidate)
         guard candidate.isEmpty == false else {
             return nil
         }
@@ -142,6 +178,56 @@ enum ProfileEmailSearch {
         )
     }
 
+    private static func phoneMatchRank(
+        phoneNumber: String?,
+        queryDigits: String
+    ) -> MatchRank? {
+        guard queryDigits.isEmpty == false,
+              let phoneNumber,
+              phoneNumber.isEmpty == false else {
+            return nil
+        }
+
+        let candidate = ProfilePhoneNumberCatalog.normalizedDigits(phoneNumber)
+        guard candidate.isEmpty == false else {
+            return nil
+        }
+
+        if candidate == queryDigits {
+            return MatchRank(tier: 0, offset: 0, remainingLength: 0)
+        }
+
+        if candidate.hasPrefix(queryDigits) {
+            return MatchRank(
+                tier: 1,
+                offset: 0,
+                remainingLength: candidate.count - queryDigits.count
+            )
+        }
+
+        guard let range = candidate.range(of: queryDigits) else {
+            return nil
+        }
+
+        return MatchRank(
+            tier: 2,
+            offset: candidate.distance(from: candidate.startIndex, to: range.lowerBound),
+            remainingLength: candidate.count - queryDigits.count
+        )
+    }
+
+    private static func isPhoneLikeQuery(_ rawValue: String) -> Bool {
+        let formattingCharacters = CharacterSet(charactersIn: "+-().")
+            .union(.whitespacesAndNewlines)
+        let meaningfulCharacters = rawValue.unicodeScalars.filter {
+            formattingCharacters.contains($0) == false
+        }
+
+        return meaningfulCharacters.isEmpty == false && meaningfulCharacters.allSatisfy {
+            CharacterSet.decimalDigits.contains($0)
+        }
+    }
+
     private static func emailParts(_ email: String) -> (local: String, domain: String) {
         guard let atIndex = email.lastIndex(of: "@") else {
             return (email, "")
@@ -154,7 +240,7 @@ enum ProfileEmailSearch {
     }
 
     private static func emailCandidates(in label: String) -> [String] {
-        let normalizedLabel = normalize(label)
+        let normalizedLabel = normalizeText(label)
         guard normalizedLabel.contains("@") else {
             return []
         }
@@ -171,7 +257,7 @@ enum ProfileEmailSearch {
 
         var candidates: [String] = []
         for candidate in extracted + [label] {
-            let normalizedCandidate = normalize(candidate)
+            let normalizedCandidate = normalizeText(candidate)
             guard normalizedCandidate.contains("@"),
                   candidates.contains(normalizedCandidate) == false else {
                 continue
@@ -183,7 +269,7 @@ enum ProfileEmailSearch {
         return candidates
     }
 
-    private static func normalize(_ rawValue: String) -> String {
+    private static func normalizeText(_ rawValue: String) -> String {
         rawValue
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .folding(

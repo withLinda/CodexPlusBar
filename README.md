@@ -22,7 +22,8 @@ When you use more than one ChatGPT profile, checking limits can become slow and 
 - One-click refresh for all profiles or a single profile.
 - Pin an important profile so it stays easy to watch.
 - Save a label and email link for each profile.
-- Search saved profiles by full or partial email address.
+- Search saved profiles by full or partial email address or phone number.
+- Reuse a saved phone number from a searchable picker when editing a profile.
 - Open the saved email link from the menu bar or manager.
 - Repair a profile by opening its sign-in session view.
 - Clear a profile session when you want to sign in again.
@@ -45,10 +46,10 @@ When you use more than one ChatGPT profile, checking limits can become slow and 
 Download the latest notarized DMG from GitHub:
 
 - [Latest release page](https://github.com/withLinda/CodexPlusBar/releases/latest)
-- [Direct notarized DMG download](https://github.com/withLinda/CodexPlusBar/releases/download/snapshot-2026-07-15-shared-ui-foundations/CodexPlusBar-snapshot-2026-07-15-shared-ui-foundations.dmg)
-- [SHA-256 checksum](https://github.com/withLinda/CodexPlusBar/releases/download/snapshot-2026-07-15-shared-ui-foundations/CodexPlusBar-snapshot-2026-07-15-shared-ui-foundations.dmg.sha256)
+- [Direct notarized DMG download](https://github.com/withLinda/CodexPlusBar/releases/download/snapshot-2026-07-16-phone-search/CodexPlusBar-snapshot-2026-07-16-phone-search.dmg)
+- [SHA-256 checksum](https://github.com/withLinda/CodexPlusBar/releases/download/snapshot-2026-07-16-phone-search/CodexPlusBar-snapshot-2026-07-16-phone-search.dmg.sha256)
 
-1. Download `CodexPlusBar-snapshot-2026-07-15-shared-ui-foundations.dmg`.
+1. Download `CodexPlusBar-snapshot-2026-07-16-phone-search.dmg`.
 2. Double-click the downloaded DMG to open it.
 3. Drag `CodexPlusBar.app` onto the `Applications` folder inside the DMG.
 4. If macOS asks, replace the older copy in Applications.

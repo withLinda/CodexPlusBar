@@ -65,7 +65,9 @@ struct ProfileManagerWindowViewTests {
             controller: controller,
             currentTime: AppMinuteClock(now: Date(timeIntervalSince1970: 1_776_000_000))
         )
-        #expect(String(reflecting: type(of: rootView.body)).contains("ProfileEmailSearchField"))
+        let bodyType = String(reflecting: type(of: rootView.body))
+        #expect(bodyType.contains("ProfileSearchField"))
+        #expect(bodyType.contains("ProfileManagerPhoneNumberField"))
     }
 
     @Test
