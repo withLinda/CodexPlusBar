@@ -114,6 +114,58 @@ struct CodexThemeTests {
     }
 
     @Test
+    func phoneSummaryPageRolesPassWCAGAndDeltaLStarForEveryPreset() {
+        for preset in CodexThemePreset.allCases {
+            let palette = CodexTheme.palette(for: preset)
+            let surfaces: [(name: String, token: CodexColorToken)] = [
+                ("groupCard", CodexTheme.cardFillToken(for: .regular, preset: preset)),
+                ("pressedRow", CodexTheme.surfaceToken(for: .nested, preset: preset)),
+            ]
+            let textRoles: [(name: String, token: CodexColorToken)] = [
+                ("heading", palette.strongText),
+                ("profile", palette.primaryText),
+                ("support", palette.mutedText),
+                ("expiryLabel", palette.dataLabelText),
+                ("phoneNumber", palette.dataValueText),
+                ("navigation", CodexTheme.utilityActionTextToken(preset: preset)),
+            ]
+            let referenceDate = Date(timeIntervalSince1970: 1_776_000_000)
+            let expiryValueRoles: [(name: String, token: CodexColorToken)] = [
+                ("expiryCalm", CodexTheme.expiryEmphasisToken(
+                    for: referenceDate.addingTimeInterval(TimeInterval(9 * 24 * 3_600)),
+                    referenceDate: referenceDate,
+                    preset: preset
+                )),
+                ("expiryWarning", CodexTheme.expiryEmphasisToken(
+                    for: referenceDate.addingTimeInterval(TimeInterval(5 * 24 * 3_600)),
+                    referenceDate: referenceDate,
+                    preset: preset
+                )),
+                ("expiryCritical", CodexTheme.expiryEmphasisToken(
+                    for: referenceDate.addingTimeInterval(TimeInterval(2 * 24 * 3_600)),
+                    referenceDate: referenceDate,
+                    preset: preset
+                )),
+            ].compactMap { name, token in
+                token.map { (name, $0) }
+            }
+
+            for surface in surfaces {
+                for textRole in textRoles + expiryValueRoles {
+                    #expect(
+                        contrastRatio(textRole.token, surface.token) >= 4.5,
+                        "\(preset.id) phone-summary \(textRole.name) on \(surface.name) should pass WCAG normal text contrast"
+                    )
+                    #expect(
+                        deltaLStar(textRole.token, surface.token) >= 40,
+                        "\(preset.id) phone-summary \(textRole.name) on \(surface.name) should keep enough perceptual lightness separation"
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
     func themeRefreshContextChangesTokensWithoutResettingViewIdentity() {
         let hardContext = CodexThemeRefreshContext(appearanceMode: .dark, contrast: .hard)
         let mediumContext = CodexThemeRefreshContext(appearanceMode: .dark, contrast: .medium)

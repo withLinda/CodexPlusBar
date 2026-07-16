@@ -303,6 +303,11 @@ struct ProfileManagerSessionPanelPresentation: Equatable, Sendable {
     }
 }
 
+enum ProfileManagerPage: Equatable, Sendable {
+    case profile
+    case phoneSummary
+}
+
 struct ProfileManagerWindowView: View {
     @Bindable var controller: PlusProfileController
     let currentTime: AppMinuteClock
@@ -317,6 +322,7 @@ struct ProfileManagerWindowView: View {
     @State private var saveResetTask: Task<Void, Never>?
     @State private var showsBulkImportSheet = false
     @State private var bulkImportText = ""
+    @State private var page = ProfileManagerPage.profile
 
     init(
         controller: PlusProfileController,
@@ -503,6 +509,8 @@ struct ProfileManagerWindowView: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
+                    phoneSummaryNavigationButton
+
                     if isProfileSearchPresented {
                         ProfileSearchField(
                             text: $profileSearchQuery,
@@ -530,13 +538,14 @@ struct ProfileManagerWindowView: View {
                             VStack(alignment: .leading, spacing: 10) {
                                 ForEach(filteredSidebarProfiles) { snapshot in
                                     Button {
-                                        controller.selectProfile(id: snapshot.id)
+                                        openProfile(snapshot.id)
                                     } label: {
                                         ProfileSummaryRow(
                                             snapshot: snapshot,
                                             referenceDate: currentTime.now,
                                             mode: .sidebar(
-                                                isSelected: snapshot.id == controller.selectedProfileID
+                                                isSelected: page == .profile
+                                                    && snapshot.id == controller.selectedProfileID
                                             ),
                                             searchPhoneNumber: ProfileSearch.matchingPhoneNumber(
                                                 in: snapshot,
@@ -559,7 +568,13 @@ struct ProfileManagerWindowView: View {
 
     @ViewBuilder
     private var detailPane: some View {
-        if let snapshot = controller.selectedProfile {
+        if page == .phoneSummary {
+            PhoneSummaryView(
+                presentation: phoneSummaryPresentation,
+                referenceDate: currentTime.now,
+                openProfile: openProfile
+            )
+        } else if let snapshot = controller.selectedProfile {
             let metrics = ProfileManagerDetailLayoutMetrics.chromeSignIn
 
             ScrollView(.vertical) {
@@ -586,6 +601,56 @@ struct ProfileManagerWindowView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
+    }
+
+    private var phoneSummaryNavigationButton: some View {
+        Button {
+            page = .phoneSummary
+        } label: {
+            HStack(alignment: .center, spacing: 10) {
+                Image(systemName: "person.2")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(
+                        page == .phoneSummary
+                            ? CodexTheme.utilityActionText
+                            : CodexTheme.mutedText
+                    )
+                    .frame(width: 24)
+                    .accessibilityHidden(true)
+
+                Text(phoneSummaryPresentation.title)
+                    .font(ProfileManagerTypography.smallStrong)
+                    .foregroundStyle(CodexTheme.primaryText)
+
+                Spacer(minLength: 8)
+
+                if let countText = phoneSummaryPresentation.navigationCountText {
+                    Text(countText)
+                        .font(ProfileManagerTypography.caption)
+                        .foregroundStyle(CodexTheme.dataValueText)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(
+                            Capsule(style: .continuous)
+                                .fill(CodexTheme.surfaceFill(for: .nested))
+                        )
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 9)
+            .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
+                    .fill(
+                        page == .phoneSummary
+                            ? CodexTheme.surfaceFill(for: .nested)
+                            : Color.clear
+                    )
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(phoneSummaryPresentation.navigationAccessibilityLabel)
     }
 
     private func detailTopGrid(
@@ -1017,6 +1082,15 @@ struct ProfileManagerWindowView: View {
         ProfilePhoneNumberCatalog.savedNumbers(in: controller.profiles)
     }
 
+    private var phoneSummaryPresentation: PhoneSummaryPresentation {
+        PhoneSummaryPresentation(
+            numberGroups: ProfilePhoneNumberCatalog.numberGroups(in: controller.profiles),
+            profilesWithoutNumber: ProfilePhoneNumberCatalog.profilesWithoutNumber(
+                in: controller.profiles
+            )
+        )
+    }
+
     private var profileTagCounts: ProfileTagCounts {
         ProfileTagCounts(snapshots: controller.profiles)
     }
@@ -1238,6 +1312,7 @@ struct ProfileManagerWindowView: View {
     }
 
     private func addProfile() {
+        page = .profile
         controller.addProfile()
     }
 
@@ -1253,7 +1328,13 @@ struct ProfileManagerWindowView: View {
 
         bulkImportText = ""
         showsBulkImportSheet = false
+        page = .profile
         syncDrafts(with: controller.selectedProfile)
+    }
+
+    private func openProfile(_ profileID: UUID) {
+        page = .profile
+        controller.selectProfile(id: profileID)
     }
 
     private func clearSidebarFilter() {

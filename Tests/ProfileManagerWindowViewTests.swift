@@ -7,6 +7,108 @@ import WebKit
 @MainActor
 struct ProfileManagerWindowViewTests {
     @Test
+    func phoneSummaryPresentationAccountsForEveryProfile() {
+        let first = sampleProfile(
+            label: "alpha@example.com",
+            phoneNumber: "+62 812 345",
+            sortOrder: 0
+        )
+        let second = sampleProfile(
+            label: "beta@example.com",
+            phoneNumber: "+62-812-345",
+            sortOrder: 1
+        )
+        let third = sampleProfile(
+            label: "gamma@example.com",
+            phoneNumber: "+63 966 111",
+            sortOrder: 2
+        )
+        let fourth = sampleProfile(
+            label: "delta@example.com",
+            phoneNumber: nil,
+            sortOrder: 3
+        )
+        let firstSnapshot = PlusProfileSnapshot(
+            profile: first,
+            state: .idle,
+            usage: nil,
+            statusMessage: nil,
+            isRefreshing: false
+        )
+        let secondSnapshot = PlusProfileSnapshot(
+            profile: second,
+            state: .idle,
+            usage: nil,
+            statusMessage: nil,
+            isRefreshing: false
+        )
+        let thirdSnapshot = PlusProfileSnapshot(
+            profile: third,
+            state: .idle,
+            usage: nil,
+            statusMessage: nil,
+            isRefreshing: false
+        )
+        let fourthSnapshot = PlusProfileSnapshot(
+            profile: fourth,
+            state: .idle,
+            usage: nil,
+            statusMessage: nil,
+            isRefreshing: false
+        )
+        let sharedGroup = ProfilePhoneNumberGroup(
+            id: "62812345",
+            phoneNumber: "+62 812 345",
+            profiles: [firstSnapshot, secondSnapshot]
+        )
+        let singleUseGroup = ProfilePhoneNumberGroup(
+            id: "63966111",
+            phoneNumber: "+63 966 111",
+            profiles: [thirdSnapshot]
+        )
+
+        let filled = PhoneSummaryPresentation(
+            numberGroups: [sharedGroup, singleUseGroup],
+            profilesWithoutNumber: [fourthSnapshot]
+        )
+        let empty = PhoneSummaryPresentation(
+            numberGroups: [],
+            profilesWithoutNumber: []
+        )
+
+        #expect(filled.title == "Phone summary")
+        #expect(filled.totalProfileCount == 4)
+        #expect(filled.sharedGroups == [sharedGroup])
+        #expect(filled.singleUseGroups == [singleUseGroup])
+        #expect(filled.summaryText == "2 profiles share a number. 1 profile uses a number once. 1 profile has no number.")
+        #expect(filled.navigationCountText == "4")
+        #expect(filled.navigationAccessibilityLabel == "Phone summary, 4 profiles")
+        #expect(empty.summaryText == "No saved profiles yet.")
+        #expect(empty.navigationCountText == nil)
+        #expect(ProfileManagerPage.profile != .phoneSummary)
+    }
+
+    @Test
+    func phoneSummaryExpiryPresentationShowsLiveAndMissingExpiry() {
+        let referenceDate = Date(timeIntervalSince1970: 1_776_000_000)
+        let live = PhoneSummaryExpiryPresentation(
+            expiresAt: referenceDate.addingTimeInterval(TimeInterval((9 * 24 + 5) * 3_600)),
+            referenceDate: referenceDate
+        )
+        let missing = PhoneSummaryExpiryPresentation(
+            expiresAt: nil,
+            referenceDate: referenceDate
+        )
+
+        #expect(live.value == DisplayFormatter.LabeledValue(label: "Expires in", value: "9d 5h"))
+        #expect(live.accessibilityText == "Expires in 9d 5h")
+        #expect(live.emphasisToken == CodexTheme.readableAccentToken(CodexTheme.Palette.accYellow))
+        #expect(missing.value == DisplayFormatter.LabeledValue(label: nil, value: "Expiry unavailable"))
+        #expect(missing.accessibilityText == "Expiry unavailable")
+        #expect(missing.emphasisToken == nil)
+    }
+
+    @Test
     func sessionPaneNeverBuildsWKWebView() throws {
         let tempDirectory = makeTemporaryDirectory()
         let store = ProfileCatalogStore(
@@ -418,12 +520,18 @@ private func flushViewHierarchy(for hostingView: NSHostingView<ProfileManagerWin
     }
 }
 
-private func sampleProfile(label: String, emailLink: String? = nil, sortOrder: Int) -> PlusProfile {
+private func sampleProfile(
+    label: String,
+    emailLink: String? = nil,
+    phoneNumber: String? = nil,
+    sortOrder: Int
+) -> PlusProfile {
     PlusProfile(
         id: UUID(),
         label: label,
         emailLink: emailLink,
         detectedNote: nil,
+        phoneNumber: phoneNumber,
         tags: [],
         webDataStoreID: UUID(),
         sortOrder: sortOrder,

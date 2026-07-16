@@ -56,6 +56,7 @@ update_policy:
 - 2026-05-29: The default archive/DMG path can produce an ad-hoc signed app and an unsigned DMG because the project has no Release Developer ID settings yet. For notarized snapshots, copy the archived app to a packaging workspace, sign it with `Developer ID Application` plus `--options runtime --timestamp`, create the DMG from that signed copy, sign the DMG, then notarize and staple before checksum/upload.
 - 2026-07-07: For release checksums, generate the `.sha256` file from inside `build/dist` with the DMG basename, then verify from that same folder. If the checksum file stores `build/dist/...`, `shasum -c` fails after `cd build/dist` even though the DMG itself is valid.
 - 2026-07-09: Do not run `xcrun stapler staple` and `xcrun stapler validate` in parallel. `validate` can race before the ticket is attached and report a false failure; run `staple`, then `validate`, then `spctl`.
+- 2026-07-17: `notarytool` Keychain profile names are case-sensitive. This Mac's working release profile is `CodexPlusBar-notary`; `CodexPlusBar-Notary` does not exist, so check the exact saved name before treating notarization credentials as missing.
 
 ## Backend API Notes
 - 2026-03-18: `/backend-api/accounts/check/v4-2023-04-27` is the source of truth for multi-account catalog data. It provides account names, plan types, entitlement dates, accessibility flags, deactivation state, and `account_ordering`.

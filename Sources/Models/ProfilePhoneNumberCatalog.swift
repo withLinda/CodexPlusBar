@@ -1,5 +1,11 @@
 import Foundation
 
+struct ProfilePhoneNumberGroup: Identifiable, Equatable, Sendable {
+    let id: String
+    let phoneNumber: String
+    let profiles: [PlusProfileSnapshot]
+}
+
 enum ProfilePhoneNumberCatalog {
     private struct RankedNumber {
         let value: String
@@ -32,6 +38,72 @@ enum ProfilePhoneNumberCatalog {
         }
 
         return numbers
+    }
+
+    static func numberGroups(in snapshots: [PlusProfileSnapshot]) -> [ProfilePhoneNumberGroup] {
+        var orderedKeys: [String] = []
+        var displayNumbers: [String: String] = [:]
+        var groupedProfiles: [String: [PlusProfileSnapshot]] = [:]
+
+        for snapshot in snapshots {
+            guard let rawNumber = snapshot.profile.phoneNumber else {
+                continue
+            }
+
+            let number = rawNumber.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard number.isEmpty == false else {
+                continue
+            }
+
+            let key = groupingKey(number)
+            if groupedProfiles[key] == nil {
+                orderedKeys.append(key)
+                displayNumbers[key] = number
+            }
+            groupedProfiles[key, default: []].append(snapshot)
+        }
+
+        return orderedKeys
+            .enumerated()
+            .compactMap { index, key -> (index: Int, group: ProfilePhoneNumberGroup)? in
+                guard let profiles = groupedProfiles[key],
+                      let phoneNumber = displayNumbers[key] else {
+                    return nil
+                }
+
+                return (
+                    index,
+                    ProfilePhoneNumberGroup(
+                        id: key,
+                        phoneNumber: phoneNumber,
+                        profiles: profiles
+                    )
+                )
+            }
+            .sorted { lhs, rhs in
+                let lhsIsShared = lhs.group.profiles.count > 1
+                let rhsIsShared = rhs.group.profiles.count > 1
+                if lhsIsShared != rhsIsShared {
+                    return lhsIsShared
+                }
+
+                if lhs.group.profiles.count != rhs.group.profiles.count {
+                    return lhs.group.profiles.count > rhs.group.profiles.count
+                }
+
+                return lhs.index < rhs.index
+            }
+            .map(\.group)
+    }
+
+    static func profilesWithoutNumber(in snapshots: [PlusProfileSnapshot]) -> [PlusProfileSnapshot] {
+        snapshots.filter { snapshot in
+            guard let phoneNumber = snapshot.profile.phoneNumber else {
+                return true
+            }
+
+            return phoneNumber.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
     }
 
     static func matches(_ savedNumbers: [String], query rawQuery: String) -> [String] {
@@ -110,6 +182,11 @@ enum ProfilePhoneNumberCatalog {
             .filter { CharacterSet.decimalDigits.contains($0) }
             .map(String.init)
             .joined()
+    }
+
+    private static func groupingKey(_ rawValue: String) -> String {
+        let digits = normalizedDigits(rawValue)
+        return digits.isEmpty ? normalizedFallback(rawValue) : digits
     }
 
     private static func normalizedFallback(_ rawValue: String) -> String {
