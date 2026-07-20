@@ -552,9 +552,22 @@ final class PlusProfileController {
 
     private func loadStoredProfiles() {
         let storedProfiles: [PlusProfile]
+        var repairMessage: String?
 
         do {
-            storedProfiles = try catalogStore.loadProfiles()
+            let loadResult = try catalogStore.loadProfilesWithReport()
+            storedProfiles = loadResult.profiles
+
+            if loadResult.removedDuplicateCount > 0 {
+                do {
+                    try catalogStore.saveProfiles(storedProfiles)
+                    repairMessage = loadResult.removedDuplicateCount == 1
+                        ? "Fixed 1 duplicate saved profile."
+                        : "Fixed \(loadResult.removedDuplicateCount) duplicate saved profiles."
+                } catch {
+                    repairMessage = "A duplicate profile was hidden, but the saved list could not be repaired."
+                }
+            }
         } catch {
             storedProfiles = []
             statusMessage = "The saved profile list could not be read. Starting with an empty list."
@@ -570,6 +583,7 @@ final class PlusProfileController {
             )
         }
         selectedProfileID = profiles.first?.id
+        statusMessage = repairMessage ?? statusMessage
         updateDashboardStatus()
     }
 
@@ -761,7 +775,12 @@ final class PlusProfileController {
 
     @discardableResult
     private func persistProfiles() -> Bool {
-        profiles = profiles.enumerated().map { index, snapshot in
+        var seenProfileIDs: Set<UUID> = []
+        let uniqueProfiles = profiles.filter { snapshot in
+            seenProfileIDs.insert(snapshot.id).inserted
+        }
+
+        profiles = uniqueProfiles.enumerated().map { index, snapshot in
             var updatedProfile = snapshot.profile
             updatedProfile.sortOrder = index
             return snapshot.updating(profile: updatedProfile)

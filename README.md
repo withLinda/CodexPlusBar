@@ -25,6 +25,7 @@ When you use more than one ChatGPT profile, checking limits can become slow and 
 - Search saved profiles by full or partial email address or phone number.
 - Reuse a saved phone number from a searchable picker when editing a profile.
 - Review shared, single-use, and missing phone numbers from the Phone summary page.
+- Automatically repair duplicate saved profile rows while keeping the first current copy.
 - Open the saved email link from the menu bar or manager.
 - Repair a profile by opening its sign-in session view.
 - Clear a profile session when you want to sign in again.
@@ -47,16 +48,23 @@ When you use more than one ChatGPT profile, checking limits can become slow and 
 Download the latest notarized DMG from GitHub:
 
 - [Latest release page](https://github.com/withLinda/CodexPlusBar/releases/latest)
-- [Direct notarized DMG download](https://github.com/withLinda/CodexPlusBar/releases/download/snapshot-2026-07-20-otp-copy/CodexPlusBar-snapshot-2026-07-20-otp-copy.dmg)
-- [SHA-256 checksum](https://github.com/withLinda/CodexPlusBar/releases/download/snapshot-2026-07-20-otp-copy/CodexPlusBar-snapshot-2026-07-20-otp-copy.dmg.sha256)
+- [Direct notarized DMG download](https://github.com/withLinda/CodexPlusBar/releases/download/snapshot-2026-07-21-profile-repair/CodexPlusBar-snapshot-2026-07-21-profile-repair.dmg)
+- [SHA-256 checksum](https://github.com/withLinda/CodexPlusBar/releases/download/snapshot-2026-07-21-profile-repair/CodexPlusBar-snapshot-2026-07-21-profile-repair.dmg.sha256)
 
-1. Download `CodexPlusBar-snapshot-2026-07-20-otp-copy.dmg`.
-2. Double-click the downloaded DMG to open it.
-3. Drag `CodexPlusBar.app` onto the `Applications` folder inside the DMG.
-4. If macOS asks, replace the older copy in Applications.
-5. Wait for the copy to finish.
-6. Eject the CodexPlusBar DMG in Finder.
-7. Open CodexPlusBar from your Applications folder.
+1. Download `CodexPlusBar-snapshot-2026-07-21-profile-repair.dmg`.
+2. Optional: download the checksum file into the same folder, open Terminal there, and run:
+
+   ```bash
+   shasum -a 256 -c CodexPlusBar-snapshot-2026-07-21-profile-repair.dmg.sha256
+   ```
+
+   A correct download prints `CodexPlusBar-snapshot-2026-07-21-profile-repair.dmg: OK`.
+3. Double-click the downloaded DMG to open it.
+4. Drag `CodexPlusBar.app` onto the `Applications` folder inside the DMG.
+5. If macOS asks, replace the older copy in Applications.
+6. Wait for the copy to finish.
+7. Eject the CodexPlusBar DMG in Finder.
+8. Open CodexPlusBar from your Applications folder.
 
 The DMG and app are signed and notarized for macOS distribution, so macOS should be able to verify them normally.
 

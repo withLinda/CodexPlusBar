@@ -55,6 +55,48 @@ struct ProfileCatalogStoreTests {
     }
 
     @Test
+    func saveProfilesRemovesDuplicateIdentifiersAndKeepsFirstProfile() throws {
+        let tempDirectory = makeTemporaryDirectory()
+        let store = ProfileCatalogStore(
+            fileURL: tempDirectory.appendingPathComponent("profiles.json", isDirectory: false)
+        )
+        var current = sampleProfile(label: "current@example.com", sortOrder: 0)
+        current.phoneNumber = "+62 812 3456"
+        current.notes = "Keep this current copy"
+        var staleDuplicate = current
+        staleDuplicate.sortOrder = 1
+        staleDuplicate.phoneNumber = nil
+        staleDuplicate.notes = nil
+
+        try store.saveProfiles([current, staleDuplicate])
+
+        let loaded = try store.loadProfiles()
+        #expect(loaded.count == 1)
+        #expect(loaded.first?.id == current.id)
+        #expect(loaded.first?.phoneNumber == current.phoneNumber)
+        #expect(loaded.first?.notes == current.notes)
+        #expect(loaded.first?.sortOrder == 0)
+    }
+
+    @Test
+    func loadProfilesReportsDuplicateIdentifiersFromExistingFile() throws {
+        let tempDirectory = makeTemporaryDirectory()
+        let fileURL = tempDirectory.appendingPathComponent("profiles.json", isDirectory: false)
+        let store = ProfileCatalogStore(fileURL: fileURL)
+        let current = sampleProfile(label: "current@example.com", sortOrder: 0)
+        var duplicate = current
+        duplicate.sortOrder = 1
+        let data = try JSONEncoder().encode([current, duplicate])
+        try data.write(to: fileURL, options: .atomic)
+
+        let result = try store.loadProfilesWithReport()
+
+        #expect(result.profiles.count == 1)
+        #expect(result.profiles.first?.id == current.id)
+        #expect(result.removedDuplicateCount == 1)
+    }
+
+    @Test
     func loadProfilesDecodesOlderJSONWithoutEmailLink() throws {
         let tempDirectory = makeTemporaryDirectory()
         let fileURL = tempDirectory.appendingPathComponent("profiles.json", isDirectory: false)

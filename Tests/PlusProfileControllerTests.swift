@@ -6,6 +6,59 @@ import WebKit
 @MainActor
 struct PlusProfileControllerTests {
     @Test
+    func loadingRepairsDuplicateProfileIdentifiersAndKeepsCurrentCopy() throws {
+        let tempDirectory = makeTemporaryDirectory()
+        let fileURL = tempDirectory.appendingPathComponent("profiles.json", isDirectory: false)
+        let store = ProfileCatalogStore(fileURL: fileURL)
+        var current = sampleProfile(label: "current@example.com", sortOrder: 0)
+        current.phoneNumber = "+62 812 3456"
+        current.notes = "Keep this current copy"
+        var staleDuplicate = current
+        staleDuplicate.sortOrder = 1
+        staleDuplicate.phoneNumber = nil
+        staleDuplicate.notes = nil
+        let data = try JSONEncoder().encode([current, staleDuplicate])
+        try data.write(to: fileURL, options: .atomic)
+
+        let controller = PlusProfileController(
+            catalogStore: store,
+            dataService: StubPlusProfileDataService(refreshResults: [:]),
+            autoStart: false
+        )
+
+        let row = try #require(controller.profiles.first)
+        #expect(controller.profiles.count == 1)
+        #expect(row.id == current.id)
+        #expect(row.profile.phoneNumber == current.phoneNumber)
+        #expect(row.profile.notes == current.notes)
+        #expect(controller.statusMessage == "Fixed 1 duplicate saved profile.")
+        #expect(try store.loadProfiles().count == 1)
+    }
+
+    @Test
+    func persistenceRemovesDuplicateSnapshotsBeforeSaving() throws {
+        let tempDirectory = makeTemporaryDirectory()
+        let store = ProfileCatalogStore(
+            fileURL: tempDirectory.appendingPathComponent("profiles.json", isDirectory: false)
+        )
+        let profile = sampleProfile(label: "current@example.com", sortOrder: 0)
+        try store.saveProfiles([profile])
+        let controller = PlusProfileController(
+            catalogStore: store,
+            dataService: StubPlusProfileDataService(refreshResults: [:]),
+            autoStart: false
+        )
+        let snapshot = try #require(controller.profiles.first)
+        controller.profiles.append(snapshot)
+
+        controller.setTags([.active], for: profile.id)
+
+        #expect(controller.profiles.count == 1)
+        #expect(controller.profiles.first?.tags == [.active])
+        #expect(try store.loadProfiles().count == 1)
+    }
+
+    @Test
     func refreshAllUpdatesEachProfileWithoutCollapsingOtherRows() async throws {
         let tempDirectory = makeTemporaryDirectory()
         let store = ProfileCatalogStore(

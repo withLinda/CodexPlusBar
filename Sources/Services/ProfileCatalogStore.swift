@@ -1,5 +1,10 @@
 import Foundation
 
+struct ProfileCatalogLoadResult {
+    let profiles: [PlusProfile]
+    let removedDuplicateCount: Int
+}
+
 struct ProfileCatalogStore {
     let fileURL: URL
     private let fileManager: FileManager
@@ -13,27 +18,26 @@ struct ProfileCatalogStore {
     }
 
     func loadProfiles() throws -> [PlusProfile] {
+        try loadProfilesWithReport().profiles
+    }
+
+    func loadProfilesWithReport() throws -> ProfileCatalogLoadResult {
         guard fileManager.fileExists(atPath: fileURL.path) else {
-            return []
+            return ProfileCatalogLoadResult(profiles: [], removedDuplicateCount: 0)
         }
 
         let data = try Data(contentsOf: fileURL)
         let decoder = JSONDecoder()
         let profiles = try decoder.decode([PlusProfile].self, from: data)
-        return profiles.sorted(by: sortProfiles)
+        let normalizedProfiles = Self.normalizedProfiles(profiles)
+        return ProfileCatalogLoadResult(
+            profiles: normalizedProfiles,
+            removedDuplicateCount: profiles.count - normalizedProfiles.count
+        )
     }
 
     func saveProfiles(_ profiles: [PlusProfile]) throws {
-        let normalizedProfiles = profiles
-            .sorted(by: sortProfiles)
-            .enumerated()
-            .map { index, profile -> PlusProfile in
-                var normalized = profile
-                normalized.sortOrder = index
-                return normalized
-            }
-
-        try write(normalizedProfiles)
+        try write(Self.normalizedProfiles(profiles))
     }
 
     func upsertProfile(_ profile: PlusProfile) throws {
@@ -78,11 +82,28 @@ struct ProfileCatalogStore {
         try data.write(to: fileURL, options: .atomic)
     }
 
-    private func sortProfiles(_ lhs: PlusProfile, _ rhs: PlusProfile) -> Bool {
-        if lhs.sortOrder == rhs.sortOrder {
-            return lhs.createdAt < rhs.createdAt
+    private static func normalizedProfiles(_ profiles: [PlusProfile]) -> [PlusProfile] {
+        let orderedProfiles = profiles.enumerated().sorted { lhs, rhs in
+            if lhs.element.sortOrder != rhs.element.sortOrder {
+                return lhs.element.sortOrder < rhs.element.sortOrder
+            }
+
+            if lhs.element.createdAt != rhs.element.createdAt {
+                return lhs.element.createdAt < rhs.element.createdAt
+            }
+
+            return lhs.offset < rhs.offset
+        }
+        var seenProfileIDs: Set<UUID> = []
+        var uniqueProfiles: [PlusProfile] = []
+        uniqueProfiles.reserveCapacity(orderedProfiles.count)
+
+        for (_, profile) in orderedProfiles where seenProfileIDs.insert(profile.id).inserted {
+            var normalized = profile
+            normalized.sortOrder = uniqueProfiles.count
+            uniqueProfiles.append(normalized)
         }
 
-        return lhs.sortOrder < rhs.sortOrder
+        return uniqueProfiles
     }
 }
