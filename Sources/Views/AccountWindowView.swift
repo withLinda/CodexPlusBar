@@ -73,14 +73,23 @@ struct ProfileManagerPrivateFieldPresentation: Equatable, Sendable {
     }
 }
 
+struct ProfileManagerOneTimePasswordClipboardValue: Equatable, Sendable {
+    let text: String
+
+    init(secret: String, referenceDate: Date = .now) throws {
+        let generator = try TOTPGenerator(secret: secret)
+        text = generator.code(at: referenceDate)
+    }
+}
+
 struct ProfileManagerOneTimePasswordPresentation: Equatable, Sendable {
     let isVisible: Bool
     let isRevealed: Bool
+    let isCopied: Bool
     let titleText: String
     let codeText: String
     let isCodeMasked: Bool
     let statusText: String
-    let copyText: String
     let copyTitle: String
     let copySymbolName: String
     let isCopyDisabled: Bool
@@ -88,18 +97,32 @@ struct ProfileManagerOneTimePasswordPresentation: Equatable, Sendable {
     let tone: CodexStatusTone
     let symbolName: String
 
-    init(secret: String, isRevealed: Bool = false, isCopied: Bool, referenceDate: Date) {
+    var revealTitle: String {
+        isRevealed ? "Hide OTP" : "Show OTP"
+    }
+
+    var revealSymbolName: String {
+        isRevealed ? "eye.slash" : "eye"
+    }
+
+    init(
+        secret: String,
+        isRevealed: Bool = false,
+        isCopied: Bool,
+        hasCopyError: Bool = false,
+        referenceDate: Date
+    ) {
         let trimmedSecret = secret.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmedSecret.isEmpty == false else {
             isVisible = false
             self.isRevealed = false
+            self.isCopied = false
             titleText = ""
             codeText = ""
             isCodeMasked = false
             statusText = ""
-            copyText = ""
-            copyTitle = "Show OTP"
-            copySymbolName = "eye"
+            copyTitle = "Copy OTP"
+            copySymbolName = "doc.on.doc"
             isCopyDisabled = true
             accessibilityValue = ""
             tone = .neutral
@@ -110,17 +133,26 @@ struct ProfileManagerOneTimePasswordPresentation: Equatable, Sendable {
         guard isRevealed else {
             isVisible = true
             self.isRevealed = false
+            self.isCopied = isCopied && hasCopyError == false
             titleText = "Current OTP"
             codeText = ""
             isCodeMasked = true
-            statusText = "2FA key saved"
-            copyText = ""
-            copyTitle = "Show OTP"
-            copySymbolName = "eye"
-            isCopyDisabled = false
-            accessibilityValue = "OTP covered. 2FA key saved."
-            tone = .info
-            symbolName = "eye.slash"
+            copyTitle = self.isCopied ? "Copied" : "Copy OTP"
+            copySymbolName = self.isCopied ? "checkmark" : "doc.on.doc"
+
+            if hasCopyError {
+                statusText = "Check 2FA key"
+                isCopyDisabled = true
+                accessibilityValue = "OTP covered. 2FA key is not valid."
+                tone = .warning
+                symbolName = "key.slash"
+            } else {
+                statusText = "2FA key saved"
+                isCopyDisabled = false
+                accessibilityValue = "OTP covered. 2FA key saved."
+                tone = .info
+                symbolName = "eye.slash"
+            }
             return
         }
 
@@ -130,12 +162,12 @@ struct ProfileManagerOneTimePasswordPresentation: Equatable, Sendable {
             let secondsRemaining = generator.secondsRemaining(at: referenceDate)
             isVisible = true
             self.isRevealed = true
+            self.isCopied = isCopied
             titleText = "Current OTP"
             codeText = generatedCode
             isCodeMasked = false
             statusText = "Expires in \(secondsRemaining)s"
-            copyText = generatedCode
-            copyTitle = isCopied ? "Copied" : "Copy code"
+            copyTitle = isCopied ? "Copied" : "Copy OTP"
             copySymbolName = isCopied ? "checkmark" : "doc.on.doc"
             isCopyDisabled = false
             accessibilityValue = "Current OTP \(generatedCode), expires in \(secondsRemaining) \(secondsRemaining == 1 ? "second" : "seconds")."
@@ -144,12 +176,12 @@ struct ProfileManagerOneTimePasswordPresentation: Equatable, Sendable {
         } catch {
             isVisible = true
             self.isRevealed = true
+            self.isCopied = false
             titleText = "Current OTP"
             codeText = "------"
             isCodeMasked = false
             statusText = "Check 2FA key"
-            copyText = ""
-            copyTitle = "Copy code"
+            copyTitle = "Copy OTP"
             copySymbolName = "doc.on.doc"
             isCopyDisabled = true
             accessibilityValue = "2FA key is not valid."
@@ -317,6 +349,7 @@ struct ProfileManagerWindowView: View {
     @State private var isProfileSearchPresented = false
     @State private var revealedPrivateFields: Set<ProfilePrivateField> = []
     @State private var isOneTimePasswordRevealed = false
+    @State private var oneTimePasswordCopyFailed = false
     @State private var copyFeedback = TransientValue<ProfileDetailsCopyField>()
     @State private var showsSavedConfirmation = false
     @State private var saveResetTask: Task<Void, Never>?
@@ -865,6 +898,7 @@ struct ProfileManagerWindowView: View {
             secret: detailsDraft.twoFactorCode,
             isRevealed: isOneTimePasswordRevealed,
             isCopied: copyFeedback.current == .oneTimePassword,
+            hasCopyError: oneTimePasswordCopyFailed,
             referenceDate: referenceDate
         )
 
@@ -873,9 +907,7 @@ struct ProfileManagerWindowView: View {
                 presentation: presentation,
                 reveal: revealOneTimePassword,
                 hide: hideOneTimePassword,
-                copy: {
-                    copy(presentation.copyText, field: .oneTimePassword)
-                }
+                copy: copyOneTimePassword
             )
         }
     }
@@ -1277,17 +1309,36 @@ struct ProfileManagerWindowView: View {
         copyFeedback.clear()
         revealedPrivateFields.removeAll()
         isOneTimePasswordRevealed = false
+        oneTimePasswordCopyFailed = false
         resetSaveFeedback()
     }
 
     private func revealOneTimePassword() {
+        oneTimePasswordCopyFailed = false
         isOneTimePasswordRevealed = true
     }
 
     private func hideOneTimePassword() {
         isOneTimePasswordRevealed = false
+        oneTimePasswordCopyFailed = false
         if copyFeedback.current == .oneTimePassword {
             copyFeedback.clear()
+        }
+    }
+
+    private func copyOneTimePassword() {
+        do {
+            let value = try ProfileManagerOneTimePasswordClipboardValue(
+                secret: detailsDraft.twoFactorCode,
+                referenceDate: .now
+            )
+            oneTimePasswordCopyFailed = false
+            copy(value.text, field: .oneTimePassword)
+        } catch {
+            if copyFeedback.current == .oneTimePassword {
+                copyFeedback.clear()
+            }
+            oneTimePasswordCopyFailed = true
         }
     }
 
@@ -1761,76 +1812,80 @@ private struct ProfileManagerOneTimePasswordPanel: View {
     let copy: () -> Void
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: CodexTheme.Radius.badge, style: .continuous)
-                    .fill(CodexTheme.surfaceFill(for: .subtle))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: CodexTheme.Radius.badge, style: .continuous)
-                            .stroke(presentation.tone.borderColor, lineWidth: 1)
-                    )
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .center, spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: CodexTheme.Radius.badge, style: .continuous)
+                        .fill(CodexTheme.surfaceFill(for: .subtle))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: CodexTheme.Radius.badge, style: .continuous)
+                                .stroke(presentation.tone.borderColor, lineWidth: 1)
+                        )
 
-                Image(systemName: presentation.symbolName)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(presentation.tone.foregroundColor)
-            }
-            .frame(width: 32, height: 32)
+                    Image(systemName: presentation.symbolName)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(presentation.tone.foregroundColor)
+                }
+                .frame(width: 32, height: 32)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(presentation.titleText)
-                    .font(ProfileManagerTypography.caption)
-                    .foregroundStyle(CodexTheme.dataLabelText)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(presentation.titleText)
+                        .font(ProfileManagerTypography.caption)
+                        .foregroundStyle(CodexTheme.dataLabelText)
 
-                Text(presentation.statusText)
-                    .font(ProfileManagerTypography.small)
-                    .foregroundStyle(
-                        presentation.isCopyDisabled
-                            ? presentation.tone.foregroundColor
-                            : CodexTheme.oneTimePasswordStatusText
-                    )
-            }
-
-            Spacer(minLength: 12)
-
-            ZStack(alignment: .trailing) {
-                if presentation.isCodeMasked {
-                    ProfileManagerOneTimePasswordMask()
-                } else {
-                    Text(presentation.codeText)
-                        .font(.system(size: 24, weight: .semibold, design: .monospaced))
-                        .monospacedDigit()
+                    Text(presentation.statusText)
+                        .font(ProfileManagerTypography.small)
                         .foregroundStyle(
                             presentation.isCopyDisabled
-                                ? CodexTheme.disabledText
-                                : CodexTheme.oneTimePasswordCodeText
+                                ? presentation.tone.foregroundColor
+                                : CodexTheme.oneTimePasswordStatusText
                         )
                 }
-            }
-            .frame(minWidth: 112, minHeight: 32, alignment: .trailing)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(presentation.accessibilityValue)
 
-            if presentation.isRevealed {
+                Spacer(minLength: 12)
+
+                ZStack(alignment: .trailing) {
+                    if presentation.isCodeMasked {
+                        ProfileManagerOneTimePasswordMask()
+                    } else {
+                        Text(presentation.codeText)
+                            .font(.system(size: 24, weight: .semibold, design: .monospaced))
+                            .monospacedDigit()
+                            .foregroundStyle(
+                                presentation.isCopyDisabled
+                                    ? CodexTheme.disabledText
+                                    : CodexTheme.oneTimePasswordCodeText
+                            )
+                    }
+                }
+                .frame(minWidth: 112, minHeight: 32, alignment: .trailing)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(presentation.accessibilityValue)
+            }
+
+            HStack(spacing: 10) {
+                Spacer(minLength: 0)
+
                 ProfileManagerInlineFieldActionButton(
-                    title: "Hide",
-                    symbolName: "eye.slash",
-                    helpText: "Hide current OTP",
-                    accessibilityLabel: "Hide current OTP",
+                    title: presentation.revealTitle,
+                    symbolName: presentation.revealSymbolName,
+                    helpText: oneTimePasswordRevealHelpText,
+                    accessibilityLabel: oneTimePasswordRevealAccessibilityLabel,
                     isDisabled: false,
                     isConfirmed: false,
-                    action: hide
+                    action: presentation.isRevealed ? hide : reveal
+                )
+
+                ProfileManagerInlineFieldActionButton(
+                    title: presentation.copyTitle,
+                    symbolName: presentation.copySymbolName,
+                    helpText: oneTimePasswordCopyHelpText,
+                    accessibilityLabel: oneTimePasswordCopyAccessibilityLabel,
+                    isDisabled: presentation.isCopyDisabled,
+                    isConfirmed: presentation.isCopied,
+                    action: copy
                 )
             }
-
-            ProfileManagerInlineFieldActionButton(
-                title: presentation.copyTitle,
-                symbolName: presentation.copySymbolName,
-                helpText: oneTimePasswordActionHelpText,
-                accessibilityLabel: oneTimePasswordActionAccessibilityLabel,
-                isDisabled: presentation.isCopyDisabled,
-                isConfirmed: presentation.isRevealed && presentation.copyTitle == "Copied",
-                action: presentation.isRevealed ? copy : reveal
-            )
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
@@ -1850,16 +1905,20 @@ private struct ProfileManagerOneTimePasswordPanel: View {
         .accessibilityElement(children: .contain)
     }
 
-    private var oneTimePasswordActionHelpText: String {
-        if presentation.isRevealed == false {
-            return "Show current OTP"
-        }
-
-        return presentation.isCopyDisabled ? "Add a valid 2FA key before copying the OTP." : "Copy current OTP"
+    private var oneTimePasswordRevealHelpText: String {
+        presentation.isRevealed ? "Hide current OTP" : "Show current OTP"
     }
 
-    private var oneTimePasswordActionAccessibilityLabel: String {
-        presentation.isRevealed ? presentation.copyTitle : "Show current OTP"
+    private var oneTimePasswordRevealAccessibilityLabel: String {
+        presentation.isRevealed ? "Hide current OTP" : "Show current OTP"
+    }
+
+    private var oneTimePasswordCopyHelpText: String {
+        presentation.isCopyDisabled ? "Add a valid 2FA key before copying the OTP." : "Copy current OTP"
+    }
+
+    private var oneTimePasswordCopyAccessibilityLabel: String {
+        presentation.isCopied ? "OTP copied" : "Copy current OTP"
     }
 }
 

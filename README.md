@@ -47,10 +47,10 @@ When you use more than one ChatGPT profile, checking limits can become slow and 
 Download the latest notarized DMG from GitHub:
 
 - [Latest release page](https://github.com/withLinda/CodexPlusBar/releases/latest)
-- [Direct notarized DMG download](https://github.com/withLinda/CodexPlusBar/releases/download/snapshot-2026-07-17-phone-summary/CodexPlusBar-snapshot-2026-07-17-phone-summary.dmg)
-- [SHA-256 checksum](https://github.com/withLinda/CodexPlusBar/releases/download/snapshot-2026-07-17-phone-summary/CodexPlusBar-snapshot-2026-07-17-phone-summary.dmg.sha256)
+- [Direct notarized DMG download](https://github.com/withLinda/CodexPlusBar/releases/download/snapshot-2026-07-20-otp-copy/CodexPlusBar-snapshot-2026-07-20-otp-copy.dmg)
+- [SHA-256 checksum](https://github.com/withLinda/CodexPlusBar/releases/download/snapshot-2026-07-20-otp-copy/CodexPlusBar-snapshot-2026-07-20-otp-copy.dmg.sha256)
 
-1. Download `CodexPlusBar-snapshot-2026-07-17-phone-summary.dmg`.
+1. Download `CodexPlusBar-snapshot-2026-07-20-otp-copy.dmg`.
 2. Double-click the downloaded DMG to open it.
 3. Drag `CodexPlusBar.app` onto the `Applications` folder inside the DMG.
 4. If macOS asks, replace the older copy in Applications.

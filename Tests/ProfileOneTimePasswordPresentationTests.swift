@@ -16,9 +16,10 @@ struct ProfileOneTimePasswordPresentationTests {
         #expect(presentation.codeText == "")
         #expect(presentation.isCodeMasked)
         #expect(presentation.statusText == "2FA key saved")
-        #expect(presentation.copyText == "")
-        #expect(presentation.copyTitle == "Show OTP")
-        #expect(presentation.copySymbolName == "eye")
+        #expect(presentation.revealTitle == "Show OTP")
+        #expect(presentation.revealSymbolName == "eye")
+        #expect(presentation.copyTitle == "Copy OTP")
+        #expect(presentation.copySymbolName == "doc.on.doc")
         #expect(presentation.isCopyDisabled == false)
         #expect(presentation.accessibilityValue == "OTP covered. 2FA key saved.")
         #expect([presentation.titleText, presentation.codeText, presentation.statusText].contains { $0.localizedCaseInsensitiveContains("hidden") } == false)
@@ -37,25 +38,48 @@ struct ProfileOneTimePasswordPresentationTests {
         #expect(presentation.codeText == "287082")
         #expect(presentation.isCodeMasked == false)
         #expect(presentation.statusText == "Expires in 1s")
-        #expect(presentation.copyText == "287082")
-        #expect(presentation.copyTitle == "Copy code")
+        #expect(presentation.revealTitle == "Hide OTP")
+        #expect(presentation.revealSymbolName == "eye.slash")
+        #expect(presentation.copyTitle == "Copy OTP")
         #expect(presentation.copySymbolName == "doc.on.doc")
         #expect(presentation.isCopyDisabled == false)
         #expect(presentation.accessibilityValue == "Current OTP 287082, expires in 1 second.")
     }
 
     @Test
-    func copiedStateUsesStableConfirmationText() {
+    func hiddenCopiedStateConfirmsCopyWithoutRevealingCode() {
         let presentation = ProfileManagerOneTimePasswordPresentation(
             secret: "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
-            isRevealed: true,
             isCopied: true,
             referenceDate: Date(timeIntervalSince1970: 45)
         )
 
+        #expect(presentation.isRevealed == false)
+        #expect(presentation.isCodeMasked)
+        #expect(presentation.codeText == "")
+        #expect(presentation.revealTitle == "Show OTP")
         #expect(presentation.copyTitle == "Copied")
         #expect(presentation.copySymbolName == "checkmark")
         #expect(presentation.isCopyDisabled == false)
+    }
+
+    @Test
+    func clipboardValueGeneratesFreshCodeWithoutChangingHiddenPresentation() throws {
+        let referenceDate = Date(timeIntervalSince1970: 59)
+        let presentation = ProfileManagerOneTimePasswordPresentation(
+            secret: "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+            isCopied: false,
+            referenceDate: referenceDate
+        )
+        let clipboardValue = try ProfileManagerOneTimePasswordClipboardValue(
+            secret: "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+            referenceDate: referenceDate
+        )
+
+        #expect(clipboardValue.text == "287082")
+        #expect(presentation.isRevealed == false)
+        #expect(presentation.isCodeMasked)
+        #expect(presentation.codeText == "")
     }
 
     @Test
@@ -101,7 +125,33 @@ struct ProfileOneTimePasswordPresentationTests {
         #expect(presentation.codeText == "")
         #expect(presentation.isCodeMasked)
         #expect(presentation.statusText == "2FA key saved")
-        #expect(presentation.copyTitle == "Show OTP")
+        #expect(presentation.revealTitle == "Show OTP")
+        #expect(presentation.copyTitle == "Copy OTP")
         #expect(presentation.isCopyDisabled == false)
+    }
+
+    @Test
+    func failedHiddenCopyShowsRepairStateWithoutRevealingTheOTP() {
+        let presentation = ProfileManagerOneTimePasswordPresentation(
+            secret: "not_valid",
+            isCopied: false,
+            hasCopyError: true,
+            referenceDate: Date(timeIntervalSince1970: 59)
+        )
+
+        #expect(presentation.isRevealed == false)
+        #expect(presentation.isCodeMasked)
+        #expect(presentation.codeText == "")
+        #expect(presentation.statusText == "Check 2FA key")
+        #expect(presentation.revealTitle == "Show OTP")
+        #expect(presentation.copyTitle == "Copy OTP")
+        #expect(presentation.isCopyDisabled)
+        #expect(presentation.accessibilityValue == "OTP covered. 2FA key is not valid.")
+        #expect(throws: OneTimePasswordError.invalidSecret) {
+            try ProfileManagerOneTimePasswordClipboardValue(
+                secret: "not_valid",
+                referenceDate: Date(timeIntervalSince1970: 59)
+            )
+        }
     }
 }
