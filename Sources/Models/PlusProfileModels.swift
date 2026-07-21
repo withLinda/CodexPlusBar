@@ -254,7 +254,6 @@ struct BulkProfileImportEntry: Equatable, Sendable {
     let email: String
     let password: String
     let twoFactorCode: String
-    let sourceLineNumber: Int
 }
 
 struct BulkProfileImportIssue: Equatable, Sendable {
@@ -343,8 +342,7 @@ enum BulkProfileImporter {
                 BulkProfileImportEntry(
                     email: fields[0],
                     password: fields[1],
-                    twoFactorCode: fields[2],
-                    sourceLineNumber: lineNumber
+                    twoFactorCode: fields[2]
                 )
             )
         }
@@ -861,20 +859,15 @@ enum PlusDashboardStatus: Equatable, Sendable {
 
 @MainActor
 final class PlusProfileRuntime {
-    let profileID: UUID
-    let dataStore: WKWebsiteDataStore
     let sessionStore: WebSessionStore
     let transport: any HTTPTransport
     private let authContextWritable: (any ChatGPTAuthContextWritable)?
     private(set) var authContext: ChatGPTAuthContext?
 
     init(
-        profileID: UUID,
         dataStore: WKWebsiteDataStore,
         transport: (any HTTPTransport)? = nil
     ) {
-        self.profileID = profileID
-        self.dataStore = dataStore
         self.sessionStore = WebSessionStore(dataStore: dataStore)
         let resolvedTransport = transport ?? CookieBackedTransport(sessionStore: sessionStore)
         self.transport = resolvedTransport

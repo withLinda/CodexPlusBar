@@ -10,11 +10,6 @@ protocol HTTPTransport {
     func data(for request: URLRequest) async throws -> HTTPResponseData
 }
 
-struct NetworkTraceField {
-    let key: String
-    let value: String?
-}
-
 struct NetworkTraceLogger: @unchecked Sendable {
     let isEnabled: Bool
     private let sink: (String) -> Void
@@ -44,22 +39,6 @@ struct NetworkTraceLogger: @unchecked Sendable {
         guard isEnabled else { return }
 
         Self.responseMessages(for: response, data: data).forEach { sink($0) }
-#endif
-    }
-
-    func logMessage(_ message: String) {
-#if DEBUG
-        guard isEnabled else { return }
-
-        sink("[CodexPlusBar] \(message)")
-#endif
-    }
-
-    func logEvent(_ event: String, fields: [NetworkTraceField]) {
-#if DEBUG
-        guard isEnabled else { return }
-
-        sink(Self.eventMessage(event: event, fields: fields))
 #endif
     }
 
@@ -102,19 +81,6 @@ struct NetworkTraceLogger: @unchecked Sendable {
         }
 
         return messages
-    }
-
-    static func eventMessage(event: String, fields: [NetworkTraceField]) -> String {
-        var segments = ["event=\(formattedFieldValue(event))"]
-
-        for field in fields {
-            guard let value = field.value else {
-                continue
-            }
-            segments.append("\(field.key)=\(formattedFieldValue(value))")
-        }
-
-        return "[CodexPlusBar] \(segments.joined(separator: " "))"
     }
 
     private static func isTraceEnabled(in environment: [String: String]) -> Bool {
@@ -207,24 +173,6 @@ struct NetworkTraceLogger: @unchecked Sendable {
         }
 
         return String(decoding: formattedData, as: UTF8.self)
-    }
-
-    private static func formattedFieldValue(_ value: String) -> String {
-        let normalized = value
-            .replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "\"", with: "\\\"")
-            .replacingOccurrences(of: "\n", with: "\\n")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-
-        if normalized.isEmpty {
-            return "\"\""
-        }
-
-        let shouldQuote = normalized.contains(where: { character in
-            character.isWhitespace || character == "="
-        })
-
-        return shouldQuote ? "\"\(normalized)\"" : normalized
     }
 
     private static func htmlSummary(from data: Data) -> String {

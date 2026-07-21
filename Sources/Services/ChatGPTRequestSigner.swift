@@ -78,10 +78,6 @@ struct ChatGPTRequestSigner {
         return url.path == "/api/auth/session"
     }
 
-    static func shouldApplyAuthHeaders(to request: URLRequest) -> Bool {
-        requestKind(for: request.url) == .backendAPI
-    }
-
     private static func workspaceSwitchTargetID(from url: URL?) -> String? {
         guard let url,
               let components = URLComponents(url: url, resolvingAgainstBaseURL: false),

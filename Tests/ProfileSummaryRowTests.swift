@@ -275,15 +275,11 @@ private func sampleUsage(
         planType: "chatgpt_plus",
         primaryWindow: WorkspaceLimitWindow(
             usedPercent: 22,
-            limitWindowSeconds: 18_000,
-            resetAfterSeconds: 17_940,
             resetAt: referenceDate.addingTimeInterval(17_940)
         ),
         secondaryWindow: sevenDayRemainingPercent.map {
             WorkspaceLimitWindow(
                 usedPercent: 100 - $0,
-                limitWindowSeconds: 604_800,
-                resetAfterSeconds: 428_400,
                 resetAt: referenceDate.addingTimeInterval(428_400)
             )
         },

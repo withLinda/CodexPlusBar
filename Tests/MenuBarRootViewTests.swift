@@ -246,15 +246,11 @@ private func menuBarTestSnapshot(
             planType: "chatgpt_plus",
             primaryWindow: WorkspaceLimitWindow(
                 usedPercent: 100 - fiveHourRemainingPercent,
-                limitWindowSeconds: 18_000,
-                resetAfterSeconds: 18_000,
                 resetAt: Date(timeIntervalSince1970: 1_776_018_000)
             ),
             secondaryWindow: sevenDayRemainingPercent.map {
                 WorkspaceLimitWindow(
                     usedPercent: 100 - $0,
-                    limitWindowSeconds: 604_800,
-                    resetAfterSeconds: 604_800,
                     resetAt: Date(timeIntervalSince1970: 1_776_086_400)
                 )
             },
@@ -320,18 +316,4 @@ private func makeUserDefaults() -> (defaults: UserDefaults, suiteName: String) {
     let defaults = UserDefaults(suiteName: suiteName)!
     defaults.removePersistentDomain(forName: suiteName)
     return (defaults, suiteName)
-}
-
-@MainActor
-private extension NSView {
-    func allSubviews() -> [NSView] {
-        var descendants: [NSView] = []
-
-        for child in subviews {
-            descendants.append(child)
-            descendants.append(contentsOf: child.allSubviews())
-        }
-
-        return descendants
-    }
 }

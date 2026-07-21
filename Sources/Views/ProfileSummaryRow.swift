@@ -592,23 +592,12 @@ private struct ProfileSummaryExpiryLine: View {
     }
 
     var body: some View {
-        Group {
-            if let label = presentation.label {
-                (
-                    Text(label + " ")
-                        .foregroundStyle(CodexTheme.dataLabelText)
-                    + Text(presentation.value)
-                        .foregroundStyle(emphasisToken?.color ?? CodexTheme.dataValueText)
-                        .monospacedDigit()
-                )
-                .font(ProfileManagerTypography.caption(scale: textScale))
-            } else {
-                Text(presentation.value)
-                    .font(ProfileManagerTypography.caption(scale: textScale))
-                    .foregroundStyle(emphasisToken?.color ?? CodexTheme.dataValueText)
-            }
-        }
-        .lineLimit(1)
+        LabeledValueText(
+            presentation: presentation,
+            labelColor: CodexTheme.dataLabelText,
+            valueColor: emphasisToken?.color ?? CodexTheme.dataValueText,
+            font: ProfileManagerTypography.caption(scale: textScale)
+        )
     }
 }
 
@@ -668,10 +657,11 @@ struct ProfileUsageMetricBlock: View {
                 }
 
                 if summary.isAvailable {
-                    (Text("Reset ")
+                    let label = Text("Reset ")
                         .foregroundStyle(CodexTheme.dataLabelText)
-                     + Text(summary.resetText)
-                        .foregroundStyle(CodexTheme.resetCountdownEmphasisColor))
+                    let value = Text(summary.resetText)
+                        .foregroundStyle(CodexTheme.resetCountdownEmphasisColor)
+                    Text("\(label)\(value)")
                     .font(density.resetFont(scale: textScale))
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
@@ -740,15 +730,9 @@ enum ProfileManagerTypography {
     static let small = Font.codexUtility(size: 13, weight: .regular, relativeTo: .subheadline)
     static let smallStrong = Font.codexUtility(size: 13, weight: .semibold, relativeTo: .subheadline)
     static let caption = Font.codexUtility(size: 12, weight: .medium, relativeTo: .caption)
-    static let metricCompact = Font.codexUtility(size: 16, weight: .semibold, relativeTo: .headline)
-    static let metricExpanded = Font.codexUtility(size: 30, weight: .semibold, relativeTo: .title2)
 
     static func micro(scale: Double) -> Font {
         Font.codexUtility(size: scaled(11, by: scale), weight: .medium, relativeTo: .caption2)
-    }
-
-    static func body(scale: Double) -> Font {
-        Font.codexUtility(size: scaled(15, by: scale), weight: .regular, relativeTo: .body)
     }
 
     static func bodyStrong(scale: Double) -> Font {

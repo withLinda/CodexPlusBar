@@ -174,8 +174,6 @@ struct CodexThemeTests {
         #expect(mediumContext.preset == CodexThemePreset(variant: .dark, contrast: .medium))
         #expect(hardContext.preferredColorScheme == .dark)
         #expect(mediumContext.preferredColorScheme == .dark)
-        #expect(hardContext.identityResetKey == nil)
-        #expect(mediumContext.identityResetKey == nil)
     }
 
     @Test
@@ -484,16 +482,6 @@ struct CodexThemeTests {
         #expect(CodexTheme.primaryActionTokens.count == 2)
         #expect(CodexTheme.primaryActionTokens[0] == CodexTheme.Palette.accOrange)
         #expect(CodexTheme.primaryActionTokens[1] == CodexTheme.Palette.accRed)
-    }
-
-    @Test
-    func authStateToneMappingMatchesMenuBarStates() {
-        #expect(CodexTheme.statusTone(for: .signedIn) == .success)
-        #expect(CodexTheme.statusTone(for: .signedIn, limitReached: true) == .warning)
-        #expect(CodexTheme.statusTone(for: .signingIn) == .info)
-        #expect(CodexTheme.statusTone(for: .signedOut) == .warning)
-        #expect(CodexTheme.statusTone(for: .expired) == .warning)
-        #expect(CodexTheme.statusTone(for: .unsupported) == .critical)
     }
 
     @Test

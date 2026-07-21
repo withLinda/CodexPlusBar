@@ -115,19 +115,6 @@ enum DisplayFormatter {
             .joined(separator: " ")
     }
 
-    static func expiresText(_ date: Date?, referenceDate: Date = .now, capitalized: Bool = true) -> String {
-        guard let date else {
-            return capitalized ? "Expiry unavailable" : "expiry unavailable"
-        }
-
-        guard let remaining = remainingDuration(until: date, referenceDate: referenceDate) else {
-            return capitalized ? "Expired" : "expired"
-        }
-
-        let prefix = capitalized ? "Expires in" : "expires in"
-        return "\(prefix) \(remaining)"
-    }
-
     static func expiryValue(_ date: Date?, referenceDate: Date = .now, capitalized: Bool = true) -> LabeledValue {
         guard let date else {
             return LabeledValue(
@@ -162,8 +149,4 @@ enum DisplayFormatter {
         return "Updated \(duration(seconds: seconds)) ago"
     }
 
-    static func timestamp(_ date: Date?) -> String {
-        guard let date else { return "Unavailable" }
-        return date.formatted(date: .abbreviated, time: .shortened)
-    }
 }

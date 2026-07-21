@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 struct ProfileManagerLabelCopyButtonPresentation: Equatable, Sendable {
@@ -497,7 +496,9 @@ struct ProfileManagerWindowView: View {
     }
 
     private var sidebar: some View {
-        CodexCard(tier: .regular) {
+        let listPresentation = sidebarListPresentation
+
+        return CodexCard(tier: .regular) {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .center, spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
@@ -505,7 +506,7 @@ struct ProfileManagerWindowView: View {
                             .font(ProfileManagerTypography.bodyStrong)
                             .foregroundStyle(CodexTheme.headingText)
 
-                        Text(sidebarMetaText)
+                        Text(sidebarMetaText(for: listPresentation))
                             .font(ProfileManagerTypography.caption)
                             .foregroundStyle(CodexTheme.mutedText)
                     }
@@ -552,24 +553,24 @@ struct ProfileManagerWindowView: View {
                     }
 
                     ProfileTagFilterBar(
-                        presentation: sidebarFilterPresentation,
+                        presentation: listPresentation.filterBar,
                         clearFilter: clearSidebarFilter,
                         toggleTag: toggleSidebarFilter
                     )
 
-                    if filteredSidebarProfiles.isEmpty,
+                    if listPresentation.displayedProfiles.isEmpty,
                        ProfileSearch.normalizedQuery(profileSearchQuery).isEmpty == false {
                         ProfileSearchEmptyState(
                             query: profileSearchQuery,
                             clearsTagFilter: sidebarTagFilter.isEmpty == false,
                             clear: clearSearchAndSidebarFilter
                         )
-                    } else if filteredSidebarProfiles.isEmpty {
+                    } else if listPresentation.displayedProfiles.isEmpty {
                         ProfileTagEmptyState(clearFilter: clearSidebarFilter)
                     } else {
                         ScrollView(.vertical) {
                             VStack(alignment: .leading, spacing: 10) {
-                                ForEach(filteredSidebarProfiles) { snapshot in
+                                ForEach(listPresentation.displayedProfiles) { snapshot in
                                     Button {
                                         openProfile(snapshot.id)
                                     } label: {
@@ -1104,10 +1105,7 @@ struct ProfileManagerWindowView: View {
     }
 
     var filteredSidebarProfiles: [PlusProfileSnapshot] {
-        let orderedProfiles = PlusProfileSnapshot.expiryFirstDisplayOrder(
-            sidebarTagFilter.apply(to: controller.profiles)
-        )
-        return ProfileSearch.filter(orderedProfiles, query: profileSearchQuery)
+        sidebarListPresentation.displayedProfiles
     }
 
     private var savedPhoneNumbers: [String] {
@@ -1123,25 +1121,20 @@ struct ProfileManagerWindowView: View {
         )
     }
 
-    private var profileTagCounts: ProfileTagCounts {
-        ProfileTagCounts(snapshots: controller.profiles)
-    }
-
-    private var sidebarFilterPresentation: ProfileTagFilterBarPresentation {
-        ProfileTagFilterBarPresentation(
+    private var sidebarListPresentation: ProfileListPresentation {
+        ProfileListPresentation(
+            profiles: controller.profiles,
             filter: sidebarTagFilter,
-            shownCount: filteredSidebarProfiles.count,
-            totalCount: controller.profiles.count,
-            tagCounts: profileTagCounts
+            query: profileSearchQuery
         )
     }
 
-    private var sidebarMetaText: String {
+    private func sidebarMetaText(for presentation: ProfileListPresentation) -> String {
         if controller.profiles.isEmpty {
             return "No saved profiles yet"
         }
 
-        return sidebarFilterPresentation.visibleSummaryText
+        return presentation.filterBar.visibleSummaryText
     }
 
     private func detailSummary(for snapshot: PlusProfileSnapshot) -> String {
@@ -1194,23 +1187,12 @@ struct ProfileManagerWindowView: View {
             referenceDate: currentTime.now
         )
 
-        Group {
-            if let label = presentation.label {
-                (
-                    Text(label + " ")
-                        .foregroundStyle(CodexTheme.dataLabelText)
-                    + Text(presentation.value)
-                        .foregroundStyle(emphasisToken?.color ?? CodexTheme.dataValueText)
-                        .monospacedDigit()
-                )
-                .font(ProfileManagerTypography.small)
-            } else {
-                Text(presentation.value)
-                    .font(ProfileManagerTypography.small)
-                    .foregroundStyle(emphasisToken?.color ?? CodexTheme.dataValueText)
-            }
-        }
-        .lineLimit(1)
+        LabeledValueText(
+            presentation: presentation,
+            labelColor: CodexTheme.dataLabelText,
+            valueColor: emphasisToken?.color ?? CodexTheme.dataValueText,
+            font: ProfileManagerTypography.small
+        )
     }
 
     private func syncDrafts(with snapshot: PlusProfileSnapshot?) {
@@ -1271,11 +1253,9 @@ struct ProfileManagerWindowView: View {
             return
         }
 
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(text, forType: .string)
-
-        copyFeedback.show(field)
+        if MacSystemActions.copyToPasteboard(text) {
+            copyFeedback.show(field)
+        }
     }
 
     private func scheduleSaveReset() {
@@ -1343,11 +1323,7 @@ struct ProfileManagerWindowView: View {
     }
 
     private func openEmailLink(for profile: PlusProfile) {
-        guard let url = profile.resolvedEmailLinkURL else {
-            return
-        }
-
-        NSWorkspace.shared.open(url)
+        MacSystemActions.open(profile.resolvedEmailLinkURL)
     }
 
     private func refreshAll() {

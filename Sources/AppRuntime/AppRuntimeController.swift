@@ -4,7 +4,6 @@ import Foundation
 @MainActor
 final class AppRuntimeController {
     let controller: PlusProfileController
-    let dotTrickController: DotTrickController
     let clock: AppMinuteClock
 
     private let profileManagerWindowPresenter: ProfileManagerWindowPresenter
@@ -28,7 +27,6 @@ final class AppRuntimeController {
         let dotTrickController = DotTrickController()
         let clock = AppMinuteClock()
         self.controller = controller
-        self.dotTrickController = dotTrickController
         self.clock = clock
         self.profileManagerWindowPresenter = ProfileManagerWindowPresenter(
             controller: controller,

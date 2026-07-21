@@ -1,5 +1,26 @@
 import SwiftUI
 
+struct ProfileListPresentation: Equatable, Sendable {
+    let displayedProfiles: [PlusProfileSnapshot]
+    let filterBar: ProfileTagFilterBarPresentation
+
+    init(
+        profiles: [PlusProfileSnapshot],
+        filter: ProfileTagFilter,
+        query: String
+    ) {
+        let filteredProfiles = filter.apply(to: profiles)
+        let orderedProfiles = PlusProfileSnapshot.expiryFirstDisplayOrder(filteredProfiles)
+        displayedProfiles = ProfileSearch.filter(orderedProfiles, query: query)
+        filterBar = ProfileTagFilterBarPresentation(
+            filter: filter,
+            shownCount: displayedProfiles.count,
+            totalCount: profiles.count,
+            tagCounts: ProfileTagCounts(snapshots: profiles)
+        )
+    }
+}
+
 struct ProfileTagFilterBarPresentation: Equatable, Sendable {
     let filter: ProfileTagFilter
     let shownCount: Int

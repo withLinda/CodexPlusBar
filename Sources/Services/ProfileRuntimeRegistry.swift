@@ -41,7 +41,6 @@ final class ProfileRuntimeRegistry {
         }
 
         let runtime = PlusProfileRuntime(
-            profileID: profile.id,
             dataStore: dataStoreManager.dataStore(for: profile.webDataStoreID)
         )
         runtimesByProfileID[profile.id] = runtime

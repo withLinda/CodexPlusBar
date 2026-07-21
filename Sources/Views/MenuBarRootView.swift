@@ -41,10 +41,11 @@ struct MenuBarRootView: View {
 
     var body: some View {
         let panelContentWidth = MenuBarPanelMetrics.contentWidth
+        let listPresentation = profileListPresentation
 
         CodexShell(role: .panel, padding: MenuBarPanelMetrics.innerPadding) {
             VStack(alignment: .leading, spacing: MenuBarPanelMetrics.stackSpacing) {
-                header
+                header(listPresentation: listPresentation)
 
                 if controller.profiles.isEmpty == false {
                     if isProfileSearchPresented {
@@ -56,7 +57,7 @@ struct MenuBarRootView: View {
                     }
 
                     ProfileTagFilterBar(
-                        presentation: tagFilterPresentation,
+                        presentation: listPresentation.filterBar,
                         textScale: panelTextScale,
                         clearFilter: clearTagFilter,
                         toggleTag: toggleTagFilter
@@ -74,7 +75,7 @@ struct MenuBarRootView: View {
 
                 ScrollView(.vertical) {
                     VStack(alignment: .leading, spacing: MenuBarPanelMetrics.rowSpacing) {
-                        content
+                        content(displayedProfiles: listPresentation.displayedProfiles)
                     }
                     .frame(width: panelContentWidth, alignment: .leading)
                 }
@@ -102,7 +103,7 @@ struct MenuBarRootView: View {
         }
     }
 
-    private var header: some View {
+    private func header(listPresentation: ProfileListPresentation) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .center, spacing: 10) {
                 Text("Profiles")
@@ -143,7 +144,7 @@ struct MenuBarRootView: View {
                 }
             }
 
-            Text(headerMetaText)
+            Text(headerMetaText(filterBar: listPresentation.filterBar))
                 .font(ProfileManagerTypography.small(scale: panelTextScale))
                 .foregroundStyle(CodexTheme.mutedText)
                 .lineLimit(1)
@@ -152,7 +153,7 @@ struct MenuBarRootView: View {
     }
 
     @ViewBuilder
-    private var content: some View {
+    private func content(displayedProfiles: [PlusProfileSnapshot]) -> some View {
         if controller.profiles.isEmpty {
             CodexCard(tier: .strong, accent: controller.dashboardStatus.tone.foregroundColor) {
                 VStack(alignment: .leading, spacing: 12) {
@@ -173,7 +174,7 @@ struct MenuBarRootView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-        } else if filteredProfiles.isEmpty,
+        } else if displayedProfiles.isEmpty,
                   ProfileSearch.normalizedQuery(profileSearchQuery).isEmpty == false {
             ProfileSearchEmptyState(
                 query: profileSearchQuery,
@@ -181,10 +182,10 @@ struct MenuBarRootView: View {
                 textScale: panelTextScale,
                 clear: clearSearchAndActiveFilters
             )
-        } else if filteredProfiles.isEmpty {
+        } else if displayedProfiles.isEmpty {
             ProfileTagEmptyState(clearFilter: clearTagFilter)
         } else {
-            ForEach(filteredProfiles) { snapshot in
+            ForEach(displayedProfiles) { snapshot in
                 let isPinned = snapshot.id == storedPinnedProfileID
 
                 MenuBarProfileRow(
@@ -256,17 +257,13 @@ struct MenuBarRootView: View {
         MenuBarPanelTextScalePreference.normalizedTextScale(panelTextScaleStorage)
     }
 
-    private var headerMetaText: String {
+    private func headerMetaText(filterBar: ProfileTagFilterBarPresentation) -> String {
         if let updatedAt = controller.profiles.compactMap(\.lastRefreshAt).max(),
            let updatedText = DisplayFormatter.updatedText(updatedAt, referenceDate: currentTime.now) {
-            return "\(updatedText) · \(tagFilterPresentation.countText)"
+            return "\(updatedText) · \(filterBar.countText)"
         }
 
-        return controller.profiles.isEmpty ? "No saved profiles yet" : tagFilterPresentation.countText
-    }
-
-    var filteredProfiles: [PlusProfileSnapshot] {
-        displayProfiles(for: tagFilter, query: profileSearchQuery)
+        return controller.profiles.isEmpty ? "No saved profiles yet" : filterBar.countText
     }
 
     func displayProfiles(for filter: ProfileTagFilter) -> [PlusProfileSnapshot] {
@@ -277,22 +274,18 @@ struct MenuBarRootView: View {
         for filter: ProfileTagFilter,
         query: String
     ) -> [PlusProfileSnapshot] {
-        let orderedProfiles = PlusProfileSnapshot.expiryFirstDisplayOrder(
-            filter.apply(to: controller.profiles)
-        )
-        return ProfileSearch.filter(orderedProfiles, query: query)
+        ProfileListPresentation(
+            profiles: controller.profiles,
+            filter: filter,
+            query: query
+        ).displayedProfiles
     }
 
-    private var profileTagCounts: ProfileTagCounts {
-        ProfileTagCounts(snapshots: controller.profiles)
-    }
-
-    private var tagFilterPresentation: ProfileTagFilterBarPresentation {
-        ProfileTagFilterBarPresentation(
+    private var profileListPresentation: ProfileListPresentation {
+        ProfileListPresentation(
+            profiles: controller.profiles,
             filter: tagFilter,
-            shownCount: filteredProfiles.count,
-            totalCount: controller.profiles.count,
-            tagCounts: profileTagCounts
+            query: profileSearchQuery
         )
     }
 
@@ -369,17 +362,11 @@ struct MenuBarRootView: View {
     }
 
     private func copyProfileLabel(_ label: String) {
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(label, forType: .string)
+        MacSystemActions.copyToPasteboard(label)
     }
 
     private func openEmailLink(for profile: PlusProfile) {
-        guard let url = profile.resolvedEmailLinkURL else {
-            return
-        }
-
-        NSWorkspace.shared.open(url)
+        MacSystemActions.open(profile.resolvedEmailLinkURL)
     }
 
     private func clearStalePreferredProfileID() {

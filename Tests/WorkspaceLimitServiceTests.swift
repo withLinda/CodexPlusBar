@@ -4,6 +4,32 @@ import Testing
 
 struct WorkspaceLimitServiceTests {
     @Test
+    func decodesWindowWithoutUnusedDurationFields() throws {
+        let data = Data(
+            """
+            {
+              "account_id": "workspace-a",
+              "plan_type": "team",
+              "rate_limit": {
+                "primary_window": {
+                  "used_percent": 25,
+                  "reset_at": 1773819260
+                }
+              }
+            }
+            """.utf8
+        )
+
+        let snapshot = try WorkspaceLimitService.decodeSnapshot(
+            from: data,
+            workspaceID: "workspace-a"
+        )
+
+        #expect(snapshot.primaryWindow.remainingPercent == 75)
+        #expect(snapshot.primaryWindow.resetAt == Date(timeIntervalSince1970: 1_773_819_260))
+    }
+
+    @Test
     func decodesPrimaryAndSecondaryWindowsEvenWhenCodeReviewPayloadExists() throws {
         let data = Data(
             """

@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 struct EmailToolsWindowView: View {
@@ -288,7 +287,7 @@ struct EmailToolsWindowView: View {
             // Variation list
             ScrollView(.vertical) {
                 LazyVStack(alignment: .leading, spacing: 6) {
-                    ForEach(Array(filtered.enumerated()), id: \.offset) { index, variation in
+                    ForEach(Array(filtered.enumerated()), id: \.element) { index, variation in
                         EmailToolsVariationRow(
                             variation: variation,
                             index: index + 1,
@@ -338,10 +337,9 @@ struct EmailToolsWindowView: View {
     }
 
     private func copyToPasteboard(_ text: String, feedback: String) {
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(text, forType: .string)
-        copyFeedback.show(feedback)
+        if MacSystemActions.copyToPasteboard(text) {
+            copyFeedback.show(feedback)
+        }
     }
 
     private func copyAllVariations(for session: DotTrickSession) {

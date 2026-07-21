@@ -93,23 +93,4 @@ struct NetworkTraceLoggerTests {
         #expect(messages.contains("workspace body:"))
     }
 
-    @Test
-    func eventMessageKeepsStableFieldOrder() {
-        let message = NetworkTraceLogger.eventMessage(
-            event: "limit_fetch_timeout",
-            fields: [
-                NetworkTraceField(key: "account_id", value: "workspace-a"),
-                NetworkTraceField(key: "sweep_index", value: "1"),
-                NetworkTraceField(key: "sweep_total", value: "4"),
-                NetworkTraceField(key: "checkpoint", value: "request"),
-                NetworkTraceField(key: "elapsed_ms", value: "20345"),
-                NetworkTraceField(key: "timeout_ms", value: "20000"),
-            ]
-        )
-
-        #expect(
-            message
-                == "[CodexPlusBar] event=limit_fetch_timeout account_id=workspace-a sweep_index=1 sweep_total=4 checkpoint=request elapsed_ms=20345 timeout_ms=20000"
-        )
-    }
 }

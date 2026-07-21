@@ -163,7 +163,7 @@ struct MenuBarStatusItemControllerTests {
     }
 }
 
-private func storedValue<Value>(in instance: Any, as type: Value.Type = Value.self) -> Value? {
+private func storedValue<Value>(in instance: Any, as _: Value.Type = Value.self) -> Value? {
     Mirror(reflecting: instance).children
         .compactMap { $0.value as? Value }
         .first
@@ -240,15 +240,11 @@ private func makePinnedStatusUsage(
         planType: "chatgpt_plus",
         primaryWindow: WorkspaceLimitWindow(
             usedPercent: 100 - fiveHourRemainingPercent,
-            limitWindowSeconds: 18_000,
-            resetAfterSeconds: 900,
             resetAt: Date(timeIntervalSince1970: 1_776_000_900)
         ),
         secondaryWindow: sevenDayRemainingPercent.map {
             WorkspaceLimitWindow(
                 usedPercent: 100 - $0,
-                limitWindowSeconds: 604_800,
-                resetAfterSeconds: 86_400,
                 resetAt: Date(timeIntervalSince1970: 1_776_086_400)
             )
         },

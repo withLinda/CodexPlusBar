@@ -1,12 +1,5 @@
 import Foundation
 
-struct ChromeDevToolsBrowserVersion: Decodable, Equatable, Sendable {
-    let protocolVersion: String?
-    let product: String?
-    let userAgent: String?
-    let jsVersion: String?
-}
-
 @MainActor
 final class ChromeDevToolsClient {
     private let webSocketTask: URLSessionWebSocketTask
@@ -41,10 +34,6 @@ final class ChromeDevToolsClient {
         )
     }
 
-    func getVersion() async throws -> ChromeDevToolsBrowserVersion {
-        try await send(method: "Browser.getVersion")
-    }
-
     func getCookies() async throws -> [ChromeDevToolsCookie] {
         let response: ChromeDevToolsCookieResponse = try await send(method: "Storage.getCookies")
         return response.cookies
@@ -56,10 +45,6 @@ final class ChromeDevToolsClient {
 
     func closeBrowser() async throws {
         let _: ChromeDevToolsEmptyResult = try await send(method: "Browser.close")
-    }
-
-    func cancel() {
-        webSocketTask.cancel(with: .goingAway, reason: nil)
     }
 
     private func send<Result: Decodable>(

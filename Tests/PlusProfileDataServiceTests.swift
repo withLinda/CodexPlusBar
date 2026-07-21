@@ -129,7 +129,6 @@ struct PlusProfileDataServiceTests {
         }
 
         let runtime = PlusProfileRuntime(
-            profileID: profile.id,
             dataStore: .nonPersistent(),
             transport: transport
         )
@@ -194,7 +193,6 @@ struct PlusProfileDataServiceTests {
                 """
         )
         let runtime = PlusProfileRuntime(
-            profileID: profile.id,
             dataStore: .nonPersistent(),
             transport: transport
         )
@@ -232,7 +230,6 @@ struct PlusProfileDataServiceTests {
                 """
         )
         let runtime = PlusProfileRuntime(
-            profileID: profile.id,
             dataStore: .nonPersistent(),
             transport: transport
         )
@@ -306,7 +303,6 @@ struct PlusProfileDataServiceTests {
             }
         }
         let runtime = PlusProfileRuntime(
-            profileID: profile.id,
             dataStore: .nonPersistent(),
             transport: transport
         )
@@ -389,7 +385,6 @@ struct PlusProfileDataServiceTests {
             }
         }
         let runtime = PlusProfileRuntime(
-            profileID: profile.id,
             dataStore: .nonPersistent(),
             transport: transport
         )
@@ -423,7 +418,6 @@ struct PlusProfileDataServiceTests {
     func clearSessionClearsNativeCookiesAndChromeCookies() async throws {
         let profile = sampleProfile(label: "clear@example.com", sortOrder: 0)
         let runtime = PlusProfileRuntime(
-            profileID: profile.id,
             dataStore: .nonPersistent()
         )
         let provider = StubRuntimeProvider(runtimeByProfileID: [profile.id: runtime])
@@ -443,7 +437,6 @@ struct PlusProfileDataServiceTests {
     func openChromePasskeySetupDelegatesToChromeSessionManager() async throws {
         let profile = sampleProfile(label: "touchid@example.com", sortOrder: 0)
         let runtime = PlusProfileRuntime(
-            profileID: profile.id,
             dataStore: .nonPersistent()
         )
         let provider = StubRuntimeProvider(runtimeByProfileID: [profile.id: runtime])
@@ -462,7 +455,6 @@ struct PlusProfileDataServiceTests {
     func removeProfileDataRemovesNativeDataAndDedicatedChromeProfile() async throws {
         let profile = sampleProfile(label: "remove@example.com", sortOrder: 0)
         let runtime = PlusProfileRuntime(
-            profileID: profile.id,
             dataStore: .nonPersistent()
         )
         let provider = StubRuntimeProvider(runtimeByProfileID: [profile.id: runtime])
@@ -491,7 +483,6 @@ private final class StubRuntimeProvider: PlusProfileRuntimeProviding {
 
     func runtime(for profile: PlusProfile) -> PlusProfileRuntime {
         runtimeByProfileID[profile.id] ?? PlusProfileRuntime(
-            profileID: profile.id,
             dataStore: .nonPersistent()
         )
     }

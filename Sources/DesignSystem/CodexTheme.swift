@@ -73,10 +73,6 @@ enum CodexProfileTagTone: String, CaseIterable, Sendable, Equatable {
     case needAction
     case pending
 
-    var accentColor: Color {
-        CodexTheme.profileTagAccentToken(for: self).color
-    }
-
     var foregroundColor: Color {
         CodexTheme.profileTagTextToken(for: self).color
     }
@@ -103,14 +99,6 @@ enum CodexThemeVariant: String, CaseIterable, Identifiable, Sendable {
 
     var id: String { rawValue }
 
-    var title: String {
-        switch self {
-        case .dark:
-            return "Dark"
-        case .light:
-            return "Light"
-        }
-    }
 }
 
 enum CodexThemeAppearanceMode: String, CaseIterable, Identifiable, Sendable {
@@ -181,10 +169,6 @@ struct CodexThemePreset: Identifiable, Sendable, Equatable {
         "\(variant.rawValue)-\(contrast.rawValue)"
     }
 
-    var title: String {
-        "\(variant.title) \(contrast.title)"
-    }
-
     static let defaultPreset = CodexThemePreset(variant: .dark, contrast: .hard)
 
     static let allCases: [CodexThemePreset] = CodexThemeVariant.allCases.flatMap { variant in
@@ -253,9 +237,6 @@ struct CodexThemeRefreshContext: Equatable {
         appearanceMode.preferredColorScheme
     }
 
-    var identityResetKey: String? {
-        nil
-    }
 }
 
 struct CodexEverforestPalette: Sendable, Equatable {
@@ -266,17 +247,11 @@ struct CodexEverforestPalette: Sendable, Equatable {
     let bg1: CodexColorToken
     let bg2: CodexColorToken
     let bg3: CodexColorToken
-    let bg4: CodexColorToken
-    let bg5: CodexColorToken
-    let bgVisual: CodexColorToken
     let bgRed: CodexColorToken
     let bgYellow: CodexColorToken
     let bgGreen: CodexColorToken
-    let bgBlue: CodexColorToken
-    let bgPurple: CodexColorToken
     let fg: CodexColorToken
     let strongText: CodexColorToken
-    let gray0: CodexColorToken
     let gray1: CodexColorToken
     let gray2: CodexColorToken
     let accOrange: CodexColorToken
@@ -285,7 +260,6 @@ struct CodexEverforestPalette: Sendable, Equatable {
     let accGreen: CodexColorToken
     let accAqua: CodexColorToken
     let accBlue: CodexColorToken
-    let accPurple: CodexColorToken
 
     var isDark: Bool {
         variant == .dark
@@ -326,31 +300,12 @@ struct CodexEverforestPalette: Sendable, Equatable {
         CodexColorToken(hex: "#1E2326")
     }
 
-    var accPink: CodexColorToken {
-        accPurple
-    }
 }
 
 enum CodexTheme {
     enum Palette {
         static let bg0 = CodexColorToken(hex: "#1E2326")
-        static let bg1 = CodexColorToken(hex: "#272E33")
-        static let bg2 = CodexColorToken(hex: "#2E383C")
-        static let bg3 = CodexColorToken(hex: "#374145")
-        static let bg4 = CodexColorToken(hex: "#414B50")
-        static let bg5 = CodexColorToken(hex: "#495156")
-        static let bg6 = CodexColorToken(hex: "#4F5B58")
-        static let bgRose = CodexColorToken(hex: "#4C3743")
-        static let bgUmber = CodexColorToken(hex: "#493B40")
-        static let bgMoss = CodexColorToken(hex: "#45443C")
-        static let bgOlive = CodexColorToken(hex: "#3C4841")
-        static let bgSlate = CodexColorToken(hex: "#384B55")
-        static let bgPlum = CodexColorToken(hex: "#463F48")
-
         static let fg = CodexColorToken(hex: "#D3C6AA")
-        static let gray0 = CodexColorToken(hex: "#7A8478")
-        static let gray1 = CodexColorToken(hex: "#859289")
-        static let gray2 = CodexColorToken(hex: "#9DA9A0")
 
         static let accOrange = CodexColorToken(hex: "#E69875")
         static let accRed = CodexColorToken(hex: "#E67E80")
@@ -359,10 +314,19 @@ enum CodexTheme {
         static let accAqua = CodexColorToken(hex: "#83C092")
         static let accBlue = CodexColorToken(hex: "#7FBBB3")
         static let accPurple = CodexColorToken(hex: "#D699B6")
-        static let accPink = accPurple
     }
 
+    private static let palettesByPresetID = Dictionary(
+        uniqueKeysWithValues: CodexThemePreset.allCases.map { preset in
+            (preset.id, makePalette(for: preset))
+        }
+    )
+
     static func palette(for preset: CodexThemePreset) -> CodexEverforestPalette {
+        palettesByPresetID[preset.id] ?? makePalette(for: preset)
+    }
+
+    private static func makePalette(for preset: CodexThemePreset) -> CodexEverforestPalette {
         switch (preset.variant, preset.contrast) {
         case (.dark, .hard):
             return CodexEverforestPalette(
@@ -373,17 +337,11 @@ enum CodexTheme {
                 bg1: CodexColorToken(hex: "#2E383C"),
                 bg2: CodexColorToken(hex: "#374145"),
                 bg3: CodexColorToken(hex: "#414B50"),
-                bg4: CodexColorToken(hex: "#495156"),
-                bg5: CodexColorToken(hex: "#4F5B58"),
-                bgVisual: CodexColorToken(hex: "#4C3743"),
                 bgRed: CodexColorToken(hex: "#493B40"),
                 bgYellow: CodexColorToken(hex: "#45443C"),
                 bgGreen: CodexColorToken(hex: "#3C4841"),
-                bgBlue: CodexColorToken(hex: "#384B55"),
-                bgPurple: CodexColorToken(hex: "#463F48"),
                 fg: CodexColorToken(hex: "#D3C6AA"),
                 strongText: CodexColorToken(hex: "#F2EFDF"),
-                gray0: CodexColorToken(hex: "#7A8478"),
                 gray1: CodexColorToken(hex: "#859289"),
                 gray2: CodexColorToken(hex: "#9DA9A0"),
                 accOrange: CodexColorToken(hex: "#E69875"),
@@ -391,8 +349,7 @@ enum CodexTheme {
                 accYellow: CodexColorToken(hex: "#DBBC7F"),
                 accGreen: CodexColorToken(hex: "#A7C080"),
                 accAqua: CodexColorToken(hex: "#83C092"),
-                accBlue: CodexColorToken(hex: "#7FBBB3"),
-                accPurple: CodexColorToken(hex: "#D699B6")
+                accBlue: CodexColorToken(hex: "#7FBBB3")
             )
         case (.dark, .medium):
             return CodexEverforestPalette(
@@ -403,17 +360,11 @@ enum CodexTheme {
                 bg1: CodexColorToken(hex: "#343F44"),
                 bg2: CodexColorToken(hex: "#3D484D"),
                 bg3: CodexColorToken(hex: "#475258"),
-                bg4: CodexColorToken(hex: "#4F585E"),
-                bg5: CodexColorToken(hex: "#56635F"),
-                bgVisual: CodexColorToken(hex: "#543A48"),
                 bgRed: CodexColorToken(hex: "#514045"),
                 bgYellow: CodexColorToken(hex: "#4D4C43"),
                 bgGreen: CodexColorToken(hex: "#425047"),
-                bgBlue: CodexColorToken(hex: "#3A515D"),
-                bgPurple: CodexColorToken(hex: "#4A444E"),
                 fg: CodexColorToken(hex: "#D3C6AA"),
                 strongText: CodexColorToken(hex: "#EFEBD4"),
-                gray0: CodexColorToken(hex: "#7A8478"),
                 gray1: CodexColorToken(hex: "#859289"),
                 gray2: CodexColorToken(hex: "#9DA9A0"),
                 accOrange: CodexColorToken(hex: "#E69875"),
@@ -421,8 +372,7 @@ enum CodexTheme {
                 accYellow: CodexColorToken(hex: "#DBBC7F"),
                 accGreen: CodexColorToken(hex: "#A7C080"),
                 accAqua: CodexColorToken(hex: "#83C092"),
-                accBlue: CodexColorToken(hex: "#7FBBB3"),
-                accPurple: CodexColorToken(hex: "#D699B6")
+                accBlue: CodexColorToken(hex: "#7FBBB3")
             )
         case (.dark, .soft):
             return CodexEverforestPalette(
@@ -433,17 +383,11 @@ enum CodexTheme {
                 bg1: CodexColorToken(hex: "#3A464C"),
                 bg2: CodexColorToken(hex: "#434F55"),
                 bg3: CodexColorToken(hex: "#4D5960"),
-                bg4: CodexColorToken(hex: "#555F66"),
-                bg5: CodexColorToken(hex: "#5D6B66"),
-                bgVisual: CodexColorToken(hex: "#5C3F4F"),
                 bgRed: CodexColorToken(hex: "#59464C"),
                 bgYellow: CodexColorToken(hex: "#55544A"),
                 bgGreen: CodexColorToken(hex: "#48584E"),
-                bgBlue: CodexColorToken(hex: "#3F5865"),
-                bgPurple: CodexColorToken(hex: "#4E4953"),
                 fg: CodexColorToken(hex: "#D3C6AA"),
                 strongText: CodexColorToken(hex: "#F3EAD3"),
-                gray0: CodexColorToken(hex: "#7A8478"),
                 gray1: CodexColorToken(hex: "#859289"),
                 gray2: CodexColorToken(hex: "#9DA9A0"),
                 accOrange: CodexColorToken(hex: "#E69875"),
@@ -451,8 +395,7 @@ enum CodexTheme {
                 accYellow: CodexColorToken(hex: "#DBBC7F"),
                 accGreen: CodexColorToken(hex: "#A7C080"),
                 accAqua: CodexColorToken(hex: "#83C092"),
-                accBlue: CodexColorToken(hex: "#7FBBB3"),
-                accPurple: CodexColorToken(hex: "#D699B6")
+                accBlue: CodexColorToken(hex: "#7FBBB3")
             )
         case (.light, .hard):
             return CodexEverforestPalette(
@@ -463,17 +406,11 @@ enum CodexTheme {
                 bg1: CodexColorToken(hex: "#F8F5E4"),
                 bg2: CodexColorToken(hex: "#F2EFDF"),
                 bg3: CodexColorToken(hex: "#EDEADA"),
-                bg4: CodexColorToken(hex: "#E8E5D5"),
-                bg5: CodexColorToken(hex: "#BEC5B2"),
-                bgVisual: CodexColorToken(hex: "#F0F2D4"),
                 bgRed: CodexColorToken(hex: "#FFE7DE"),
                 bgYellow: CodexColorToken(hex: "#FEF2D5"),
                 bgGreen: CodexColorToken(hex: "#F3F5D9"),
-                bgBlue: CodexColorToken(hex: "#ECF5ED"),
-                bgPurple: CodexColorToken(hex: "#FCECED"),
                 fg: CodexColorToken(hex: "#5C6A72"),
                 strongText: CodexColorToken(hex: "#1E2326"),
-                gray0: CodexColorToken(hex: "#A6B0A0"),
                 gray1: CodexColorToken(hex: "#939F91"),
                 gray2: CodexColorToken(hex: "#829181"),
                 accOrange: CodexColorToken(hex: "#F57D26"),
@@ -481,8 +418,7 @@ enum CodexTheme {
                 accYellow: CodexColorToken(hex: "#DFA000"),
                 accGreen: CodexColorToken(hex: "#8DA101"),
                 accAqua: CodexColorToken(hex: "#35A77C"),
-                accBlue: CodexColorToken(hex: "#3A94C5"),
-                accPurple: CodexColorToken(hex: "#DF69BA")
+                accBlue: CodexColorToken(hex: "#3A94C5")
             )
         case (.light, .medium):
             return CodexEverforestPalette(
@@ -493,17 +429,11 @@ enum CodexTheme {
                 bg1: CodexColorToken(hex: "#F4F0D9"),
                 bg2: CodexColorToken(hex: "#EFEBD4"),
                 bg3: CodexColorToken(hex: "#E6E2CC"),
-                bg4: CodexColorToken(hex: "#E0DCC7"),
-                bg5: CodexColorToken(hex: "#BDC3AF"),
-                bgVisual: CodexColorToken(hex: "#EAEDC8"),
                 bgRed: CodexColorToken(hex: "#FDE3DA"),
                 bgYellow: CodexColorToken(hex: "#FAEDCD"),
                 bgGreen: CodexColorToken(hex: "#F0F1D2"),
-                bgBlue: CodexColorToken(hex: "#E9F0E9"),
-                bgPurple: CodexColorToken(hex: "#FAE8E2"),
                 fg: CodexColorToken(hex: "#5C6A72"),
                 strongText: CodexColorToken(hex: "#232A2E"),
-                gray0: CodexColorToken(hex: "#A6B0A0"),
                 gray1: CodexColorToken(hex: "#939F91"),
                 gray2: CodexColorToken(hex: "#829181"),
                 accOrange: CodexColorToken(hex: "#F57D26"),
@@ -511,8 +441,7 @@ enum CodexTheme {
                 accYellow: CodexColorToken(hex: "#DFA000"),
                 accGreen: CodexColorToken(hex: "#8DA101"),
                 accAqua: CodexColorToken(hex: "#35A77C"),
-                accBlue: CodexColorToken(hex: "#3A94C5"),
-                accPurple: CodexColorToken(hex: "#DF69BA")
+                accBlue: CodexColorToken(hex: "#3A94C5")
             )
         case (.light, .soft):
             return CodexEverforestPalette(
@@ -523,17 +452,11 @@ enum CodexTheme {
                 bg1: CodexColorToken(hex: "#EAE4CA"),
                 bg2: CodexColorToken(hex: "#E5DFC5"),
                 bg3: CodexColorToken(hex: "#DDD8BE"),
-                bg4: CodexColorToken(hex: "#D8D3BA"),
-                bg5: CodexColorToken(hex: "#B9C0AB"),
-                bgVisual: CodexColorToken(hex: "#E1E4BD"),
                 bgRed: CodexColorToken(hex: "#FADBD0"),
                 bgYellow: CodexColorToken(hex: "#F1E4C5"),
                 bgGreen: CodexColorToken(hex: "#E5E6C5"),
-                bgBlue: CodexColorToken(hex: "#E1E7DD"),
-                bgPurple: CodexColorToken(hex: "#F1DDD4"),
                 fg: CodexColorToken(hex: "#5C6A72"),
                 strongText: CodexColorToken(hex: "#293136"),
-                gray0: CodexColorToken(hex: "#A6B0A0"),
                 gray1: CodexColorToken(hex: "#939F91"),
                 gray2: CodexColorToken(hex: "#829181"),
                 accOrange: CodexColorToken(hex: "#F57D26"),
@@ -541,8 +464,7 @@ enum CodexTheme {
                 accYellow: CodexColorToken(hex: "#DFA000"),
                 accGreen: CodexColorToken(hex: "#8DA101"),
                 accAqua: CodexColorToken(hex: "#35A77C"),
-                accBlue: CodexColorToken(hex: "#3A94C5"),
-                accPurple: CodexColorToken(hex: "#DF69BA")
+                accBlue: CodexColorToken(hex: "#3A94C5")
             )
         }
     }
@@ -558,23 +480,12 @@ enum CodexTheme {
         ).preset
     }
 
-    static var activeRefreshContext: CodexThemeRefreshContext {
-        CodexThemeRefreshContext(
-            appearanceMode: CodexThemeSettings.appearanceMode(),
-            contrast: CodexThemeSettings.contrast()
-        )
-    }
-
     static var activePalette: CodexEverforestPalette {
         palette(for: activePreset)
     }
 
     static var isDarkTheme: Bool {
         activePalette.isDark
-    }
-
-    static var preferredColorScheme: ColorScheme? {
-        activeRefreshContext.preferredColorScheme
     }
 
     enum Radius {
@@ -585,23 +496,16 @@ enum CodexTheme {
         static let button: CGFloat = 10
         static let icon: CGFloat = 10
         static let badge: CGFloat = 8
-        static let progress: CGFloat = 5
     }
 
     enum Spacing {
         static let outerPage: CGFloat = 26
         static let panel: CGFloat = 16
         static let section: CGFloat = 16
-        static let row: CGFloat = 12
         static let content: CGFloat = 20
         static let micro: CGFloat = 6
     }
 
-    static var bg0: Color { activePalette.bgDim.color }
-    static var bg1: Color { activePalette.bg0.color }
-    static var bg2: Color { activePalette.bg1.color }
-    static var bg3: Color { activePalette.bg2.color }
-    static var bg4: Color { activePalette.bg3.color }
     static var primaryTextToken: CodexColorToken { activePalette.primaryText }
     static var headingTextToken: CodexColorToken { activePalette.strongText }
     static var mutedTextToken: CodexColorToken { activePalette.mutedText }
@@ -610,7 +514,6 @@ enum CodexTheme {
     static var supportTextToken: CodexColorToken { activePalette.supportText }
     static var dataLabelTextToken: CodexColorToken { activePalette.dataLabelText }
     static var dataValueTextToken: CodexColorToken { activePalette.dataValueText }
-    static var canvasFillToken: CodexColorToken { canvasFillToken(for: activePreset) }
     static var shellFillToken: CodexColorToken { shellFillToken(for: activePreset) }
     static var shellDialogFillToken: CodexColorToken { shellFillToken(for: activePreset) }
 
@@ -636,33 +539,23 @@ enum CodexTheme {
     static var dangerText: Color { dangerTextToken().color }
     static var accentOrange: Color { activePalette.accOrange.color }
     static var accentRed: Color { activePalette.accRed.color }
-    static var accentYellow: Color { activePalette.accYellow.color }
-    static var accentGreen: Color { activePalette.accGreen.color }
     static var accentAqua: Color { activePalette.accAqua.color }
     static var accentBlue: Color { activePalette.accBlue.color }
-    static var accentPurple: Color { activePalette.accPurple.color }
-    static var accentPink: Color { activePalette.accPink.color }
     static var accentInk: Color { activePalette.onAccentText.color }
 
     static let shellCornerRadius = Radius.strongSurface
-    static let sectionCornerRadius = Radius.surface
     static let fieldCornerRadius = Radius.field
     static let controlCornerRadius = Radius.button
     static let iconCornerRadius = Radius.icon
-    static let thinBarCornerRadius = Radius.progress
     static let profileTagBorderLineWidth: CGFloat = 0.75
 
     static let panelPadding = Spacing.panel
     static let sectionSpacing = Spacing.section
-    static let rowSpacing = Spacing.row
     static let contentSpacing = Spacing.content
     static let chromePadding = Spacing.outerPage
 
     static var surfaceLine: Color { surfaceBorder(for: .regular) }
-    static var border: Color { surfaceLine }
     static var warmBorder: Color { accentOrange.opacity(isDarkTheme ? 0.28 : 0.46) }
-    static var focusRing: Color { accentOrange.opacity(isDarkTheme ? 0.38 : 0.54) }
-    static var shadowPrimary: Color { Color.black.opacity(isDarkTheme ? 0.34 : 0.12) }
     static var primaryActionTokens: [CodexColorToken] {
         [activePalette.accOrange, activePalette.accRed]
     }
@@ -750,19 +643,8 @@ enum CodexTheme {
         )
     }
 
-    static var warmGradient: LinearGradient {
-        LinearGradient(
-            colors: [accentOrange, accentRed],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-    }
-
     static var shellFill: Color { shellFillToken.color }
     static var shellDialogFill: Color { shellDialogFillToken.color }
-    static var shellMutedFill: Color { surfaceFill(for: .subtle) }
-    static var sectionFill: Color { surfaceFill(for: .regular) }
-    static var sectionMutedFill: Color { surfaceFill(for: .nested) }
 
     static func shellFill(for role: CodexSurfaceRole) -> Color {
         switch role {
@@ -909,44 +791,6 @@ enum CodexTheme {
         }
     }
 
-    static func statusTone(for authState: AuthState, limitReached: Bool = false) -> CodexStatusTone {
-        if authState == .signedIn, limitReached {
-            return .warning
-        }
-
-        switch authState {
-        case .signedIn:
-            return .success
-        case .signingIn:
-            return .info
-        case .noAccounts:
-            return .warning
-        case .signedOut:
-            return .warning
-        case .expired:
-            return .warning
-        case .unsupported:
-            return .critical
-        }
-    }
-
-    static func badgeTitle(for authState: AuthState) -> String {
-        switch authState {
-        case .signedIn:
-            return "Ready"
-        case .signingIn:
-            return "Checking"
-        case .noAccounts:
-            return "No accounts"
-        case .signedOut:
-            return "No session"
-        case .expired:
-            return "Expired"
-        case .unsupported:
-            return "Changed"
-        }
-    }
-
     static func statusAccentToken(for tone: CodexStatusTone) -> CodexColorToken {
         switch tone {
         case .neutral:
@@ -1058,30 +902,6 @@ enum CodexTheme {
         progressTextToken(forRemainingPercent: remainingPercent).color
     }
 
-    static func progressStopTokens(forRemainingPercent remainingPercent: Int) -> [CodexColorToken] {
-        let dominant = progressAccentToken(forRemainingPercent: remainingPercent)
-        return [
-            activePalette.accRed.mixed(with: dominant, fraction: 0.20),
-            activePalette.accOrange.mixed(with: dominant, fraction: 0.24),
-            activePalette.accYellow.mixed(with: dominant, fraction: 0.22),
-            activePalette.accGreen.mixed(with: dominant, fraction: 0.18),
-        ]
-    }
-
-    static func progressGradient(forRemainingPercent remainingPercent: Int) -> LinearGradient {
-        let tokens = progressStopTokens(forRemainingPercent: remainingPercent)
-        return LinearGradient(
-            gradient: Gradient(stops: [
-                .init(color: tokens[0].color, location: 0.0),
-                .init(color: tokens[1].color, location: 0.34),
-                .init(color: tokens[2].color, location: 0.68),
-                .init(color: tokens[3].color, location: 1.0),
-            ]),
-            startPoint: .leading,
-            endPoint: .trailing
-        )
-    }
-
     static func expiryEmphasisToken(
         for date: Date?,
         referenceDate: Date = .now,
@@ -1139,18 +959,6 @@ enum CodexTheme {
         resetCountdownEmphasisToken().color
     }
 
-    static func statusLabelColor(for authState: AuthState, limitReached: Bool) -> Color {
-        if authState == .signedIn, limitReached == false {
-            return .primary
-        }
-
-        if authState == .signingIn {
-            return .primary
-        }
-
-        return statusTone(for: authState, limitReached: limitReached).foregroundColor
-    }
-
     static func interPostScriptName(for weight: Font.Weight) -> String {
         if weight == .medium {
             return "Inter-Medium"
@@ -1191,25 +999,6 @@ enum CodexTheme {
         }
 
         return .system(size: size, weight: weight)
-    }
-
-    static func displayFont(size: CGFloat, weight: Font.Weight, italic: Bool) -> Font {
-        let traits: NSFontTraitMask = italic ? [.italicFontMask] : []
-        if let font = NSFontManager.shared.font(
-            withFamily: "Cormorant Garamond",
-            traits: traits,
-            weight: appKitWeight(for: weight),
-            size: size
-        ) {
-            return Font(font)
-        }
-
-        let fallback = Font.system(size: size, weight: weight, design: .serif)
-        return italic ? fallback.italic() : fallback
-    }
-
-    static func canvasDarkeningOverlay() -> LinearGradient {
-        canvasDarkeningOverlay(preset: activePreset)
     }
 
     static func canvasDarkeningOverlay(preset: CodexThemePreset) -> LinearGradient {
@@ -1342,26 +1131,9 @@ extension Font {
         CodexTheme.utilityFont(size: size, weight: weight)
     }
 
-    static func codexDisplay(
-        size: CGFloat,
-        weight: Font.Weight = .semibold,
-        italic: Bool = false
-    ) -> Font {
-        CodexTheme.displayFont(size: size, weight: weight, italic: italic)
-    }
-
-    static let codexDisplayTitle = Font.codexDisplay(size: 34, weight: .semibold, italic: true)
-    static let codexDisplaySubtitle = Font.codexDisplay(size: 22, weight: .medium, italic: true)
-    static let codexTitle = Font.codexSans(size: 18, weight: .semibold, relativeTo: .headline)
-    static let codexBody = Font.codexSans(size: 15, weight: .regular, relativeTo: .body)
-    static let codexBodyStrong = Font.codexSans(size: 15, weight: .semibold, relativeTo: .body)
     static let codexSmall = Font.codexSans(size: 13, weight: .regular, relativeTo: .subheadline)
     static let codexSmallStrong = Font.codexSans(size: 13, weight: .semibold, relativeTo: .subheadline)
     static let codexCaption = Font.codexUtility(size: 12, weight: .medium, relativeTo: .caption)
-    static let codexMetric = Font.codexUtility(size: 14, weight: .semibold, relativeTo: .subheadline)
-    static let codexMicro = Font.codexUtility(size: 11, weight: .medium, relativeTo: .caption2)
-    static let codexLargeMetric = Font.codexSans(size: 26, weight: .semibold, relativeTo: .title2)
-    static let codexMenuBarLabel = Font.codexUtility(size: 12, weight: .semibold, relativeTo: .caption)
 }
 
 extension Color {

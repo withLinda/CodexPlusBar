@@ -832,14 +832,10 @@ private func makeUsage(
         planType: "chatgpt_plus",
         primaryWindow: WorkspaceLimitWindow(
             usedPercent: primaryUsedPercent,
-            limitWindowSeconds: 18_000,
-            resetAfterSeconds: 900,
             resetAt: Date(timeIntervalSince1970: 1_776_000_900)
         ),
         secondaryWindow: WorkspaceLimitWindow(
             usedPercent: secondaryUsedPercent,
-            limitWindowSeconds: 604_800,
-            resetAfterSeconds: 86_400,
             resetAt: Date(timeIntervalSince1970: 1_776_086_400)
         ),
         fetchedAt: Date(timeIntervalSince1970: 1_776_000_000)
@@ -893,15 +889,11 @@ private func makeMenuBarUsage(
 
     let fiveHourWindow = WorkspaceLimitWindow(
         usedPercent: 100 - fiveHourRemainingPercent,
-        limitWindowSeconds: 18_000,
-        resetAfterSeconds: 900,
         resetAt: Date(timeIntervalSince1970: 1_776_000_900)
     )
     let sevenDayWindow = sevenDayRemainingPercent.map {
         WorkspaceLimitWindow(
             usedPercent: 100 - $0,
-            limitWindowSeconds: 604_800,
-            resetAfterSeconds: 86_400,
             resetAt: Date(timeIntervalSince1970: 1_776_086_400)
         )
     }

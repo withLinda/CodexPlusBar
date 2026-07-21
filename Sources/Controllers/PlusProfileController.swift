@@ -46,6 +46,16 @@ struct MenuBarStatusContent: Equatable, Sendable {
     }
 }
 
+private struct ProfileStateCounts {
+    var ready = 0
+    var needsLogin = 0
+    var failed = 0
+
+    var hasKnownState: Bool {
+        ready > 0 || needsLogin > 0 || failed > 0
+    }
+}
+
 @Observable
 @MainActor
 final class PlusProfileController {
@@ -106,18 +116,6 @@ final class PlusProfileController {
         return profiles.first(where: { $0.id == selectedProfileID }) ?? profiles.first
     }
 
-    var readyProfiles: [PlusProfileSnapshot] {
-        profiles.filter { $0.state == .ready && $0.usage != nil }
-    }
-
-    var needsLoginProfiles: [PlusProfileSnapshot] {
-        profiles.filter { $0.state == .needsLogin }
-    }
-
-    var failedProfiles: [PlusProfileSnapshot] {
-        profiles.filter { $0.state == .failed }
-    }
-
     var statusBarSymbolName: String {
         if let urgent = mostUrgentHealthyProfile(),
            let remaining = urgent.usage?.fiveHourRemainingPercent,
@@ -126,10 +124,6 @@ final class PlusProfileController {
         }
 
         return dashboardStatus.symbolName
-    }
-
-    func statusBarText(referenceDate: Date = .now) -> String {
-        statusBarText(preferredProfileID: nil, referenceDate: referenceDate)
     }
 
     func preferredStatusProfile(preferredProfileID: UUID?) -> PlusProfileSnapshot? {
@@ -174,6 +168,7 @@ final class PlusProfileController {
             return .text(profiles.isEmpty ? "Checking…" : "Refreshing…")
         }
 
+        let stateCounts = profileStateCounts
         switch dashboardStatus {
         case .empty:
             return .text("Add profile")
@@ -182,7 +177,7 @@ final class PlusProfileController {
         case .failed:
             return .text("Check profiles")
         case .mixedAttention:
-            return .text("\(readyProfiles.count)/\(profiles.count) ready")
+            return .text("\(stateCounts.ready)/\(profiles.count) ready")
         case .refreshing:
             return .text("Refreshing…")
         case .ready:
@@ -191,7 +186,7 @@ final class PlusProfileController {
                 return .text(updated.replacingOccurrences(of: "Updated ", with: ""))
             }
 
-            return .text("\(readyProfiles.count) ready")
+            return .text("\(stateCounts.ready) ready")
         }
     }
 
@@ -694,27 +689,29 @@ final class PlusProfileController {
             return
         }
 
-        if isRefreshing && readyProfiles.isEmpty {
+        let stateCounts = profileStateCounts
+
+        if isRefreshing && stateCounts.ready == 0 {
             dashboardStatus = .refreshing
             return
         }
 
-        if readyProfiles.count == profiles.count {
+        if stateCounts.ready == profiles.count {
             dashboardStatus = .ready
             return
         }
 
-        if readyProfiles.isEmpty && needsLoginProfiles.count == profiles.count {
+        if stateCounts.ready == 0 && stateCounts.needsLogin == profiles.count {
             dashboardStatus = .needsLogin
             return
         }
 
-        if readyProfiles.isEmpty && failedProfiles.isEmpty == false {
+        if stateCounts.ready == 0 && stateCounts.failed > 0 {
             dashboardStatus = .failed
             return
         }
 
-        if readyProfiles.isEmpty == false || needsLoginProfiles.isEmpty == false || failedProfiles.isEmpty == false {
+        if stateCounts.hasKnownState {
             dashboardStatus = .mixedAttention
             return
         }
@@ -727,8 +724,9 @@ final class PlusProfileController {
             return "Add a profile, then sign in one by one."
         }
 
-        let loginCount = needsLoginProfiles.count
-        let failureCount = failedProfiles.count
+        let stateCounts = profileStateCounts
+        let loginCount = stateCounts.needsLogin
+        let failureCount = stateCounts.failed
 
         if loginCount == 0 && failureCount == 0 {
             return nil
@@ -746,23 +744,37 @@ final class PlusProfileController {
     }
 
     private func mostUrgentHealthyProfile() -> PlusProfileSnapshot? {
-        readyProfiles.sorted { lhs, rhs in
-            let lhsRemaining = lhs.usage?.fiveHourRemainingPercent ?? 101
-            let rhsRemaining = rhs.usage?.fiveHourRemainingPercent ?? 101
+        profiles.lazy
+            .filter { $0.state == .ready && $0.usage != nil }
+            .min { lhs, rhs in
+                let lhsRemaining = lhs.usage?.fiveHourRemainingPercent ?? 101
+                let rhsRemaining = rhs.usage?.fiveHourRemainingPercent ?? 101
 
-            if lhsRemaining == rhsRemaining {
-                let lhsReset = lhs.usage?.primaryWindow.resetAt ?? .distantFuture
-                let rhsReset = rhs.usage?.primaryWindow.resetAt ?? .distantFuture
+                if lhsRemaining == rhsRemaining {
+                    let lhsReset = lhs.usage?.primaryWindow.resetAt ?? .distantFuture
+                    let rhsReset = rhs.usage?.primaryWindow.resetAt ?? .distantFuture
 
-                if lhsReset == rhsReset {
-                    return lhs.label.localizedStandardCompare(rhs.label) == .orderedAscending
+                    if lhsReset == rhsReset {
+                        return lhs.label.localizedStandardCompare(rhs.label) == .orderedAscending
+                    }
+
+                    return lhsReset < rhsReset
                 }
 
-                return lhsReset < rhsReset
+                return lhsRemaining < rhsRemaining
             }
+    }
 
-            return lhsRemaining < rhsRemaining
-        }.first
+    private var profileStateCounts: ProfileStateCounts {
+        profiles.reduce(into: ProfileStateCounts()) { counts, snapshot in
+            if snapshot.state == .ready, snapshot.usage != nil {
+                counts.ready += 1
+            } else if snapshot.state == .needsLogin {
+                counts.needsLogin += 1
+            } else if snapshot.state == .failed {
+                counts.failed += 1
+            }
+        }
     }
 
     private func compactStatusLabel(for label: String) -> String {

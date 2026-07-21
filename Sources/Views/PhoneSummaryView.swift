@@ -471,22 +471,13 @@ private struct PhoneSummaryExpiryText: View {
     }
 
     var body: some View {
-        Group {
-            if let label = presentation.value.label {
-                (
-                    Text("· \(label) ")
-                        .foregroundStyle(presentation.emphasisToken?.color ?? CodexTheme.mutedText)
-                    + Text(presentation.value.value)
-                        .foregroundStyle(presentation.emphasisToken?.color ?? CodexTheme.mutedText)
-                        .monospacedDigit()
-                )
-            } else {
-                Text("· \(presentation.value.value)")
-                    .foregroundStyle(presentation.emphasisToken?.color ?? CodexTheme.mutedText)
-            }
-        }
-        .font(ProfileManagerTypography.caption)
-        .lineLimit(1)
+        LabeledValueText(
+            presentation: presentation.value,
+            prefix: "· ",
+            labelColor: presentation.emphasisToken?.color ?? CodexTheme.mutedText,
+            valueColor: presentation.emphasisToken?.color ?? CodexTheme.mutedText,
+            font: ProfileManagerTypography.caption
+        )
         .fixedSize(horizontal: true, vertical: false)
         .accessibilityHidden(true)
     }

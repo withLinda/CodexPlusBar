@@ -21,16 +21,6 @@ struct WorkspaceLimitService {
         }
     }
 
-    static func decodeSnapshotIfPresent(from entry: WorkspaceEntry, workspaceID: String) -> WorkspaceLimitSnapshot? {
-        guard let object = entry.payload as? JSONObject,
-              rateLimitObject(named: "rate_limit", in: object) != nil else {
-            return nil
-        }
-
-        let accountID = WorkspacePayloadSupport.resolveWorkspaceID(from: entry) ?? workspaceID
-        return try? snapshot(from: object, workspaceID: workspaceID, accountID: accountID)
-    }
-
     private static func normalizeSnapshot(from payload: Any, rawData: Data, workspaceID: String) throws -> WorkspaceLimitSnapshot {
         if let rootObject = payload as? JSONObject, rootObject["rate_limit"] != nil {
             if let legacyPayload = try? JSONDecoder.chatGPTAPI.decode(AccountCheckResponse.self, from: rawData) {
@@ -65,8 +55,6 @@ struct WorkspaceLimitService {
             workspaceID: workspaceID,
             accountID: payload.accountID,
             planType: payload.planType,
-            allowed: payload.rateLimit.allowed,
-            limitReached: payload.rateLimit.limitReached,
             primaryWindow: try payload.rateLimit.primaryWindow.requireWindow(),
             secondaryWindow: try payload.rateLimit.secondaryWindow?.requireWindow(),
             fetchedAt: .now
@@ -101,8 +89,6 @@ struct WorkspaceLimitService {
             workspaceID: workspaceID,
             accountID: accountID,
             planType: planType,
-            allowed: rateLimit.allowed,
-            limitReached: rateLimit.limitReached,
             primaryWindow: try rateLimit.primaryWindow.requireWindow(),
             secondaryWindow: try rateLimit.secondaryWindow?.requireWindow(),
             fetchedAt: .now
@@ -183,14 +169,10 @@ private struct AccountCheckResponse: Decodable {
 }
 
 private struct RateLimitContainer: Decodable {
-    let allowed: Bool
-    let limitReached: Bool
     let primaryWindow: LimitWindowPayload
     let secondaryWindow: LimitWindowPayload?
 
     enum CodingKeys: String, CodingKey {
-        case allowed
-        case limitReached = "limit_reached"
         case primaryWindow = "primary_window"
         case secondaryWindow = "secondary_window"
     }
@@ -200,10 +182,6 @@ private struct RateLimitContainer: Decodable {
             throw WorkspaceLimitService.unsupportedAuthenticatedResponse()
         }
 
-        allowed = WorkspacePayloadSupport.boolValue(from: object["allowed"]) ?? true
-        limitReached = WorkspacePayloadSupport.boolValue(
-            from: object["limit_reached"] ?? object["limitReached"]
-        ) ?? false
         primaryWindow = try LimitWindowPayload(object: primaryWindowObject)
         if let secondaryWindowObject = object["secondary_window"] as? JSONObject {
             secondaryWindow = try LimitWindowPayload(object: secondaryWindowObject)
@@ -215,28 +193,20 @@ private struct RateLimitContainer: Decodable {
 
 private struct LimitWindowPayload: Decodable {
     let usedPercent: Int
-    let limitWindowSeconds: Int
-    let resetAfterSeconds: Int
     let resetAt: Int
 
     enum CodingKeys: String, CodingKey {
         case usedPercent = "used_percent"
-        case limitWindowSeconds = "limit_window_seconds"
-        case resetAfterSeconds = "reset_after_seconds"
         case resetAt = "reset_at"
     }
 
     init(object: JSONObject) throws {
         guard let usedPercent = WorkspacePayloadSupport.intValue(from: object["used_percent"]),
-              let limitWindowSeconds = WorkspacePayloadSupport.intValue(from: object["limit_window_seconds"]),
-              let resetAfterSeconds = WorkspacePayloadSupport.intValue(from: object["reset_after_seconds"]),
               let resetAt = WorkspacePayloadSupport.intValue(from: object["reset_at"]) else {
             throw WorkspaceLimitService.unsupportedAuthenticatedResponse()
         }
 
         self.usedPercent = usedPercent
-        self.limitWindowSeconds = limitWindowSeconds
-        self.resetAfterSeconds = resetAfterSeconds
         self.resetAt = resetAt
     }
 
@@ -247,8 +217,6 @@ private struct LimitWindowPayload: Decodable {
 
         return WorkspaceLimitWindow(
             usedPercent: max(0, min(usedPercent, 100)),
-            limitWindowSeconds: limitWindowSeconds,
-            resetAfterSeconds: max(0, resetAfterSeconds),
             resetAt: Date(timeIntervalSince1970: TimeInterval(resetAt))
         )
     }

@@ -6,15 +6,13 @@ struct ProfileCatalogLoadResult {
 }
 
 struct ProfileCatalogStore {
-    let fileURL: URL
-    private let fileManager: FileManager
+    private let storage: JSONFileStorage
 
     init(
         fileURL: URL = Self.defaultFileURL(),
         fileManager: FileManager = .default
     ) {
-        self.fileURL = fileURL
-        self.fileManager = fileManager
+        self.storage = JSONFileStorage(fileURL: fileURL, fileManager: fileManager)
     }
 
     func loadProfiles() throws -> [PlusProfile] {
@@ -22,13 +20,9 @@ struct ProfileCatalogStore {
     }
 
     func loadProfilesWithReport() throws -> ProfileCatalogLoadResult {
-        guard fileManager.fileExists(atPath: fileURL.path) else {
+        guard let profiles = try storage.load([PlusProfile].self) else {
             return ProfileCatalogLoadResult(profiles: [], removedDuplicateCount: 0)
         }
-
-        let data = try Data(contentsOf: fileURL)
-        let decoder = JSONDecoder()
-        let profiles = try decoder.decode([PlusProfile].self, from: data)
         let normalizedProfiles = Self.normalizedProfiles(profiles)
         return ProfileCatalogLoadResult(
             profiles: normalizedProfiles,
@@ -37,7 +31,9 @@ struct ProfileCatalogStore {
     }
 
     func saveProfiles(_ profiles: [PlusProfile]) throws {
-        try write(Self.normalizedProfiles(profiles))
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        try storage.save(Self.normalizedProfiles(profiles), encoder: encoder)
     }
 
     func upsertProfile(_ profile: PlusProfile) throws {
@@ -60,26 +56,10 @@ struct ProfileCatalogStore {
     static func defaultFileURL(
         fileManager: FileManager = .default
     ) -> URL {
-        let applicationSupportURL = fileManager.urls(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask
-        ).first
-
-        let root = applicationSupportURL
-            ?? URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
-        return root
-            .appendingPathComponent("CodexPlusBar", isDirectory: true)
-            .appendingPathComponent("profiles.json", isDirectory: false)
-    }
-
-    private func write(_ profiles: [PlusProfile]) throws {
-        let directoryURL = fileURL.deletingLastPathComponent()
-        try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
-
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        let data = try encoder.encode(profiles)
-        try data.write(to: fileURL, options: .atomic)
+        JSONFileStorage.applicationSupportFileURL(
+            named: "profiles.json",
+            fileManager: fileManager
+        )
     }
 
     private static func normalizedProfiles(_ profiles: [PlusProfile]) -> [PlusProfile] {
