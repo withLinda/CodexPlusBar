@@ -304,12 +304,13 @@ enum BulkProfileImporter {
 
         for (offset, line) in lines.enumerated() {
             let lineNumber = offset + 1
-            let trimmedLine = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            let contentLine = removingLeadingOrderedListMarker(from: line)
+            let trimmedLine = contentLine.trimmingCharacters(in: .whitespacesAndNewlines)
             guard trimmedLine.isEmpty == false else {
                 continue
             }
 
-            let fields = line
+            let fields = contentLine
                 .split(separator: "|", omittingEmptySubsequences: false)
                 .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
 
@@ -348,6 +349,44 @@ enum BulkProfileImporter {
         }
 
         return BulkProfileImportPreview(entries: entries, issues: issues)
+    }
+
+    private static func removingLeadingOrderedListMarker(from line: String) -> String {
+        var cursor = line.startIndex
+
+        while cursor < line.endIndex, isHorizontalWhitespace(line[cursor]) {
+            cursor = line.index(after: cursor)
+        }
+
+        let firstDigit = cursor
+        while cursor < line.endIndex, isASCIIDigit(line[cursor]) {
+            cursor = line.index(after: cursor)
+        }
+
+        guard cursor != firstDigit,
+              cursor < line.endIndex,
+              line[cursor] == "." else {
+            return line
+        }
+
+        cursor = line.index(after: cursor)
+        guard cursor < line.endIndex, isHorizontalWhitespace(line[cursor]) else {
+            return line
+        }
+
+        while cursor < line.endIndex, isHorizontalWhitespace(line[cursor]) {
+            cursor = line.index(after: cursor)
+        }
+
+        return String(line[cursor...])
+    }
+
+    private static func isASCIIDigit(_ character: Character) -> Bool {
+        character.isASCII && character.isNumber
+    }
+
+    private static func isHorizontalWhitespace(_ character: Character) -> Bool {
+        character.unicodeScalars.allSatisfy(CharacterSet.whitespaces.contains)
     }
 
     private static func isPlausibleEmail(_ value: String) -> Bool {

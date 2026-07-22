@@ -288,8 +288,8 @@ struct ProfileManagerWindowViewTests {
         let valid = ProfileManagerBulkImportSheetPresentation(
             preview: BulkProfileImporter.preview(
                 from: """
-                alpha@example.com|password-a|SECRETONE
-                beta@example.com|password-b|SECRETTWO
+                1. alpha@example.com|password-a|SECRETONE
+                2. beta@example.com|password-b|SECRETTWO
                 """
             )
         )

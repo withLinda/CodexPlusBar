@@ -152,6 +152,29 @@ struct PlusProfileModelsTests {
     }
 
     @Test
+    func bulkProfileImportRemovesOnlyRealNumberedListMarkers() {
+        let preview = BulkProfileImporter.preview(
+            from: """
+            1. 67_asylums_ringing+sample@icloud.com|password-one|SECRETONE
+            2. normal-profile@icloud.com|password-two|SECRETTWO
+              3. 9lives-profile@icloud.com|password-three|SECRETTHREE
+            4.profile-starts-with-a-number@icloud.com|password-four|SECRETFOUR
+            55profile-starts-with-digits@icloud.com|password-five|SECRETFIVE
+            """
+        )
+
+        #expect(preview.issues == [])
+        #expect(preview.canSubmit)
+        #expect(preview.entries.map(\.email) == [
+            "67_asylums_ringing+sample@icloud.com",
+            "normal-profile@icloud.com",
+            "9lives-profile@icloud.com",
+            "4.profile-starts-with-a-number@icloud.com",
+            "55profile-starts-with-digits@icloud.com",
+        ])
+    }
+
+    @Test
     func bulkProfileImportReportsLineIssuesBeforeImport() {
         let preview = BulkProfileImporter.preview(
             from: """
