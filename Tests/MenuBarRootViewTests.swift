@@ -97,35 +97,49 @@ struct MenuBarRootViewTests {
     }
 
     @Test
-    func tagFilterPresentationUsesAllStateForMenuBarPanel() {
-        let presentation = ProfileTagFilterBarPresentation(
-            filter: ProfileTagFilter(),
+    func filterPresentationUsesAllStateForMenuBarPanel() {
+        let presentation = ProfileFilterBarPresentation(
+            filter: ProfileFilter(),
             shownCount: 3,
             totalCount: 3,
+            fullFiveHourLimitCount: 1,
             tagCounts: ProfileTagCounts(active: 1, needAction: 1, pending: 1)
         )
 
         #expect(presentation.countText == "3 profiles")
         #expect(presentation.visibleSummaryText == "3 profiles")
-        #expect(presentation.accessibilitySummaryText == "3 profiles, 1 active, 1 need action, 1 pending")
-        #expect(presentation.segments.map(\.displayText) == ["All 3", "Active 1", "Action 1", "Pending 1"])
+        #expect(
+            presentation.accessibilitySummaryText
+                == "3 profiles, 1 profile with full 5-hour limit, 1 active, 1 need action, 1 pending"
+        )
+        #expect(
+            presentation.segments.map(\.displayText)
+                == ["All 3", "Full 1", "Active 1", "Action 1", "Pending 1"]
+        )
         #expect(presentation.isAllSelected)
+        #expect(presentation.isFullFiveHourLimitSelected == false)
         #expect(presentation.isSelected(.active) == false)
     }
 
     @Test
-    func tagFilterPresentationDisablesEmptyUnselectedSegments() throws {
-        let presentation = ProfileTagFilterBarPresentation(
-            filter: ProfileTagFilter([.active]),
+    func filterPresentationDisablesEmptyUnselectedSegments() throws {
+        let presentation = ProfileFilterBarPresentation(
+            filter: ProfileFilter([.active]),
             shownCount: 2,
             totalCount: 3,
             tagCounts: ProfileTagCounts(active: 2, needAction: 0, pending: 1)
         )
 
+        let fullLimit = try #require(presentation.segments.first { $0.kind == .fullFiveHourLimit })
         let active = try #require(presentation.segments.first { $0.tag == .active })
         let needAction = try #require(presentation.segments.first { $0.tag == .needAction })
 
         #expect(presentation.visibleSummaryText == "2 of 3 shown")
+        #expect(fullLimit.displayText == "Full 0")
+        #expect(fullLimit.kind.systemImage == "gauge.high")
+        #expect(fullLimit.accessibilityLabel == "Full 5-hour limit, 100 percent remaining")
+        #expect(fullLimit.isSelected == false)
+        #expect(fullLimit.isEnabled == false)
         #expect(active.displayText == "Active 2")
         #expect(active.isSelected)
         #expect(active.isEnabled)
@@ -133,6 +147,24 @@ struct MenuBarRootViewTests {
         #expect(needAction.accessibilityLabel == "Need action")
         #expect(needAction.isSelected == false)
         #expect(needAction.isEnabled == false)
+    }
+
+    @Test
+    func fullLimitFilterSegmentShowsExactSelectedState() throws {
+        let presentation = ProfileFilterBarPresentation(
+            filter: ProfileFilter(showsOnlyFullFiveHourLimit: true),
+            shownCount: 2,
+            totalCount: 5,
+            fullFiveHourLimitCount: 2
+        )
+
+        let fullLimit = try #require(presentation.segments.first { $0.kind == .fullFiveHourLimit })
+
+        #expect(presentation.isAllSelected == false)
+        #expect(presentation.isFullFiveHourLimitSelected)
+        #expect(fullLimit.displayText == "Full 2")
+        #expect(fullLimit.isSelected)
+        #expect(fullLimit.isEnabled)
     }
 
     @Test
@@ -183,7 +215,7 @@ struct MenuBarRootViewTests {
             openEmailToolsWindow: {}
         )
 
-        #expect(view.displayProfiles(for: ProfileTagFilter([.active])).map(\.label) == [
+        #expect(view.displayProfiles(for: ProfileFilter([.active])).map(\.label) == [
             "soonest@example.com",
             "later@example.com",
             "unknown@example.com",
@@ -191,7 +223,7 @@ struct MenuBarRootViewTests {
 
         #expect(
             view.displayProfiles(
-                for: ProfileTagFilter([.active]),
+                for: ProfileFilter([.active]),
                 query: "soonest@"
             ).map(\.label) == ["soonest@example.com"]
         )

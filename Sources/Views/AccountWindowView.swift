@@ -343,7 +343,7 @@ struct ProfileManagerWindowView: View {
     @Bindable var controller: PlusProfileController
     let currentTime: AppMinuteClock
     @State private var detailsDraft = PlusProfileDetailsDraft()
-    @State private var sidebarTagFilter = ProfileTagFilter()
+    @State private var sidebarFilter = ProfileFilter()
     @State private var profileSearchQuery = ""
     @State private var isProfileSearchPresented = false
     @State private var revealedPrivateFields: Set<ProfilePrivateField> = []
@@ -552,21 +552,22 @@ struct ProfileManagerWindowView: View {
                         )
                     }
 
-                    ProfileTagFilterBar(
+                    ProfileFilterBar(
                         presentation: listPresentation.filterBar,
                         clearFilter: clearSidebarFilter,
-                        toggleTag: toggleSidebarFilter
+                        toggleFullLimit: toggleSidebarFullLimitFilter,
+                        toggleTag: toggleSidebarTagFilter
                     )
 
                     if listPresentation.displayedProfiles.isEmpty,
                        ProfileSearch.normalizedQuery(profileSearchQuery).isEmpty == false {
                         ProfileSearchEmptyState(
                             query: profileSearchQuery,
-                            clearsTagFilter: sidebarTagFilter.isEmpty == false,
+                            clearsFilter: sidebarFilter.isEmpty == false,
                             clear: clearSearchAndSidebarFilter
                         )
                     } else if listPresentation.displayedProfiles.isEmpty {
-                        ProfileTagEmptyState(clearFilter: clearSidebarFilter)
+                        ProfileFilterEmptyState(clearFilter: clearSidebarFilter)
                     } else {
                         ScrollView(.vertical) {
                             VStack(alignment: .leading, spacing: 10) {
@@ -1124,7 +1125,7 @@ struct ProfileManagerWindowView: View {
     private var sidebarListPresentation: ProfileListPresentation {
         ProfileListPresentation(
             profiles: controller.profiles,
-            filter: sidebarTagFilter,
+            filter: sidebarFilter,
             query: profileSearchQuery
         )
     }
@@ -1365,12 +1366,12 @@ struct ProfileManagerWindowView: View {
     }
 
     private func clearSidebarFilter() {
-        sidebarTagFilter.clear()
+        sidebarFilter.clear()
     }
 
     private func clearSearchAndSidebarFilter() {
         profileSearchQuery = ""
-        sidebarTagFilter.clear()
+        sidebarFilter.clear()
         keepSelectedProfileVisible()
     }
 
@@ -1384,8 +1385,13 @@ struct ProfileManagerWindowView: View {
         keepSelectedProfileVisible()
     }
 
-    private func toggleSidebarFilter(_ tag: PlusProfileTag) {
-        sidebarTagFilter.toggle(tag)
+    private func toggleSidebarFullLimitFilter() {
+        sidebarFilter.toggleFullFiveHourLimit()
+        keepSelectedProfileVisible()
+    }
+
+    private func toggleSidebarTagFilter(_ tag: PlusProfileTag) {
+        sidebarFilter.toggle(tag)
         keepSelectedProfileVisible()
     }
 

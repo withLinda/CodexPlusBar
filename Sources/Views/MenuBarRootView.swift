@@ -6,7 +6,7 @@ struct MenuBarRootView: View {
     @Environment(\.openSettings) private var openSettings
     @AppStorage(MenuBarProfilePreference.preferredProfileIDKey) private var preferredProfileIDStorage = ""
     @AppStorage(MenuBarPanelTextScalePreference.textScaleKey) private var panelTextScaleStorage = MenuBarPanelTextScalePreference.defaultScale
-    @State private var tagFilter = ProfileTagFilter()
+    @State private var profileFilter = ProfileFilter()
     @State private var profileSearchQuery = ""
     @State private var isProfileSearchPresented = false
     let currentTime: AppMinuteClock
@@ -56,11 +56,12 @@ struct MenuBarRootView: View {
                         )
                     }
 
-                    ProfileTagFilterBar(
+                    ProfileFilterBar(
                         presentation: listPresentation.filterBar,
                         textScale: panelTextScale,
-                        clearFilter: clearTagFilter,
-                        toggleTag: toggleTagFilter
+                        clearFilter: clearProfileFilter,
+                        toggleFullLimit: toggleFullLimitFilter,
+                        toggleTag: toggleProfileTagFilter
                     )
                 }
 
@@ -178,12 +179,12 @@ struct MenuBarRootView: View {
                   ProfileSearch.normalizedQuery(profileSearchQuery).isEmpty == false {
             ProfileSearchEmptyState(
                 query: profileSearchQuery,
-                clearsTagFilter: tagFilter.isEmpty == false,
+                clearsFilter: profileFilter.isEmpty == false,
                 textScale: panelTextScale,
                 clear: clearSearchAndActiveFilters
             )
         } else if displayedProfiles.isEmpty {
-            ProfileTagEmptyState(clearFilter: clearTagFilter)
+            ProfileFilterEmptyState(clearFilter: clearProfileFilter)
         } else {
             ForEach(displayedProfiles) { snapshot in
                 let isPinned = snapshot.id == storedPinnedProfileID
@@ -257,7 +258,7 @@ struct MenuBarRootView: View {
         MenuBarPanelTextScalePreference.normalizedTextScale(panelTextScaleStorage)
     }
 
-    private func headerMetaText(filterBar: ProfileTagFilterBarPresentation) -> String {
+    private func headerMetaText(filterBar: ProfileFilterBarPresentation) -> String {
         if let updatedAt = controller.profiles.compactMap(\.lastRefreshAt).max(),
            let updatedText = DisplayFormatter.updatedText(updatedAt, referenceDate: currentTime.now) {
             return "\(updatedText) · \(filterBar.countText)"
@@ -266,12 +267,12 @@ struct MenuBarRootView: View {
         return controller.profiles.isEmpty ? "No saved profiles yet" : filterBar.countText
     }
 
-    func displayProfiles(for filter: ProfileTagFilter) -> [PlusProfileSnapshot] {
+    func displayProfiles(for filter: ProfileFilter) -> [PlusProfileSnapshot] {
         displayProfiles(for: filter, query: "")
     }
 
     func displayProfiles(
-        for filter: ProfileTagFilter,
+        for filter: ProfileFilter,
         query: String
     ) -> [PlusProfileSnapshot] {
         ProfileListPresentation(
@@ -284,7 +285,7 @@ struct MenuBarRootView: View {
     private var profileListPresentation: ProfileListPresentation {
         ProfileListPresentation(
             profiles: controller.profiles,
-            filter: tagFilter,
+            filter: profileFilter,
             query: profileSearchQuery
         )
     }
@@ -331,13 +332,13 @@ struct MenuBarRootView: View {
         preferredProfileIDStorage = MenuBarProfilePreference.storedValue(for: profileID)
     }
 
-    private func clearTagFilter() {
-        tagFilter.clear()
+    private func clearProfileFilter() {
+        profileFilter.clear()
     }
 
     private func clearSearchAndActiveFilters() {
         profileSearchQuery = ""
-        tagFilter.clear()
+        profileFilter.clear()
     }
 
     private func showProfileSearch() {
@@ -349,8 +350,12 @@ struct MenuBarRootView: View {
         isProfileSearchPresented = false
     }
 
-    private func toggleTagFilter(_ tag: PlusProfileTag) {
-        tagFilter.toggle(tag)
+    private func toggleFullLimitFilter() {
+        profileFilter.toggleFullFiveHourLimit()
+    }
+
+    private func toggleProfileTagFilter(_ tag: PlusProfileTag) {
+        profileFilter.toggle(tag)
     }
 
     private func zoomPanelIn() {

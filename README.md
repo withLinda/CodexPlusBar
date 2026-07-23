@@ -23,6 +23,8 @@ When you use more than one ChatGPT profile, checking limits can become slow and 
 - Pin an important profile so it stays easy to watch.
 - Save a label and email link for each profile.
 - Search saved profiles by full or partial email address or phone number.
+- Filter profiles by tag or show only profiles with exactly 100% of the 5H limit remaining.
+- See the exact 100% 5H state with a distinct purple accent.
 - Reuse a saved phone number from a searchable picker when editing a profile.
 - Review shared, single-use, and missing phone numbers from the Phone summary page.
 - Automatically repair duplicate saved profile rows while keeping the first current copy.
@@ -48,17 +50,17 @@ When you use more than one ChatGPT profile, checking limits can become slow and 
 Download the latest notarized DMG from GitHub:
 
 - [Latest release page](https://github.com/withLinda/CodexPlusBar/releases/latest)
-- [Direct notarized DMG download](https://github.com/withLinda/CodexPlusBar/releases/download/snapshot-2026-07-22-numbered-import/CodexPlusBar-snapshot-2026-07-22-numbered-import.dmg)
-- [SHA-256 checksum](https://github.com/withLinda/CodexPlusBar/releases/download/snapshot-2026-07-22-numbered-import/CodexPlusBar-snapshot-2026-07-22-numbered-import.dmg.sha256)
+- [Direct notarized DMG download](https://github.com/withLinda/CodexPlusBar/releases/download/snapshot-2026-07-23-full-limit-filter/CodexPlusBar-snapshot-2026-07-23-full-limit-filter.dmg)
+- [SHA-256 checksum](https://github.com/withLinda/CodexPlusBar/releases/download/snapshot-2026-07-23-full-limit-filter/CodexPlusBar-snapshot-2026-07-23-full-limit-filter.dmg.sha256)
 
-1. Download `CodexPlusBar-snapshot-2026-07-22-numbered-import.dmg`.
+1. Download `CodexPlusBar-snapshot-2026-07-23-full-limit-filter.dmg` from the direct link above.
 2. Optional: download the checksum file into the same folder, open Terminal there, and run:
 
    ```bash
-   shasum -a 256 -c CodexPlusBar-snapshot-2026-07-22-numbered-import.dmg.sha256
+   shasum -a 256 -c CodexPlusBar-snapshot-2026-07-23-full-limit-filter.dmg.sha256
    ```
 
-   A correct download prints `CodexPlusBar-snapshot-2026-07-22-numbered-import.dmg: OK`.
+   A correct download prints `CodexPlusBar-snapshot-2026-07-23-full-limit-filter.dmg: OK`.
 3. Double-click the downloaded DMG to open it.
 4. Drag `CodexPlusBar.app` onto the `Applications` folder inside the DMG.
 5. If macOS asks, replace the older copy in Applications.

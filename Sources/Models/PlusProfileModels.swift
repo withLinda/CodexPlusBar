@@ -677,6 +677,10 @@ struct PlusProfileSnapshot: Identifiable, Equatable, Sendable {
         return "—"
     }
 
+    var hasFullFiveHourLimit: Bool {
+        usage?.fiveHourRemainingPercent == 100
+    }
+
     func usageSummary(referenceDate: Date = .now) -> ProfileUsageSummary? {
         usage?.usageSummary(referenceDate: referenceDate)
     }
@@ -727,15 +731,20 @@ struct PlusProfileSnapshot: Identifiable, Equatable, Sendable {
     }
 }
 
-struct ProfileTagFilter: Equatable, Sendable {
+struct ProfileFilter: Equatable, Sendable {
     private(set) var selectedTags: [PlusProfileTag]
+    private(set) var showsOnlyFullFiveHourLimit: Bool
 
-    init(_ selectedTags: [PlusProfileTag] = []) {
+    init(
+        _ selectedTags: [PlusProfileTag] = [],
+        showsOnlyFullFiveHourLimit: Bool = false
+    ) {
         self.selectedTags = PlusProfile.normalizedTags(selectedTags)
+        self.showsOnlyFullFiveHourLimit = showsOnlyFullFiveHourLimit
     }
 
     var isEmpty: Bool {
-        selectedTags.isEmpty
+        selectedTags.isEmpty && showsOnlyFullFiveHourLimit == false
     }
 
     func isSelected(_ tag: PlusProfileTag) -> Bool {
@@ -743,13 +752,12 @@ struct ProfileTagFilter: Equatable, Sendable {
     }
 
     func includes(_ snapshot: PlusProfileSnapshot) -> Bool {
-        guard isEmpty == false else {
-            return true
-        }
-
-        return selectedTags.contains { selectedTag in
+        let matchesSelectedTags = selectedTags.isEmpty || selectedTags.contains { selectedTag in
             snapshot.tags.contains(selectedTag)
         }
+        let matchesFullFiveHourLimit = showsOnlyFullFiveHourLimit == false || snapshot.hasFullFiveHourLimit
+
+        return matchesSelectedTags && matchesFullFiveHourLimit
     }
 
     func apply(to snapshots: [PlusProfileSnapshot]) -> [PlusProfileSnapshot] {
@@ -770,8 +778,13 @@ struct ProfileTagFilter: Equatable, Sendable {
         selectedTags = PlusProfile.normalizedTags(selectedTags)
     }
 
+    mutating func toggleFullFiveHourLimit() {
+        showsOnlyFullFiveHourLimit.toggle()
+    }
+
     mutating func clear() {
         selectedTags = []
+        showsOnlyFullFiveHourLimit = false
     }
 }
 

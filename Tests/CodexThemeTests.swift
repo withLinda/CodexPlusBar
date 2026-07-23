@@ -40,9 +40,11 @@ struct CodexThemeTests {
         #expect(CodexTheme.palette(for: darkHardPreset).accGreen.hex == "#A7C080")
         #expect(CodexTheme.palette(for: darkHardPreset).accAqua.hex == "#83C092")
         #expect(CodexTheme.palette(for: darkHardPreset).accBlue.hex == "#7FBBB3")
+        #expect(CodexTheme.palette(for: darkHardPreset).accPurple.hex == "#D699B6")
         #expect(CodexTheme.palette(for: lightHardPreset).accGreen.hex == "#8DA101")
         #expect(CodexTheme.palette(for: lightHardPreset).accAqua.hex == "#35A77C")
         #expect(CodexTheme.palette(for: lightHardPreset).accBlue.hex == "#3A94C5")
+        #expect(CodexTheme.palette(for: lightHardPreset).accPurple.hex == "#DF69BA")
     }
 
     @Test
@@ -310,6 +312,7 @@ struct CodexThemeTests {
                 ("action", CodexTheme.actionTextToken(preset: preset)),
                 ("success", CodexTheme.readableAccentToken(palette.accAqua, preset: preset)),
                 ("info", CodexTheme.readableAccentToken(palette.accBlue, preset: preset)),
+                ("fullLimitData", CodexTheme.progressTextToken(forRemainingPercent: 100, preset: preset)),
                 ("healthyData", CodexTheme.progressTextToken(forRemainingPercent: 90, preset: preset)),
                 ("warningData", CodexTheme.resetEmphasisToken(forRemainingPercent: 82, preset: preset)),
                 ("dangerData", CodexTheme.progressTextToken(forRemainingPercent: 12, preset: preset)),
@@ -337,7 +340,25 @@ struct CodexThemeTests {
 
         #expect(CodexTheme.statusAccentToken(for: .success).hex == darkPalette.accAqua.hex)
         #expect(CodexTheme.statusAccentToken(for: .info).hex == darkPalette.accBlue.hex)
+        #expect(CodexTheme.fullLimitAccentToken(preset: darkHardPreset).hex == darkPalette.accPurple.hex)
         #expect(CodexTheme.progressAccentToken(forRemainingPercent: 90, preset: darkHardPreset).hex == darkPalette.accGreen.hex)
+        #expect(CodexTheme.fullLimitAccentToken(preset: darkHardPreset) != darkPalette.accGreen)
+    }
+
+    @Test
+    func exactFullLimitUsesDistinctPurpleForEveryPreset() {
+        for preset in CodexThemePreset.allCases {
+            let palette = CodexTheme.palette(for: preset)
+            let fullLimitText = CodexTheme.progressTextToken(forRemainingPercent: 100, preset: preset)
+            let nearbyHealthyText = CodexTheme.progressTextToken(forRemainingPercent: 99, preset: preset)
+
+            #expect(CodexTheme.fullLimitAccentToken(preset: preset) == palette.accPurple)
+            #expect(CodexTheme.progressAccentToken(forRemainingPercent: 100, preset: preset) == palette.accPurple)
+            #expect(CodexTheme.progressAccentToken(forRemainingPercent: 99, preset: preset) == palette.accGreen)
+            #expect(CodexTheme.progressAccentToken(forRemainingPercent: 101, preset: preset) == palette.accGreen)
+            #expect(fullLimitText != nearbyHealthyText)
+            #expect(fullLimitText != palette.strongText)
+        }
     }
 
     @Test
@@ -450,8 +471,13 @@ struct CodexThemeTests {
         let palette = CodexTheme.palette(for: lightHardPreset)
 
         #expect(CodexTheme.progressTextToken(forRemainingPercent: 90, preset: lightHardPreset) != palette.strongText)
+        #expect(CodexTheme.progressTextToken(forRemainingPercent: 100, preset: lightHardPreset) != palette.strongText)
         #expect(CodexTheme.resetEmphasisToken(forRemainingPercent: 12, preset: lightHardPreset) != palette.strongText)
         #expect(CodexTheme.resetCountdownEmphasisToken(preset: lightHardPreset) != palette.strongText)
+        #expect(
+            CodexTheme.progressTextToken(forRemainingPercent: 100, preset: lightHardPreset)
+                == CodexTheme.readableAccentToken(palette.accPurple, preset: lightHardPreset)
+        )
         #expect(
             CodexTheme.progressTextToken(forRemainingPercent: 90, preset: lightHardPreset)
                 == CodexTheme.readableAccentToken(palette.accGreen, preset: lightHardPreset)
@@ -486,6 +512,7 @@ struct CodexThemeTests {
 
     @Test
     func progressPaletteGetsWarmerAsRemainingDrops() {
+        #expect(CodexTheme.progressTextToken(forRemainingPercent: 100) == CodexTheme.readableAccentToken(CodexTheme.Palette.accPurple))
         #expect(CodexTheme.progressTextToken(forRemainingPercent: 90) == CodexTheme.readableAccentToken(CodexTheme.Palette.accGreen))
         #expect(CodexTheme.progressTextToken(forRemainingPercent: 70) == CodexTheme.readableAccentToken(CodexTheme.Palette.accYellow))
         #expect(CodexTheme.progressTextToken(forRemainingPercent: 40) == CodexTheme.readableAccentToken(CodexTheme.Palette.accOrange))
@@ -500,6 +527,9 @@ struct CodexThemeTests {
         #expect(CodexTheme.progressTextToken(forRemainingPercent: 50) == CodexTheme.readableAccentToken(CodexTheme.Palette.accYellow))
         #expect(CodexTheme.progressTextToken(forRemainingPercent: 74) == CodexTheme.readableAccentToken(CodexTheme.Palette.accYellow))
         #expect(CodexTheme.progressTextToken(forRemainingPercent: 75) == CodexTheme.readableAccentToken(CodexTheme.Palette.accGreen))
+        #expect(CodexTheme.progressTextToken(forRemainingPercent: 99) == CodexTheme.readableAccentToken(CodexTheme.Palette.accGreen))
+        #expect(CodexTheme.progressTextToken(forRemainingPercent: 100) == CodexTheme.readableAccentToken(CodexTheme.Palette.accPurple))
+        #expect(CodexTheme.progressTextToken(forRemainingPercent: 101) == CodexTheme.readableAccentToken(CodexTheme.Palette.accGreen))
     }
 
     @Test
@@ -583,6 +613,7 @@ private func densePanelAccentTextRoles(for preset: CodexThemePreset) -> [(name: 
         ("success", CodexTheme.successTextToken(preset: preset)),
         ("danger", CodexTheme.dangerTextToken(preset: preset)),
         ("info", CodexTheme.readableAccentToken(palette.accBlue, preset: preset)),
+        ("fullLimitData", CodexTheme.progressTextToken(forRemainingPercent: 100, preset: preset)),
         ("healthyData", CodexTheme.progressTextToken(forRemainingPercent: 90, preset: preset)),
         ("warningData", CodexTheme.progressTextToken(forRemainingPercent: 62, preset: preset)),
         ("dangerData", CodexTheme.progressTextToken(forRemainingPercent: 12, preset: preset)),

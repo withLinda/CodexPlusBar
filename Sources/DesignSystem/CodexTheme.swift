@@ -260,6 +260,7 @@ struct CodexEverforestPalette: Sendable, Equatable {
     let accGreen: CodexColorToken
     let accAqua: CodexColorToken
     let accBlue: CodexColorToken
+    let accPurple: CodexColorToken
 
     var isDark: Bool {
         variant == .dark
@@ -349,7 +350,8 @@ enum CodexTheme {
                 accYellow: CodexColorToken(hex: "#DBBC7F"),
                 accGreen: CodexColorToken(hex: "#A7C080"),
                 accAqua: CodexColorToken(hex: "#83C092"),
-                accBlue: CodexColorToken(hex: "#7FBBB3")
+                accBlue: CodexColorToken(hex: "#7FBBB3"),
+                accPurple: CodexColorToken(hex: "#D699B6")
             )
         case (.dark, .medium):
             return CodexEverforestPalette(
@@ -372,7 +374,8 @@ enum CodexTheme {
                 accYellow: CodexColorToken(hex: "#DBBC7F"),
                 accGreen: CodexColorToken(hex: "#A7C080"),
                 accAqua: CodexColorToken(hex: "#83C092"),
-                accBlue: CodexColorToken(hex: "#7FBBB3")
+                accBlue: CodexColorToken(hex: "#7FBBB3"),
+                accPurple: CodexColorToken(hex: "#D699B6")
             )
         case (.dark, .soft):
             return CodexEverforestPalette(
@@ -395,7 +398,8 @@ enum CodexTheme {
                 accYellow: CodexColorToken(hex: "#DBBC7F"),
                 accGreen: CodexColorToken(hex: "#A7C080"),
                 accAqua: CodexColorToken(hex: "#83C092"),
-                accBlue: CodexColorToken(hex: "#7FBBB3")
+                accBlue: CodexColorToken(hex: "#7FBBB3"),
+                accPurple: CodexColorToken(hex: "#D699B6")
             )
         case (.light, .hard):
             return CodexEverforestPalette(
@@ -418,7 +422,8 @@ enum CodexTheme {
                 accYellow: CodexColorToken(hex: "#DFA000"),
                 accGreen: CodexColorToken(hex: "#8DA101"),
                 accAqua: CodexColorToken(hex: "#35A77C"),
-                accBlue: CodexColorToken(hex: "#3A94C5")
+                accBlue: CodexColorToken(hex: "#3A94C5"),
+                accPurple: CodexColorToken(hex: "#DF69BA")
             )
         case (.light, .medium):
             return CodexEverforestPalette(
@@ -441,7 +446,8 @@ enum CodexTheme {
                 accYellow: CodexColorToken(hex: "#DFA000"),
                 accGreen: CodexColorToken(hex: "#8DA101"),
                 accAqua: CodexColorToken(hex: "#35A77C"),
-                accBlue: CodexColorToken(hex: "#3A94C5")
+                accBlue: CodexColorToken(hex: "#3A94C5"),
+                accPurple: CodexColorToken(hex: "#DF69BA")
             )
         case (.light, .soft):
             return CodexEverforestPalette(
@@ -464,7 +470,8 @@ enum CodexTheme {
                 accYellow: CodexColorToken(hex: "#DFA000"),
                 accGreen: CodexColorToken(hex: "#8DA101"),
                 accAqua: CodexColorToken(hex: "#35A77C"),
-                accBlue: CodexColorToken(hex: "#3A94C5")
+                accBlue: CodexColorToken(hex: "#3A94C5"),
+                accPurple: CodexColorToken(hex: "#DF69BA")
             )
         }
     }
@@ -876,8 +883,23 @@ enum CodexTheme {
         return fill.mixed(with: accent, fraction: fraction)
     }
 
-    static func progressAccentToken(forRemainingPercent remainingPercent: Int, preset: CodexThemePreset = activePreset) -> CodexColorToken {
+    /// Purple is reserved for the exact 100%-remaining limit state.
+    static func fullLimitAccentToken(
+        preset: CodexThemePreset = activePreset
+    ) -> CodexColorToken {
+        palette(for: preset).accPurple
+    }
+
+    static func progressAccentToken(
+        forRemainingPercent remainingPercent: Int,
+        preset: CodexThemePreset = activePreset
+    ) -> CodexColorToken {
         let palette = palette(for: preset)
+
+        if remainingPercent == 100 {
+            return fullLimitAccentToken(preset: preset)
+        }
+
         switch clamped(remainingPercent) {
         case 0..<25:
             return palette.accRed

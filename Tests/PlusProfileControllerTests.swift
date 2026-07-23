@@ -515,7 +515,7 @@ struct PlusProfileControllerTests {
     }
 
     @Test
-    func profileTagFilterUsesAnySelectedTagAndFallsBackToAllWhenEmpty() {
+    func profileFilterCombinesAnySelectedTagWithExactFullFiveHourLimit() {
         let active = menuBarSnapshot(
             label: "active@example.com",
             state: .ready,
@@ -548,11 +548,67 @@ struct PlusProfileControllerTests {
             sortOrder: 3,
             tags: []
         )
-        let rows = [active, pending, mixed, untagged]
+        let fullActive = menuBarSnapshot(
+            label: "full-active@example.com",
+            state: .ready,
+            fiveHourRemainingPercent: 100,
+            sevenDayRemainingPercent: 42,
+            sortOrder: 4,
+            tags: [.active]
+        )
+        let fullPending = menuBarSnapshot(
+            label: "full-pending@example.com",
+            state: .ready,
+            fiveHourRemainingPercent: 100,
+            sevenDayRemainingPercent: nil,
+            sortOrder: 5,
+            tags: [.pending]
+        )
+        let secondaryFullOnly = menuBarSnapshot(
+            label: "secondary-full@example.com",
+            state: .ready,
+            fiveHourRemainingPercent: 74,
+            sevenDayRemainingPercent: 100,
+            sortOrder: 6,
+            tags: []
+        )
+        let rows = [
+            active,
+            pending,
+            mixed,
+            untagged,
+            fullActive,
+            fullPending,
+            secondaryFullOnly,
+        ]
 
-        #expect(ProfileTagFilter().apply(to: rows).map(\.id) == rows.map(\.id))
-        #expect(ProfileTagFilter([.active, .needAction]).apply(to: rows).map(\.id) == [active.id, mixed.id])
-        #expect(ProfileTagFilter([.pending]).apply(to: rows).map(\.id) == [pending.id, mixed.id])
+        #expect(ProfileFilter().apply(to: rows).map(\.id) == rows.map(\.id))
+        #expect(
+            ProfileFilter([.active, .needAction]).apply(to: rows).map(\.id)
+                == [active.id, mixed.id, fullActive.id]
+        )
+        #expect(
+            ProfileFilter([.pending]).apply(to: rows).map(\.id)
+                == [pending.id, mixed.id, fullPending.id]
+        )
+        #expect(
+            ProfileFilter(showsOnlyFullFiveHourLimit: true).apply(to: rows).map(\.id)
+                == [fullActive.id, fullPending.id]
+        )
+        #expect(
+            ProfileFilter(
+                [.active],
+                showsOnlyFullFiveHourLimit: true
+            ).apply(to: rows).map(\.id) == [fullActive.id]
+        )
+
+        var mutableFilter = ProfileFilter()
+        mutableFilter.toggleFullFiveHourLimit()
+        #expect(mutableFilter.isEmpty == false)
+        #expect(mutableFilter.showsOnlyFullFiveHourLimit)
+        mutableFilter.clear()
+        #expect(mutableFilter.isEmpty)
+        #expect(mutableFilter.showsOnlyFullFiveHourLimit == false)
     }
 
     @Test

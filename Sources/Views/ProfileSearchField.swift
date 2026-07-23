@@ -85,18 +85,18 @@ struct ProfileSearchField: View {
 
 struct ProfileSearchEmptyState: View {
     let query: String
-    let clearsTagFilter: Bool
+    let clearsFilter: Bool
     let textScale: Double
     let clear: () -> Void
 
     init(
         query: String,
-        clearsTagFilter: Bool,
+        clearsFilter: Bool,
         textScale: Double = 1,
         clear: @escaping () -> Void
     ) {
         self.query = query
-        self.clearsTagFilter = clearsTagFilter
+        self.clearsFilter = clearsFilter
         self.textScale = textScale
         self.clear = clear
     }
@@ -112,7 +112,7 @@ struct ProfileSearchEmptyState: View {
                 .foregroundStyle(CodexTheme.supportText)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Button(clearsTagFilter ? "Clear search and tags" : "Clear search", action: clear)
+            Button(clearsFilter ? "Clear search and filters" : "Clear search", action: clear)
                 .buttonStyle(CodexQuietButtonStyle())
         }
         .frame(maxWidth: .infinity, alignment: .leading)

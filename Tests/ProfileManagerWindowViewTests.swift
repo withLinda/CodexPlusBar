@@ -330,19 +330,24 @@ struct ProfileManagerWindowViewTests {
     }
 
     @Test
-    func tagFilterPresentationShowsFilteredCountForManagerSidebar() {
-        let presentation = ProfileTagFilterBarPresentation(
-            filter: ProfileTagFilter([.active]),
+    func filterPresentationShowsFilteredCountForManagerSidebar() {
+        let presentation = ProfileFilterBarPresentation(
+            filter: ProfileFilter([.active]),
             shownCount: 2,
             totalCount: 5,
+            fullFiveHourLimitCount: 1,
             tagCounts: ProfileTagCounts(active: 2, needAction: 1, pending: 2)
         )
 
         #expect(presentation.countText == "2 of 5 shown")
         #expect(presentation.visibleSummaryText == "2 of 5 shown")
-        #expect(presentation.accessibilitySummaryText == "2 of 5 shown, 2 active, 1 need action, 2 pending")
+        #expect(
+            presentation.accessibilitySummaryText
+                == "2 of 5 shown, 1 profile with full 5-hour limit, 2 active, 1 need action, 2 pending"
+        )
         #expect(presentation.statusCountText == "2 active · 1 need action · 2 pending")
         #expect(presentation.isAllSelected == false)
+        #expect(presentation.isFullFiveHourLimitSelected == false)
         #expect(presentation.isSelected(.active))
         #expect(presentation.isSelected(.pending) == false)
     }

@@ -2,40 +2,44 @@ import SwiftUI
 
 struct ProfileListPresentation: Equatable, Sendable {
     let displayedProfiles: [PlusProfileSnapshot]
-    let filterBar: ProfileTagFilterBarPresentation
+    let filterBar: ProfileFilterBarPresentation
 
     init(
         profiles: [PlusProfileSnapshot],
-        filter: ProfileTagFilter,
+        filter: ProfileFilter,
         query: String
     ) {
         let filteredProfiles = filter.apply(to: profiles)
         let orderedProfiles = PlusProfileSnapshot.expiryFirstDisplayOrder(filteredProfiles)
         displayedProfiles = ProfileSearch.filter(orderedProfiles, query: query)
-        filterBar = ProfileTagFilterBarPresentation(
+        filterBar = ProfileFilterBarPresentation(
             filter: filter,
             shownCount: displayedProfiles.count,
             totalCount: profiles.count,
+            fullFiveHourLimitCount: profiles.count(where: \.hasFullFiveHourLimit),
             tagCounts: ProfileTagCounts(snapshots: profiles)
         )
     }
 }
 
-struct ProfileTagFilterBarPresentation: Equatable, Sendable {
-    let filter: ProfileTagFilter
+struct ProfileFilterBarPresentation: Equatable, Sendable {
+    let filter: ProfileFilter
     let shownCount: Int
     let totalCount: Int
+    let fullFiveHourLimitCount: Int
     let tagCounts: ProfileTagCounts
 
     init(
-        filter: ProfileTagFilter,
+        filter: ProfileFilter,
         shownCount: Int,
         totalCount: Int,
+        fullFiveHourLimitCount: Int = 0,
         tagCounts: ProfileTagCounts = ProfileTagCounts()
     ) {
         self.filter = filter
         self.shownCount = shownCount
         self.totalCount = totalCount
+        self.fullFiveHourLimitCount = fullFiveHourLimitCount
         self.tagCounts = tagCounts
     }
 
@@ -56,7 +60,10 @@ struct ProfileTagFilterBarPresentation: Equatable, Sendable {
     }
 
     var accessibilitySummaryText: String {
-        "\(visibleSummaryText), \(tagCounts.accessibilityText)"
+        let fullLimitText = fullFiveHourLimitCount == 1
+            ? "1 profile with full 5-hour limit"
+            : "\(fullFiveHourLimitCount) profiles with full 5-hour limits"
+        return "\(visibleSummaryText), \(fullLimitText), \(tagCounts.accessibilityText)"
     }
 
     var isAllSelected: Bool {
@@ -67,13 +74,17 @@ struct ProfileTagFilterBarPresentation: Equatable, Sendable {
         filter.isSelected(tag)
     }
 
+    var isFullFiveHourLimitSelected: Bool {
+        filter.showsOnlyFullFiveHourLimit
+    }
+
     var statusCountText: String {
         tagCounts.statusText
     }
 
-    var segments: [ProfileTagFilterSegment] {
-        let allSegment = ProfileTagFilterSegment(
-            tag: nil,
+    var segments: [ProfileFilterSegment] {
+        let allSegment = ProfileFilterSegment(
+            kind: .all,
             title: "All",
             count: totalCount,
             isSelected: isAllSelected,
@@ -81,10 +92,19 @@ struct ProfileTagFilterBarPresentation: Equatable, Sendable {
             accessibilityLabel: "All profiles"
         )
 
-        return [allSegment] + PlusProfileTag.allCases.map { tag in
+        let fullLimitSegment = ProfileFilterSegment(
+            kind: .fullFiveHourLimit,
+            title: "Full",
+            count: fullFiveHourLimitCount,
+            isSelected: isFullFiveHourLimitSelected,
+            isEnabled: fullFiveHourLimitCount > 0 || isFullFiveHourLimitSelected,
+            accessibilityLabel: "Full 5-hour limit, 100 percent remaining"
+        )
+
+        let tagSegments = PlusProfileTag.allCases.map { tag in
             let count = tagCounts.count(for: tag)
-            return ProfileTagFilterSegment(
-                tag: tag,
+            return ProfileFilterSegment(
+                kind: .tag(tag),
                 title: tag.shortDisplayName,
                 count: count,
                 isSelected: isSelected(tag),
@@ -92,11 +112,49 @@ struct ProfileTagFilterBarPresentation: Equatable, Sendable {
                 accessibilityLabel: tag.displayName
             )
         }
+
+        return [allSegment, fullLimitSegment] + tagSegments
     }
 }
 
-struct ProfileTagFilterSegment: Identifiable, Equatable, Sendable {
-    let tag: PlusProfileTag?
+enum ProfileFilterSegmentKind: Hashable, Sendable {
+    case all
+    case fullFiveHourLimit
+    case tag(PlusProfileTag)
+
+    var id: String {
+        switch self {
+        case .all:
+            return "all"
+        case .fullFiveHourLimit:
+            return "full-five-hour-limit"
+        case let .tag(tag):
+            return "tag-\(tag.id)"
+        }
+    }
+
+    var tag: PlusProfileTag? {
+        guard case let .tag(tag) = self else {
+            return nil
+        }
+
+        return tag
+    }
+
+    var systemImage: String {
+        switch self {
+        case .all:
+            return "line.3.horizontal.decrease.circle"
+        case .fullFiveHourLimit:
+            return "gauge.high"
+        case let .tag(tag):
+            return tag.systemImage
+        }
+    }
+}
+
+struct ProfileFilterSegment: Identifiable, Equatable, Sendable {
+    let kind: ProfileFilterSegmentKind
     let title: String
     let count: Int
     let isSelected: Bool
@@ -104,7 +162,11 @@ struct ProfileTagFilterSegment: Identifiable, Equatable, Sendable {
     let accessibilityLabel: String
 
     var id: String {
-        tag?.id ?? "all"
+        kind.id
+    }
+
+    var tag: PlusProfileTag? {
+        kind.tag
     }
 
     var displayText: String {
@@ -112,21 +174,24 @@ struct ProfileTagFilterSegment: Identifiable, Equatable, Sendable {
     }
 }
 
-struct ProfileTagFilterBar: View {
-    let presentation: ProfileTagFilterBarPresentation
+struct ProfileFilterBar: View {
+    let presentation: ProfileFilterBarPresentation
     let textScale: Double
     let clearFilter: () -> Void
+    let toggleFullLimit: () -> Void
     let toggleTag: (PlusProfileTag) -> Void
 
     init(
-        presentation: ProfileTagFilterBarPresentation,
+        presentation: ProfileFilterBarPresentation,
         textScale: Double = 1,
         clearFilter: @escaping () -> Void,
+        toggleFullLimit: @escaping () -> Void,
         toggleTag: @escaping (PlusProfileTag) -> Void
     ) {
         self.presentation = presentation
         self.textScale = textScale
         self.clearFilter = clearFilter
+        self.toggleFullLimit = toggleFullLimit
         self.toggleTag = toggleTag
     }
 
@@ -134,7 +199,7 @@ struct ProfileTagFilterBar: View {
         ViewThatFits(in: .horizontal) {
             HStack(spacing: 4 * CGFloat(textScale)) {
                 ForEach(presentation.segments) { segment in
-                    ProfileTagSegmentButton(
+                    ProfileFilterSegmentButton(
                         segment: segment,
                         textScale: textScale,
                         action: {
@@ -145,10 +210,11 @@ struct ProfileTagFilterBar: View {
             }
             .fixedSize(horizontal: true, vertical: false)
 
-            ProfileTagFilterMenu(
+            ProfileFilterMenu(
                 presentation: presentation,
                 textScale: textScale,
                 clearFilter: clearFilter,
+                toggleFullLimit: toggleFullLimit,
                 toggleTag: toggleTag
             )
         }
@@ -158,32 +224,35 @@ struct ProfileTagFilterBar: View {
         .accessibilityValue(presentation.accessibilitySummaryText)
     }
 
-    private func activate(_ segment: ProfileTagFilterSegment) {
+    private func activate(_ segment: ProfileFilterSegment) {
         guard segment.isEnabled else {
             return
         }
 
-        if let tag = segment.tag {
-            toggleTag(tag)
-        } else {
+        switch segment.kind {
+        case .all:
             clearFilter()
+        case .fullFiveHourLimit:
+            toggleFullLimit()
+        case let .tag(tag):
+            toggleTag(tag)
         }
     }
 }
 
-private struct ProfileTagSegmentButton: View {
-    let segment: ProfileTagFilterSegment
+private struct ProfileFilterSegmentButton: View {
+    let segment: ProfileFilterSegment
     let textScale: Double
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: 4 * CGFloat(textScale)) {
-                if segment.isSelected, let tag = segment.tag {
-                    Image(systemName: tag.systemImage)
+                if segment.isSelected, segment.kind != .all {
+                    Image(systemName: segment.kind.systemImage)
                         .font(.system(size: 8 * CGFloat(textScale), weight: .semibold))
                         .frame(width: 9 * CGFloat(textScale), height: 9 * CGFloat(textScale))
-                        .foregroundStyle(tag.profileTagTone.foregroundColor)
+                        .foregroundStyle(selectedIconColor)
                 }
 
                 Text(segment.title)
@@ -236,12 +305,38 @@ private struct ProfileTagSegmentButton: View {
             return tag.profileTagTone.borderColor(isSelected: true)
         }
 
+        if segment.kind == .fullFiveHourLimit {
+            return CodexTheme.usagePercentageColor(forRemainingPercent: 100).opacity(0.28)
+        }
+
         return CodexTheme.accentBlue.opacity(0.28)
+    }
+
+    private var selectedIconColor: Color {
+        if let tag = segment.tag {
+            return tag.profileTagTone.foregroundColor
+        }
+
+        if segment.kind == .fullFiveHourLimit {
+            return CodexTheme.usagePercentageColor(forRemainingPercent: 100)
+        }
+
+        return CodexTheme.primaryText
     }
 
     private var helpText: String {
         if segment.isEnabled == false {
+            if segment.kind == .fullFiveHourLimit {
+                return "No profiles have a full 5H limit"
+            }
+
             return "No \(segment.accessibilityLabel.lowercased()) profiles"
+        }
+
+        if segment.kind == .fullFiveHourLimit {
+            return segment.isSelected
+                ? "Stop showing only full 5H limits"
+                : "Show only profiles with 5H at 100%"
         }
 
         if segment.isSelected, segment.tag != nil {
@@ -257,10 +352,11 @@ private struct ProfileTagSegmentButton: View {
     }
 }
 
-private struct ProfileTagFilterMenu: View {
-    let presentation: ProfileTagFilterBarPresentation
+private struct ProfileFilterMenu: View {
+    let presentation: ProfileFilterBarPresentation
     let textScale: Double
     let clearFilter: () -> Void
+    let toggleFullLimit: () -> Void
     let toggleTag: (PlusProfileTag) -> Void
 
     var body: some View {
@@ -277,7 +373,7 @@ private struct ProfileTagFilterMenu: View {
             if presentation.isAllSelected == false {
                 Divider()
 
-                Button("Clear filter", action: clearFilter)
+                Button("Clear filters", action: clearFilter)
             }
         } label: {
             HStack(spacing: 6 * CGFloat(textScale)) {
@@ -312,24 +408,27 @@ private struct ProfileTagFilterMenu: View {
         .accessibilityValue(presentation.accessibilitySummaryText)
     }
 
-    private func activate(_ segment: ProfileTagFilterSegment) {
+    private func activate(_ segment: ProfileFilterSegment) {
         guard segment.isEnabled else {
             return
         }
 
-        if let tag = segment.tag {
-            toggleTag(tag)
-        } else {
+        switch segment.kind {
+        case .all:
             clearFilter()
+        case .fullFiveHourLimit:
+            toggleFullLimit()
+        case let .tag(tag):
+            toggleTag(tag)
         }
     }
 
-    private func symbolName(for segment: ProfileTagFilterSegment) -> String {
+    private func symbolName(for segment: ProfileFilterSegment) -> String {
         if segment.isSelected {
             return "checkmark"
         }
 
-        return segment.tag?.systemImage ?? "line.3.horizontal.decrease.circle"
+        return segment.kind.systemImage
     }
 }
 
@@ -503,12 +602,12 @@ struct ProfileTagToggleChip: View {
     }
 }
 
-struct ProfileTagEmptyState: View {
+struct ProfileFilterEmptyState: View {
     let clearFilter: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("No profiles match these tags.")
+            Text("No profiles match these filters.")
                 .font(ProfileManagerTypography.small)
                 .foregroundStyle(CodexTheme.mutedText)
                 .fixedSize(horizontal: false, vertical: true)
