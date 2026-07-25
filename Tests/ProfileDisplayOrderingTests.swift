@@ -4,6 +4,85 @@ import Testing
 
 struct ProfileDisplayOrderingTests {
     @Test
+    func nextResetOrderingUsesEarliestKnownWindowAndPutsUnknownLast() {
+        let referenceDate = date("2026-06-01T00:00:00Z")
+        let secondaryResetsFirst = makeSnapshot(
+            label: "secondary-first@example.com",
+            expiresAt: nil,
+            sortOrder: 2,
+            createdAt: referenceDate,
+            primaryResetAt: referenceDate.addingTimeInterval(14_400),
+            secondaryResetAt: referenceDate.addingTimeInterval(3_600)
+        )
+        let primaryResetsSecond = makeSnapshot(
+            label: "primary-second@example.com",
+            expiresAt: nil,
+            sortOrder: 1,
+            createdAt: referenceDate,
+            primaryResetAt: referenceDate.addingTimeInterval(7_200)
+        )
+        let unknownReset = makeSnapshot(
+            label: "unknown@example.com",
+            expiresAt: nil,
+            sortOrder: 0,
+            createdAt: referenceDate
+        )
+
+        let ordered = ProfileDisplayOrder.nextReset.apply(
+            to: [unknownReset, primaryResetsSecond, secondaryResetsFirst]
+        )
+
+        #expect(secondaryResetsFirst.nextResetAt == referenceDate.addingTimeInterval(3_600))
+        #expect(ordered.map(\.label) == [
+            "secondary-first@example.com",
+            "primary-second@example.com",
+            "unknown@example.com",
+        ])
+    }
+
+    @Test
+    func nextResetOrderingUsesSavedOrderForMatchingAndUnknownDates() {
+        let resetAt = date("2026-06-01T04:00:00Z")
+        let firstKnown = makeSnapshot(
+            label: "first-known@example.com",
+            expiresAt: nil,
+            sortOrder: 0,
+            createdAt: date("2026-06-01T00:00:00Z"),
+            primaryResetAt: resetAt
+        )
+        let secondKnown = makeSnapshot(
+            label: "second-known@example.com",
+            expiresAt: nil,
+            sortOrder: 1,
+            createdAt: date("2026-06-01T00:00:00Z"),
+            primaryResetAt: resetAt
+        )
+        let firstUnknown = makeSnapshot(
+            label: "first-unknown@example.com",
+            expiresAt: nil,
+            sortOrder: 2,
+            createdAt: date("2026-06-01T00:00:00Z")
+        )
+        let secondUnknown = makeSnapshot(
+            label: "second-unknown@example.com",
+            expiresAt: nil,
+            sortOrder: 3,
+            createdAt: date("2026-06-01T00:00:00Z")
+        )
+
+        let ordered = ProfileDisplayOrder.nextReset.apply(
+            to: [secondUnknown, secondKnown, firstUnknown, firstKnown]
+        )
+
+        #expect(ordered.map(\.label) == [
+            "first-known@example.com",
+            "second-known@example.com",
+            "first-unknown@example.com",
+            "second-unknown@example.com",
+        ])
+    }
+
+    @Test
     func expiryFirstOrderingPutsSoonestKnownExpiryFirstAndUnknownLast() {
         let oldestKnown = makeSnapshot(
             label: "oldest@example.com",
@@ -84,9 +163,26 @@ private func makeSnapshot(
     label: String,
     expiresAt: Date?,
     sortOrder: Int,
-    createdAt: Date
+    createdAt: Date,
+    primaryResetAt: Date? = nil,
+    secondaryResetAt: Date? = nil
 ) -> PlusProfileSnapshot {
-    PlusProfileSnapshot(
+    let usage = primaryResetAt.map { primaryResetAt in
+        PlusProfileUsage(
+            accountID: "account-\(sortOrder)",
+            planType: "chatgpt_plus",
+            primaryWindow: WorkspaceLimitWindow(
+                usedPercent: 50,
+                resetAt: primaryResetAt
+            ),
+            secondaryWindow: secondaryResetAt.map {
+                WorkspaceLimitWindow(usedPercent: 50, resetAt: $0)
+            },
+            fetchedAt: createdAt
+        )
+    }
+
+    return PlusProfileSnapshot(
         profile: PlusProfile(
             id: UUID(),
             label: label,
@@ -101,7 +197,7 @@ private func makeSnapshot(
             lastKnownState: .active
         ),
         state: .ready,
-        usage: nil,
+        usage: usage,
         statusMessage: nil,
         isRefreshing: false
     )

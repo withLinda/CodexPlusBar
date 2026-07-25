@@ -258,6 +258,28 @@ struct CodexThemeTests {
     }
 
     @Test
+    func profileSortControlPassesWCAGAndDeltaLStarForEveryPreset() {
+        for preset in CodexThemePreset.allCases {
+            let controlFill = CodexTheme.surfaceToken(for: .subtle, preset: preset)
+            let label = CodexTheme.palette(for: preset).primaryText
+            let sortIcon = CodexTheme.utilityActionTextToken(preset: preset)
+
+            #expect(
+                contrastRatio(label, controlFill) >= 4.5,
+                "\(preset.id) sort label should pass WCAG normal text contrast"
+            )
+            #expect(
+                deltaLStar(label, controlFill) >= 40,
+                "\(preset.id) sort label should keep enough perceptual lightness separation"
+            )
+            #expect(
+                contrastRatio(sortIcon, controlFill) >= 3,
+                "\(preset.id) sort icon should pass WCAG non-text contrast"
+            )
+        }
+    }
+
+    @Test
     func dataLabelsAndValuesStaySemanticallySeparatedForEveryPreset() {
         for preset in CodexThemePreset.allCases {
             let palette = CodexTheme.palette(for: preset)

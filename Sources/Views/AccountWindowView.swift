@@ -342,6 +342,7 @@ enum ProfileManagerPage: Equatable, Sendable {
 struct ProfileManagerWindowView: View {
     @Bindable var controller: PlusProfileController
     let currentTime: AppMinuteClock
+    @AppStorage(ProfileDisplayOrderPreference.orderKey) private var profileDisplayOrder = ProfileDisplayOrderPreference.defaultOrder
     @State private var detailsDraft = PlusProfileDetailsDraft()
     @State private var sidebarFilter = ProfileFilter()
     @State private var profileSearchQuery = ""
@@ -358,10 +359,16 @@ struct ProfileManagerWindowView: View {
 
     init(
         controller: PlusProfileController,
-        currentTime: AppMinuteClock
+        currentTime: AppMinuteClock,
+        userDefaults: UserDefaults = .standard
     ) {
         self.controller = controller
         self.currentTime = currentTime
+        _profileDisplayOrder = AppStorage(
+            wrappedValue: ProfileDisplayOrderPreference.defaultOrder,
+            ProfileDisplayOrderPreference.orderKey,
+            store: userDefaults
+        )
     }
 
     var body: some View {
@@ -552,8 +559,9 @@ struct ProfileManagerWindowView: View {
                         )
                     }
 
-                    ProfileFilterBar(
-                        presentation: listPresentation.filterBar,
+                    ProfileListControlsBar(
+                        filterPresentation: listPresentation.filterBar,
+                        displayOrder: $profileDisplayOrder,
                         clearFilter: clearSidebarFilter,
                         toggleFullLimit: toggleSidebarFullLimitFilter,
                         toggleTag: toggleSidebarTagFilter
@@ -1126,7 +1134,8 @@ struct ProfileManagerWindowView: View {
         ProfileListPresentation(
             profiles: controller.profiles,
             filter: sidebarFilter,
-            query: profileSearchQuery
+            query: profileSearchQuery,
+            displayOrder: profileDisplayOrder
         )
     }
 

@@ -400,6 +400,13 @@ struct ProfileManagerWindowViewTests {
             dataService: StubProfileViewDataService(),
             autoStart: false
         )
+        let defaultsSuiteName = "ProfileManagerWindowViewTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: defaultsSuiteName))
+        defaults.removePersistentDomain(forName: defaultsSuiteName)
+        defer {
+            defaults.removePersistentDomain(forName: defaultsSuiteName)
+        }
+        ProfileDisplayOrderPreference.setOrder(.accountExpiry, defaults: defaults)
         controller.profiles = [
             PlusProfileSnapshot(
                 profile: first,
@@ -434,7 +441,8 @@ struct ProfileManagerWindowViewTests {
 
         let view = ProfileManagerWindowView(
             controller: controller,
-            currentTime: AppMinuteClock(now: Date(timeIntervalSince1970: 1_776_000_000))
+            currentTime: AppMinuteClock(now: Date(timeIntervalSince1970: 1_776_000_000)),
+            userDefaults: defaults
         )
 
         #expect(controller.profiles.map(\.label) == [

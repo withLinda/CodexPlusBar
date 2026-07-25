@@ -6,6 +6,7 @@ struct MenuBarRootView: View {
     @Environment(\.openSettings) private var openSettings
     @AppStorage(MenuBarProfilePreference.preferredProfileIDKey) private var preferredProfileIDStorage = ""
     @AppStorage(MenuBarPanelTextScalePreference.textScaleKey) private var panelTextScaleStorage = MenuBarPanelTextScalePreference.defaultScale
+    @AppStorage(ProfileDisplayOrderPreference.orderKey) private var profileDisplayOrder = ProfileDisplayOrderPreference.defaultOrder
     @State private var profileFilter = ProfileFilter()
     @State private var profileSearchQuery = ""
     @State private var isProfileSearchPresented = false
@@ -37,6 +38,11 @@ struct MenuBarRootView: View {
             MenuBarPanelTextScalePreference.textScaleKey,
             store: userDefaults
         )
+        _profileDisplayOrder = AppStorage(
+            wrappedValue: ProfileDisplayOrderPreference.defaultOrder,
+            ProfileDisplayOrderPreference.orderKey,
+            store: userDefaults
+        )
     }
 
     var body: some View {
@@ -56,8 +62,9 @@ struct MenuBarRootView: View {
                         )
                     }
 
-                    ProfileFilterBar(
-                        presentation: listPresentation.filterBar,
+                    ProfileListControlsBar(
+                        filterPresentation: listPresentation.filterBar,
+                        displayOrder: $profileDisplayOrder,
                         textScale: panelTextScale,
                         clearFilter: clearProfileFilter,
                         toggleFullLimit: toggleFullLimitFilter,
@@ -278,7 +285,8 @@ struct MenuBarRootView: View {
         ProfileListPresentation(
             profiles: controller.profiles,
             filter: filter,
-            query: query
+            query: query,
+            displayOrder: profileDisplayOrder
         ).displayedProfiles
     }
 
@@ -286,7 +294,8 @@ struct MenuBarRootView: View {
         ProfileListPresentation(
             profiles: controller.profiles,
             filter: profileFilter,
-            query: profileSearchQuery
+            query: profileSearchQuery,
+            displayOrder: profileDisplayOrder
         )
     }
 

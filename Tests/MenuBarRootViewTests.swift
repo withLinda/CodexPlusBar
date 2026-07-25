@@ -168,7 +168,7 @@ struct MenuBarRootViewTests {
     }
 
     @Test
-    func menuBarFilteredProfilesUseExpiryFirstDisplayOrder() {
+    func menuBarFilteredProfilesUseSelectedAccountExpiryDisplayOrder() {
         let controller = PlusProfileController(
             dataService: StubMenuBarRootViewDataService(),
             autoStart: false
@@ -177,6 +177,7 @@ struct MenuBarRootViewTests {
         defer {
             defaults.removePersistentDomain(forName: suiteName)
         }
+        ProfileDisplayOrderPreference.setOrder(.accountExpiry, defaults: defaults)
 
         controller.profiles = [
             menuBarTestSnapshot(
@@ -228,6 +229,59 @@ struct MenuBarRootViewTests {
             ).map(\.label) == ["soonest@example.com"]
         )
     }
+
+    @Test
+    func menuBarProfilesDefaultToSoonestNextReset() {
+        let controller = PlusProfileController(
+            dataService: StubMenuBarRootViewDataService(),
+            autoStart: false
+        )
+        let (defaults, suiteName) = makeUserDefaults()
+        defer {
+            defaults.removePersistentDomain(forName: suiteName)
+        }
+
+        controller.profiles = [
+            menuBarTestSnapshot(
+                label: "unknown@example.com",
+                state: .idle,
+                fiveHourRemainingPercent: nil,
+                sevenDayRemainingPercent: nil,
+                sortOrder: 0
+            ),
+            menuBarTestSnapshot(
+                label: "later@example.com",
+                state: .ready,
+                fiveHourRemainingPercent: 50,
+                sevenDayRemainingPercent: 50,
+                sortOrder: 1,
+                primaryResetAt: Date(timeIntervalSince1970: 1_776_021_600)
+            ),
+            menuBarTestSnapshot(
+                label: "soonest@example.com",
+                state: .ready,
+                fiveHourRemainingPercent: 50,
+                sevenDayRemainingPercent: 50,
+                sortOrder: 2,
+                primaryResetAt: Date(timeIntervalSince1970: 1_776_028_800),
+                secondaryResetAt: Date(timeIntervalSince1970: 1_776_007_200)
+            ),
+        ]
+
+        let view = MenuBarRootView(
+            controller: controller,
+            currentTime: AppMinuteClock(now: Date(timeIntervalSince1970: 1_776_000_000)),
+            userDefaults: defaults,
+            openManagerWindow: { _ in },
+            openEmailToolsWindow: {}
+        )
+
+        #expect(view.displayProfiles(for: ProfileFilter()).map(\.label) == [
+            "soonest@example.com",
+            "later@example.com",
+            "unknown@example.com",
+        ])
+    }
 }
 
 @MainActor
@@ -270,7 +324,9 @@ private func menuBarTestSnapshot(
     sevenDayRemainingPercent: Int?,
     sortOrder: Int,
     expiresAt: Date? = nil,
-    tags: [PlusProfileTag] = []
+    tags: [PlusProfileTag] = [],
+    primaryResetAt: Date = Date(timeIntervalSince1970: 1_776_018_000),
+    secondaryResetAt: Date = Date(timeIntervalSince1970: 1_776_086_400)
 ) -> PlusProfileSnapshot {
     let usage: PlusProfileUsage? = if let fiveHourRemainingPercent {
         PlusProfileUsage(
@@ -278,12 +334,12 @@ private func menuBarTestSnapshot(
             planType: "chatgpt_plus",
             primaryWindow: WorkspaceLimitWindow(
                 usedPercent: 100 - fiveHourRemainingPercent,
-                resetAt: Date(timeIntervalSince1970: 1_776_018_000)
+                resetAt: primaryResetAt
             ),
             secondaryWindow: sevenDayRemainingPercent.map {
                 WorkspaceLimitWindow(
                     usedPercent: 100 - $0,
-                    resetAt: Date(timeIntervalSince1970: 1_776_086_400)
+                    resetAt: secondaryResetAt
                 )
             },
             fetchedAt: Date(timeIntervalSince1970: 1_776_000_000)

@@ -7,10 +7,11 @@ struct ProfileListPresentation: Equatable, Sendable {
     init(
         profiles: [PlusProfileSnapshot],
         filter: ProfileFilter,
-        query: String
+        query: String,
+        displayOrder: ProfileDisplayOrder = ProfileDisplayOrder.defaultOrder
     ) {
         let filteredProfiles = filter.apply(to: profiles)
-        let orderedProfiles = PlusProfileSnapshot.expiryFirstDisplayOrder(filteredProfiles)
+        let orderedProfiles = PlusProfileSnapshot.displayOrder(filteredProfiles, by: displayOrder)
         displayedProfiles = ProfileSearch.filter(orderedProfiles, query: query)
         filterBar = ProfileFilterBarPresentation(
             filter: filter,
@@ -19,6 +20,52 @@ struct ProfileListPresentation: Equatable, Sendable {
             fullFiveHourLimitCount: profiles.count(where: \.hasFullFiveHourLimit),
             tagCounts: ProfileTagCounts(snapshots: profiles)
         )
+    }
+}
+
+struct ProfileListControlsBar: View {
+    let filterPresentation: ProfileFilterBarPresentation
+    @Binding var displayOrder: ProfileDisplayOrder
+    let textScale: Double
+    let clearFilter: () -> Void
+    let toggleFullLimit: () -> Void
+    let toggleTag: (PlusProfileTag) -> Void
+
+    init(
+        filterPresentation: ProfileFilterBarPresentation,
+        displayOrder: Binding<ProfileDisplayOrder>,
+        textScale: Double = 1,
+        clearFilter: @escaping () -> Void,
+        toggleFullLimit: @escaping () -> Void,
+        toggleTag: @escaping (PlusProfileTag) -> Void
+    ) {
+        self.filterPresentation = filterPresentation
+        _displayOrder = displayOrder
+        self.textScale = textScale
+        self.clearFilter = clearFilter
+        self.toggleFullLimit = toggleFullLimit
+        self.toggleTag = toggleTag
+    }
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 8 * CGFloat(textScale)) {
+            ProfileFilterBar(
+                presentation: filterPresentation,
+                textScale: textScale,
+                clearFilter: clearFilter,
+                toggleFullLimit: toggleFullLimit,
+                toggleTag: toggleTag
+            )
+            .layoutPriority(1)
+
+            ProfileDisplayOrderMenu(
+                displayOrder: $displayOrder,
+                textScale: textScale
+            )
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Profile list controls")
     }
 }
 
@@ -429,6 +476,49 @@ private struct ProfileFilterMenu: View {
         }
 
         return segment.kind.systemImage
+    }
+}
+
+private struct ProfileDisplayOrderMenu: View {
+    @Binding var displayOrder: ProfileDisplayOrder
+    let textScale: Double
+
+    var body: some View {
+        Menu {
+            Picker("Sort profiles", selection: $displayOrder) {
+                ForEach(ProfileDisplayOrder.allCases) { order in
+                    Label(order.title, systemImage: order.systemImage)
+                        .tag(order)
+                }
+            }
+        } label: {
+            HStack(spacing: 6 * CGFloat(textScale)) {
+                Image(systemName: "arrow.up.arrow.down")
+                    .font(.system(size: 11 * CGFloat(textScale), weight: .semibold))
+                    .foregroundStyle(CodexTheme.utilityActionText)
+
+                Text(displayOrder.compactTitle)
+                    .lineLimit(1)
+            }
+            .font(ProfileManagerTypography.caption(scale: textScale))
+            .foregroundStyle(CodexTheme.primaryText)
+            .padding(.horizontal, 9 * CGFloat(textScale))
+            .padding(.vertical, 6 * CGFloat(textScale))
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(CodexTheme.surfaceFill(for: .subtle))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .stroke(CodexTheme.surfaceBorder(for: .subtle), lineWidth: 1)
+                    )
+            )
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .fixedSize(horizontal: true, vertical: false)
+        .help(displayOrder.accessibilityValue)
+        .accessibilityLabel("Sort profiles")
+        .accessibilityValue(displayOrder.accessibilityValue)
     }
 }
 

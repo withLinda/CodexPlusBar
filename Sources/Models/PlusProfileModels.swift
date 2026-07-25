@@ -681,6 +681,16 @@ struct PlusProfileSnapshot: Identifiable, Equatable, Sendable {
         usage?.fiveHourRemainingPercent == 100
     }
 
+    var nextResetAt: Date? {
+        guard let usage else {
+            return nil
+        }
+
+        return [usage.primaryWindow.resetAt, usage.secondaryWindow?.resetAt]
+            .compactMap { $0 }
+            .min()
+    }
+
     func usageSummary(referenceDate: Date = .now) -> ProfileUsageSummary? {
         usage?.usageSummary(referenceDate: referenceDate)
     }
@@ -702,14 +712,105 @@ struct PlusProfileSnapshot: Identifiable, Equatable, Sendable {
     }
 
     static func expiryFirstDisplayOrder(_ snapshots: [PlusProfileSnapshot]) -> [PlusProfileSnapshot] {
-        snapshots.sorted(by: expiryFirstSort)
+        ProfileDisplayOrder.accountExpiry.apply(to: snapshots)
     }
 
-    private static func expiryFirstSort(_ lhs: PlusProfileSnapshot, _ rhs: PlusProfileSnapshot) -> Bool {
-        switch (lhs.expiresAt, rhs.expiresAt) {
-        case let (lhsExpiry?, rhsExpiry?):
-            if lhsExpiry != rhsExpiry {
-                return lhsExpiry < rhsExpiry
+    static func displayOrder(
+        _ snapshots: [PlusProfileSnapshot],
+        by order: ProfileDisplayOrder
+    ) -> [PlusProfileSnapshot] {
+        order.apply(to: snapshots)
+    }
+}
+
+enum ProfileDisplayOrder: String, CaseIterable, Identifiable, Sendable {
+    case nextReset
+    case accountExpiry
+    case saved
+
+    static let defaultOrder = ProfileDisplayOrder.nextReset
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .nextReset:
+            return "Next reset"
+        case .accountExpiry:
+            return "Account expiry"
+        case .saved:
+            return "Saved order"
+        }
+    }
+
+    var compactTitle: String {
+        switch self {
+        case .nextReset:
+            return "Reset"
+        case .accountExpiry:
+            return "Expiry"
+        case .saved:
+            return "Saved"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .nextReset:
+            return "clock"
+        case .accountExpiry:
+            return "calendar"
+        case .saved:
+            return "line.3.horizontal"
+        }
+    }
+
+    var accessibilityValue: String {
+        switch self {
+        case .nextReset:
+            return "Next 5-hour or 7-day reset, soonest first"
+        case .accountExpiry:
+            return "Account expiry, soonest first"
+        case .saved:
+            return "Saved profile order"
+        }
+    }
+
+    func apply(to snapshots: [PlusProfileSnapshot]) -> [PlusProfileSnapshot] {
+        switch self {
+        case .nextReset:
+            return snapshots.sorted { lhs, rhs in
+                compareOptionalDates(
+                    lhs.nextResetAt,
+                    rhs.nextResetAt,
+                    lhs: lhs,
+                    rhs: rhs
+                )
+            }
+        case .accountExpiry:
+            return snapshots.sorted { lhs, rhs in
+                compareOptionalDates(
+                    lhs.expiresAt,
+                    rhs.expiresAt,
+                    lhs: lhs,
+                    rhs: rhs
+                )
+            }
+        case .saved:
+            return snapshots.sorted(by: Self.savedOrderSort)
+        }
+    }
+
+    private func compareOptionalDates(
+        _ lhsDate: Date?,
+        _ rhsDate: Date?,
+        lhs: PlusProfileSnapshot,
+        rhs: PlusProfileSnapshot
+    ) -> Bool {
+        switch (lhsDate, rhsDate) {
+        case let (lhsDate?, rhsDate?):
+            if lhsDate != rhsDate {
+                return lhsDate < rhsDate
             }
         case (.some, .none):
             return true
@@ -719,6 +820,10 @@ struct PlusProfileSnapshot: Identifiable, Equatable, Sendable {
             break
         }
 
+        return Self.savedOrderSort(lhs, rhs)
+    }
+
+    private static func savedOrderSort(_ lhs: PlusProfileSnapshot, _ rhs: PlusProfileSnapshot) -> Bool {
         if lhs.profile.sortOrder != rhs.profile.sortOrder {
             return lhs.profile.sortOrder < rhs.profile.sortOrder
         }
