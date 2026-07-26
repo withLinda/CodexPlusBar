@@ -1010,10 +1010,10 @@ struct ProfileManagerWindowView: View {
 
                     CodexIconButton(
                         symbolName: "globe",
-                        helpText: "Open \(snapshot.profile.provider.displayName) sign-in",
+                        helpText: "Open \(snapshot.profile.provider.displayName) in Chrome",
                         tone: .secondary
                     ) {
-                        openChromeSignIn(snapshot.id)
+                        openChrome(snapshot.id)
                     }
 
                     CodexIconButton(
@@ -1107,7 +1107,7 @@ struct ProfileManagerWindowView: View {
 
                 HStack(spacing: 8) {
                     Button {
-                        openChromeSignIn(snapshot.id)
+                        openChrome(snapshot.id)
                     } label: {
                         Label(presentation.primaryTitle, systemImage: "globe")
                     }
@@ -1482,9 +1482,9 @@ struct ProfileManagerWindowView: View {
         }
     }
 
-    private func openChromeSignIn(_ profileID: UUID) {
+    private func openChrome(_ profileID: UUID) {
         Task {
-            await controller.openChromeSignIn(for: profileID)
+            await controller.openChrome(for: profileID)
         }
     }
 

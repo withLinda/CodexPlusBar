@@ -798,6 +798,24 @@ struct PlusProfileDataServiceTests {
     }
 
     @Test
+    func openChromeAccountPageDelegatesToChromeSessionManager() async throws {
+        let profile = sampleProfile(label: "open@example.com", sortOrder: 0)
+        let runtime = PlusProfileRuntime(
+            dataStore: .nonPersistent()
+        )
+        let provider = StubRuntimeProvider(runtimeByProfileID: [profile.id: runtime])
+        let chromeSessionManager = StubChromeSessionManager()
+        let service = PlusProfileDataService(
+            runtimeProvider: provider,
+            chromeSessionManager: chromeSessionManager
+        )
+
+        try await service.openChromeAccountPage(for: profile)
+
+        #expect(chromeSessionManager.openedAccountPageProfileIDs == [profile.id])
+    }
+
+    @Test
     func removeProfileDataRemovesNativeDataAndDedicatedChromeProfile() async throws {
         let profile = sampleProfile(label: "remove@example.com", sortOrder: 0)
         let runtime = PlusProfileRuntime(
@@ -846,6 +864,7 @@ private final class StubRuntimeProvider: PlusProfileRuntimeProviding {
 @MainActor
 private final class StubChromeSessionManager: ChromeSessionManaging {
     private let cookies: [ChromeDevToolsCookie]
+    private(set) var openedAccountPageProfileIDs: [UUID] = []
     private(set) var openedProfileIDs: [UUID] = []
     private(set) var openedPasskeySetupProfileIDs: [UUID] = []
     private(set) var syncedProfileIDs: [UUID] = []
@@ -856,6 +875,10 @@ private final class StubChromeSessionManager: ChromeSessionManaging {
 
     init(cookies: [ChromeDevToolsCookie] = []) {
         self.cookies = cookies
+    }
+
+    func openAccountPage(for profile: PlusProfile) async throws {
+        openedAccountPageProfileIDs.append(profile.id)
     }
 
     func openSignIn(for profile: PlusProfile) async throws {

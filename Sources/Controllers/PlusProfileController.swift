@@ -477,7 +477,7 @@ final class PlusProfileController {
         chromeSignInProfileIDs.contains(profileID)
     }
 
-    func openChromeSignIn(for profileID: UUID) async {
+    func openChrome(for profileID: UUID) async {
         guard var index = indexOfProfile(profileID) else { return }
         var snapshot = profiles[index]
 
@@ -487,10 +487,19 @@ final class PlusProfileController {
             guard let refreshedIndex = indexOfProfile(profileID) else { return }
             index = refreshedIndex
             snapshot = profiles[index]
+        }
 
-            if snapshot.state == .ready, snapshot.usage != nil {
-                return
+        if snapshot.state == .ready, snapshot.usage != nil {
+            do {
+                try await dataService.openChromeAccountPage(for: snapshot.profile)
+            } catch {
+                applyFailure(
+                    ChatGPTAPIError.map(error),
+                    to: profileID,
+                    preserveUsage: true
+                )
             }
+            return
         }
 
         do {

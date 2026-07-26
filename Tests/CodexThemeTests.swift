@@ -595,6 +595,24 @@ struct CodexThemeTests {
     }
 
     @Test
+    func primaryActionInkPassesWCAGAndDeltaLStarForEveryPreset() {
+        for preset in CodexThemePreset.allCases {
+            let palette = CodexTheme.palette(for: preset)
+
+            for fill in [palette.accOrange, palette.accRed] {
+                #expect(
+                    contrastRatio(palette.onAccentText, fill) >= 4.5,
+                    "\(preset.id) primary action label should pass WCAG normal text contrast"
+                )
+                #expect(
+                    deltaLStar(palette.onAccentText, fill) >= 40,
+                    "\(preset.id) primary action label should keep delta L* >= 40"
+                )
+            }
+        }
+    }
+
+    @Test
     func progressPaletteGetsWarmerAsRemainingDrops() {
         #expect(CodexTheme.progressTextToken(forRemainingPercent: 100) == CodexTheme.readableAccentToken(CodexTheme.Palette.accPurple))
         #expect(CodexTheme.progressTextToken(forRemainingPercent: 90) == CodexTheme.readableAccentToken(CodexTheme.Palette.accGreen))

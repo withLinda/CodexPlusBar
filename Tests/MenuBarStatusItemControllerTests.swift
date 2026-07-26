@@ -192,6 +192,9 @@ private final class StubPinnedStatusDataService: PlusProfileDataServing {
     func openChromeSignIn(for profile: PlusProfile) async throws {
     }
 
+    func openChromeAccountPage(for profile: PlusProfile) async throws {
+    }
+
     func openChromePasskeySetup(for profile: PlusProfile) async throws {
     }
 

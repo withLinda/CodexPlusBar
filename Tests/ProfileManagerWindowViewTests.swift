@@ -528,6 +528,9 @@ private final class StubProfileViewDataService: PlusProfileDataServing {
     func openChromeSignIn(for profile: PlusProfile) async throws {
     }
 
+    func openChromeAccountPage(for profile: PlusProfile) async throws {
+    }
+
     func openChromePasskeySetup(for profile: PlusProfile) async throws {
     }
 

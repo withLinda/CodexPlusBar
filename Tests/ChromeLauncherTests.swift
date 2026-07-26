@@ -148,6 +148,40 @@ struct ChromeLauncherTests {
     }
 
     @Test
+    func openAccountPageUsesSavedCodexProfileWithoutSignInTabs() async throws {
+        let profile = sampleProfile()
+        let rootDirectory = makeTemporaryDirectory()
+        let recorder = LaunchRecorder()
+        let launcher = ChromeLauncher(
+            appLocator: StubChromeLocator(executableURL: URL(fileURLWithPath: "/tmp/fake-chrome")),
+            profileStore: ChromeProfileStore(rootDirectory: rootDirectory),
+            launchProcess: { _, arguments in
+                recorder.arguments = arguments
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: "/usr/bin/true")
+                try process.run()
+                return process
+            },
+            sleep: { _ in }
+        )
+        let manager = DefaultChromeSessionManager(launcher: launcher)
+
+        try await manager.openAccountPage(for: profile)
+
+        let launchedURLs = recorder.arguments.compactMap(URL.init(string:))
+        #expect(launchedURLs.contains(ChatGPTWebURLs.usagePage))
+        #expect(launchedURLs.contains(ChatGPTWebURLs.loginPage) == false)
+        #expect(launchedURLs.contains { $0.host == "accounts.google.com" } == false)
+        #expect(recorder.arguments.contains("--new-window"))
+        #expect(recorder.arguments.contains("--remote-debugging-port=0") == false)
+        #expect(
+            recorder.arguments.contains(
+                "--user-data-dir=\(rootDirectory.appendingPathComponent(profile.webDataStoreID.uuidString).path)"
+            )
+        )
+    }
+
+    @Test
     func claudeSignInOpensClaudeInsteadOfChatGPT() async throws {
         let profile = sampleProfile(provider: .claude)
         let recorder = LaunchRecorder()

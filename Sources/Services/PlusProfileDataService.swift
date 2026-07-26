@@ -12,6 +12,7 @@ extension ProfileRuntimeRegistry: PlusProfileRuntimeProviding {}
 @MainActor
 protocol PlusProfileDataServing: AnyObject {
     func refreshProfile(_ profile: PlusProfile) async throws -> PlusProfileRefreshResult
+    func openChromeAccountPage(for profile: PlusProfile) async throws
     func openChromeSignIn(for profile: PlusProfile) async throws
     func openChromePasskeySetup(for profile: PlusProfile) async throws
     func syncChromeSession(for profile: PlusProfile) async throws
@@ -131,6 +132,10 @@ final class PlusProfileDataService: PlusProfileDataServing {
 
     func openChromeSignIn(for profile: PlusProfile) async throws {
         try await chromeSessionManager.openSignIn(for: profile)
+    }
+
+    func openChromeAccountPage(for profile: PlusProfile) async throws {
+        try await chromeSessionManager.openAccountPage(for: profile)
     }
 
     func openChromePasskeySetup(for profile: PlusProfile) async throws {

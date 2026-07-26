@@ -32,6 +32,7 @@ struct ChromeSignInFinishDetector: Sendable {
 
 @MainActor
 protocol ChromeSessionManaging: AnyObject {
+    func openAccountPage(for profile: PlusProfile) async throws
     func openSignIn(for profile: PlusProfile) async throws
     func openPasskeySetup(for profile: PlusProfile) async throws
     func syncCookies(
@@ -79,6 +80,15 @@ final class DefaultChromeSessionManager: ChromeSessionManaging {
         self.profileStore = profileStore
         self.fileManager = fileManager
         self.makeClient = makeClient
+    }
+
+    func openAccountPage(for profile: PlusProfile) async throws {
+        _ = try await launcher.launch(
+            profile: profile,
+            mode: .visible,
+            initialURL: accountPage(for: profile.provider),
+            requiresDevTools: false
+        )
     }
 
     func openSignIn(for profile: PlusProfile) async throws {
@@ -313,6 +323,15 @@ final class DefaultChromeSessionManager: ChromeSessionManaging {
             return ChatGPTWebURLs.loginPage
         case .claude:
             return ClaudeWebURLs.loginPage
+        }
+    }
+
+    private func accountPage(for provider: ProfileProvider) -> URL {
+        switch provider {
+        case .codex:
+            return ChatGPTWebURLs.usagePage
+        case .claude:
+            return ClaudeWebURLs.usagePage
         }
     }
 

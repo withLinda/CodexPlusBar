@@ -177,7 +177,7 @@ struct PlusProfileControllerTests {
             autoStart: false
         )
 
-        await controller.openChromeSignIn(for: profile.id)
+        await controller.openChrome(for: profile.id)
 
         let row = try #require(controller.profiles.first)
         #expect(service.openedChromeProfileIDs == [profile.id])
@@ -187,7 +187,51 @@ struct PlusProfileControllerTests {
     }
 
     @Test
-    func claudeOpenUsesSavedSessionWithoutOpeningChrome() async throws {
+    func readyCodexOpenUsesAccountPageWithoutStartingSignInFlow() async throws {
+        let tempDirectory = makeTemporaryDirectory()
+        let store = ProfileCatalogStore(
+            fileURL: tempDirectory.appendingPathComponent("profiles.json", isDirectory: false)
+        )
+        let profile = sampleProfile(label: "ready@example.com", sortOrder: 0)
+        try store.saveProfiles([profile])
+        let usage = makeUsage(
+            accountID: "acct_ready",
+            primaryUsedPercent: 24,
+            secondaryUsedPercent: 38
+        )
+        let service = StubPlusProfileDataService(
+            refreshResults: [
+                profile.id: .success(
+                    PlusProfileRefreshResult(
+                        usage: usage,
+                        detectedNote: "Chatgpt Plus · ready",
+                        expiryRefresh: .unchanged
+                    )
+                ),
+            ]
+        )
+        let controller = PlusProfileController(
+            catalogStore: store,
+            dataService: service,
+            autoStart: false
+        )
+
+        await controller.refreshAll()
+        await controller.openChrome(for: profile.id)
+
+        let row = try #require(controller.profiles.first)
+        #expect(service.openedChromeAccountPageProfileIDs == [profile.id])
+        #expect(service.openedChromeProfileIDs.isEmpty)
+        #expect(service.waitedForChromeProfileIDs.isEmpty)
+        #expect(service.syncedChromeProfileIDs.isEmpty)
+        #expect(controller.isChromeSignInOpen(for: profile.id) == false)
+        #expect(row.state == .ready)
+        #expect(row.usage?.accountID == usage.accountID)
+        #expect(row.statusMessage == nil)
+    }
+
+    @Test
+    func claudeOpenUsesSavedSessionAndOpensItsAccountPage() async throws {
         let tempDirectory = makeTemporaryDirectory()
         let store = ProfileCatalogStore(
             fileURL: tempDirectory.appendingPathComponent("profiles.json", isDirectory: false)
@@ -218,11 +262,12 @@ struct PlusProfileControllerTests {
             autoStart: false
         )
 
-        await controller.openChromeSignIn(for: profile.id)
+        await controller.openChrome(for: profile.id)
 
         let row = try #require(controller.profiles.first)
         #expect(row.state == .ready)
         #expect(row.usage?.accountID == usage.accountID)
+        #expect(service.openedChromeAccountPageProfileIDs == [profile.id])
         #expect(service.openedChromeProfileIDs.isEmpty)
         #expect(service.waitedForChromeProfileIDs.isEmpty)
         #expect(controller.isChromeSignInOpen(for: profile.id) == false)
@@ -271,7 +316,7 @@ struct PlusProfileControllerTests {
             autoStart: false
         )
 
-        await controller.openChromeSignIn(for: profile.id)
+        await controller.openChrome(for: profile.id)
 
         let row = try #require(controller.profiles.first)
         #expect(service.openedChromeProfileIDs == [profile.id])
@@ -297,7 +342,7 @@ struct PlusProfileControllerTests {
             autoStart: false
         )
 
-        await controller.openChromeSignIn(for: profile.id)
+        await controller.openChrome(for: profile.id)
         let didChange = await controller.setProvider(.claude, for: profile.id)
 
         let row = try #require(controller.profiles.first)
@@ -380,7 +425,7 @@ struct PlusProfileControllerTests {
             autoStart: false
         )
 
-        await controller.openChromeSignIn(for: profile.id)
+        await controller.openChrome(for: profile.id)
         await controller.syncChromeSession(for: profile.id)
 
         let row = try #require(controller.profiles.first)
@@ -411,7 +456,7 @@ struct PlusProfileControllerTests {
             autoStart: false
         )
 
-        await controller.openChromeSignIn(for: profile.id)
+        await controller.openChrome(for: profile.id)
         await controller.syncChromeSession(for: profile.id)
 
         let row = try #require(controller.profiles.first)
@@ -871,6 +916,7 @@ private final class StubPlusProfileDataService: PlusProfileDataServing {
     private let refreshResults: [UUID: Result<PlusProfileRefreshResult, ChatGPTAPIError>]
     private let syncResults: [UUID: Result<ChatGPTAuthContext, ChatGPTAPIError>]
     private let chromeSignInFinishResults: [UUID: Bool]
+    private(set) var openedChromeAccountPageProfileIDs: [UUID] = []
     private(set) var openedChromeProfileIDs: [UUID] = []
     private(set) var openedPasskeySetupProfileIDs: [UUID] = []
     private(set) var syncedChromeProfileIDs: [UUID] = []
@@ -896,6 +942,10 @@ private final class StubPlusProfileDataService: PlusProfileDataServing {
 
     func openChromeSignIn(for profile: PlusProfile) async throws {
         openedChromeProfileIDs.append(profile.id)
+    }
+
+    func openChromeAccountPage(for profile: PlusProfile) async throws {
+        openedChromeAccountPageProfileIDs.append(profile.id)
     }
 
     func openChromePasskeySetup(for profile: PlusProfile) async throws {
@@ -978,6 +1028,9 @@ private final class ConcurrencyRecordingProfileDataService: PlusProfileDataServi
     }
 
     func openChromeSignIn(for profile: PlusProfile) async throws {
+    }
+
+    func openChromeAccountPage(for profile: PlusProfile) async throws {
     }
 
     func openChromePasskeySetup(for profile: PlusProfile) async throws {

@@ -293,6 +293,9 @@ private final class StubMenuBarRootViewDataService: PlusProfileDataServing {
     func openChromeSignIn(for profile: PlusProfile) async throws {
     }
 
+    func openChromeAccountPage(for profile: PlusProfile) async throws {
+    }
+
     func openChromePasskeySetup(for profile: PlusProfile) async throws {
     }
 
