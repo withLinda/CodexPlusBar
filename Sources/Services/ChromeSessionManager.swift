@@ -29,6 +29,7 @@ final class DefaultChromeSessionManager: ChromeSessionManaging {
     private struct ActiveSession {
         let session: ChromeLaunchedSession
         let purpose: ActiveSessionPurpose
+        let provider: ProfileProvider
     }
 
     private let launcher: ChromeLauncher
@@ -53,7 +54,8 @@ final class DefaultChromeSessionManager: ChromeSessionManaging {
 
     func openSignIn(for profile: PlusProfile) async throws {
         if let activeSession = activeSessionsByProfileID[profile.id],
-           activeSession.purpose == .signIn {
+           activeSession.purpose == .signIn,
+           activeSession.provider == profile.provider {
             NSRunningApplication(
                 processIdentifier: activeSession.session.processIdentifier
             )?.activate(options: [.activateAllWindows])
@@ -69,16 +71,27 @@ final class DefaultChromeSessionManager: ChromeSessionManaging {
             mode: .visible,
             initialURLs: [
                 ChromeBrowserSignInURLs.googleSyncSignInPage,
-                ChatGPTWebURLs.loginPage,
+                signInURL(for: profile.provider),
             ],
             requiresDevTools: false
         )
-        activeSessionsByProfileID[profile.id] = ActiveSession(session: session, purpose: .signIn)
+        activeSessionsByProfileID[profile.id] = ActiveSession(
+            session: session,
+            purpose: .signIn,
+            provider: profile.provider
+        )
     }
 
     func openPasskeySetup(for profile: PlusProfile) async throws {
+        guard profile.provider == .codex else {
+            throw ChatGPTAPIError.unsupported(
+                "Touch ID help is only available for Codex profiles."
+            )
+        }
+
         if let activeSession = activeSessionsByProfileID[profile.id],
-           activeSession.purpose == .passkeySetup {
+           activeSession.purpose == .passkeySetup,
+           activeSession.provider == profile.provider {
             NSRunningApplication(
                 processIdentifier: activeSession.session.processIdentifier
             )?.activate(options: [.activateAllWindows])
@@ -90,14 +103,19 @@ final class DefaultChromeSessionManager: ChromeSessionManaging {
         }
 
         let session = try await launcher.launchPasskeySetup(profile: profile)
-        activeSessionsByProfileID[profile.id] = ActiveSession(session: session, purpose: .passkeySetup)
+        activeSessionsByProfileID[profile.id] = ActiveSession(
+            session: session,
+            purpose: .passkeySetup,
+            provider: profile.provider
+        )
     }
 
     func syncCookies(
         for profile: PlusProfile,
         into sessionStore: WebSessionStore
     ) async throws -> ChromeCookieImportResult {
-        guard let session = activeSessionsByProfileID[profile.id] else {
+        guard let session = activeSessionsByProfileID[profile.id],
+              session.provider == profile.provider else {
             throw ChatGPTAPIError.unsupported("Open Chrome sign-in first, then sync.")
         }
 
@@ -107,7 +125,7 @@ final class DefaultChromeSessionManager: ChromeSessionManaging {
         let inspectorSession = try await launcher.launch(
             profile: profile,
             mode: .headless,
-            initialURL: ChatGPTWebURLs.cookieScope,
+            initialURL: cookieScope(for: profile.provider),
             requiresDevTools: true
         )
         var client: ChromeDevToolsClient?
@@ -119,8 +137,9 @@ final class DefaultChromeSessionManager: ChromeSessionManaging {
             }
 
             let cookies = try await client.getCookies()
-            let importedCookieCount = try await ChromeCookieImporter.storeChatGPTCookies(
+            let importedCookieCount = try await ChromeCookieImporter.storeCookies(
                 from: cookies,
+                for: profile.provider,
                 in: sessionStore
             )
             await closeInspectorSession(client: client, processIdentifier: inspectorSession.processIdentifier)
@@ -149,7 +168,7 @@ final class DefaultChromeSessionManager: ChromeSessionManaging {
         let session = try await launcher.launch(
             profile: profile,
             mode: .headless,
-            initialURL: ChatGPTWebURLs.cookieScope,
+            initialURL: cookieScope(for: profile.provider),
             requiresDevTools: true
         )
         var client: ChromeDevToolsClient?
@@ -187,6 +206,24 @@ final class DefaultChromeSessionManager: ChromeSessionManaging {
         }
 
         return try await makeClient(endpoint)
+    }
+
+    private func signInURL(for provider: ProfileProvider) -> URL {
+        switch provider {
+        case .codex:
+            return ChatGPTWebURLs.loginPage
+        case .claude:
+            return ClaudeWebURLs.loginPage
+        }
+    }
+
+    private func cookieScope(for provider: ProfileProvider) -> URL {
+        switch provider {
+        case .codex:
+            return ChatGPTWebURLs.cookieScope
+        case .claude:
+            return ClaudeWebURLs.cookieScope
+        }
     }
 
     private func closeInspectorSession(

@@ -298,21 +298,27 @@ struct ProfileManagerDetailLayoutMetrics: Equatable {
 }
 
 struct ProfileManagerSessionPanelPresentation: Equatable, Sendable {
-    let title = "Chrome sign-in"
+    let title: String
     let summaryText: String
-    let primaryTitle = "Open Chrome"
+    let primaryTitle: String
     let passkeyHelpTitle = "Touch ID help"
     let syncTitle = "Sync now"
     let cancelTitle = "Cancel"
     let isSyncDisabled: Bool
     let showsCancel: Bool
+    let showsPasskeyHelp: Bool
 
     init(snapshot: PlusProfileSnapshot, isChromeSignInOpen: Bool) {
+        let provider = snapshot.profile.provider
+        title = "\(provider.displayName) sign-in"
+        primaryTitle = "Open \(provider.displayName)"
         isSyncDisabled = isChromeSignInOpen == false || snapshot.isRefreshing
         showsCancel = isChromeSignInOpen
+        showsPasskeyHelp = provider == .codex
 
         if isChromeSignInOpen {
-            summaryText = snapshot.statusMessage ?? "Waiting for sign-in in Chrome."
+            summaryText = snapshot.statusMessage
+                ?? "Waiting for \(provider.displayName) sign-in in Chrome."
             return
         }
 
@@ -323,13 +329,13 @@ struct ProfileManagerSessionPanelPresentation: Equatable, Sendable {
 
         switch snapshot.state {
         case .idle, .needsLogin:
-            summaryText = "Open Chrome, sign in, then sync."
+            summaryText = "Open \(provider.displayName), sign in, then sync."
         case .loading:
             summaryText = "Checking this profile."
         case .ready:
-            summaryText = "Session is synced."
+            summaryText = "\(provider.displayName) session is synced."
         case .failed:
-            summaryText = "Open Chrome to repair this profile."
+            summaryText = "Open \(provider.displayName) to repair this profile."
         }
     }
 }
@@ -564,7 +570,8 @@ struct ProfileManagerWindowView: View {
                         displayOrder: $profileDisplayOrder,
                         clearFilter: clearSidebarFilter,
                         toggleFullLimit: toggleSidebarFullLimitFilter,
-                        toggleTag: toggleSidebarTagFilter
+                        toggleTag: toggleSidebarTagFilter,
+                        toggleProvider: toggleSidebarProviderFilter
                     )
 
                     if listPresentation.displayedProfiles.isEmpty,
@@ -717,7 +724,8 @@ struct ProfileManagerWindowView: View {
         CodexCard(
             tier: .strong,
             accent: detailAccent(for: snapshot),
-            padding: metrics.compactCardPadding
+            padding: metrics.compactCardPadding,
+            fillProvider: snapshot.profile.provider
         ) {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .top, spacing: 12) {
@@ -736,6 +744,8 @@ struct ProfileManagerWindowView: View {
                     Spacer(minLength: 0)
 
                     VStack(alignment: .trailing, spacing: 8) {
+                        ProfileProviderBadge(provider: snapshot.profile.provider)
+
                         CodexStatusBadge(
                             title: snapshot.state.title,
                             tone: snapshot.state.tone
@@ -986,7 +996,7 @@ struct ProfileManagerWindowView: View {
 
                     CodexIconButton(
                         symbolName: "globe",
-                        helpText: "Open Chrome sign-in",
+                        helpText: "Open \(snapshot.profile.provider.displayName) sign-in",
                         tone: .secondary
                     ) {
                         openChromeSignIn(snapshot.id)
@@ -1052,9 +1062,25 @@ struct ProfileManagerWindowView: View {
                     .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(presentation.title)
-                        .font(ProfileManagerTypography.bodyStrong)
-                        .foregroundStyle(CodexTheme.headingText)
+                    HStack(spacing: 10) {
+                        Text(presentation.title)
+                            .font(ProfileManagerTypography.bodyStrong)
+                            .foregroundStyle(CodexTheme.headingText)
+
+                        Picker(
+                            "Usage service",
+                            selection: providerBinding(for: snapshot)
+                        ) {
+                            ForEach(ProfileProvider.allCases) { provider in
+                                Text(provider.displayName).tag(provider)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.segmented)
+                        .frame(width: 150)
+                        .disabled(snapshot.isRefreshing)
+                        .accessibilityLabel("Usage service")
+                    }
 
                     Text(presentation.summaryText)
                         .font(ProfileManagerTypography.small)
@@ -1074,13 +1100,15 @@ struct ProfileManagerWindowView: View {
                     .buttonStyle(CodexPrimaryButtonStyle(font: ProfileManagerTypography.smallStrong))
                     .disabled(snapshot.isRefreshing)
 
-                    CodexIconButton(
-                        symbolName: "touchid",
-                        helpText: presentation.passkeyHelpTitle,
-                        tone: .quiet,
-                        isDisabled: snapshot.isRefreshing
-                    ) {
-                        openChromePasskeySetup(snapshot.id)
+                    if presentation.showsPasskeyHelp {
+                        CodexIconButton(
+                            symbolName: "touchid",
+                            helpText: presentation.passkeyHelpTitle,
+                            tone: .quiet,
+                            isDisabled: snapshot.isRefreshing
+                        ) {
+                            openChromePasskeySetup(snapshot.id)
+                        }
                     }
 
                     Button(presentation.syncTitle) {
@@ -1160,7 +1188,7 @@ struct ProfileManagerWindowView: View {
         case .ready:
             return "Live usage is loaded."
         case .needsLogin:
-            return "This profile needs a fresh ChatGPT login."
+            return "This profile needs a fresh \(snapshot.profile.provider.displayName) login."
         case .failed:
             return snapshot.statusMessage ?? "The last refresh failed."
         }
@@ -1404,6 +1432,11 @@ struct ProfileManagerWindowView: View {
         keepSelectedProfileVisible()
     }
 
+    private func toggleSidebarProviderFilter(_ provider: ProfileProvider) {
+        sidebarFilter.toggle(provider)
+        keepSelectedProfileVisible()
+    }
+
     private func keepSelectedProfileVisible() {
         guard filteredSidebarProfiles.isEmpty == false else {
             return
@@ -1437,6 +1470,22 @@ struct ProfileManagerWindowView: View {
         Task {
             await controller.openChromeSignIn(for: profileID)
         }
+    }
+
+    private func providerBinding(for snapshot: PlusProfileSnapshot) -> Binding<ProfileProvider> {
+        Binding(
+            get: {
+                controller.profiles
+                    .first(where: { $0.id == snapshot.id })?
+                    .profile.provider
+                    ?? snapshot.profile.provider
+            },
+            set: { provider in
+                Task {
+                    await controller.setProvider(provider, for: snapshot.id)
+                }
+            }
+        )
     }
 
     private func openChromePasskeySetup(_ profileID: UUID) {

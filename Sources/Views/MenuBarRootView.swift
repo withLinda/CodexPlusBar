@@ -68,7 +68,8 @@ struct MenuBarRootView: View {
                         textScale: panelTextScale,
                         clearFilter: clearProfileFilter,
                         toggleFullLimit: toggleFullLimitFilter,
-                        toggleTag: toggleProfileTagFilter
+                        toggleTag: toggleProfileTagFilter,
+                        toggleProvider: toggleProfileProviderFilter
                     )
                 }
 
@@ -365,6 +366,10 @@ struct MenuBarRootView: View {
 
     private func toggleProfileTagFilter(_ tag: PlusProfileTag) {
         profileFilter.toggle(tag)
+    }
+
+    private func toggleProfileProviderFilter(_ provider: ProfileProvider) {
+        profileFilter.toggle(provider)
     }
 
     private func zoomPanelIn() {

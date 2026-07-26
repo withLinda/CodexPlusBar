@@ -148,6 +148,31 @@ struct ChromeLauncherTests {
     }
 
     @Test
+    func claudeSignInOpensClaudeInsteadOfChatGPT() async throws {
+        let profile = sampleProfile(provider: .claude)
+        let recorder = LaunchRecorder()
+        let launcher = ChromeLauncher(
+            appLocator: StubChromeLocator(executableURL: URL(fileURLWithPath: "/tmp/fake-chrome")),
+            profileStore: ChromeProfileStore(rootDirectory: makeTemporaryDirectory()),
+            launchProcess: { _, arguments in
+                recorder.arguments = arguments
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: "/usr/bin/true")
+                try process.run()
+                return process
+            },
+            sleep: { _ in }
+        )
+        let manager = DefaultChromeSessionManager(launcher: launcher)
+
+        try await manager.openSignIn(for: profile)
+
+        let launchedURLs = recorder.arguments.compactMap(URL.init(string:))
+        #expect(launchedURLs.contains(ClaudeWebURLs.loginPage))
+        #expect(launchedURLs.contains(ChatGPTWebURLs.loginPage) == false)
+    }
+
+    @Test
     func passkeySetupLaunchUsesVisibleDedicatedProfileWithoutDevTools() async throws {
         let profile = sampleProfile()
         let recorder = LaunchRecorder()
@@ -285,9 +310,10 @@ private struct StubChromeLocator: ChromeAppLocating {
     }
 }
 
-private func sampleProfile() -> PlusProfile {
+private func sampleProfile(provider: ProfileProvider = .codex) -> PlusProfile {
     PlusProfile(
         id: UUID(),
+        provider: provider,
         label: "chrome@example.com",
         emailLink: nil,
         detectedNote: nil,

@@ -250,6 +250,7 @@ struct CodexEverforestPalette: Sendable, Equatable {
     let bgRed: CodexColorToken
     let bgYellow: CodexColorToken
     let bgGreen: CodexColorToken
+    let bgBlue: CodexColorToken
     let fg: CodexColorToken
     let strongText: CodexColorToken
     let gray1: CodexColorToken
@@ -341,6 +342,7 @@ enum CodexTheme {
                 bgRed: CodexColorToken(hex: "#493B40"),
                 bgYellow: CodexColorToken(hex: "#45443C"),
                 bgGreen: CodexColorToken(hex: "#3C4841"),
+                bgBlue: CodexColorToken(hex: "#384B55"),
                 fg: CodexColorToken(hex: "#D3C6AA"),
                 strongText: CodexColorToken(hex: "#F2EFDF"),
                 gray1: CodexColorToken(hex: "#859289"),
@@ -365,6 +367,7 @@ enum CodexTheme {
                 bgRed: CodexColorToken(hex: "#514045"),
                 bgYellow: CodexColorToken(hex: "#4D4C43"),
                 bgGreen: CodexColorToken(hex: "#425047"),
+                bgBlue: CodexColorToken(hex: "#3A515D"),
                 fg: CodexColorToken(hex: "#D3C6AA"),
                 strongText: CodexColorToken(hex: "#EFEBD4"),
                 gray1: CodexColorToken(hex: "#859289"),
@@ -389,6 +392,7 @@ enum CodexTheme {
                 bgRed: CodexColorToken(hex: "#59464C"),
                 bgYellow: CodexColorToken(hex: "#55544A"),
                 bgGreen: CodexColorToken(hex: "#48584E"),
+                bgBlue: CodexColorToken(hex: "#3F5865"),
                 fg: CodexColorToken(hex: "#D3C6AA"),
                 strongText: CodexColorToken(hex: "#F3EAD3"),
                 gray1: CodexColorToken(hex: "#859289"),
@@ -413,6 +417,7 @@ enum CodexTheme {
                 bgRed: CodexColorToken(hex: "#FFE7DE"),
                 bgYellow: CodexColorToken(hex: "#FEF2D5"),
                 bgGreen: CodexColorToken(hex: "#F3F5D9"),
+                bgBlue: CodexColorToken(hex: "#ECF5ED"),
                 fg: CodexColorToken(hex: "#5C6A72"),
                 strongText: CodexColorToken(hex: "#1E2326"),
                 gray1: CodexColorToken(hex: "#939F91"),
@@ -437,6 +442,7 @@ enum CodexTheme {
                 bgRed: CodexColorToken(hex: "#FDE3DA"),
                 bgYellow: CodexColorToken(hex: "#FAEDCD"),
                 bgGreen: CodexColorToken(hex: "#F0F1D2"),
+                bgBlue: CodexColorToken(hex: "#E9F0E9"),
                 fg: CodexColorToken(hex: "#5C6A72"),
                 strongText: CodexColorToken(hex: "#232A2E"),
                 gray1: CodexColorToken(hex: "#939F91"),
@@ -461,6 +467,7 @@ enum CodexTheme {
                 bgRed: CodexColorToken(hex: "#FADBD0"),
                 bgYellow: CodexColorToken(hex: "#F1E4C5"),
                 bgGreen: CodexColorToken(hex: "#E5E6C5"),
+                bgBlue: CodexColorToken(hex: "#E1E7DD"),
                 fg: CodexColorToken(hex: "#5C6A72"),
                 strongText: CodexColorToken(hex: "#293136"),
                 gray1: CodexColorToken(hex: "#939F91"),
@@ -687,6 +694,76 @@ enum CodexTheme {
         preset: CodexThemePreset
     ) -> CodexColorToken {
         palette(for: preset).bg0
+    }
+
+    static func profileCardFill(
+        for provider: ProfileProvider,
+        isSelected: Bool = false
+    ) -> Color {
+        profileCardFillToken(
+            for: provider,
+            isSelected: isSelected,
+            preset: activePreset
+        ).color
+    }
+
+    static func profileCardFillToken(
+        for provider: ProfileProvider,
+        isSelected: Bool = false,
+        preset: CodexThemePreset
+    ) -> CodexColorToken {
+        let palette = palette(for: preset)
+        let base = isSelected
+            ? surfaceToken(for: .strong, preset: preset)
+            : cardFillToken(for: .nested, preset: preset)
+        let providerTint = switch provider {
+        case .codex:
+            palette.bgYellow
+        case .claude:
+            palette.bgBlue
+        }
+
+        return base.mixed(
+            with: providerTint,
+            fraction: palette.isDark ? 0.32 : 0.32
+        )
+    }
+
+    static func profileProviderAccent(
+        for provider: ProfileProvider,
+        isSelected: Bool = false
+    ) -> Color {
+        profileProviderAccentToken(
+            for: provider,
+            isSelected: isSelected,
+            preset: activePreset
+        ).color
+    }
+
+    static func profileProviderAccentToken(
+        for provider: ProfileProvider,
+        isSelected: Bool = false,
+        preset: CodexThemePreset
+    ) -> CodexColorToken {
+        let palette = palette(for: preset)
+        let accent = switch provider {
+        case .codex:
+            palette.accOrange
+        case .claude:
+            palette.accBlue
+        }
+
+        return readableAccentToken(
+            accent,
+            preset: preset,
+            additionalBackgrounds: [
+                profileCardFillToken(
+                    for: provider,
+                    isSelected: isSelected,
+                    preset: preset
+                )
+            ]
+        )
     }
 
     static func surfaceToken(for tier: CodexSurfaceTier) -> CodexColorToken {
@@ -1331,6 +1408,8 @@ struct CodexCard<Content: View>: View {
     let accent: Color?
     let padding: CGFloat
     let shadow: Bool
+    let fillToken: CodexColorToken?
+    let fillProvider: ProfileProvider?
     let content: Content
 
     init(
@@ -1338,24 +1417,37 @@ struct CodexCard<Content: View>: View {
         accent: Color? = nil,
         padding: CGFloat = CodexTheme.panelPadding,
         shadow: Bool = true,
+        fillToken: CodexColorToken? = nil,
+        fillProvider: ProfileProvider? = nil,
         @ViewBuilder content: () -> Content
     ) {
         self.tier = tier
         self.accent = accent
         self.padding = padding
         self.shadow = shadow
+        self.fillToken = fillToken
+        self.fillProvider = fillProvider
         self.content = content()
     }
 
     var body: some View {
         let shadowStyle = CodexTheme.shadow(for: tier, preset: themeContext.preset)
         let cornerRadius = CodexTheme.cornerRadius(for: tier)
+        let resolvedFillToken = fillToken
+            ?? fillProvider.map {
+                CodexTheme.profileCardFillToken(
+                    for: $0,
+                    isSelected: true,
+                    preset: themeContext.preset
+                )
+            }
+            ?? CodexTheme.cardFillToken(for: tier, preset: themeContext.preset)
 
         content
             .padding(padding)
             .background(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(CodexTheme.cardFillToken(for: tier, preset: themeContext.preset).color)
+                    .fill(resolvedFillToken.color)
                     .overlay(
                         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                             .fill(CodexTheme.surfaceSheen(for: tier, preset: themeContext.preset))

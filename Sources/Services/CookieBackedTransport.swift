@@ -84,7 +84,14 @@ final class CookieBackedTransport: HTTPTransport, ChatGPTAuthContextWritable {
         cookies: [HTTPCookie],
         authContext: ChatGPTAuthContext?
     ) -> URLRequest {
-        ChatGPTRequestSigner.sign(
+        if request.url?.host?.lowercased() == ClaudeWebURLs.cookieScope.host?.lowercased() {
+            return ClaudeRequestSigner.sign(
+                request,
+                cookies: cookies
+            )
+        }
+
+        return ChatGPTRequestSigner.sign(
             request,
             cookies: cookies,
             authContext: authContext

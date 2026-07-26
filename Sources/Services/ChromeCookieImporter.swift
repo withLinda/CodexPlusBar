@@ -26,10 +26,26 @@ enum ChromeCookieImporter {
     ) throws -> [HTTPCookie] {
         let host = scope.host?.lowercased() ?? "chatgpt.com"
         let importedCookies = cookies
-            .filter { isChatGPTCookieDomain($0.domain, host: host) }
+            .filter { isCookieDomain($0.domain, host: host) }
             .compactMap(makeHTTPCookie)
 
         guard importedCookies.contains(where: isSessionCookie) else {
+            throw ChatGPTAPIError.unauthorized
+        }
+
+        return importedCookies
+    }
+
+    static func claudeHTTPCookies(
+        from cookies: [ChromeDevToolsCookie],
+        scope: URL = ClaudeWebURLs.cookieScope
+    ) throws -> [HTTPCookie] {
+        let host = scope.host?.lowercased() ?? "claude.ai"
+        let importedCookies = cookies
+            .filter { isCookieDomain($0.domain, host: host) }
+            .compactMap(makeHTTPCookie)
+
+        guard importedCookies.isEmpty == false else {
             throw ChatGPTAPIError.unauthorized
         }
 
@@ -46,7 +62,31 @@ enum ChromeCookieImporter {
         return importedCookies.count
     }
 
-    private static func isChatGPTCookieDomain(
+    @MainActor
+    static func storeClaudeCookies(
+        from cookies: [ChromeDevToolsCookie],
+        in sessionStore: WebSessionStore
+    ) async throws -> Int {
+        let importedCookies = try claudeHTTPCookies(from: cookies)
+        await sessionStore.replaceCookies(importedCookies, for: ClaudeWebURLs.cookieScope)
+        return importedCookies.count
+    }
+
+    @MainActor
+    static func storeCookies(
+        from cookies: [ChromeDevToolsCookie],
+        for provider: ProfileProvider,
+        in sessionStore: WebSessionStore
+    ) async throws -> Int {
+        switch provider {
+        case .codex:
+            return try await storeChatGPTCookies(from: cookies, in: sessionStore)
+        case .claude:
+            return try await storeClaudeCookies(from: cookies, in: sessionStore)
+        }
+    }
+
+    private static func isCookieDomain(
         _ domain: String,
         host: String
     ) -> Bool {

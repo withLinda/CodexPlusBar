@@ -27,6 +27,7 @@ enum ProfileSummaryRowSupportStyle: Equatable, Sendable {
 }
 
 struct ProfileSummaryRowPresentation: Equatable, Sendable {
+    let provider: ProfileProvider
     let title: String
     let tags: [PlusProfileTag]
     let usageSummary: ProfileUsageSummary?
@@ -51,6 +52,7 @@ struct ProfileSummaryRowPresentation: Equatable, Sendable {
         mode: ProfileSummaryRowMode,
         searchPhoneNumber: String? = nil
     ) {
+        provider = snapshot.profile.provider
         title = DisplayFormatter.privateProfileLabel(snapshot.label)
         tags = snapshot.tags
         compactTagSummary = ProfileTagSummary(tags: snapshot.tags)
@@ -136,6 +138,8 @@ struct ProfileSummaryRowPresentation: Equatable, Sendable {
 }
 
 struct ProfileSummaryRow: View {
+    @Environment(\.codexThemeRefreshContext) private var themeContext
+
     let presentation: ProfileSummaryRowPresentation
     let mode: ProfileSummaryRowMode
     let textScale: Double
@@ -293,12 +297,16 @@ struct ProfileSummaryRow: View {
 
     private var titleRow: some View {
         HStack(alignment: .top, spacing: 8) {
-            Text(presentation.title)
-                .font(ProfileManagerTypography.smallStrong)
-                .foregroundStyle(CodexTheme.dataValueText)
-                .lineLimit(1)
-                .allowsTightening(true)
-                .minimumScaleFactor(0.88)
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                ProfileProviderBadge(provider: presentation.provider, textScale: 0.92)
+
+                Text(presentation.title)
+                    .font(ProfileManagerTypography.smallStrong)
+                    .foregroundStyle(CodexTheme.dataValueText)
+                    .lineLimit(1)
+                    .allowsTightening(true)
+                    .minimumScaleFactor(0.88)
+            }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .layoutPriority(1)
 
@@ -317,13 +325,21 @@ struct ProfileSummaryRow: View {
     }
 
     private var menuBarTitleLabel: some View {
-        Text(presentation.title)
-            .font(ProfileManagerTypography.smallStrong(scale: effectiveTextScale))
-            .foregroundStyle(CodexTheme.dataValueText)
-            .lineLimit(1)
-            .truncationMode(.middle)
-            .minimumScaleFactor(0.9)
-            .frame(minWidth: 40, alignment: .leading)
+        HStack(alignment: .firstTextBaseline, spacing: scaled(6)) {
+            ProfileProviderBadge(
+                provider: presentation.provider,
+                textScale: effectiveTextScale,
+                showsText: false
+            )
+
+            Text(presentation.title)
+                .font(ProfileManagerTypography.smallStrong(scale: effectiveTextScale))
+                .foregroundStyle(CodexTheme.dataValueText)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .minimumScaleFactor(0.9)
+                .frame(minWidth: 40, alignment: .leading)
+        }
     }
 
     private func phoneSearchContextLine(_ phoneNumber: String) -> some View {
@@ -452,16 +468,89 @@ struct ProfileSummaryRow: View {
         let isSelected = if case let .sidebar(isSelected) = mode { isSelected } else { false }
 
         return RoundedRectangle(cornerRadius: CodexTheme.fieldCornerRadius, style: .continuous)
-            .fill(CodexTheme.cardFill(for: isSelected ? .strong : .nested))
+            .fill(
+                CodexTheme.profileCardFillToken(
+                    for: presentation.provider,
+                    isSelected: isSelected,
+                    preset: themeContext.preset
+                ).color
+            )
             .overlay {
                 RoundedRectangle(cornerRadius: CodexTheme.fieldCornerRadius, style: .continuous)
                     .stroke(
                         isSelected
-                            ? CodexTheme.accentOrange.opacity(0.35)
+                            ? CodexTheme.profileProviderAccentToken(
+                                for: presentation.provider,
+                                isSelected: true,
+                                preset: themeContext.preset
+                            ).color.opacity(0.42)
                             : CodexTheme.surfaceBorder(for: .nested),
                         lineWidth: 1
                     )
             }
+    }
+}
+
+struct ProfileProviderBadge: View {
+    @Environment(\.codexThemeRefreshContext) private var themeContext
+
+    let provider: ProfileProvider
+    let textScale: Double
+    let showsText: Bool
+
+    init(
+        provider: ProfileProvider,
+        textScale: Double = 1,
+        showsText: Bool = true
+    ) {
+        self.provider = provider
+        self.textScale = textScale
+        self.showsText = showsText
+    }
+
+    var body: some View {
+        let accent = CodexTheme.profileProviderAccentToken(
+            for: provider,
+            preset: themeContext.preset
+        ).color
+        let selectedAccent = CodexTheme.profileProviderAccentToken(
+            for: provider,
+            isSelected: true,
+            preset: themeContext.preset
+        ).color
+
+        HStack(spacing: 4 * CGFloat(textScale)) {
+            Image(systemName: provider.systemImage)
+                .font(.system(size: 9 * CGFloat(textScale), weight: .semibold))
+                .accessibilityHidden(true)
+
+            if showsText {
+                Text(provider.displayName)
+                    .lineLimit(1)
+            }
+        }
+        .font(ProfileManagerTypography.micro(scale: textScale))
+        .foregroundStyle(accent)
+        .padding(.horizontal, showsText ? 6 * CGFloat(textScale) : 0)
+        .padding(.vertical, showsText ? 4 * CGFloat(textScale) : 0)
+        .background {
+            if showsText {
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(
+                        selectedAccent
+                            .opacity(0.12)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 7, style: .continuous)
+                            .stroke(
+                                selectedAccent.opacity(0.28),
+                                lineWidth: 1
+                            )
+                    )
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(provider.displayName) profile")
     }
 }
 

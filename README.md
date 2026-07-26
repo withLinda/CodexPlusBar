@@ -1,6 +1,6 @@
 # CodexPlusBar
 
-CodexPlusBar is a macOS menu bar app for people who use ChatGPT Plus and Codex often. It shows your remaining usage for saved profiles at a glance, so you can decide which account to use without opening ChatGPT, switching accounts, or guessing when limits reset.
+CodexPlusBar is a macOS menu bar app for people who use ChatGPT Plus, Codex, and Claude often. It shows your remaining usage for saved profiles at a glance, so you can decide which account to use without opening a provider, switching accounts, or guessing when limits reset.
 
 ![CodexPlusBar menu bar panel](docs/screenshots/codexplusbar-menu-bar-panel.png)
 
@@ -16,6 +16,7 @@ When you use more than one ChatGPT profile, checking limits can become slow and 
 
 - Menu bar status with 5H and 7D remaining usage.
 - Separate saved profiles, each with its own sign-in session.
+- Provider profiles for Codex and Claude, with provider-specific sign-in and usage requests.
 - Profile manager for adding, renaming, reordering, and removing profiles.
 - Bulk import for adding many profiles from plain or numbered `email|password|2FA` rows.
 - Generate and copy the current OTP from a saved 2FA key.
@@ -40,7 +41,7 @@ When you use more than one ChatGPT profile, checking limits can become slow and 
 2. Open the manager window from the menu bar panel.
 3. Add a profile.
 4. Or use Import to paste many `email|password|2FA` rows at once.
-5. Sign in to ChatGPT in each profile's session view.
+5. Sign in to the selected provider in each profile's Chrome session.
 6. Save a clear label and optional email link.
 7. Refresh usage.
 8. Pin the profile you care about most.
@@ -51,17 +52,17 @@ When you use more than one ChatGPT profile, checking limits can become slow and 
 Download the latest notarized DMG from GitHub:
 
 - [Latest release page](https://github.com/withLinda/CodexPlusBar/releases/latest)
-- [Direct notarized DMG download](https://github.com/withLinda/CodexPlusBar/releases/download/snapshot-2026-07-26-profile-sorting/CodexPlusBar-snapshot-2026-07-26-profile-sorting.dmg)
-- [SHA-256 checksum](https://github.com/withLinda/CodexPlusBar/releases/download/snapshot-2026-07-26-profile-sorting/CodexPlusBar-snapshot-2026-07-26-profile-sorting.dmg.sha256)
+- [Direct notarized DMG download](https://github.com/withLinda/CodexPlusBar/releases/download/snapshot-2026-07-26-claude-profiles/CodexPlusBar-snapshot-2026-07-26-claude-profiles.dmg)
+- [SHA-256 checksum](https://github.com/withLinda/CodexPlusBar/releases/download/snapshot-2026-07-26-claude-profiles/CodexPlusBar-snapshot-2026-07-26-claude-profiles.dmg.sha256)
 
-1. Download `CodexPlusBar-snapshot-2026-07-26-profile-sorting.dmg` from the direct link above.
+1. Download `CodexPlusBar-snapshot-2026-07-26-claude-profiles.dmg` from the direct link above.
 2. Optional: download the checksum file into the same folder, open Terminal there, and run:
 
    ```bash
-   shasum -a 256 -c CodexPlusBar-snapshot-2026-07-26-profile-sorting.dmg.sha256
+   shasum -a 256 -c CodexPlusBar-snapshot-2026-07-26-claude-profiles.dmg.sha256
    ```
 
-   A correct download prints `CodexPlusBar-snapshot-2026-07-26-profile-sorting.dmg: OK`.
+   A correct download prints `CodexPlusBar-snapshot-2026-07-26-claude-profiles.dmg: OK`.
 3. Double-click the downloaded DMG to open it.
 4. Drag `CodexPlusBar.app` onto the `Applications` folder inside the DMG.
 5. If macOS asks, replace the older copy in Applications.
@@ -91,8 +92,8 @@ The DMG is written to `build/dist/CodexPlusBar.dmg`.
 
 - macOS 14 or newer.
 - Xcode for building from source.
-- A ChatGPT account for each profile you want to track.
+- A ChatGPT or Claude account for each profile you want to track.
 
 ## Privacy Note
 
-Profile labels and sessions are stored locally on your Mac. CodexPlusBar uses your local ChatGPT web session to read usage data from ChatGPT.
+Profile labels and sessions are stored locally on your Mac. CodexPlusBar uses your local provider web session to read usage data from ChatGPT or Claude.

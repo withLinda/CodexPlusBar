@@ -215,6 +215,64 @@ struct ChromeCookieImporterTests {
             _ = try ChromeCookieImporter.chatGPTHTTPCookies(from: cookies)
         }
     }
+
+    @Test
+    func claudeCookiesUseOnlyClaudeRootDomain() throws {
+        let cookies = [
+            ChromeDevToolsCookie(
+                name: "sessionKey",
+                value: "claude-session",
+                domain: ".claude.ai",
+                path: "/",
+                expires: nil,
+                httpOnly: true,
+                secure: true
+            ),
+            ChromeDevToolsCookie(
+                name: "noise",
+                value: "wrong-site",
+                domain: ".chatgpt.com",
+                path: "/",
+                expires: nil,
+                httpOnly: true,
+                secure: true
+            ),
+            ChromeDevToolsCookie(
+                name: "noise",
+                value: "wrong-subdomain",
+                domain: ".login.claude.ai",
+                path: "/",
+                expires: nil,
+                httpOnly: true,
+                secure: true
+            ),
+        ]
+
+        let imported = try ChromeCookieImporter.claudeHTTPCookies(from: cookies)
+
+        #expect(imported.map(\.name) == ["sessionKey"])
+        #expect(imported.first?.value == "claude-session")
+        #expect(imported.first?.domain == ".claude.ai")
+    }
+
+    @Test
+    func claudeCookiesRejectPayloadWithoutClaudeCookies() {
+        let cookies = [
+            ChromeDevToolsCookie(
+                name: "sessionKey",
+                value: "wrong-site",
+                domain: ".chatgpt.com",
+                path: "/",
+                expires: nil,
+                httpOnly: true,
+                secure: true
+            ),
+        ]
+
+        #expect(throws: ChatGPTAPIError.unauthorized) {
+            _ = try ChromeCookieImporter.claudeHTTPCookies(from: cookies)
+        }
+    }
 }
 
 private func makeHTTPCookie(name: String, value: String) throws -> HTTPCookie {

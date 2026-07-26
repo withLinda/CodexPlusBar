@@ -190,10 +190,14 @@ final class PlusProfileController {
         }
     }
 
-    func addProfile(label: String? = nil) {
+    func addProfile(
+        label: String? = nil,
+        provider: ProfileProvider = .codex
+    ) {
         let nextIndex = profiles.count + 1
         let newProfile = PlusProfile(
             id: UUID(),
+            provider: provider,
             label: label ?? "Account \(nextIndex)",
             emailLink: nil,
             detectedNote: nil,
@@ -209,7 +213,7 @@ final class PlusProfileController {
                 profile: newProfile,
                 state: .idle,
                 usage: nil,
-                statusMessage: "Open Chrome to sign in with this account.",
+                statusMessage: "Open Chrome to sign in to \(provider.displayName).",
                 isRefreshing: false
             )
         )
@@ -274,6 +278,48 @@ final class PlusProfileController {
 
     func selectProfile(id: UUID?) {
         selectedProfileID = id ?? profiles.first?.id
+    }
+
+    @discardableResult
+    func setProvider(
+        _ provider: ProfileProvider,
+        for profileID: UUID
+    ) async -> Bool {
+        guard let index = indexOfProfile(profileID) else {
+            return false
+        }
+
+        let snapshot = profiles[index]
+        guard snapshot.profile.provider != provider else {
+            return true
+        }
+
+        let previousProfiles = profiles
+        let previousProfile = snapshot.profile
+        var updatedProfile = previousProfile
+        updatedProfile.provider = provider
+        updatedProfile.detectedNote = nil
+        updatedProfile.expiresAt = nil
+        updatedProfile.lastRefreshAt = nil
+        updatedProfile.lastKnownState = .needsLogin
+
+        profiles[index] = snapshot.updating(
+            profile: updatedProfile,
+            state: .needsLogin,
+            usage: .some(nil),
+            statusMessage: .some("Open Chrome to sign in to \(provider.displayName)."),
+            isRefreshing: false
+        )
+
+        guard persistProfiles() else {
+            profiles = previousProfiles
+            return false
+        }
+
+        chromeSignInProfileIDs.remove(profileID)
+        await dataService.closeChromeSignIn(for: previousProfile)
+        updateDashboardStatus()
+        return true
     }
 
     @discardableResult
@@ -383,7 +429,9 @@ final class PlusProfileController {
                 profile: updatedProfile,
                 state: .needsLogin,
                 usage: .some(nil),
-                statusMessage: .some("Open Chrome to sign in again."),
+                statusMessage: .some(
+                    "Open Chrome to sign in to \(snapshot.profile.provider.displayName) again."
+                ),
                 isRefreshing: false
             )
             chromeSignInProfileIDs.remove(profileID)
@@ -438,7 +486,9 @@ final class PlusProfileController {
             chromeSignInProfileIDs.insert(profileID)
             if let refreshedIndex = indexOfProfile(profileID) {
                 profiles[refreshedIndex] = profiles[refreshedIndex].updating(
-                    statusMessage: .some("Waiting for sign-in in Chrome."),
+                    statusMessage: .some(
+                        "Waiting for \(snapshot.profile.provider.displayName) sign-in in Chrome."
+                    ),
                     isRefreshing: false
                 )
             }
@@ -481,7 +531,7 @@ final class PlusProfileController {
         setRefreshingState(for: profileID, isRefreshing: true)
 
         do {
-            _ = try await dataService.syncChromeSession(for: snapshot.profile)
+            try await dataService.syncChromeSession(for: snapshot.profile)
             chromeSignInProfileIDs.remove(profileID)
             await refreshProfile(id: profileID)
         } catch {
@@ -616,7 +666,7 @@ final class PlusProfileController {
         case .active:
             return "Live usage will refresh automatically."
         case .needsLogin:
-            return "Open Chrome to sign in again."
+            return "Open Chrome to sign in to \(profile.provider.displayName) again."
         case .failed:
             return "Refresh this profile to retry the last failed request."
         }
@@ -649,7 +699,9 @@ final class PlusProfileController {
                 profile: updatedProfile,
                 state: .needsLogin,
                 usage: preserveUsage ? nil : .some(nil),
-                statusMessage: .some("Open Chrome to sign in again."),
+                statusMessage: .some(
+                    "Open Chrome to sign in to \(snapshot.profile.provider.displayName) again."
+                ),
                 isRefreshing: false
             )
         default:
@@ -676,7 +728,10 @@ final class PlusProfileController {
             profile: updatedProfile,
             state: .needsLogin,
             usage: .some(nil),
-            statusMessage: .some("Chrome session was not ready. Stay signed in, then sync again."),
+            statusMessage: .some(
+                "\(snapshot.profile.provider.displayName) session was not ready. "
+                    + "Stay signed in, then sync again."
+            ),
             isRefreshing: false
         )
         persistProfiles()

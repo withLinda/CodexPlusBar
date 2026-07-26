@@ -182,6 +182,33 @@ struct ProfileSummaryRowTests {
     }
 
     @Test
+    func rowPresentationExposesProviderIdentity() {
+        var profile = sampleSnapshot(
+            state: .ready,
+            usage: nil,
+            note: nil,
+            expiresAt: nil,
+            statusMessage: nil,
+            isRefreshing: false,
+            emailLink: nil
+        ).profile
+        profile.provider = .claude
+
+        let presentation = ProfileSummaryRowPresentation(
+            snapshot: PlusProfileSnapshot(
+                profile: profile,
+                state: .ready,
+                usage: nil,
+                statusMessage: nil,
+                isRefreshing: false
+            ),
+            mode: .sidebar(isSelected: false)
+        )
+
+        #expect(presentation.provider == .claude)
+    }
+
+    @Test
     func rowPresentationMasksEmailTitleInSidebarAndMenuBar() {
         let snapshot = sampleSnapshot(
             state: .ready,

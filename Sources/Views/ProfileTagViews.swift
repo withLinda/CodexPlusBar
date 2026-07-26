@@ -18,7 +18,8 @@ struct ProfileListPresentation: Equatable, Sendable {
             shownCount: displayedProfiles.count,
             totalCount: profiles.count,
             fullFiveHourLimitCount: profiles.count(where: \.hasFullFiveHourLimit),
-            tagCounts: ProfileTagCounts(snapshots: profiles)
+            tagCounts: ProfileTagCounts(snapshots: profiles),
+            providerCounts: ProfileProviderCounts(snapshots: profiles)
         )
     }
 }
@@ -30,6 +31,7 @@ struct ProfileListControlsBar: View {
     let clearFilter: () -> Void
     let toggleFullLimit: () -> Void
     let toggleTag: (PlusProfileTag) -> Void
+    let toggleProvider: (ProfileProvider) -> Void
 
     init(
         filterPresentation: ProfileFilterBarPresentation,
@@ -37,7 +39,8 @@ struct ProfileListControlsBar: View {
         textScale: Double = 1,
         clearFilter: @escaping () -> Void,
         toggleFullLimit: @escaping () -> Void,
-        toggleTag: @escaping (PlusProfileTag) -> Void
+        toggleTag: @escaping (PlusProfileTag) -> Void,
+        toggleProvider: @escaping (ProfileProvider) -> Void
     ) {
         self.filterPresentation = filterPresentation
         _displayOrder = displayOrder
@@ -45,6 +48,7 @@ struct ProfileListControlsBar: View {
         self.clearFilter = clearFilter
         self.toggleFullLimit = toggleFullLimit
         self.toggleTag = toggleTag
+        self.toggleProvider = toggleProvider
     }
 
     var body: some View {
@@ -54,7 +58,8 @@ struct ProfileListControlsBar: View {
                 textScale: textScale,
                 clearFilter: clearFilter,
                 toggleFullLimit: toggleFullLimit,
-                toggleTag: toggleTag
+                toggleTag: toggleTag,
+                toggleProvider: toggleProvider
             )
             .layoutPriority(1)
 
@@ -75,19 +80,22 @@ struct ProfileFilterBarPresentation: Equatable, Sendable {
     let totalCount: Int
     let fullFiveHourLimitCount: Int
     let tagCounts: ProfileTagCounts
+    let providerCounts: ProfileProviderCounts
 
     init(
         filter: ProfileFilter,
         shownCount: Int,
         totalCount: Int,
         fullFiveHourLimitCount: Int = 0,
-        tagCounts: ProfileTagCounts = ProfileTagCounts()
+        tagCounts: ProfileTagCounts = ProfileTagCounts(),
+        providerCounts: ProfileProviderCounts = ProfileProviderCounts()
     ) {
         self.filter = filter
         self.shownCount = shownCount
         self.totalCount = totalCount
         self.fullFiveHourLimitCount = fullFiveHourLimitCount
         self.tagCounts = tagCounts
+        self.providerCounts = providerCounts
     }
 
     var countText: String {
@@ -106,11 +114,28 @@ struct ProfileFilterBarPresentation: Equatable, Sendable {
         countText
     }
 
+    var controlSummaryText: String {
+        if let selectedProvider = filter.selectedProvider {
+            return "\(selectedProvider.displayName) · \(visibleSummaryText)"
+        }
+
+        return visibleSummaryText
+    }
+
     var accessibilitySummaryText: String {
         let fullLimitText = fullFiveHourLimitCount == 1
             ? "1 profile with full 5-hour limit"
             : "\(fullFiveHourLimitCount) profiles with full 5-hour limits"
-        return "\(visibleSummaryText), \(fullLimitText), \(tagCounts.accessibilityText)"
+        var parts = [visibleSummaryText]
+        if providerCounts.total > 0 {
+            parts.append(providerCounts.accessibilityText)
+        }
+        parts.append(fullLimitText)
+        parts.append(tagCounts.accessibilityText)
+        if let selectedProvider = filter.selectedProvider {
+            parts.append("\(selectedProvider.displayName) only")
+        }
+        return parts.joined(separator: ", ")
     }
 
     var isAllSelected: Bool {
@@ -119,6 +144,10 @@ struct ProfileFilterBarPresentation: Equatable, Sendable {
 
     func isSelected(_ tag: PlusProfileTag) -> Bool {
         filter.isSelected(tag)
+    }
+
+    func isSelected(_ provider: ProfileProvider) -> Bool {
+        filter.isSelected(provider)
     }
 
     var isFullFiveHourLimitSelected: Bool {
@@ -138,6 +167,23 @@ struct ProfileFilterBarPresentation: Equatable, Sendable {
             isEnabled: totalCount > 0,
             accessibilityLabel: "All profiles"
         )
+
+        let providerSegments: [ProfileFilterSegment] = if providerCounts.total > 0
+            || filter.selectedProvider != nil {
+            ProfileProvider.allCases.map { provider in
+                let count = providerCounts.count(for: provider)
+                return ProfileFilterSegment(
+                    kind: .provider(provider),
+                    title: provider.displayName,
+                    count: count,
+                    isSelected: isSelected(provider),
+                    isEnabled: count > 0 || isSelected(provider),
+                    accessibilityLabel: "\(provider.displayName) profiles"
+                )
+            }
+        } else {
+            []
+        }
 
         let fullLimitSegment = ProfileFilterSegment(
             kind: .fullFiveHourLimit,
@@ -160,12 +206,13 @@ struct ProfileFilterBarPresentation: Equatable, Sendable {
             )
         }
 
-        return [allSegment, fullLimitSegment] + tagSegments
+        return [allSegment] + providerSegments + [fullLimitSegment] + tagSegments
     }
 }
 
 enum ProfileFilterSegmentKind: Hashable, Sendable {
     case all
+    case provider(ProfileProvider)
     case fullFiveHourLimit
     case tag(PlusProfileTag)
 
@@ -173,6 +220,8 @@ enum ProfileFilterSegmentKind: Hashable, Sendable {
         switch self {
         case .all:
             return "all"
+        case let .provider(provider):
+            return "provider-\(provider.id)"
         case .fullFiveHourLimit:
             return "full-five-hour-limit"
         case let .tag(tag):
@@ -188,10 +237,20 @@ enum ProfileFilterSegmentKind: Hashable, Sendable {
         return tag
     }
 
+    var provider: ProfileProvider? {
+        guard case let .provider(provider) = self else {
+            return nil
+        }
+
+        return provider
+    }
+
     var systemImage: String {
         switch self {
         case .all:
             return "line.3.horizontal.decrease.circle"
+        case let .provider(provider):
+            return provider.systemImage
         case .fullFiveHourLimit:
             return "gauge.high"
         case let .tag(tag):
@@ -216,6 +275,10 @@ struct ProfileFilterSegment: Identifiable, Equatable, Sendable {
         kind.tag
     }
 
+    var provider: ProfileProvider? {
+        kind.provider
+    }
+
     var displayText: String {
         "\(title) \(count)"
     }
@@ -227,19 +290,22 @@ struct ProfileFilterBar: View {
     let clearFilter: () -> Void
     let toggleFullLimit: () -> Void
     let toggleTag: (PlusProfileTag) -> Void
+    let toggleProvider: (ProfileProvider) -> Void
 
     init(
         presentation: ProfileFilterBarPresentation,
         textScale: Double = 1,
         clearFilter: @escaping () -> Void,
         toggleFullLimit: @escaping () -> Void,
-        toggleTag: @escaping (PlusProfileTag) -> Void
+        toggleTag: @escaping (PlusProfileTag) -> Void,
+        toggleProvider: @escaping (ProfileProvider) -> Void
     ) {
         self.presentation = presentation
         self.textScale = textScale
         self.clearFilter = clearFilter
         self.toggleFullLimit = toggleFullLimit
         self.toggleTag = toggleTag
+        self.toggleProvider = toggleProvider
     }
 
     var body: some View {
@@ -262,7 +328,8 @@ struct ProfileFilterBar: View {
                 textScale: textScale,
                 clearFilter: clearFilter,
                 toggleFullLimit: toggleFullLimit,
-                toggleTag: toggleTag
+                toggleTag: toggleTag,
+                toggleProvider: toggleProvider
             )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -283,6 +350,8 @@ struct ProfileFilterBar: View {
             toggleFullLimit()
         case let .tag(tag):
             toggleTag(tag)
+        case let .provider(provider):
+            toggleProvider(provider)
         }
     }
 }
@@ -352,6 +421,13 @@ private struct ProfileFilterSegmentButton: View {
             return tag.profileTagTone.borderColor(isSelected: true)
         }
 
+        if let provider = segment.provider {
+            return CodexTheme.profileProviderAccent(
+                for: provider,
+                isSelected: segment.isSelected
+            ).opacity(0.34)
+        }
+
         if segment.kind == .fullFiveHourLimit {
             return CodexTheme.usagePercentageColor(forRemainingPercent: 100).opacity(0.28)
         }
@@ -362,6 +438,10 @@ private struct ProfileFilterSegmentButton: View {
     private var selectedIconColor: Color {
         if let tag = segment.tag {
             return tag.profileTagTone.foregroundColor
+        }
+
+        if let provider = segment.provider {
+            return CodexTheme.profileProviderAccent(for: provider)
         }
 
         if segment.kind == .fullFiveHourLimit {
@@ -386,6 +466,12 @@ private struct ProfileFilterSegmentButton: View {
                 : "Show only profiles with 5H at 100%"
         }
 
+        if let provider = segment.provider {
+            return segment.isSelected
+                ? "Remove \(provider.displayName) filter"
+                : "Show only \(provider.displayName) profiles"
+        }
+
         if segment.isSelected, segment.tag != nil {
             return "Remove \(segment.accessibilityLabel) filter"
         }
@@ -405,6 +491,7 @@ private struct ProfileFilterMenu: View {
     let clearFilter: () -> Void
     let toggleFullLimit: () -> Void
     let toggleTag: (PlusProfileTag) -> Void
+    let toggleProvider: (ProfileProvider) -> Void
 
     var body: some View {
         Menu {
@@ -430,7 +517,7 @@ private struct ProfileFilterMenu: View {
                 Text("Filter")
                     .lineLimit(1)
 
-                Text(presentation.visibleSummaryText)
+                Text(presentation.controlSummaryText)
                     .foregroundStyle(CodexTheme.mutedText)
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -467,6 +554,8 @@ private struct ProfileFilterMenu: View {
             toggleFullLimit()
         case let .tag(tag):
             toggleTag(tag)
+        case let .provider(provider):
+            toggleProvider(provider)
         }
     }
 

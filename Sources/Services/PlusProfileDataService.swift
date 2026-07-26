@@ -14,7 +14,7 @@ protocol PlusProfileDataServing: AnyObject {
     func refreshProfile(_ profile: PlusProfile) async throws -> PlusProfileRefreshResult
     func openChromeSignIn(for profile: PlusProfile) async throws
     func openChromePasskeySetup(for profile: PlusProfile) async throws
-    func syncChromeSession(for profile: PlusProfile) async throws -> ChatGPTAuthContext
+    func syncChromeSession(for profile: PlusProfile) async throws
     func closeChromeSignIn(for profile: PlusProfile) async
     func clearSession(for profile: PlusProfile) async throws
     func removeProfileData(for profile: PlusProfile) async throws
@@ -34,6 +34,15 @@ final class PlusProfileDataService: PlusProfileDataServing {
     }
 
     func refreshProfile(_ profile: PlusProfile) async throws -> PlusProfileRefreshResult {
+        switch profile.provider {
+        case .codex:
+            return try await refreshCodexProfile(profile)
+        case .claude:
+            return try await refreshClaudeProfile(profile)
+        }
+    }
+
+    private func refreshCodexProfile(_ profile: PlusProfile) async throws -> PlusProfileRefreshResult {
         let runtime = runtimeProvider.runtime(for: profile)
         let authSessionService = AuthSessionService(
             transport: runtime.transport,
@@ -70,6 +79,27 @@ final class PlusProfileDataService: PlusProfileDataServing {
         )
     }
 
+    private func refreshClaudeProfile(_ profile: PlusProfile) async throws -> PlusProfileRefreshResult {
+        let runtime = runtimeProvider.runtime(for: profile)
+        runtime.updateAuthContext(nil)
+        let response = try await runtime.transport.data(
+            for: ClaudeUsageService.makeUsageRequest()
+        )
+        let snapshot = try ClaudeUsageService.decodeSnapshot(from: response.data)
+
+        return PlusProfileRefreshResult(
+            usage: PlusProfileUsage(
+                accountID: snapshot.accountID,
+                planType: snapshot.planType,
+                primaryWindow: snapshot.primaryWindow,
+                secondaryWindow: snapshot.secondaryWindow,
+                fetchedAt: snapshot.fetchedAt
+            ),
+            detectedNote: "Claude",
+            expiryRefresh: .unchanged
+        )
+    }
+
     func clearSession(for profile: PlusProfile) async throws {
         let runtime = runtimeProvider.runtime(for: profile)
         runtime.updateAuthContext(nil)
@@ -92,23 +122,33 @@ final class PlusProfileDataService: PlusProfileDataServing {
         try await chromeSessionManager.openPasskeySetup(for: profile)
     }
 
-    func syncChromeSession(for profile: PlusProfile) async throws -> ChatGPTAuthContext {
+    func syncChromeSession(for profile: PlusProfile) async throws {
         let runtime = runtimeProvider.runtime(for: profile)
         _ = try await chromeSessionManager.syncCookies(
             for: profile,
             into: runtime.sessionStore
         )
 
-        let authSessionService = AuthSessionService(
-            transport: runtime.transport,
-            sessionStore: runtime.sessionStore
-        )
-
         do {
-            let context = try await authSessionService.fetchCurrentSession(fallback: runtime.authContext)
-            runtime.updateAuthContext(context)
+            switch profile.provider {
+            case .codex:
+                let authSessionService = AuthSessionService(
+                    transport: runtime.transport,
+                    sessionStore: runtime.sessionStore
+                )
+                let context = try await authSessionService.fetchCurrentSession(
+                    fallback: runtime.authContext
+                )
+                runtime.updateAuthContext(context)
+            case .claude:
+                runtime.updateAuthContext(nil)
+                let response = try await runtime.transport.data(
+                    for: ClaudeUsageService.makeUsageRequest()
+                )
+                _ = try ClaudeUsageService.decodeSnapshot(from: response.data)
+            }
+
             await chromeSessionManager.closeSignIn(for: profile)
-            return context
         } catch {
             if ChatGPTAPIError.map(error) == .unauthorized {
                 try? await chromeSessionManager.openSignIn(for: profile)

@@ -155,6 +155,68 @@ struct PlusProfileDataServiceTests {
     }
 
     @Test
+    func refreshClaudeProfileUsesClaudeUsageEndpointOnly() async throws {
+        let profile = sampleProfile(
+            label: "claude@example.com",
+            sortOrder: 0,
+            provider: .claude
+        )
+        let transport = MockHTTPTransport { request in
+            #expect(request.httpMethod == "GET")
+            #expect(request.url == ClaudeWebURLs.usageEndpoint)
+
+            return HTTPResponseData(
+                data: Data(
+                    """
+                    {
+                      "five_hour": null,
+                      "seven_day": null,
+                      "limits": [
+                        {
+                          "kind": "session",
+                          "group": "session",
+                          "percent": 2,
+                          "severity": "normal",
+                          "resets_at": "2026-07-26T15:10:00.082855+00:00",
+                          "scope": null,
+                          "is_active": true
+                        }
+                      ]
+                    }
+                    """.utf8
+                ),
+                response: HTTPURLResponse(
+                    url: try #require(request.url),
+                    statusCode: 200,
+                    httpVersion: nil,
+                    headerFields: [:]
+                )!
+            )
+        }
+        let runtime = PlusProfileRuntime(
+            dataStore: .nonPersistent(),
+            transport: transport
+        )
+        let provider = StubRuntimeProvider(runtimeByProfileID: [profile.id: runtime])
+        let service = PlusProfileDataService(runtimeProvider: provider)
+
+        let result = try await service.refreshProfile(profile)
+
+        #expect(result.usage.accountID == ClaudeWebURLs.organizationID)
+        #expect(result.usage.planType == "claude")
+        #expect(result.usage.primaryWindow.usedPercent == 2)
+        #expect(result.usage.primaryWindow.remainingPercent == 98)
+        #expect(result.usage.secondaryWindow == nil)
+        #expect(result.detectedNote == "Claude")
+        #expect(result.expiryRefresh == .unchanged)
+        #expect(
+            transport.requestPaths
+                == ["/api/organizations/\(ClaudeWebURLs.organizationID)/usage"]
+        )
+        #expect(runtime.authContext == nil)
+    }
+
+    @Test
     func refreshProfileMatchesExpiryByCatalogOwnerAlias() async throws {
         let profile = sampleProfile(label: "owner@example.com", sortOrder: 0)
         let transport = makeRefreshTransport(
@@ -334,7 +396,8 @@ struct PlusProfileDataServiceTests {
             chromeSessionManager: chromeSessionManager
         )
 
-        let context = try await service.syncChromeSession(for: profile)
+        try await service.syncChromeSession(for: profile)
+        let context = try #require(runtime.authContext)
 
         #expect(chromeSessionManager.syncedProfileIDs == [profile.id])
         #expect(context.accountID == "acct_chrome_123456")
@@ -408,10 +471,78 @@ struct PlusProfileDataServiceTests {
         )
 
         await #expect(throws: ChatGPTAPIError.unauthorized) {
-            _ = try await service.syncChromeSession(for: profile)
+            try await service.syncChromeSession(for: profile)
         }
         #expect(chromeSessionManager.syncedProfileIDs == [profile.id])
         #expect(chromeSessionManager.openedProfileIDs == [profile.id])
+    }
+
+    @Test
+    func syncClaudeSessionImportsCookiesAndValidatesUsage() async throws {
+        let profile = sampleProfile(
+            label: "claude-sync@example.com",
+            sortOrder: 0,
+            provider: .claude
+        )
+        let transport = MockHTTPTransport { request in
+            return HTTPResponseData(
+                data: Data(
+                    """
+                    {
+                      "limits": [
+                        {
+                          "kind": "session",
+                          "group": "session",
+                          "percent": 7,
+                          "resets_at": "2026-07-26T15:10:00+00:00",
+                          "is_active": true
+                        }
+                      ]
+                    }
+                    """.utf8
+                ),
+                response: HTTPURLResponse(
+                    url: try #require(request.url),
+                    statusCode: 200,
+                    httpVersion: nil,
+                    headerFields: [:]
+                )!
+            )
+        }
+        let runtime = PlusProfileRuntime(
+            dataStore: .nonPersistent(),
+            transport: transport
+        )
+        let provider = StubRuntimeProvider(runtimeByProfileID: [profile.id: runtime])
+        let chromeSessionManager = StubChromeSessionManager(
+            cookies: [
+                ChromeDevToolsCookie(
+                    name: "sessionKey",
+                    value: "claude-session",
+                    domain: ".claude.ai",
+                    path: "/",
+                    expires: nil,
+                    httpOnly: true,
+                    secure: true
+                ),
+            ]
+        )
+        let service = PlusProfileDataService(
+            runtimeProvider: provider,
+            chromeSessionManager: chromeSessionManager
+        )
+
+        try await service.syncChromeSession(for: profile)
+
+        #expect(chromeSessionManager.syncedProfileIDs == [profile.id])
+        #expect(chromeSessionManager.closedProfileIDs == [profile.id])
+        #expect(runtime.authContext == nil)
+        #expect(
+            await runtime.sessionStore.cookieValue(
+                named: "sessionKey",
+                for: ClaudeWebURLs.cookieScope
+            ) == "claude-session"
+        )
     }
 
     @Test
@@ -524,8 +655,9 @@ private final class StubChromeSessionManager: ChromeSessionManaging {
         into sessionStore: WebSessionStore
     ) async throws -> ChromeCookieImportResult {
         syncedProfileIDs.append(profile.id)
-        let count = try await ChromeCookieImporter.storeChatGPTCookies(
+        let count = try await ChromeCookieImporter.storeCookies(
             from: cookies,
+            for: profile.provider,
             in: sessionStore
         )
         return ChromeCookieImportResult(importedCookieCount: count)
@@ -667,9 +799,14 @@ private func makeRefreshTransport(
     }
 }
 
-private func sampleProfile(label: String, sortOrder: Int) -> PlusProfile {
+private func sampleProfile(
+    label: String,
+    sortOrder: Int,
+    provider: ProfileProvider = .codex
+) -> PlusProfile {
     PlusProfile(
         id: UUID(),
+        provider: provider,
         label: label,
         emailLink: nil,
         detectedNote: nil,

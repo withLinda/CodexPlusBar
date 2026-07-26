@@ -8,6 +8,33 @@ enum PlusProfileStoredState: String, Codable, Equatable, Sendable {
     case failed
 }
 
+enum ProfileProvider: String, Codable, CaseIterable, Equatable, Identifiable, Sendable {
+    case codex
+    case claude
+
+    var id: String {
+        rawValue
+    }
+
+    var displayName: String {
+        switch self {
+        case .codex:
+            return "Codex"
+        case .claude:
+            return "Claude"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .codex:
+            return "terminal.fill"
+        case .claude:
+            return "sparkles"
+        }
+    }
+}
+
 enum PlusProfileTag: String, Codable, CaseIterable, Equatable, Hashable, Identifiable, Sendable {
     case active
     case needAction = "need_action"
@@ -75,6 +102,7 @@ enum PlusProfileTag: String, Codable, CaseIterable, Equatable, Hashable, Identif
 
 struct PlusProfile: Identifiable, Codable, Equatable, Sendable {
     let id: UUID
+    var provider: ProfileProvider
     var label: String
     var emailLink: String?
     var detectedNote: String?
@@ -92,6 +120,7 @@ struct PlusProfile: Identifiable, Codable, Equatable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case id
+        case provider
         case label
         case emailLink
         case detectedNote
@@ -110,6 +139,7 @@ struct PlusProfile: Identifiable, Codable, Equatable, Sendable {
 
     init(
         id: UUID,
+        provider: ProfileProvider = .codex,
         label: String,
         emailLink: String?,
         detectedNote: String?,
@@ -126,6 +156,7 @@ struct PlusProfile: Identifiable, Codable, Equatable, Sendable {
         lastKnownState: PlusProfileStoredState
     ) {
         self.id = id
+        self.provider = provider
         self.label = label
         self.emailLink = emailLink
         self.detectedNote = detectedNote
@@ -146,6 +177,7 @@ struct PlusProfile: Identifiable, Codable, Equatable, Sendable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
 
         id = try container.decode(UUID.self, forKey: .id)
+        provider = (try? container.decodeIfPresent(ProfileProvider.self, forKey: .provider)) ?? .codex
         label = try container.decode(String.self, forKey: .label)
         emailLink = try container.decodeIfPresent(String.self, forKey: .emailLink)
         detectedNote = try container.decodeIfPresent(String.self, forKey: .detectedNote)
@@ -168,6 +200,7 @@ struct PlusProfile: Identifiable, Codable, Equatable, Sendable {
         var container = encoder.container(keyedBy: CodingKeys.self)
 
         try container.encode(id, forKey: .id)
+        try container.encode(provider, forKey: .provider)
         try container.encode(label, forKey: .label)
         try container.encodeIfPresent(emailLink, forKey: .emailLink)
         try container.encodeIfPresent(detectedNote, forKey: .detectedNote)
@@ -839,21 +872,30 @@ enum ProfileDisplayOrder: String, CaseIterable, Identifiable, Sendable {
 struct ProfileFilter: Equatable, Sendable {
     private(set) var selectedTags: [PlusProfileTag]
     private(set) var showsOnlyFullFiveHourLimit: Bool
+    private(set) var selectedProvider: ProfileProvider?
 
     init(
         _ selectedTags: [PlusProfileTag] = [],
-        showsOnlyFullFiveHourLimit: Bool = false
+        showsOnlyFullFiveHourLimit: Bool = false,
+        provider: ProfileProvider? = nil
     ) {
         self.selectedTags = PlusProfile.normalizedTags(selectedTags)
         self.showsOnlyFullFiveHourLimit = showsOnlyFullFiveHourLimit
+        selectedProvider = provider
     }
 
     var isEmpty: Bool {
-        selectedTags.isEmpty && showsOnlyFullFiveHourLimit == false
+        selectedTags.isEmpty
+            && showsOnlyFullFiveHourLimit == false
+            && selectedProvider == nil
     }
 
     func isSelected(_ tag: PlusProfileTag) -> Bool {
         selectedTags.contains(tag)
+    }
+
+    func isSelected(_ provider: ProfileProvider) -> Bool {
+        selectedProvider == provider
     }
 
     func includes(_ snapshot: PlusProfileSnapshot) -> Bool {
@@ -861,8 +903,9 @@ struct ProfileFilter: Equatable, Sendable {
             snapshot.tags.contains(selectedTag)
         }
         let matchesFullFiveHourLimit = showsOnlyFullFiveHourLimit == false || snapshot.hasFullFiveHourLimit
+        let matchesProvider = selectedProvider == nil || snapshot.profile.provider == selectedProvider
 
-        return matchesSelectedTags && matchesFullFiveHourLimit
+        return matchesSelectedTags && matchesFullFiveHourLimit && matchesProvider
     }
 
     func apply(to snapshots: [PlusProfileSnapshot]) -> [PlusProfileSnapshot] {
@@ -883,6 +926,10 @@ struct ProfileFilter: Equatable, Sendable {
         selectedTags = PlusProfile.normalizedTags(selectedTags)
     }
 
+    mutating func toggle(_ provider: ProfileProvider) {
+        selectedProvider = selectedProvider == provider ? nil : provider
+    }
+
     mutating func toggleFullFiveHourLimit() {
         showsOnlyFullFiveHourLimit.toggle()
     }
@@ -890,6 +937,41 @@ struct ProfileFilter: Equatable, Sendable {
     mutating func clear() {
         selectedTags = []
         showsOnlyFullFiveHourLimit = false
+        selectedProvider = nil
+    }
+}
+
+struct ProfileProviderCounts: Equatable, Sendable {
+    let codex: Int
+    let claude: Int
+
+    init(codex: Int = 0, claude: Int = 0) {
+        self.codex = codex
+        self.claude = claude
+    }
+
+    init(snapshots: [PlusProfileSnapshot]) {
+        codex = snapshots.count { $0.profile.provider == .codex }
+        claude = snapshots.count { $0.profile.provider == .claude }
+    }
+
+    var total: Int {
+        codex + claude
+    }
+
+    func count(for provider: ProfileProvider) -> Int {
+        switch provider {
+        case .codex:
+            return codex
+        case .claude:
+            return claude
+        }
+    }
+
+    var accessibilityText: String {
+        let codexText = codex == 1 ? "1 Codex profile" : "\(codex) Codex profiles"
+        let claudeText = claude == 1 ? "1 Claude profile" : "\(claude) Claude profiles"
+        return "\(codexText), \(claudeText)"
     }
 }
 

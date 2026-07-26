@@ -296,15 +296,7 @@ private final class StubMenuBarRootViewDataService: PlusProfileDataServing {
     func openChromePasskeySetup(for profile: PlusProfile) async throws {
     }
 
-    func syncChromeSession(for profile: PlusProfile) async throws -> ChatGPTAuthContext {
-        ChatGPTAuthContext(
-            accessToken: "token-\(profile.id.uuidString)",
-            accountID: "acct-\(profile.id.uuidString)",
-            expiresAt: nil,
-            deviceID: nil,
-            clientVersion: nil,
-            language: "en-US"
-        )
+    func syncChromeSession(for profile: PlusProfile) async throws {
     }
 
     func closeChromeSignIn(for profile: PlusProfile) async {

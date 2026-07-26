@@ -12,11 +12,11 @@ enum ChatGPTAPIError: LocalizedError, Equatable, Sendable {
     var errorDescription: String? {
         switch self {
         case .unauthorized:
-            return "The ChatGPT session is missing or expired."
+            return "The saved browser session is missing or expired."
         case .invalidResponse:
-            return "ChatGPT returned a response the app could not read."
+            return "The usage service returned a response the app could not read."
         case let .httpStatus(code):
-            return "ChatGPT returned HTTP \(code)."
+            return "The usage service returned HTTP \(code)."
         case let .decoding(message), let .unsupported(message), let .network(message):
             return message
         case .missingURL:

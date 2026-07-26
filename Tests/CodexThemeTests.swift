@@ -116,6 +116,68 @@ struct CodexThemeTests {
     }
 
     @Test
+    func providerCardRolesPassWCAGAndDeltaLStarForEveryPreset() {
+        for preset in CodexThemePreset.allCases {
+            let palette = CodexTheme.palette(for: preset)
+            let textRoles: [(name: String, token: CodexColorToken)] = [
+                ("heading", palette.strongText),
+                ("primary", palette.primaryText),
+                ("support", palette.supportText),
+                ("dataValue", palette.dataValueText),
+            ]
+
+            let codexFill = CodexTheme.profileCardFillToken(
+                for: .codex,
+                preset: preset
+            )
+            let claudeFill = CodexTheme.profileCardFillToken(
+                for: .claude,
+                preset: preset
+            )
+
+            #expect(
+                codexFill.hex != claudeFill.hex,
+                "\(preset.id) provider cards should not collapse to the same fill"
+            )
+
+            for provider in ProfileProvider.allCases {
+                for isSelected in [false, true] {
+                    let fill = CodexTheme.profileCardFillToken(
+                        for: provider,
+                        isSelected: isSelected,
+                        preset: preset
+                    )
+
+                    for textRole in textRoles {
+                        #expect(
+                            contrastRatio(textRole.token, fill) >= 4.5,
+                            "\(preset.id) \(provider.displayName) \(textRole.name) on provider card should pass WCAG"
+                        )
+                        #expect(
+                            deltaLStar(textRole.token, fill) >= 40,
+                            "\(preset.id) \(provider.displayName) \(textRole.name) on provider card should keep delta L* >= 40"
+                        )
+                    }
+
+                    let providerAccent = CodexTheme.profileProviderAccentToken(
+                        for: provider,
+                        isSelected: isSelected,
+                        preset: preset
+                    )
+                    #expect(
+                        contrastRatio(providerAccent, fill) >= 4.5,
+                        "\(preset.id) \(provider.displayName) badge text should pass WCAG"
+                    )
+                    #expect(
+                        deltaLStar(providerAccent, fill) >= 40,
+                        "\(preset.id) \(provider.displayName) badge text should keep delta L* >= 40"
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
     func phoneSummaryPageRolesPassWCAGAndDeltaLStarForEveryPreset() {
         for preset in CodexThemePreset.allCases {
             let palette = CodexTheme.palette(for: preset)

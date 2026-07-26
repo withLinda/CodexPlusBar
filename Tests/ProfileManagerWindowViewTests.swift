@@ -353,6 +353,28 @@ struct ProfileManagerWindowViewTests {
     }
 
     @Test
+    func filterPresentationExposesProviderSegmentsAndSelection() throws {
+        let presentation = ProfileFilterBarPresentation(
+            filter: ProfileFilter(provider: .claude),
+            shownCount: 2,
+            totalCount: 5,
+            providerCounts: ProfileProviderCounts(codex: 3, claude: 2)
+        )
+
+        #expect(
+            presentation.segments.prefix(3).map(\.displayText)
+                == ["All 5", "Codex 3", "Claude 2"]
+        )
+        let claude = try #require(
+            presentation.segments.first { $0.kind == .provider(.claude) }
+        )
+        #expect(claude.isSelected)
+        #expect(claude.accessibilityLabel == "Claude profiles")
+        #expect(presentation.accessibilitySummaryText.contains("Claude only"))
+        #expect(presentation.controlSummaryText == "Claude · 2 of 5 shown")
+    }
+
+    @Test
     func chromeSessionPresentationUsesCompactActionState() {
         let snapshot = PlusProfileSnapshot(
             profile: sampleProfile(label: "alpha@example.com", sortOrder: 0),
@@ -371,17 +393,29 @@ struct ProfileManagerWindowViewTests {
             isChromeSignInOpen: false
         )
 
-        #expect(waiting.title == "Chrome sign-in")
-        #expect(waiting.summaryText == "Waiting for sign-in in Chrome.")
-        #expect(waiting.primaryTitle == "Open Chrome")
+        #expect(waiting.title == "Codex sign-in")
+        #expect(waiting.summaryText == "Waiting for Codex sign-in in Chrome.")
+        #expect(waiting.primaryTitle == "Open Codex")
         #expect(waiting.passkeyHelpTitle == "Touch ID help")
         #expect(waiting.syncTitle == "Sync now")
         #expect(waiting.cancelTitle == "Cancel")
         #expect(waiting.isSyncDisabled == false)
         #expect(waiting.showsCancel)
-        #expect(idle.summaryText == "Open Chrome, sign in, then sync.")
+        #expect(waiting.showsPasskeyHelp)
+        #expect(idle.summaryText == "Open Codex, sign in, then sync.")
         #expect(idle.isSyncDisabled)
         #expect(idle.showsCancel == false)
+
+        var claudeProfile = snapshot.profile
+        claudeProfile.provider = .claude
+        let claude = ProfileManagerSessionPanelPresentation(
+            snapshot: snapshot.updating(profile: claudeProfile),
+            isChromeSignInOpen: false
+        )
+        #expect(claude.title == "Claude sign-in")
+        #expect(claude.primaryTitle == "Open Claude")
+        #expect(claude.summaryText == "Open Claude, sign in, then sync.")
+        #expect(claude.showsPasskeyHelp == false)
     }
 
     @Test
@@ -470,15 +504,7 @@ private final class StubProfileViewDataService: PlusProfileDataServing {
     func openChromePasskeySetup(for profile: PlusProfile) async throws {
     }
 
-    func syncChromeSession(for profile: PlusProfile) async throws -> ChatGPTAuthContext {
-        ChatGPTAuthContext(
-            accessToken: "token-\(profile.id.uuidString)",
-            accountID: "acct-\(profile.id.uuidString)",
-            expiresAt: nil,
-            deviceID: nil,
-            clientVersion: nil,
-            language: "en-US"
-        )
+    func syncChromeSession(for profile: PlusProfile) async throws {
     }
 
     func closeChromeSignIn(for profile: PlusProfile) async {

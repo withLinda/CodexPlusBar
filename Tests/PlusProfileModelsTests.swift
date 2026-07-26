@@ -37,6 +37,39 @@ struct PlusProfileModelsTests {
     }
 
     @Test
+    func profileFilterCanShowOnlyOneProvider() {
+        let codex = sampleSnapshot(tags: [], provider: .codex)
+        let claude = sampleSnapshot(tags: [], provider: .claude)
+        let rows = [codex, claude]
+
+        #expect(
+            ProfileFilter(provider: .claude).apply(to: rows).map(\.id) == [claude.id]
+        )
+
+        var filter = ProfileFilter()
+        filter.toggle(.codex)
+        #expect(filter.selectedProvider == .codex)
+        #expect(filter.isEmpty == false)
+        filter.toggle(.codex)
+        #expect(filter.selectedProvider == nil)
+        #expect(filter.isEmpty)
+    }
+
+    @Test
+    func profileProviderCountsKeepProviderTotalsSeparate() {
+        let counts = ProfileProviderCounts(snapshots: [
+            sampleSnapshot(tags: [], provider: .codex),
+            sampleSnapshot(tags: [], provider: .codex),
+            sampleSnapshot(tags: [], provider: .claude),
+        ])
+
+        #expect(counts.codex == 2)
+        #expect(counts.claude == 1)
+        #expect(counts.count(for: .claude) == 1)
+        #expect(counts.accessibilityText == "2 Codex profiles, 1 Claude profile")
+    }
+
+    @Test
     func compactTagSummaryUsesPriorityTagAndOverflowCount() {
         let summary = ProfileTagSummary(tags: [.active, .pending, .needAction])
 
@@ -78,6 +111,19 @@ struct PlusProfileModelsTests {
         #expect(profile.twoFactorCode == nil)
         #expect(profile.phoneNumber == nil)
         #expect(profile.notes == nil)
+        #expect(profile.provider == .codex)
+    }
+
+    @Test
+    func profileProviderRoundTripsClaude() throws {
+        var profile = sampleProfile(emailLink: nil)
+        profile.provider = .claude
+
+        let data = try JSONEncoder().encode(profile)
+        let decoded = try JSONDecoder().decode(PlusProfile.self, from: data)
+
+        #expect(decoded.provider == .claude)
+        #expect(ProfileProvider.allCases.map(\.displayName) == ["Codex", "Claude"])
     }
 
     @Test
@@ -271,9 +317,12 @@ struct PlusProfileModelsTests {
     }
 }
 
-private func sampleSnapshot(tags: [PlusProfileTag]) -> PlusProfileSnapshot {
+private func sampleSnapshot(
+    tags: [PlusProfileTag],
+    provider: ProfileProvider = .codex
+) -> PlusProfileSnapshot {
     PlusProfileSnapshot(
-        profile: sampleProfile(emailLink: nil, tags: tags),
+        profile: sampleProfile(emailLink: nil, tags: tags, provider: provider),
         state: .idle,
         usage: nil,
         statusMessage: nil,
@@ -281,9 +330,14 @@ private func sampleSnapshot(tags: [PlusProfileTag]) -> PlusProfileSnapshot {
     )
 }
 
-private func sampleProfile(emailLink: String?, tags: [PlusProfileTag] = []) -> PlusProfile {
+private func sampleProfile(
+    emailLink: String?,
+    tags: [PlusProfileTag] = [],
+    provider: ProfileProvider = .codex
+) -> PlusProfile {
     PlusProfile(
         id: UUID(),
+        provider: provider,
         label: "alpha@example.com",
         emailLink: emailLink,
         detectedNote: nil,
