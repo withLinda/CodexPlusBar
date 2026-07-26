@@ -394,15 +394,17 @@ struct ProfileManagerWindowViewTests {
         )
 
         #expect(waiting.title == "Codex sign-in")
-        #expect(waiting.summaryText == "Waiting for Codex sign-in in Chrome.")
-        #expect(waiting.primaryTitle == "Open Codex")
+        #expect(waiting.summaryText == "Sign in, then return here. Usage updates automatically.")
+        #expect(waiting.primaryTitle == "Show Codex")
         #expect(waiting.passkeyHelpTitle == "Touch ID help")
-        #expect(waiting.syncTitle == "Sync now")
+        #expect(waiting.syncTitle == "Check now")
         #expect(waiting.cancelTitle == "Cancel")
+        #expect(waiting.showsSync)
         #expect(waiting.isSyncDisabled == false)
         #expect(waiting.showsCancel)
         #expect(waiting.showsPasskeyHelp)
-        #expect(idle.summaryText == "Open Codex, sign in, then sync.")
+        #expect(idle.summaryText == "Open Codex to sign in.")
+        #expect(idle.showsSync == false)
         #expect(idle.isSyncDisabled)
         #expect(idle.showsCancel == false)
 
@@ -414,8 +416,33 @@ struct ProfileManagerWindowViewTests {
         )
         #expect(claude.title == "Claude sign-in")
         #expect(claude.primaryTitle == "Open Claude")
-        #expect(claude.summaryText == "Open Claude, sign in, then sync.")
+        #expect(claude.summaryText == "Saved Claude sign-in is checked automatically.")
         #expect(claude.showsPasskeyHelp == false)
+
+        let readyClaude = ProfileManagerSessionPanelPresentation(
+            snapshot: snapshot.updating(
+                profile: claudeProfile,
+                state: .ready,
+                usage: .some(
+                    PlusProfileUsage(
+                        accountID: "841724c1-1111-4222-8333-123456789abc",
+                        planType: "claude",
+                        primaryWindow: WorkspaceLimitWindow(
+                            usedPercent: 25,
+                            resetAt: Date(timeIntervalSince1970: 1_776_000_900)
+                        ),
+                        secondaryWindow: nil,
+                        fetchedAt: Date(timeIntervalSince1970: 1_776_000_000)
+                    )
+                ),
+                statusMessage: .some("Waiting for Claude sign-in in Chrome.")
+            ),
+            isChromeSignInOpen: true
+        )
+        #expect(readyClaude.summaryText == "Claude session is synced.")
+        #expect(readyClaude.primaryTitle == "Show Claude")
+        #expect(readyClaude.showsSync == false)
+        #expect(readyClaude.showsCancel == false)
     }
 
     @Test
@@ -505,6 +532,10 @@ private final class StubProfileViewDataService: PlusProfileDataServing {
     }
 
     func syncChromeSession(for profile: PlusProfile) async throws {
+    }
+
+    func waitForChromeSignInToFinish(for profile: PlusProfile) async -> Bool {
+        false
     }
 
     func closeChromeSignIn(for profile: PlusProfile) async {

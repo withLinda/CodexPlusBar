@@ -173,6 +173,40 @@ struct ChromeLauncherTests {
     }
 
     @Test
+    func signInFinishDetectorWaitsUntilUserReturnsFromBrowser() {
+        var detector = ChromeSignInFinishDetector(isHostApplicationActive: true)
+
+        let stayedInApp = detector.shouldFinish(
+            isHostApplicationActive: true,
+            isBrowserRunning: true
+        )
+        let enteredBrowser = detector.shouldFinish(
+            isHostApplicationActive: false,
+            isBrowserRunning: true
+        )
+        let returnedToApp = detector.shouldFinish(
+            isHostApplicationActive: true,
+            isBrowserRunning: true
+        )
+
+        #expect(stayedInApp == false)
+        #expect(enteredBrowser == false)
+        #expect(returnedToApp)
+    }
+
+    @Test
+    func signInFinishDetectorAlsoFinishesWhenBrowserQuits() {
+        var detector = ChromeSignInFinishDetector(isHostApplicationActive: true)
+
+        let browserQuit = detector.shouldFinish(
+            isHostApplicationActive: true,
+            isBrowserRunning: false
+        )
+
+        #expect(browserQuit)
+    }
+
+    @Test
     func passkeySetupLaunchUsesVisibleDedicatedProfileWithoutDevTools() async throws {
         let profile = sampleProfile()
         let recorder = LaunchRecorder()

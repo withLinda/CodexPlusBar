@@ -15,6 +15,7 @@ protocol PlusProfileDataServing: AnyObject {
     func openChromeSignIn(for profile: PlusProfile) async throws
     func openChromePasskeySetup(for profile: PlusProfile) async throws
     func syncChromeSession(for profile: PlusProfile) async throws
+    func waitForChromeSignInToFinish(for profile: PlusProfile) async -> Bool
     func closeChromeSignIn(for profile: PlusProfile) async
     func clearSession(for profile: PlusProfile) async throws
     func removeProfileData(for profile: PlusProfile) async throws
@@ -82,7 +83,22 @@ final class PlusProfileDataService: PlusProfileDataServing {
     private func refreshClaudeProfile(_ profile: PlusProfile) async throws -> PlusProfileRefreshResult {
         let runtime = runtimeProvider.runtime(for: profile)
         runtime.updateAuthContext(nil)
-        let snapshot = try await fetchClaudeSnapshot(using: runtime)
+        let snapshot: WorkspaceLimitSnapshot
+
+        do {
+            snapshot = try await fetchClaudeSnapshot(using: runtime)
+        } catch let originalError as ChatGPTAPIError where originalError == .unauthorized {
+            do {
+                _ = try await chromeSessionManager.restoreCookies(
+                    for: profile,
+                    into: runtime.sessionStore
+                )
+                runtime.updateClaudeOrganizationID(nil)
+                snapshot = try await fetchClaudeSnapshot(using: runtime)
+            } catch let restoreError as ChatGPTAPIError where restoreError == .unauthorized {
+                throw originalError
+            }
+        }
 
         return PlusProfileRefreshResult(
             usage: PlusProfileUsage(
@@ -153,6 +169,10 @@ final class PlusProfileDataService: PlusProfileDataServing {
 
             throw error
         }
+    }
+
+    func waitForChromeSignInToFinish(for profile: PlusProfile) async -> Bool {
+        await chromeSessionManager.waitForSignInToFinish(for: profile)
     }
 
     func closeChromeSignIn(for profile: PlusProfile) async {

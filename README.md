@@ -10,13 +10,14 @@ Screenshots use demo data. Profile labels and links are censored.
 
 ## Why It Is Useful
 
-When you use more than one ChatGPT profile, checking limits can become slow and annoying. CodexPlusBar keeps each profile in its own local WebKit session, then shows the important usage numbers from the menu bar. Think of it like a small fuel gauge for your ChatGPT work: you do not need to open the full dashboard just to know whether you still have room to keep going.
+When you use more than one ChatGPT profile, checking limits can become slow and annoying. CodexPlusBar keeps each profile in its own local browser session, then shows the important usage numbers from the menu bar. Think of it like a small fuel gauge for your work: you do not need to open the full dashboard just to know whether you still have room to keep going.
 
 ## Features
 
 - Menu bar status with 5H and 7D remaining usage.
 - Separate saved profiles, each with its own sign-in session.
 - Provider profiles for Codex and Claude, with provider-specific sign-in and usage requests.
+- Automatic Claude usage refresh from an existing saved Chrome sign-in.
 - Profile manager for adding, renaming, reordering, and removing profiles.
 - Bulk import for adding many profiles from plain or numbered `email|password|2FA` rows.
 - Generate and copy the current OTP from a saved 2FA key.
@@ -41,7 +42,7 @@ When you use more than one ChatGPT profile, checking limits can become slow and 
 2. Open the manager window from the menu bar panel.
 3. Add a profile.
 4. Or use Import to paste many `email|password|2FA` rows at once.
-5. Sign in to the selected provider in each profile's Chrome session.
+5. Sign in to the selected provider in its Chrome session, then return to CodexPlusBar. The app imports the session and refreshes usage automatically.
 6. Save a clear label and optional email link.
 7. Refresh usage.
 8. Pin the profile you care about most.
@@ -52,17 +53,17 @@ When you use more than one ChatGPT profile, checking limits can become slow and 
 Download the latest notarized DMG from GitHub:
 
 - [Latest release page](https://github.com/withLinda/CodexPlusBar/releases/latest)
-- [Direct notarized DMG download](https://github.com/withLinda/CodexPlusBar/releases/download/snapshot-2026-07-26-claude-org-discovery/CodexPlusBar-snapshot-2026-07-26-claude-org-discovery.dmg)
-- [SHA-256 checksum](https://github.com/withLinda/CodexPlusBar/releases/download/snapshot-2026-07-26-claude-org-discovery/CodexPlusBar-snapshot-2026-07-26-claude-org-discovery.dmg.sha256)
+- [Direct notarized DMG download](https://github.com/withLinda/CodexPlusBar/releases/download/snapshot-2026-07-26-claude-auto-sync/CodexPlusBar-snapshot-2026-07-26-claude-auto-sync.dmg)
+- [SHA-256 checksum](https://github.com/withLinda/CodexPlusBar/releases/download/snapshot-2026-07-26-claude-auto-sync/CodexPlusBar-snapshot-2026-07-26-claude-auto-sync.dmg.sha256)
 
-1. Click the direct DMG link above to download `CodexPlusBar-snapshot-2026-07-26-claude-org-discovery.dmg`.
+1. Click the direct DMG link above to download `CodexPlusBar-snapshot-2026-07-26-claude-auto-sync.dmg`.
 2. Optional: download the checksum file into the same folder, open Terminal there, and run:
 
    ```bash
-   shasum -a 256 -c CodexPlusBar-snapshot-2026-07-26-claude-org-discovery.dmg.sha256
+   shasum -a 256 -c CodexPlusBar-snapshot-2026-07-26-claude-auto-sync.dmg.sha256
    ```
 
-   A correct download prints `CodexPlusBar-snapshot-2026-07-26-claude-org-discovery.dmg: OK`.
+   A correct download prints `CodexPlusBar-snapshot-2026-07-26-claude-auto-sync.dmg: OK`.
 3. Double-click the downloaded DMG to open it.
 4. Drag `CodexPlusBar.app` onto the `Applications` folder inside the DMG.
 5. If macOS asks, replace the older copy in Applications.
@@ -96,4 +97,4 @@ The DMG is written to `build/dist/CodexPlusBar.dmg`.
 
 ## Privacy Note
 
-Profile labels and sessions are stored locally on your Mac. CodexPlusBar uses your local provider web session to read usage data from ChatGPT or Claude.
+Profile labels and sessions are stored locally on your Mac. CodexPlusBar uses each profile's local browser session to read usage data from ChatGPT or Claude.

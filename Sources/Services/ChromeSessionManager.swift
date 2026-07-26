@@ -6,6 +6,30 @@ struct ChromeCookieImportResult: Equatable, Sendable {
     let importedCookieCount: Int
 }
 
+struct ChromeSignInFinishDetector: Sendable {
+    private var didLeaveHostApplication: Bool
+
+    init(isHostApplicationActive: Bool) {
+        didLeaveHostApplication = isHostApplicationActive == false
+    }
+
+    mutating func shouldFinish(
+        isHostApplicationActive: Bool,
+        isBrowserRunning: Bool
+    ) -> Bool {
+        guard isBrowserRunning else {
+            return true
+        }
+
+        if isHostApplicationActive == false {
+            didLeaveHostApplication = true
+            return false
+        }
+
+        return didLeaveHostApplication
+    }
+}
+
 @MainActor
 protocol ChromeSessionManaging: AnyObject {
     func openSignIn(for profile: PlusProfile) async throws
@@ -14,6 +38,11 @@ protocol ChromeSessionManaging: AnyObject {
         for profile: PlusProfile,
         into sessionStore: WebSessionStore
     ) async throws -> ChromeCookieImportResult
+    func restoreCookies(
+        for profile: PlusProfile,
+        into sessionStore: WebSessionStore
+    ) async throws -> ChromeCookieImportResult
+    func waitForSignInToFinish(for profile: PlusProfile) async -> Bool
     func clearCookies(for profile: PlusProfile) async throws
     func removeProfileData(for profile: PlusProfile) async throws
     func closeSignIn(for profile: PlusProfile) async
@@ -122,6 +151,75 @@ final class DefaultChromeSessionManager: ChromeSessionManaging {
         activeSessionsByProfileID.removeValue(forKey: profile.id)
         await terminateProcessIfNeeded(session.session.processIdentifier)
 
+        return try await importCookies(
+            for: profile,
+            into: sessionStore,
+            opensSignInOnUnauthorized: true
+        )
+    }
+
+    func restoreCookies(
+        for profile: PlusProfile,
+        into sessionStore: WebSessionStore
+    ) async throws -> ChromeCookieImportResult {
+        guard activeSessionsByProfileID[profile.id] == nil,
+              profileStore.hasProfileDirectory(for: profile)
+        else {
+            throw ChatGPTAPIError.unauthorized
+        }
+
+        return try await importCookies(
+            for: profile,
+            into: sessionStore,
+            opensSignInOnUnauthorized: false
+        )
+    }
+
+    func waitForSignInToFinish(for profile: PlusProfile) async -> Bool {
+        guard let activeSession = activeSessionsByProfileID[profile.id],
+              activeSession.purpose == .signIn,
+              activeSession.provider == profile.provider
+        else {
+            return false
+        }
+
+        let processIdentifier = activeSession.session.processIdentifier
+        var finishDetector = ChromeSignInFinishDetector(
+            isHostApplicationActive: NSApplication.shared.isActive
+        )
+
+        while Task.isCancelled == false {
+            guard let currentSession = activeSessionsByProfileID[profile.id],
+                  currentSession.session.processIdentifier == processIdentifier
+            else {
+                return false
+            }
+
+            let browserApplication = NSRunningApplication(
+                processIdentifier: processIdentifier
+            )
+            if finishDetector.shouldFinish(
+                isHostApplicationActive: NSApplication.shared.isActive,
+                isBrowserRunning: browserApplication?.isTerminated == false
+            ) {
+                return true
+            }
+
+            do {
+                try await Task.sleep(for: .milliseconds(500))
+            } catch {
+                return false
+            }
+        }
+
+        return false
+    }
+
+    private func importCookies(
+        for profile: PlusProfile,
+        into sessionStore: WebSessionStore,
+        opensSignInOnUnauthorized: Bool
+    ) async throws -> ChromeCookieImportResult {
         let inspectorSession = try await launcher.launch(
             profile: profile,
             mode: .headless,
@@ -147,7 +245,8 @@ final class DefaultChromeSessionManager: ChromeSessionManaging {
         } catch {
             await closeInspectorSession(client: client, processIdentifier: inspectorSession.processIdentifier)
 
-            if ChatGPTAPIError.map(error) == .unauthorized {
+            if opensSignInOnUnauthorized,
+               ChatGPTAPIError.map(error) == .unauthorized {
                 try? await openSignIn(for: profile)
             }
 

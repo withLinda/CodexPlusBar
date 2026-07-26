@@ -198,6 +198,10 @@ private final class StubPinnedStatusDataService: PlusProfileDataServing {
     func syncChromeSession(for profile: PlusProfile) async throws {
     }
 
+    func waitForChromeSignInToFinish(for profile: PlusProfile) async -> Bool {
+        false
+    }
+
     func closeChromeSignIn(for profile: PlusProfile) async {
     }
 

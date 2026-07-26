@@ -299,6 +299,10 @@ private final class StubMenuBarRootViewDataService: PlusProfileDataServing {
     func syncChromeSession(for profile: PlusProfile) async throws {
     }
 
+    func waitForChromeSignInToFinish(for profile: PlusProfile) async -> Bool {
+        false
+    }
+
     func closeChromeSignIn(for profile: PlusProfile) async {
     }
 

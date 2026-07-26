@@ -694,6 +694,7 @@ private func densePanelAccentTextRoles(for preset: CodexThemePreset) -> [(name: 
     let palette = CodexTheme.palette(for: preset)
     return [
         ("action", CodexTheme.actionTextToken(preset: preset)),
+        ("utilityAction", CodexTheme.utilityActionTextToken(preset: preset)),
         ("success", CodexTheme.successTextToken(preset: preset)),
         ("danger", CodexTheme.dangerTextToken(preset: preset)),
         ("info", CodexTheme.readableAccentToken(palette.accBlue, preset: preset)),

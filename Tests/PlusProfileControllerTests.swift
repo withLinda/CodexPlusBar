@@ -182,7 +182,104 @@ struct PlusProfileControllerTests {
         let row = try #require(controller.profiles.first)
         #expect(service.openedChromeProfileIDs == [profile.id])
         #expect(controller.isChromeSignInOpen(for: profile.id))
-        #expect(row.statusMessage == "Waiting for Codex sign-in in Chrome.")
+        #expect(service.waitedForChromeProfileIDs == [profile.id])
+        #expect(row.statusMessage == "Sign in, then return here. Usage updates automatically.")
+    }
+
+    @Test
+    func claudeOpenUsesSavedSessionWithoutOpeningChrome() async throws {
+        let tempDirectory = makeTemporaryDirectory()
+        let store = ProfileCatalogStore(
+            fileURL: tempDirectory.appendingPathComponent("profiles.json", isDirectory: false)
+        )
+        var profile = sampleProfile(label: "claude@example.com", sortOrder: 0)
+        profile.provider = .claude
+        profile.lastKnownState = .needsLogin
+        try store.saveProfiles([profile])
+        let usage = makeUsage(
+            accountID: "841724c1-1111-4222-8333-123456789abc",
+            primaryUsedPercent: 18,
+            secondaryUsedPercent: 0
+        )
+        let service = StubPlusProfileDataService(
+            refreshResults: [
+                profile.id: .success(
+                    PlusProfileRefreshResult(
+                        usage: usage,
+                        detectedNote: "Claude",
+                        expiryRefresh: .unchanged
+                    )
+                ),
+            ]
+        )
+        let controller = PlusProfileController(
+            catalogStore: store,
+            dataService: service,
+            autoStart: false
+        )
+
+        await controller.openChromeSignIn(for: profile.id)
+
+        let row = try #require(controller.profiles.first)
+        #expect(row.state == .ready)
+        #expect(row.usage?.accountID == usage.accountID)
+        #expect(service.openedChromeProfileIDs.isEmpty)
+        #expect(service.waitedForChromeProfileIDs.isEmpty)
+        #expect(controller.isChromeSignInOpen(for: profile.id) == false)
+    }
+
+    @Test
+    func returningFromSignInBrowserAutomaticallySyncsAndRefreshesUsage() async throws {
+        let tempDirectory = makeTemporaryDirectory()
+        let store = ProfileCatalogStore(
+            fileURL: tempDirectory.appendingPathComponent("profiles.json", isDirectory: false)
+        )
+        let profile = sampleProfile(label: "auto-close@example.com", sortOrder: 0)
+        try store.saveProfiles([profile])
+        let usage = makeUsage(
+            accountID: "acct_auto_close",
+            primaryUsedPercent: 22,
+            secondaryUsedPercent: 31
+        )
+        let service = StubPlusProfileDataService(
+            refreshResults: [
+                profile.id: .success(
+                    PlusProfileRefreshResult(
+                        usage: usage,
+                        detectedNote: "Chatgpt Plus · close",
+                        expiryRefresh: .unchanged
+                    )
+                ),
+            ],
+            syncResults: [
+                profile.id: .success(
+                    ChatGPTAuthContext(
+                        accessToken: "token-auto-close",
+                        accountID: "acct_auto_close",
+                        expiresAt: nil,
+                        deviceID: nil,
+                        clientVersion: nil,
+                        language: "en-US"
+                    )
+                ),
+            ],
+            chromeSignInFinishResults: [profile.id: true]
+        )
+        let controller = PlusProfileController(
+            catalogStore: store,
+            dataService: service,
+            autoStart: false
+        )
+
+        await controller.openChromeSignIn(for: profile.id)
+
+        let row = try #require(controller.profiles.first)
+        #expect(service.openedChromeProfileIDs == [profile.id])
+        #expect(service.waitedForChromeProfileIDs == [profile.id])
+        #expect(service.syncedChromeProfileIDs == [profile.id])
+        #expect(controller.isChromeSignInOpen(for: profile.id) == false)
+        #expect(row.state == .ready)
+        #expect(row.usage?.accountID == "acct_auto_close")
     }
 
     @Test
@@ -773,19 +870,23 @@ struct PlusProfileControllerTests {
 private final class StubPlusProfileDataService: PlusProfileDataServing {
     private let refreshResults: [UUID: Result<PlusProfileRefreshResult, ChatGPTAPIError>]
     private let syncResults: [UUID: Result<ChatGPTAuthContext, ChatGPTAPIError>]
+    private let chromeSignInFinishResults: [UUID: Bool]
     private(set) var openedChromeProfileIDs: [UUID] = []
     private(set) var openedPasskeySetupProfileIDs: [UUID] = []
     private(set) var syncedChromeProfileIDs: [UUID] = []
+    private(set) var waitedForChromeProfileIDs: [UUID] = []
     private(set) var closedChromeProfileIDs: [UUID] = []
     private(set) var clearedProfileIDs: [UUID] = []
     private(set) var removedProfileIDs: [UUID] = []
 
     init(
         refreshResults: [UUID: Result<PlusProfileRefreshResult, ChatGPTAPIError>],
-        syncResults: [UUID: Result<ChatGPTAuthContext, ChatGPTAPIError>] = [:]
+        syncResults: [UUID: Result<ChatGPTAuthContext, ChatGPTAPIError>] = [:],
+        chromeSignInFinishResults: [UUID: Bool] = [:]
     ) {
         self.refreshResults = refreshResults
         self.syncResults = syncResults
+        self.chromeSignInFinishResults = chromeSignInFinishResults
     }
 
     func refreshProfile(_ profile: PlusProfile) async throws -> PlusProfileRefreshResult {
@@ -806,6 +907,11 @@ private final class StubPlusProfileDataService: PlusProfileDataServing {
         if let result = syncResults[profile.id] {
             _ = try result.get()
         }
+    }
+
+    func waitForChromeSignInToFinish(for profile: PlusProfile) async -> Bool {
+        waitedForChromeProfileIDs.append(profile.id)
+        return chromeSignInFinishResults[profile.id] ?? false
     }
 
     func closeChromeSignIn(for profile: PlusProfile) async {
@@ -878,6 +984,10 @@ private final class ConcurrencyRecordingProfileDataService: PlusProfileDataServi
     }
 
     func syncChromeSession(for profile: PlusProfile) async throws {
+    }
+
+    func waitForChromeSignInToFinish(for profile: PlusProfile) async -> Bool {
+        false
     }
 
     func closeChromeSignIn(for profile: PlusProfile) async {

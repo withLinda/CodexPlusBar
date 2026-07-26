@@ -478,8 +478,20 @@ final class PlusProfileController {
     }
 
     func openChromeSignIn(for profileID: UUID) async {
-        guard let index = indexOfProfile(profileID) else { return }
-        let snapshot = profiles[index]
+        guard var index = indexOfProfile(profileID) else { return }
+        var snapshot = profiles[index]
+
+        if snapshot.profile.provider == .claude, snapshot.state != .ready {
+            await refreshProfile(id: profileID)
+
+            guard let refreshedIndex = indexOfProfile(profileID) else { return }
+            index = refreshedIndex
+            snapshot = profiles[index]
+
+            if snapshot.state == .ready, snapshot.usage != nil {
+                return
+            }
+        }
 
         do {
             try await dataService.openChromeSignIn(for: snapshot.profile)
@@ -487,12 +499,21 @@ final class PlusProfileController {
             if let refreshedIndex = indexOfProfile(profileID) {
                 profiles[refreshedIndex] = profiles[refreshedIndex].updating(
                     statusMessage: .some(
-                        "Waiting for \(snapshot.profile.provider.displayName) sign-in in Chrome."
+                        "Sign in, then return here. Usage updates automatically."
                     ),
                     isRefreshing: false
                 )
             }
             updateDashboardStatus()
+
+            let didFinish = await dataService.waitForChromeSignInToFinish(
+                for: snapshot.profile
+            )
+            guard didFinish, chromeSignInProfileIDs.contains(profileID) else {
+                return
+            }
+
+            await syncChromeSession(for: profileID)
         } catch {
             applyFailure(
                 ChatGPTAPIError.map(error),

@@ -207,6 +207,76 @@ struct PlusProfileDataServiceTests {
     }
 
     @Test(.tags(.networking))
+    func refreshClaudeProfileRestoresSavedChromeCookiesAfterUnauthorized() async throws {
+        let organizationID = "841724c1-1111-4222-8333-123456789abc"
+        let profile = sampleProfile(
+            label: "claude-restored@example.com",
+            sortOrder: 0,
+            provider: .claude
+        )
+        let bootstrapAttempts = RequestCounter()
+        let transport = MockHTTPTransport { request in
+            switch request.url?.path {
+            case ClaudeWebURLs.bootstrapEndpoint.path:
+                if await bootstrapAttempts.next() == 1 {
+                    throw ChatGPTAPIError.unauthorized
+                }
+                return try makeClaudeBootstrapResponse(
+                    for: request,
+                    organizationIDs: [organizationID]
+                )
+            case "/api/organizations/\(organizationID)/usage":
+                return try makeClaudeUsageResponse(for: request, usedPercent: 9)
+            default:
+                throw ChatGPTAPIError.invalidResponse
+            }
+        }
+        let runtime = PlusProfileRuntime(
+            dataStore: .nonPersistent(),
+            transport: transport
+        )
+        let provider = StubRuntimeProvider(runtimeByProfileID: [profile.id: runtime])
+        let chromeSessionManager = StubChromeSessionManager(
+            cookies: [
+                ChromeDevToolsCookie(
+                    name: "sessionKey",
+                    value: "saved-claude-session",
+                    domain: ".claude.ai",
+                    path: "/",
+                    expires: nil,
+                    httpOnly: true,
+                    secure: true
+                ),
+            ]
+        )
+        let service = PlusProfileDataService(
+            runtimeProvider: provider,
+            chromeSessionManager: chromeSessionManager
+        )
+
+        let result = try await service.refreshProfile(profile)
+
+        #expect(result.usage.accountID == organizationID)
+        #expect(result.usage.primaryWindow.usedPercent == 9)
+        #expect(chromeSessionManager.restoredProfileIDs == [profile.id])
+        #expect(chromeSessionManager.syncedProfileIDs.isEmpty)
+        #expect(
+            await runtime.sessionStore.cookieValue(
+                named: "sessionKey",
+                for: ClaudeWebURLs.cookieScope
+            ) == "saved-claude-session"
+        )
+        #expect(
+            transport.requestPaths
+                == [
+                    "/edge-api/bootstrap",
+                    "/edge-api/bootstrap",
+                    "/api/organizations/\(organizationID)/usage",
+                ]
+        )
+    }
+
+    @Test(.tags(.networking))
     func refreshClaudeProfilePrefersLastActiveOrganizationCookie() async throws {
         let firstOrganizationID = "11111111-2222-4333-8444-555555555555"
         let activeOrganizationID = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
@@ -779,6 +849,7 @@ private final class StubChromeSessionManager: ChromeSessionManaging {
     private(set) var openedProfileIDs: [UUID] = []
     private(set) var openedPasskeySetupProfileIDs: [UUID] = []
     private(set) var syncedProfileIDs: [UUID] = []
+    private(set) var restoredProfileIDs: [UUID] = []
     private(set) var clearedProfileIDs: [UUID] = []
     private(set) var removedProfileIDs: [UUID] = []
     private(set) var closedProfileIDs: [UUID] = []
@@ -808,6 +879,23 @@ private final class StubChromeSessionManager: ChromeSessionManaging {
         return ChromeCookieImportResult(importedCookieCount: count)
     }
 
+    func restoreCookies(
+        for profile: PlusProfile,
+        into sessionStore: WebSessionStore
+    ) async throws -> ChromeCookieImportResult {
+        restoredProfileIDs.append(profile.id)
+        let count = try await ChromeCookieImporter.storeCookies(
+            from: cookies,
+            for: profile.provider,
+            in: sessionStore
+        )
+        return ChromeCookieImportResult(importedCookieCount: count)
+    }
+
+    func waitForSignInToFinish(for profile: PlusProfile) async -> Bool {
+        false
+    }
+
     func clearCookies(for profile: PlusProfile) async throws {
         clearedProfileIDs.append(profile.id)
     }
@@ -833,6 +921,15 @@ private final class MockHTTPTransport: HTTPTransport {
     func data(for request: URLRequest) async throws -> HTTPResponseData {
         requestPaths.append(request.url?.path ?? "<missing>")
         return try await handler(request)
+    }
+}
+
+private actor RequestCounter {
+    private var value = 0
+
+    func next() -> Int {
+        value += 1
+        return value
     }
 }
 

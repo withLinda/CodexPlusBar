@@ -25,6 +25,10 @@ struct ChromeProfileStore {
         return directory
     }
 
+    func hasProfileDirectory(for profile: PlusProfile) -> Bool {
+        fileManager.fileExists(atPath: profileDirectory(for: profile).path)
+    }
+
     func removeProfileDirectory(for profile: PlusProfile) throws {
         let directory = profileDirectory(for: profile)
         guard fileManager.fileExists(atPath: directory.path) else {

@@ -302,23 +302,33 @@ struct ProfileManagerSessionPanelPresentation: Equatable, Sendable {
     let summaryText: String
     let primaryTitle: String
     let passkeyHelpTitle = "Touch ID help"
-    let syncTitle = "Sync now"
+    let syncTitle = "Check now"
     let cancelTitle = "Cancel"
     let isSyncDisabled: Bool
+    let showsSync: Bool
     let showsCancel: Bool
     let showsPasskeyHelp: Bool
 
     init(snapshot: PlusProfileSnapshot, isChromeSignInOpen: Bool) {
         let provider = snapshot.profile.provider
+        let hasReadyUsage = snapshot.state == .ready && snapshot.usage != nil
         title = "\(provider.displayName) sign-in"
-        primaryTitle = "Open \(provider.displayName)"
-        isSyncDisabled = isChromeSignInOpen == false || snapshot.isRefreshing
-        showsCancel = isChromeSignInOpen
+        primaryTitle = isChromeSignInOpen
+            ? "Show \(provider.displayName)"
+            : "Open \(provider.displayName)"
+        showsSync = isChromeSignInOpen && hasReadyUsage == false
+        isSyncDisabled = showsSync == false || snapshot.isRefreshing
+        showsCancel = showsSync
         showsPasskeyHelp = provider == .codex
+
+        if hasReadyUsage {
+            summaryText = "\(provider.displayName) session is synced."
+            return
+        }
 
         if isChromeSignInOpen {
             summaryText = snapshot.statusMessage
-                ?? "Waiting for \(provider.displayName) sign-in in Chrome."
+                ?? "Sign in, then return here. Usage updates automatically."
             return
         }
 
@@ -329,7 +339,11 @@ struct ProfileManagerSessionPanelPresentation: Equatable, Sendable {
 
         switch snapshot.state {
         case .idle, .needsLogin:
-            summaryText = "Open \(provider.displayName), sign in, then sync."
+            if provider == .claude {
+                summaryText = "Saved Claude sign-in is checked automatically."
+            } else {
+                summaryText = "Open Codex to sign in."
+            }
         case .loading:
             summaryText = "Checking this profile."
         case .ready:
@@ -1057,7 +1071,7 @@ struct ProfileManagerWindowView: View {
             HStack(alignment: .center, spacing: 12) {
                 Image(systemName: "key.fill")
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(CodexTheme.accentOrange)
+                    .foregroundStyle(CodexTheme.utilityActionText)
                     .frame(width: 24, height: 24)
                     .accessibilityHidden(true)
 
@@ -1111,11 +1125,13 @@ struct ProfileManagerWindowView: View {
                         }
                     }
 
-                    Button(presentation.syncTitle) {
-                        syncChromeSession(snapshot.id)
+                    if presentation.showsSync {
+                        Button(presentation.syncTitle) {
+                            syncChromeSession(snapshot.id)
+                        }
+                        .buttonStyle(CodexSecondaryButtonStyle(font: ProfileManagerTypography.smallStrong))
+                        .disabled(presentation.isSyncDisabled)
                     }
-                    .buttonStyle(CodexSecondaryButtonStyle(font: ProfileManagerTypography.smallStrong))
-                    .disabled(presentation.isSyncDisabled)
 
                     if presentation.showsCancel {
                         Button(presentation.cancelTitle) {
