@@ -65,6 +65,11 @@ struct NetworkTraceLogger: @unchecked Sendable {
             return messages
         }
 
+        if response.url?.path == ClaudeWebURLs.bootstrapEndpoint.path {
+            messages.append("[CodexPlusBar] Claude bootstrap body redacted (\(data.count) bytes)")
+            return messages
+        }
+
         if let sessionSummary = authSessionSummary(from: response.url, data: data) {
             messages.append("[CodexPlusBar] session summary: \(sessionSummary)")
             return messages

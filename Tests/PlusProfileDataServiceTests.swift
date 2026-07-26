@@ -154,8 +154,9 @@ struct PlusProfileDataServiceTests {
         )
     }
 
-    @Test
-    func refreshClaudeProfileUsesClaudeUsageEndpointOnly() async throws {
+    @Test(.tags(.networking))
+    func refreshClaudeProfileDiscoversOrganizationThenCachesIt() async throws {
+        let organizationID = "841724c1-1111-4222-8333-123456789abc"
         let profile = sampleProfile(
             label: "claude@example.com",
             sortOrder: 0,
@@ -163,35 +164,119 @@ struct PlusProfileDataServiceTests {
         )
         let transport = MockHTTPTransport { request in
             #expect(request.httpMethod == "GET")
-            #expect(request.url == ClaudeWebURLs.usageEndpoint)
 
-            return HTTPResponseData(
-                data: Data(
-                    """
-                    {
-                      "five_hour": null,
-                      "seven_day": null,
-                      "limits": [
-                        {
-                          "kind": "session",
-                          "group": "session",
-                          "percent": 2,
-                          "severity": "normal",
-                          "resets_at": "2026-07-26T15:10:00.082855+00:00",
-                          "scope": null,
-                          "is_active": true
-                        }
-                      ]
-                    }
-                    """.utf8
-                ),
-                response: HTTPURLResponse(
-                    url: try #require(request.url),
-                    statusCode: 200,
-                    httpVersion: nil,
-                    headerFields: [:]
-                )!
-            )
+            switch request.url?.path {
+            case ClaudeWebURLs.bootstrapEndpoint.path:
+                return try makeClaudeBootstrapResponse(
+                    for: request,
+                    organizationIDs: [organizationID]
+                )
+            case "/api/organizations/\(organizationID)/usage":
+                return try makeClaudeUsageResponse(for: request, usedPercent: 2)
+            default:
+                throw ChatGPTAPIError.invalidResponse
+            }
+        }
+        let runtime = PlusProfileRuntime(
+            dataStore: .nonPersistent(),
+            transport: transport
+        )
+        let provider = StubRuntimeProvider(runtimeByProfileID: [profile.id: runtime])
+        let service = PlusProfileDataService(runtimeProvider: provider)
+
+        let result = try await service.refreshProfile(profile)
+        _ = try await service.refreshProfile(profile)
+
+        #expect(result.usage.accountID == organizationID)
+        #expect(result.usage.planType == "claude")
+        #expect(result.usage.primaryWindow.usedPercent == 2)
+        #expect(result.usage.primaryWindow.remainingPercent == 98)
+        #expect(result.usage.secondaryWindow == nil)
+        #expect(result.detectedNote == "Claude")
+        #expect(result.expiryRefresh == .unchanged)
+        #expect(
+            transport.requestPaths
+                == [
+                    "/edge-api/bootstrap",
+                    "/api/organizations/\(organizationID)/usage",
+                    "/api/organizations/\(organizationID)/usage",
+                ]
+        )
+        #expect(runtime.authContext == nil)
+        #expect(runtime.claudeOrganizationID == organizationID)
+    }
+
+    @Test(.tags(.networking))
+    func refreshClaudeProfilePrefersLastActiveOrganizationCookie() async throws {
+        let firstOrganizationID = "11111111-2222-4333-8444-555555555555"
+        let activeOrganizationID = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
+        let profile = sampleProfile(
+            label: "claude-multi@example.com",
+            sortOrder: 0,
+            provider: .claude
+        )
+        let transport = MockHTTPTransport { request in
+            switch request.url?.path {
+            case ClaudeWebURLs.bootstrapEndpoint.path:
+                return try makeClaudeBootstrapResponse(
+                    for: request,
+                    organizationIDs: [firstOrganizationID, activeOrganizationID]
+                )
+            case "/api/organizations/\(activeOrganizationID)/usage":
+                return try makeClaudeUsageResponse(for: request, usedPercent: 12)
+            default:
+                throw ChatGPTAPIError.invalidResponse
+            }
+        }
+        let runtime = PlusProfileRuntime(
+            dataStore: .nonPersistent(),
+            transport: transport
+        )
+        await runtime.sessionStore.storeCookies([
+            try makeClaudeCookie(
+                name: ClaudeBootstrapService.lastActiveOrganizationCookieName,
+                value: activeOrganizationID
+            ),
+        ])
+        let provider = StubRuntimeProvider(runtimeByProfileID: [profile.id: runtime])
+        let service = PlusProfileDataService(runtimeProvider: provider)
+
+        let result = try await service.refreshProfile(profile)
+
+        #expect(result.usage.accountID == activeOrganizationID)
+        #expect(result.usage.primaryWindow.usedPercent == 12)
+        #expect(
+            transport.requestPaths
+                == [
+                    "/edge-api/bootstrap",
+                    "/api/organizations/\(activeOrganizationID)/usage",
+                ]
+        )
+    }
+
+    @Test(.tags(.networking))
+    func refreshClaudeProfileTriesNextMembershipAfterUsage404() async throws {
+        let firstOrganizationID = "11111111-2222-4333-8444-555555555555"
+        let workingOrganizationID = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
+        let profile = sampleProfile(
+            label: "claude-fallback@example.com",
+            sortOrder: 0,
+            provider: .claude
+        )
+        let transport = MockHTTPTransport { request in
+            switch request.url?.path {
+            case ClaudeWebURLs.bootstrapEndpoint.path:
+                return try makeClaudeBootstrapResponse(
+                    for: request,
+                    organizationIDs: [firstOrganizationID, workingOrganizationID]
+                )
+            case "/api/organizations/\(firstOrganizationID)/usage":
+                throw ChatGPTAPIError.httpStatus(404)
+            case "/api/organizations/\(workingOrganizationID)/usage":
+                return try makeClaudeUsageResponse(for: request, usedPercent: 18)
+            default:
+                throw ChatGPTAPIError.invalidResponse
+            }
         }
         let runtime = PlusProfileRuntime(
             dataStore: .nonPersistent(),
@@ -202,18 +287,62 @@ struct PlusProfileDataServiceTests {
 
         let result = try await service.refreshProfile(profile)
 
-        #expect(result.usage.accountID == ClaudeWebURLs.organizationID)
-        #expect(result.usage.planType == "claude")
-        #expect(result.usage.primaryWindow.usedPercent == 2)
-        #expect(result.usage.primaryWindow.remainingPercent == 98)
-        #expect(result.usage.secondaryWindow == nil)
-        #expect(result.detectedNote == "Claude")
-        #expect(result.expiryRefresh == .unchanged)
+        #expect(result.usage.accountID == workingOrganizationID)
+        #expect(runtime.claudeOrganizationID == workingOrganizationID)
         #expect(
             transport.requestPaths
-                == ["/api/organizations/\(ClaudeWebURLs.organizationID)/usage"]
+                == [
+                    "/edge-api/bootstrap",
+                    "/api/organizations/\(firstOrganizationID)/usage",
+                    "/api/organizations/\(workingOrganizationID)/usage",
+                ]
         )
-        #expect(runtime.authContext == nil)
+    }
+
+    @Test(.tags(.networking))
+    func cachedClaudeOrganization404ForcesBootstrapRediscovery() async throws {
+        let staleOrganizationID = "11111111-2222-4333-8444-555555555555"
+        let freshOrganizationID = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
+        let profile = sampleProfile(
+            label: "claude-stale@example.com",
+            sortOrder: 0,
+            provider: .claude
+        )
+        let transport = MockHTTPTransport { request in
+            switch request.url?.path {
+            case "/api/organizations/\(staleOrganizationID)/usage":
+                throw ChatGPTAPIError.httpStatus(404)
+            case ClaudeWebURLs.bootstrapEndpoint.path:
+                return try makeClaudeBootstrapResponse(
+                    for: request,
+                    organizationIDs: [freshOrganizationID]
+                )
+            case "/api/organizations/\(freshOrganizationID)/usage":
+                return try makeClaudeUsageResponse(for: request, usedPercent: 23)
+            default:
+                throw ChatGPTAPIError.invalidResponse
+            }
+        }
+        let runtime = PlusProfileRuntime(
+            dataStore: .nonPersistent(),
+            transport: transport
+        )
+        runtime.updateClaudeOrganizationID(staleOrganizationID)
+        let provider = StubRuntimeProvider(runtimeByProfileID: [profile.id: runtime])
+        let service = PlusProfileDataService(runtimeProvider: provider)
+
+        let result = try await service.refreshProfile(profile)
+
+        #expect(result.usage.accountID == freshOrganizationID)
+        #expect(runtime.claudeOrganizationID == freshOrganizationID)
+        #expect(
+            transport.requestPaths
+                == [
+                    "/api/organizations/\(staleOrganizationID)/usage",
+                    "/edge-api/bootstrap",
+                    "/api/organizations/\(freshOrganizationID)/usage",
+                ]
+        )
     }
 
     @Test
@@ -477,42 +606,33 @@ struct PlusProfileDataServiceTests {
         #expect(chromeSessionManager.openedProfileIDs == [profile.id])
     }
 
-    @Test
+    @Test(.tags(.networking))
     func syncClaudeSessionImportsCookiesAndValidatesUsage() async throws {
+        let staleOrganizationID = "11111111-2222-4333-8444-555555555555"
+        let organizationID = "841724c1-1111-4222-8333-123456789abc"
         let profile = sampleProfile(
             label: "claude-sync@example.com",
             sortOrder: 0,
             provider: .claude
         )
         let transport = MockHTTPTransport { request in
-            return HTTPResponseData(
-                data: Data(
-                    """
-                    {
-                      "limits": [
-                        {
-                          "kind": "session",
-                          "group": "session",
-                          "percent": 7,
-                          "resets_at": "2026-07-26T15:10:00+00:00",
-                          "is_active": true
-                        }
-                      ]
-                    }
-                    """.utf8
-                ),
-                response: HTTPURLResponse(
-                    url: try #require(request.url),
-                    statusCode: 200,
-                    httpVersion: nil,
-                    headerFields: [:]
-                )!
-            )
+            switch request.url?.path {
+            case ClaudeWebURLs.bootstrapEndpoint.path:
+                return try makeClaudeBootstrapResponse(
+                    for: request,
+                    organizationIDs: [organizationID]
+                )
+            case "/api/organizations/\(organizationID)/usage":
+                return try makeClaudeUsageResponse(for: request, usedPercent: 7)
+            default:
+                throw ChatGPTAPIError.invalidResponse
+            }
         }
         let runtime = PlusProfileRuntime(
             dataStore: .nonPersistent(),
             transport: transport
         )
+        runtime.updateClaudeOrganizationID(staleOrganizationID)
         let provider = StubRuntimeProvider(runtimeByProfileID: [profile.id: runtime])
         let chromeSessionManager = StubChromeSessionManager(
             cookies: [
@@ -523,6 +643,15 @@ struct PlusProfileDataServiceTests {
                     path: "/",
                     expires: nil,
                     httpOnly: true,
+                    secure: true
+                ),
+                ChromeDevToolsCookie(
+                    name: ClaudeBootstrapService.lastActiveOrganizationCookieName,
+                    value: organizationID,
+                    domain: ".claude.ai",
+                    path: "/",
+                    expires: nil,
+                    httpOnly: false,
                     secure: true
                 ),
             ]
@@ -537,6 +666,14 @@ struct PlusProfileDataServiceTests {
         #expect(chromeSessionManager.syncedProfileIDs == [profile.id])
         #expect(chromeSessionManager.closedProfileIDs == [profile.id])
         #expect(runtime.authContext == nil)
+        #expect(runtime.claudeOrganizationID == organizationID)
+        #expect(
+            transport.requestPaths
+                == [
+                    "/edge-api/bootstrap",
+                    "/api/organizations/\(organizationID)/usage",
+                ]
+        )
         #expect(
             await runtime.sessionStore.cookieValue(
                 named: "sessionKey",
@@ -547,9 +684,16 @@ struct PlusProfileDataServiceTests {
 
     @Test
     func clearSessionClearsNativeCookiesAndChromeCookies() async throws {
-        let profile = sampleProfile(label: "clear@example.com", sortOrder: 0)
+        let profile = sampleProfile(
+            label: "clear@example.com",
+            sortOrder: 0,
+            provider: .claude
+        )
         let runtime = PlusProfileRuntime(
             dataStore: .nonPersistent()
+        )
+        runtime.updateClaudeOrganizationID(
+            "841724c1-1111-4222-8333-123456789abc"
         )
         let provider = StubRuntimeProvider(runtimeByProfileID: [profile.id: runtime])
         let chromeSessionManager = StubChromeSessionManager()
@@ -562,6 +706,7 @@ struct PlusProfileDataServiceTests {
 
         #expect(provider.clearedProfileIDs == [profile.id])
         #expect(chromeSessionManager.clearedProfileIDs == [profile.id])
+        #expect(runtime.claudeOrganizationID == nil)
     }
 
     @Test
@@ -689,6 +834,73 @@ private final class MockHTTPTransport: HTTPTransport {
         requestPaths.append(request.url?.path ?? "<missing>")
         return try await handler(request)
     }
+}
+
+private func makeClaudeBootstrapResponse(
+    for request: URLRequest,
+    organizationIDs: [String]
+) throws -> HTTPResponseData {
+    let memberships = organizationIDs
+        .map { #"{"organization":{"uuid":"\#($0)"}}"# }
+        .joined(separator: ",")
+
+    return HTTPResponseData(
+        data: Data(
+            #"{"account":{"memberships":[\#(memberships)]}}"#.utf8
+        ),
+        response: HTTPURLResponse(
+            url: try #require(request.url),
+            statusCode: 200,
+            httpVersion: nil,
+            headerFields: ["Content-Type": "application/json"]
+        )!
+    )
+}
+
+private func makeClaudeUsageResponse(
+    for request: URLRequest,
+    usedPercent: Int
+) throws -> HTTPResponseData {
+    HTTPResponseData(
+        data: Data(
+            """
+            {
+              "limits": [
+                {
+                  "kind": "session",
+                  "group": "session",
+                  "percent": \(usedPercent),
+                  "resets_at": "2026-07-26T15:10:00.082855+00:00",
+                  "is_active": true
+                }
+              ]
+            }
+            """.utf8
+        ),
+        response: HTTPURLResponse(
+            url: try #require(request.url),
+            statusCode: 200,
+            httpVersion: nil,
+            headerFields: ["Content-Type": "application/json"]
+        )!
+    )
+}
+
+private func makeClaudeCookie(
+    name: String,
+    value: String
+) throws -> HTTPCookie {
+    try #require(
+        HTTPCookie(
+            properties: [
+                .name: name,
+                .value: value,
+                .domain: ".claude.ai",
+                .path: "/",
+                .secure: "TRUE",
+            ]
+        )
+    )
 }
 
 @MainActor

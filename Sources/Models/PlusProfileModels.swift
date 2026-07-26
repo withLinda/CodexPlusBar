@@ -1102,6 +1102,7 @@ final class PlusProfileRuntime {
     let transport: any HTTPTransport
     private let authContextWritable: (any ChatGPTAuthContextWritable)?
     private(set) var authContext: ChatGPTAuthContext?
+    private(set) var claudeOrganizationID: String?
 
     init(
         dataStore: WKWebsiteDataStore,
@@ -1116,5 +1117,9 @@ final class PlusProfileRuntime {
     func updateAuthContext(_ context: ChatGPTAuthContext?) {
         authContext = context
         authContextWritable?.updateAuthContext(context)
+    }
+
+    func updateClaudeOrganizationID(_ organizationID: String?) {
+        claudeOrganizationID = organizationID
     }
 }

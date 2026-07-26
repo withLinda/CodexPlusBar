@@ -1,8 +1,17 @@
 import Foundation
 
 struct ClaudeUsageService {
-    static func makeUsageRequest() -> URLRequest {
-        var request = URLRequest(url: ClaudeWebURLs.usageEndpoint)
+    static func makeUsageRequest(organizationID: String) throws -> URLRequest {
+        guard let normalizedOrganizationID = ClaudeBootstrapService.normalizedOrganizationID(
+            organizationID
+        ) else {
+            throw invalidOrganizationError()
+        }
+
+        let url = ClaudeWebURLs.organizationsEndpoint
+            .appendingPathComponent(normalizedOrganizationID)
+            .appendingPathComponent("usage")
+        var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
         return request
@@ -10,8 +19,15 @@ struct ClaudeUsageService {
 
     static func decodeSnapshot(
         from data: Data,
+        organizationID: String,
         fetchedAt: Date = .now
     ) throws -> WorkspaceLimitSnapshot {
+        guard let normalizedOrganizationID = ClaudeBootstrapService.normalizedOrganizationID(
+            organizationID
+        ) else {
+            throw invalidOrganizationError()
+        }
+
         switch WorkspacePayloadSupport.inspectPayload(in: data) {
         case .html, .unauthorizedJSON:
             throw ChatGPTAPIError.unauthorized
@@ -43,8 +59,8 @@ struct ClaudeUsageService {
         }
 
         return WorkspaceLimitSnapshot(
-            workspaceID: ClaudeWebURLs.organizationID,
-            accountID: ClaudeWebURLs.organizationID,
+            workspaceID: normalizedOrganizationID,
+            accountID: normalizedOrganizationID,
             planType: "claude",
             primaryWindow: primaryWindow,
             secondaryWindow: secondaryWindow,
@@ -85,6 +101,12 @@ struct ClaudeUsageService {
     private static func unsupportedResponse() -> ChatGPTAPIError {
         ChatGPTAPIError.unsupported(
             "Claude returned usage data, but the format changed and the app could not read it."
+        )
+    }
+
+    private static func invalidOrganizationError() -> ChatGPTAPIError {
+        ChatGPTAPIError.unsupported(
+            "Claude returned an invalid organization identifier."
         )
     }
 }

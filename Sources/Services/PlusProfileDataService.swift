@@ -82,10 +82,7 @@ final class PlusProfileDataService: PlusProfileDataServing {
     private func refreshClaudeProfile(_ profile: PlusProfile) async throws -> PlusProfileRefreshResult {
         let runtime = runtimeProvider.runtime(for: profile)
         runtime.updateAuthContext(nil)
-        let response = try await runtime.transport.data(
-            for: ClaudeUsageService.makeUsageRequest()
-        )
-        let snapshot = try ClaudeUsageService.decodeSnapshot(from: response.data)
+        let snapshot = try await fetchClaudeSnapshot(using: runtime)
 
         return PlusProfileRefreshResult(
             usage: PlusProfileUsage(
@@ -103,6 +100,7 @@ final class PlusProfileDataService: PlusProfileDataServing {
     func clearSession(for profile: PlusProfile) async throws {
         let runtime = runtimeProvider.runtime(for: profile)
         runtime.updateAuthContext(nil)
+        runtime.updateClaudeOrganizationID(nil)
         await runtimeProvider.clearSession(for: profile)
         try await chromeSessionManager.clearCookies(for: profile)
     }
@@ -110,6 +108,7 @@ final class PlusProfileDataService: PlusProfileDataServing {
     func removeProfileData(for profile: PlusProfile) async throws {
         let runtime = runtimeProvider.runtime(for: profile)
         runtime.updateAuthContext(nil)
+        runtime.updateClaudeOrganizationID(nil)
         try await runtimeProvider.removeProfileData(for: profile)
         try await chromeSessionManager.removeProfileData(for: profile)
     }
@@ -142,10 +141,8 @@ final class PlusProfileDataService: PlusProfileDataServing {
                 runtime.updateAuthContext(context)
             case .claude:
                 runtime.updateAuthContext(nil)
-                let response = try await runtime.transport.data(
-                    for: ClaudeUsageService.makeUsageRequest()
-                )
-                _ = try ClaudeUsageService.decodeSnapshot(from: response.data)
+                runtime.updateClaudeOrganizationID(nil)
+                _ = try await fetchClaudeSnapshot(using: runtime)
             }
 
             await chromeSessionManager.closeSignIn(for: profile)
@@ -167,6 +164,65 @@ final class PlusProfileDataService: PlusProfileDataServing {
         request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
         request.setValue(accountID, forHTTPHeaderField: "ChatGPT-Account-ID")
         return request
+    }
+
+    private func fetchClaudeSnapshot(
+        using runtime: PlusProfileRuntime
+    ) async throws -> WorkspaceLimitSnapshot {
+        if let cachedOrganizationID = runtime.claudeOrganizationID {
+            do {
+                return try await fetchClaudeSnapshot(
+                    organizationID: cachedOrganizationID,
+                    transport: runtime.transport
+                )
+            } catch let error as ChatGPTAPIError where error == .httpStatus(404) {
+                runtime.updateClaudeOrganizationID(nil)
+            }
+        }
+
+        let preferredOrganizationID = await runtime.sessionStore.cookieValue(
+            named: ClaudeBootstrapService.lastActiveOrganizationCookieName,
+            for: ClaudeWebURLs.cookieScope
+        )
+        let organizationIDs = try await ClaudeBootstrapService(
+            transport: runtime.transport
+        ).fetchOrganizationIDs(
+            preferredOrganizationID: preferredOrganizationID
+        )
+
+        var lastNotFoundError: ChatGPTAPIError?
+
+        for organizationID in organizationIDs {
+            do {
+                let snapshot = try await fetchClaudeSnapshot(
+                    organizationID: organizationID,
+                    transport: runtime.transport
+                )
+                runtime.updateClaudeOrganizationID(organizationID)
+                return snapshot
+            } catch let error as ChatGPTAPIError where error == .httpStatus(404) {
+                lastNotFoundError = error
+            }
+        }
+
+        throw lastNotFoundError
+            ?? ChatGPTAPIError.unsupported(
+                "Claude did not provide usage for any organization in this profile."
+            )
+    }
+
+    private func fetchClaudeSnapshot(
+        organizationID: String,
+        transport: HTTPTransport
+    ) async throws -> WorkspaceLimitSnapshot {
+        let request = try ClaudeUsageService.makeUsageRequest(
+            organizationID: organizationID
+        )
+        let response = try await transport.data(for: request)
+        return try ClaudeUsageService.decodeSnapshot(
+            from: response.data,
+            organizationID: organizationID
+        )
     }
 
     private static func makeDetectedNote(planType: String, accountID: String) -> String {

@@ -34,7 +34,9 @@ struct CookieBackedTransportTests {
             value: "claude-session",
             domain: ".claude.ai"
         )
-        var request = ClaudeUsageService.makeUsageRequest()
+        var request = try ClaudeUsageService.makeUsageRequest(
+            organizationID: "841724c1-1111-4222-8333-123456789abc"
+        )
         request.setValue("Bearer old-token", forHTTPHeaderField: "Authorization")
         request.setValue("old-account", forHTTPHeaderField: "ChatGPT-Account-ID")
         request.setValue("https://chatgpt.com", forHTTPHeaderField: "Origin")

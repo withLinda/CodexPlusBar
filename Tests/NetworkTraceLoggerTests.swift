@@ -93,4 +93,32 @@ struct NetworkTraceLoggerTests {
         #expect(messages.contains("workspace body:"))
     }
 
+    @Test(.tags(.networking))
+    func claudeBootstrapResponseMessagesRedactSensitiveBody() {
+        let response = HTTPURLResponse(
+            url: ClaudeWebURLs.bootstrapEndpoint,
+            statusCode: 200,
+            httpVersion: nil,
+            headerFields: ["Content-Type": "application/json"]
+        )!
+        let data = Data(
+            """
+            {
+              "account": {
+                "email": "private@example.com",
+                "intercom_user_jwt": "secret-jwt"
+              }
+            }
+            """.utf8
+        )
+
+        let messages = NetworkTraceLogger.responseMessages(
+            for: response,
+            data: data
+        ).joined(separator: "\n")
+
+        #expect(messages.contains("Claude bootstrap body redacted"))
+        #expect(messages.contains("private@example.com") == false)
+        #expect(messages.contains("secret-jwt") == false)
+    }
 }

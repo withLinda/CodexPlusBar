@@ -3,19 +3,23 @@ import Testing
 @testable import CodexPlusBar
 
 struct ClaudeUsageServiceTests {
-    @Test
-    func requestUsesExpectedOrganizationUsageGETEndpoint() {
-        let request = ClaudeUsageService.makeUsageRequest()
+    private let organizationID = "841724c1-1111-4222-8333-123456789abc"
+
+    @Test(.tags(.networking))
+    func requestUsesProvidedOrganizationUsageGETEndpoint() throws {
+        let request = try ClaudeUsageService.makeUsageRequest(
+            organizationID: organizationID
+        )
 
         #expect(request.httpMethod == "GET")
         #expect(
             request.url?.absoluteString
                 == "https://claude.ai/api/organizations/"
-                    + "37255346-bbc8-48a0-9d5e-a3e3329a3d80/usage"
+                    + "\(organizationID)/usage"
         )
     }
 
-    @Test
+    @Test(.tags(.networking))
     func limitsSessionEntryBuildsFiveHourWindow() throws {
         let fetchedAt = Date(timeIntervalSince1970: 1_800_000_000)
         let snapshot = try ClaudeUsageService.decodeSnapshot(
@@ -48,11 +52,12 @@ struct ClaudeUsageServiceTests {
                 }
                 """.utf8
             ),
+            organizationID: organizationID,
             fetchedAt: fetchedAt
         )
 
-        #expect(snapshot.workspaceID == ClaudeWebURLs.organizationID)
-        #expect(snapshot.accountID == ClaudeWebURLs.organizationID)
+        #expect(snapshot.workspaceID == organizationID)
+        #expect(snapshot.accountID == organizationID)
         #expect(snapshot.planType == "claude")
         #expect(snapshot.primaryWindow.usedPercent == 2)
         #expect(snapshot.primaryWindow.remainingPercent == 98)
@@ -64,7 +69,7 @@ struct ClaudeUsageServiceTests {
         #expect(snapshot.fetchedAt == fetchedAt)
     }
 
-    @Test
+    @Test(.tags(.networking))
     func activeWeeklyLimitBuildsSevenDayWindow() throws {
         let snapshot = try ClaudeUsageService.decodeSnapshot(
             from: Data(
@@ -88,18 +93,33 @@ struct ClaudeUsageServiceTests {
                   ]
                 }
                 """.utf8
-            )
+            ),
+            organizationID: organizationID
         )
 
         #expect(snapshot.secondaryWindow?.usedPercent == 40)
         #expect(snapshot.secondaryWindow?.remainingPercent == 60)
     }
 
-    @Test
+    @Test(.tags(.networking))
     func htmlResponseMeansSessionNeedsLogin() {
         #expect(throws: ChatGPTAPIError.unauthorized) {
             _ = try ClaudeUsageService.decodeSnapshot(
-                from: Data("<html>Sign in</html>".utf8)
+                from: Data("<html>Sign in</html>".utf8),
+                organizationID: organizationID
+            )
+        }
+    }
+
+    @Test(.tags(.networking))
+    func invalidOrganizationIDIsRejectedBeforeRequest() {
+        #expect(
+            throws: ChatGPTAPIError.unsupported(
+                "Claude returned an invalid organization identifier."
+            )
+        ) {
+            _ = try ClaudeUsageService.makeUsageRequest(
+                organizationID: "not-an-organization-uuid"
             )
         }
     }
