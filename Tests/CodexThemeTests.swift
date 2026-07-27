@@ -41,10 +41,14 @@ struct CodexThemeTests {
         #expect(CodexTheme.palette(for: darkHardPreset).accAqua.hex == "#83C092")
         #expect(CodexTheme.palette(for: darkHardPreset).accBlue.hex == "#7FBBB3")
         #expect(CodexTheme.palette(for: darkHardPreset).accPurple.hex == "#D699B6")
+        #expect(CodexTheme.palette(for: darkHardPreset).bgPurple.hex == "#463F48")
+        #expect(CodexTheme.palette(for: darkHardPreset).codexProviderSurfaceTint.hex == "#1E2D2B")
         #expect(CodexTheme.palette(for: lightHardPreset).accGreen.hex == "#8DA101")
         #expect(CodexTheme.palette(for: lightHardPreset).accAqua.hex == "#35A77C")
         #expect(CodexTheme.palette(for: lightHardPreset).accBlue.hex == "#3A94C5")
         #expect(CodexTheme.palette(for: lightHardPreset).accPurple.hex == "#DF69BA")
+        #expect(CodexTheme.palette(for: lightHardPreset).bgPurple.hex == "#FCECED")
+        #expect(CodexTheme.palette(for: lightHardPreset).codexProviderSurfaceTint.hex == "#FCECED")
     }
 
     @Test
@@ -116,6 +120,78 @@ struct CodexThemeTests {
     }
 
     @Test
+    func colorTokenMixingUsesDeterministicSRGBComponents() {
+        let black = CodexColorToken(hex: "#000000")
+        let white = CodexColorToken(hex: "#FFFFFF")
+
+        #expect(black.mixed(with: white, fraction: 0.5).hex == "#808080")
+        #expect(black.mixed(with: white, fraction: -1).hex == "#000000")
+        #expect(black.mixed(with: white, fraction: 2).hex == "#FFFFFF")
+    }
+
+    @Test
+    func darkHardProviderCardsUseDeepAquaAndBlueSurfaceFamilies() {
+        #expect(
+            CodexTheme.profileCardFillToken(
+                for: .codex,
+                preset: darkHardPreset
+            ).hex == "#232E2F"
+        )
+        #expect(
+            CodexTheme.profileCardFillToken(
+                for: .codex,
+                isSelected: true,
+                preset: darkHardPreset
+            ).hex == "#2C383A"
+        )
+        #expect(
+            CodexTheme.profileCardFillToken(
+                for: .claude,
+                preset: darkHardPreset
+            ).hex == "#2E3B42"
+        )
+        #expect(
+            CodexTheme.profileCardFillToken(
+                for: .claude,
+                isSelected: true,
+                preset: darkHardPreset
+            ).hex == "#37454C"
+        )
+    }
+
+    @Test
+    func darkCodexCardsStayDeepWhileSelectionRemainsVisible() {
+        let darkPresets = CodexThemePreset.allCases.filter { $0.variant == .dark }
+
+        for preset in darkPresets {
+            let base = CodexTheme.surfaceToken(for: .strong, preset: preset)
+            let unselectedFill = CodexTheme.profileCardFillToken(
+                for: .codex,
+                preset: preset
+            )
+            let selectedFill = CodexTheme.profileCardFillToken(
+                for: .codex,
+                isSelected: true,
+                preset: preset
+            )
+            let depthFromBase = deltaLStar(selectedFill, base)
+
+            #expect(
+                depthFromBase >= 3.5,
+                "\(preset.id) selected Codex card should be clearly darker than its normal base surface"
+            )
+            #expect(
+                depthFromBase <= 5,
+                "\(preset.id) selected Codex card should not become a black visual hole"
+            )
+            #expect(
+                deltaLStar(selectedFill, unselectedFill) >= 4,
+                "\(preset.id) selected and unselected Codex cards should remain easy to distinguish"
+            )
+        }
+    }
+
+    @Test
     func providerCardRolesPassWCAGAndDeltaLStarForEveryPreset() {
         for preset in CodexThemePreset.allCases {
             let palette = CodexTheme.palette(for: preset)
@@ -126,22 +202,35 @@ struct CodexThemeTests {
                 ("dataValue", palette.dataValueText),
             ]
 
-            let codexFill = CodexTheme.profileCardFillToken(
-                for: .codex,
-                preset: preset
-            )
-            let claudeFill = CodexTheme.profileCardFillToken(
-                for: .claude,
-                preset: preset
-            )
+            for isSelected in [false, true] {
+                let base = isSelected
+                    ? CodexTheme.surfaceToken(for: .strong, preset: preset)
+                    : CodexTheme.cardFillToken(for: .nested, preset: preset)
+                let codexFill = CodexTheme.profileCardFillToken(
+                    for: .codex,
+                    isSelected: isSelected,
+                    preset: preset
+                )
+                let claudeFill = CodexTheme.profileCardFillToken(
+                    for: .claude,
+                    isSelected: isSelected,
+                    preset: preset
+                )
 
-            #expect(
-                codexFill.hex != claudeFill.hex,
-                "\(preset.id) provider cards should not collapse to the same fill"
-            )
+                #expect(
+                    codexFill == base.mixed(with: palette.codexProviderSurfaceTint, fraction: 0.44),
+                    "\(preset.id) Codex cards should use their calm provider surface"
+                )
+                #expect(
+                    claudeFill == base.mixed(with: palette.bgBlue, fraction: 0.44),
+                    "\(preset.id) Claude cards should use the cool blue provider surface"
+                )
+                #expect(
+                    deltaE76(codexFill, claudeFill) >= 4,
+                    "\(preset.id) provider cards should keep a visible but calm perceptual color difference"
+                )
 
-            for provider in ProfileProvider.allCases {
-                for isSelected in [false, true] {
+                for provider in ProfileProvider.allCases {
                     let fill = CodexTheme.profileCardFillToken(
                         for: provider,
                         isSelected: isSelected,
@@ -733,17 +822,72 @@ private func contrastRatio(_ foreground: CodexColorToken, _ background: CodexCol
 }
 
 private func deltaLStar(_ lhs: CodexColorToken, _ rhs: CodexColorToken) -> Double {
-    abs(perceptualLightness(lhs) - perceptualLightness(rhs))
+    abs(cielab(lhs).lightness - cielab(rhs).lightness)
 }
 
-private func perceptualLightness(_ token: CodexColorToken) -> Double {
-    let y = relativeLuminance(token)
+private func deltaE76(_ lhs: CodexColorToken, _ rhs: CodexColorToken) -> Double {
+    let lhsLab = cielab(lhs)
+    let rhsLab = cielab(rhs)
+    return sqrt(
+        pow(lhsLab.lightness - rhsLab.lightness, 2)
+            + pow(lhsLab.a - rhsLab.a, 2)
+            + pow(lhsLab.b - rhsLab.b, 2)
+    )
+}
+
+private func cielab(_ token: CodexColorToken) -> (
+    lightness: Double,
+    a: Double,
+    b: Double
+) {
+    let rgb = rgbComponents(token)
+    let linearRGB = [
+        linearSRGB(rgb.red),
+        linearSRGB(rgb.green),
+        linearSRGB(rgb.blue),
+    ]
+    let xyzD65 = multiply(
+        matrix: [
+            [0.41239079926595934, 0.357584339383878, 0.1804807884018343],
+            [0.21263900587151027, 0.715168678767756, 0.07219231536073371],
+            [0.01933081871559182, 0.11919477979462598, 0.9505321522496607],
+        ],
+        vector: linearRGB
+    )
+    let xyzD50 = multiply(
+        matrix: [
+            [1.0479298208405488, 0.022946793341019088, -0.05019222954313557],
+            [0.029627815688159344, 0.990434484573249, -0.01707382502938514],
+            [-0.009243058152591178, 0.015055144896577895, 0.7518742899580008],
+        ],
+        vector: xyzD65
+    )
+    let referenceWhite = [0.96422, 1.0, 0.82521]
+    let fx = labTransfer(xyzD50[0] / referenceWhite[0])
+    let fy = labTransfer(xyzD50[1] / referenceWhite[1])
+    let fz = labTransfer(xyzD50[2] / referenceWhite[2])
+
+    return (
+        lightness: (116.0 * fy) - 16.0,
+        a: 500.0 * (fx - fy),
+        b: 200.0 * (fy - fz)
+    )
+}
+
+private func multiply(matrix: [[Double]], vector: [Double]) -> [Double] {
+    matrix.map { row in
+        zip(row, vector).reduce(0) { result, values in
+            result + values.0 * values.1
+        }
+    }
+}
+
+private func labTransfer(_ value: Double) -> Double {
     let epsilon = 216.0 / 24_389.0
     let kappa = 24_389.0 / 27.0
-    let value = y > epsilon
-        ? pow(y, 1.0 / 3.0)
-        : ((kappa * y) + 16.0) / 116.0
-    return (116.0 * value) - 16.0
+    return value > epsilon
+        ? pow(value, 1.0 / 3.0)
+        : ((kappa * value) + 16.0) / 116.0
 }
 
 private func relativeLuminance(_ token: CodexColorToken) -> Double {

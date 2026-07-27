@@ -53,17 +53,17 @@ When you use more than one ChatGPT profile, checking limits can become slow and 
 Download the latest notarized DMG from GitHub:
 
 - [Latest release page](https://github.com/withLinda/CodexPlusBar/releases/latest)
-- [Direct notarized DMG download](https://github.com/withLinda/CodexPlusBar/releases/download/snapshot-2026-07-27-account-pages/CodexPlusBar-snapshot-2026-07-27-account-pages.dmg)
-- [SHA-256 checksum](https://github.com/withLinda/CodexPlusBar/releases/download/snapshot-2026-07-27-account-pages/CodexPlusBar-snapshot-2026-07-27-account-pages.dmg.sha256)
+- [Direct notarized DMG download](https://github.com/withLinda/CodexPlusBar/releases/download/snapshot-2026-07-27-provider-surfaces/CodexPlusBar-snapshot-2026-07-27-provider-surfaces.dmg)
+- [SHA-256 checksum](https://github.com/withLinda/CodexPlusBar/releases/download/snapshot-2026-07-27-provider-surfaces/CodexPlusBar-snapshot-2026-07-27-provider-surfaces.dmg.sha256)
 
-1. Click the direct DMG link above to download `CodexPlusBar-snapshot-2026-07-27-account-pages.dmg`.
+1. Click the direct DMG link above to download `CodexPlusBar-snapshot-2026-07-27-provider-surfaces.dmg`.
 2. Optional: download the checksum file into the same folder, open Terminal there, and run:
 
    ```bash
-   shasum -a 256 -c CodexPlusBar-snapshot-2026-07-27-account-pages.dmg.sha256
+   shasum -a 256 -c CodexPlusBar-snapshot-2026-07-27-provider-surfaces.dmg.sha256
    ```
 
-   A correct download prints `CodexPlusBar-snapshot-2026-07-27-account-pages.dmg: OK`.
+   A correct download prints `CodexPlusBar-snapshot-2026-07-27-provider-surfaces.dmg: OK`.
 3. Double-click the downloaded DMG to open it.
 4. Drag `CodexPlusBar.app` onto the `Applications` folder inside the DMG.
 5. If macOS asks, replace the older copy in Applications.

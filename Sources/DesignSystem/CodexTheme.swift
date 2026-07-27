@@ -14,10 +14,27 @@ struct CodexColorToken: Sendable, Equatable {
     }
 
     func mixed(with other: CodexColorToken, fraction: Double) -> CodexColorToken {
-        CodexColorToken(
-            hex: color
-                .mixed(with: other.color, fraction: fraction)
-                .hexString
+        let lhs = rgbComponents
+        let rhs = other.rgbComponents
+        let clampedFraction = max(0, min(fraction, 1))
+
+        return CodexColorToken(
+            hex: String(
+                format: "#%02X%02X%02X",
+                Int(round(lhs.red + (rhs.red - lhs.red) * clampedFraction)),
+                Int(round(lhs.green + (rhs.green - lhs.green) * clampedFraction)),
+                Int(round(lhs.blue + (rhs.blue - lhs.blue) * clampedFraction))
+            )
+        )
+    }
+
+    private var rgbComponents: (red: Double, green: Double, blue: Double) {
+        let rawHex = hex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
+        let value = Int(rawHex, radix: 16) ?? 0
+        return (
+            Double((value >> 16) & 0xFF),
+            Double((value >> 8) & 0xFF),
+            Double(value & 0xFF)
         )
     }
 }
@@ -251,6 +268,7 @@ struct CodexEverforestPalette: Sendable, Equatable {
     let bgYellow: CodexColorToken
     let bgGreen: CodexColorToken
     let bgBlue: CodexColorToken
+    let bgPurple: CodexColorToken
     let fg: CodexColorToken
     let strongText: CodexColorToken
     let gray1: CodexColorToken
@@ -302,6 +320,19 @@ struct CodexEverforestPalette: Sendable, Equatable {
         CodexColorToken(hex: "#1E2326")
     }
 
+    var codexProviderSurfaceTint: CodexColorToken {
+        switch (variant, contrast) {
+        case (.dark, .hard):
+            CodexColorToken(hex: "#1E2D2B")
+        case (.dark, .medium):
+            CodexColorToken(hex: "#253432")
+        case (.dark, .soft):
+            CodexColorToken(hex: "#2C3B39")
+        case (.light, _):
+            bgPurple
+        }
+    }
+
 }
 
 enum CodexTheme {
@@ -343,6 +374,7 @@ enum CodexTheme {
                 bgYellow: CodexColorToken(hex: "#45443C"),
                 bgGreen: CodexColorToken(hex: "#3C4841"),
                 bgBlue: CodexColorToken(hex: "#384B55"),
+                bgPurple: CodexColorToken(hex: "#463F48"),
                 fg: CodexColorToken(hex: "#D3C6AA"),
                 strongText: CodexColorToken(hex: "#F2EFDF"),
                 gray1: CodexColorToken(hex: "#859289"),
@@ -368,6 +400,7 @@ enum CodexTheme {
                 bgYellow: CodexColorToken(hex: "#4D4C43"),
                 bgGreen: CodexColorToken(hex: "#425047"),
                 bgBlue: CodexColorToken(hex: "#3A515D"),
+                bgPurple: CodexColorToken(hex: "#4A444E"),
                 fg: CodexColorToken(hex: "#D3C6AA"),
                 strongText: CodexColorToken(hex: "#EFEBD4"),
                 gray1: CodexColorToken(hex: "#859289"),
@@ -393,6 +426,7 @@ enum CodexTheme {
                 bgYellow: CodexColorToken(hex: "#55544A"),
                 bgGreen: CodexColorToken(hex: "#48584E"),
                 bgBlue: CodexColorToken(hex: "#3F5865"),
+                bgPurple: CodexColorToken(hex: "#4E4953"),
                 fg: CodexColorToken(hex: "#D3C6AA"),
                 strongText: CodexColorToken(hex: "#F3EAD3"),
                 gray1: CodexColorToken(hex: "#859289"),
@@ -418,6 +452,7 @@ enum CodexTheme {
                 bgYellow: CodexColorToken(hex: "#FEF2D5"),
                 bgGreen: CodexColorToken(hex: "#F3F5D9"),
                 bgBlue: CodexColorToken(hex: "#ECF5ED"),
+                bgPurple: CodexColorToken(hex: "#FCECED"),
                 fg: CodexColorToken(hex: "#5C6A72"),
                 strongText: CodexColorToken(hex: "#1E2326"),
                 gray1: CodexColorToken(hex: "#939F91"),
@@ -443,6 +478,7 @@ enum CodexTheme {
                 bgYellow: CodexColorToken(hex: "#FAEDCD"),
                 bgGreen: CodexColorToken(hex: "#F0F1D2"),
                 bgBlue: CodexColorToken(hex: "#E9F0E9"),
+                bgPurple: CodexColorToken(hex: "#FAE8E2"),
                 fg: CodexColorToken(hex: "#5C6A72"),
                 strongText: CodexColorToken(hex: "#232A2E"),
                 gray1: CodexColorToken(hex: "#939F91"),
@@ -468,6 +504,7 @@ enum CodexTheme {
                 bgYellow: CodexColorToken(hex: "#F1E4C5"),
                 bgGreen: CodexColorToken(hex: "#E5E6C5"),
                 bgBlue: CodexColorToken(hex: "#E1E7DD"),
+                bgPurple: CodexColorToken(hex: "#F1DDD4"),
                 fg: CodexColorToken(hex: "#5C6A72"),
                 strongText: CodexColorToken(hex: "#293136"),
                 gray1: CodexColorToken(hex: "#939F91"),
@@ -718,14 +755,14 @@ enum CodexTheme {
             : cardFillToken(for: .nested, preset: preset)
         let providerTint = switch provider {
         case .codex:
-            palette.bgYellow
+            palette.codexProviderSurfaceTint
         case .claude:
             palette.bgBlue
         }
 
         return base.mixed(
             with: providerTint,
-            fraction: palette.isDark ? 0.32 : 0.32
+            fraction: 0.44
         )
     }
 
@@ -1250,29 +1287,6 @@ extension Color {
         )
     }
 
-    func mixed(with other: Color, fraction: Double) -> Color {
-        let lhs = NSColor(self).usingColorSpace(.deviceRGB) ?? NSColor.black
-        let rhs = NSColor(other).usingColorSpace(.deviceRGB) ?? NSColor.black
-        let clampedFraction = max(0, min(fraction, 1))
-
-        return Color(
-            .sRGB,
-            red: lhs.redComponent + (rhs.redComponent - lhs.redComponent) * clampedFraction,
-            green: lhs.greenComponent + (rhs.greenComponent - lhs.greenComponent) * clampedFraction,
-            blue: lhs.blueComponent + (rhs.blueComponent - lhs.blueComponent) * clampedFraction,
-            opacity: lhs.alphaComponent + (rhs.alphaComponent - lhs.alphaComponent) * clampedFraction
-        )
-    }
-
-    var hexString: String {
-        let color = NSColor(self).usingColorSpace(.deviceRGB) ?? NSColor.black
-        return String(
-            format: "#%02X%02X%02X",
-            Int(round(color.redComponent * 255)),
-            Int(round(color.greenComponent * 255)),
-            Int(round(color.blueComponent * 255))
-        )
-    }
 }
 
 private struct CodexThemeRefreshModifier: ViewModifier {
