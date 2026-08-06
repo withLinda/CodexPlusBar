@@ -48,22 +48,39 @@ When you use more than one ChatGPT profile, checking limits can become slow and 
 8. Pin the profile you care about most.
 9. Check 5H and 7D usage from the menu bar.
 
+## Chrome Storage
+
+CodexPlusBar keeps its helper Chrome data in one shared folder. Each saved
+account has one named Chrome profile inside that folder. This avoids storing a
+full copy of Chrome's extensions, speech models, and component downloads for
+every account.
+
+Normal account pages and background cookie checks use a small Chrome mode with
+extensions and Sync disabled. The **Touch ID help** action is the full Chrome
+mode; use it when you need Google Password Manager or a synced OpenAI passkey.
+
+When the app starts, it moves old per-account Chrome folders into the shared
+layout and removes generated caches and downloads. Cookies, passwords,
+passkeys, bookmarks, normal and protected Google account settings, web-app
+metadata, and website data are kept. Chrome must be closed before manually
+changing this folder.
+
 ## Install
 
 Download the latest notarized DMG from GitHub:
 
 - [Latest release page](https://github.com/withLinda/CodexPlusBar/releases/latest)
-- [Direct notarized DMG download](https://github.com/withLinda/CodexPlusBar/releases/download/snapshot-2026-07-27-provider-surfaces/CodexPlusBar-snapshot-2026-07-27-provider-surfaces.dmg)
-- [SHA-256 checksum](https://github.com/withLinda/CodexPlusBar/releases/download/snapshot-2026-07-27-provider-surfaces/CodexPlusBar-snapshot-2026-07-27-provider-surfaces.dmg.sha256)
+- [Direct notarized DMG download](https://github.com/withLinda/CodexPlusBar/releases/download/snapshot-2026-08-06-shared-chrome-storage/CodexPlusBar-snapshot-2026-08-06-shared-chrome-storage.dmg)
+- [SHA-256 checksum](https://github.com/withLinda/CodexPlusBar/releases/download/snapshot-2026-08-06-shared-chrome-storage/CodexPlusBar-snapshot-2026-08-06-shared-chrome-storage.dmg.sha256)
 
-1. Click the direct DMG link above to download `CodexPlusBar-snapshot-2026-07-27-provider-surfaces.dmg`.
+1. Click the direct DMG link above to download `CodexPlusBar-snapshot-2026-08-06-shared-chrome-storage.dmg`.
 2. Optional: download the checksum file into the same folder, open Terminal there, and run:
 
    ```bash
-   shasum -a 256 -c CodexPlusBar-snapshot-2026-07-27-provider-surfaces.dmg.sha256
+   shasum -a 256 -c CodexPlusBar-snapshot-2026-08-06-shared-chrome-storage.dmg.sha256
    ```
 
-   A correct download prints `CodexPlusBar-snapshot-2026-07-27-provider-surfaces.dmg: OK`.
+   A correct download prints `CodexPlusBar-snapshot-2026-08-06-shared-chrome-storage.dmg: OK`.
 3. Double-click the downloaded DMG to open it.
 4. Drag `CodexPlusBar.app` onto the `Applications` folder inside the DMG.
 5. If macOS asks, replace the older copy in Applications.

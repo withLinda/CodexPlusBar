@@ -59,7 +59,7 @@ private struct ProfileStateCounts {
 @Observable
 @MainActor
 final class PlusProfileController {
-    static let touchIDPasskeyHelpMessage = "Touch ID works when the OpenAI passkey is in Apple Passwords or synced into this Chrome profile."
+    static let touchIDPasskeyHelpMessage = "Touch ID works when the OpenAI passkey is in Apple Passwords or synced into this Chrome profile. Touch ID help opens the full Chrome setup; normal sign-in stays lightweight."
 
     var profiles: [PlusProfileSnapshot] = []
     var selectedProfileID: UUID?
@@ -94,12 +94,23 @@ final class PlusProfileController {
         loadStoredProfiles()
 
         if autoStart {
-            bootstrapTask = Task { [weak self] in
-                await self?.refreshAll()
-            }
-            autoRefreshTask = Task { [weak self] in
-                await self?.runAutoRefreshLoop()
-            }
+            startBackgroundTasks()
+        }
+    }
+
+    /// Starts the refresh loops after app startup work (such as the Chrome
+    /// storage migration) has completed.  Keeping this separate from `init`
+    /// prevents a first-run migration from racing a Claude cookie restore.
+    func startBackgroundTasks() {
+        guard bootstrapTask == nil, autoRefreshTask == nil else {
+            return
+        }
+
+        bootstrapTask = Task { [weak self] in
+            await self?.refreshAll()
+        }
+        autoRefreshTask = Task { [weak self] in
+            await self?.runAutoRefreshLoop()
         }
     }
 

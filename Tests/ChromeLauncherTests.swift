@@ -23,7 +23,7 @@ struct ChromeLauncherTests {
     }
 
     @Test
-    func launchUsesDedicatedProfileAndReadsDevToolsPort() async throws {
+    func launchUsesSharedUserDataRootAndReadsDevToolsPort() async throws {
         let profile = sampleProfile()
         let rootDirectory = makeTemporaryDirectory()
         let recorder = LaunchRecorder()
@@ -61,13 +61,24 @@ struct ChromeLauncherTests {
         let session = try await launcher.launch(profile: profile)
 
         #expect(session.profileID == profile.id)
-        #expect(session.profileDirectory == rootDirectory.appendingPathComponent(profile.webDataStoreID.uuidString, isDirectory: true))
+        #expect(
+            session.userDataDirectory == rootDirectory
+        )
+        #expect(
+            session.profileDirectory == rootDirectory.appendingPathComponent(
+                "Profile-\(profile.webDataStoreID.uuidString)",
+                isDirectory: true
+            )
+        )
         #expect(session.endpoint?.browserURL.absoluteString == "http://127.0.0.1:51046/json/version")
         #expect(recorder.arguments.contains("--remote-debugging-port=0"))
         #expect(recorder.arguments.contains("--remote-debugging-address=127.0.0.1"))
         #expect(recorder.arguments.contains("--no-first-run"))
         #expect(recorder.arguments.contains(ChatGPTWebURLs.loginPage.absoluteString))
-        #expect(recorder.arguments.contains("--user-data-dir=\(session.profileDirectory.path)"))
+        #expect(recorder.arguments.contains("--user-data-dir=\(rootDirectory.path)"))
+        #expect(recorder.arguments.contains("--profile-directory=Profile-\(profile.webDataStoreID.uuidString)"))
+        #expect(recorder.arguments.contains("--disable-extensions"))
+        #expect(recorder.arguments.contains("--disable-sync"))
     }
 
     @Test
@@ -145,6 +156,34 @@ struct ChromeLauncherTests {
         #expect(queryValues["continue"] == nil)
         #expect(launchedURLs.contains(ChatGPTWebURLs.loginPage))
         #expect(recorder.arguments.contains("--remote-debugging-port=0") == false)
+        #expect(recorder.arguments.contains("--disable-extensions"))
+        #expect(recorder.arguments.contains("--disable-sync") == false)
+    }
+
+    @Test
+    func openingSignInAgainAfterChromeQuitStartsANewProcess() async throws {
+        let profile = sampleProfile()
+        let recorder = LaunchRecorder()
+        let launcher = ChromeLauncher(
+            appLocator: StubChromeLocator(executableURL: URL(fileURLWithPath: "/tmp/fake-chrome")),
+            profileStore: ChromeProfileStore(rootDirectory: makeTemporaryDirectory()),
+            launchProcess: { _, arguments in
+                recorder.arguments = arguments
+                recorder.launchCount += 1
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: "/usr/bin/true")
+                try process.run()
+                process.waitUntilExit()
+                return process
+            },
+            sleep: { _ in }
+        )
+        let manager = DefaultChromeSessionManager(launcher: launcher)
+
+        try await manager.openSignIn(for: profile)
+        try await manager.openSignIn(for: profile)
+
+        #expect(recorder.launchCount == 2)
     }
 
     @Test
@@ -174,9 +213,16 @@ struct ChromeLauncherTests {
         #expect(launchedURLs.contains { $0.host == "accounts.google.com" } == false)
         #expect(recorder.arguments.contains("--new-window"))
         #expect(recorder.arguments.contains("--remote-debugging-port=0") == false)
+        #expect(recorder.arguments.contains("--disable-extensions"))
+        #expect(recorder.arguments.contains("--disable-sync"))
         #expect(
             recorder.arguments.contains(
-                "--user-data-dir=\(rootDirectory.appendingPathComponent(profile.webDataStoreID.uuidString).path)"
+                "--user-data-dir=\(rootDirectory.path)"
+            )
+        )
+        #expect(
+            recorder.arguments.contains(
+                "--profile-directory=Profile-\(profile.webDataStoreID.uuidString)"
             )
         )
     }
@@ -241,7 +287,7 @@ struct ChromeLauncherTests {
     }
 
     @Test
-    func passkeySetupLaunchUsesVisibleDedicatedProfileWithoutDevTools() async throws {
+    func passkeySetupLaunchUsesVisibleFullProfileWithoutDevTools() async throws {
         let profile = sampleProfile()
         let recorder = LaunchRecorder()
         let launcher = ChromeLauncher(
@@ -265,7 +311,11 @@ struct ChromeLauncherTests {
         #expect(recorder.arguments.contains("--headless=new") == false)
         #expect(recorder.arguments.contains("--new-window"))
         #expect(recorder.arguments.contains(ChatGPTWebURLs.passkeySetupPage.absoluteString))
-        #expect(recorder.arguments.contains("--user-data-dir=\(session.profileDirectory.path)"))
+        #expect(recorder.arguments.contains(ChromeBrowserSignInURLs.googleSyncSignInPage.absoluteString))
+        #expect(recorder.arguments.contains("--user-data-dir=\(session.userDataDirectory.path)"))
+        #expect(recorder.arguments.contains("--profile-directory=Profile-\(profile.webDataStoreID.uuidString)"))
+        #expect(recorder.arguments.contains("--disable-extensions") == false)
+        #expect(recorder.arguments.contains("--disable-sync") == false)
     }
 
     @Test
@@ -368,6 +418,7 @@ private func makeTemporaryDirectory() -> URL {
 
 private final class LaunchRecorder: @unchecked Sendable {
     var arguments: [String] = []
+    var launchCount = 0
 }
 
 private struct StubChromeLocator: ChromeAppLocating {

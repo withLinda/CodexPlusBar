@@ -8,6 +8,7 @@ struct ChromeDevToolsEndpoint: Equatable, Sendable {
 
 struct ChromeLaunchedSession: Sendable {
     let profileID: UUID
+    let userDataDirectory: URL
     let profileDirectory: URL
     let processIdentifier: Int32
     let endpoint: ChromeDevToolsEndpoint?
@@ -57,8 +58,17 @@ final class ChromeLauncher {
         case headless
     }
 
+    /// Controls which optional Chrome systems are allowed to run in the
+    /// app-owned profile.  Normal account work is intentionally minimal;
+    /// passkey help is the one explicit full-browser path.
+    enum StoragePolicy: Sendable {
+        case minimal
+        case signIn
+        case full
+    }
+
     private let appLocator: ChromeAppLocating
-    private let profileStore: ChromeProfileStore
+    let profileStore: ChromeProfileStore
     private let launchProcess: @MainActor @Sendable (URL, [String]) throws -> Process
     private let sleep: @Sendable (UInt64) async throws -> Void
 
@@ -80,13 +90,15 @@ final class ChromeLauncher {
         profile: PlusProfile,
         mode: LaunchMode = .visible,
         initialURL: URL = ChatGPTWebURLs.loginPage,
-        requiresDevTools: Bool = true
+        requiresDevTools: Bool = true,
+        storagePolicy: StoragePolicy = .minimal
     ) async throws -> ChromeLaunchedSession {
         try await launch(
             profile: profile,
             mode: mode,
             initialURLs: [initialURL],
-            requiresDevTools: requiresDevTools
+            requiresDevTools: requiresDevTools,
+            storagePolicy: storagePolicy
         )
     }
 
@@ -94,30 +106,34 @@ final class ChromeLauncher {
         profile: PlusProfile,
         mode: LaunchMode,
         initialURLs: [URL],
-        requiresDevTools: Bool
+        requiresDevTools: Bool,
+        storagePolicy: StoragePolicy = .minimal
     ) async throws -> ChromeLaunchedSession {
         guard let chromeExecutableURL = appLocator.chromeExecutableURL() else {
             throw ChatGPTAPIError.unsupported("Google Chrome is not installed on this Mac.")
         }
 
         let profileDirectory = try profileStore.ensureProfileDirectory(for: profile)
-        removeStaleDevToolsPortFile(in: profileDirectory)
+        removeStaleDevToolsPortFile(in: profileStore.userDataDirectory)
 
         let process = try launchProcess(
             chromeExecutableURL,
             arguments(
+                userDataDirectory: profileStore.userDataDirectory,
                 profileDirectory: profileDirectory,
                 mode: mode,
                 initialURLs: initialURLs,
-                requiresDevTools: requiresDevTools
+                requiresDevTools: requiresDevTools,
+                storagePolicy: storagePolicy
             )
         )
         let endpoint = requiresDevTools
-            ? try await waitForDevToolsEndpoint(in: profileDirectory)
+            ? try await waitForDevToolsEndpoint(in: profileStore.userDataDirectory)
             : nil
 
         return ChromeLaunchedSession(
             profileID: profile.id,
+            userDataDirectory: profileStore.userDataDirectory,
             profileDirectory: profileDirectory,
             processIdentifier: process.processIdentifier,
             endpoint: endpoint
@@ -128,18 +144,33 @@ final class ChromeLauncher {
         try await launch(
             profile: profile,
             mode: .visible,
-            initialURL: ChatGPTWebURLs.passkeySetupPage,
-            requiresDevTools: false
+            initialURLs: [
+                ChromeBrowserSignInURLs.googleSyncSignInPage,
+                ChatGPTWebURLs.passkeySetupPage,
+            ],
+            requiresDevTools: false,
+            storagePolicy: .full
         )
     }
 
     nonisolated static func readDevToolsEndpoint(
-        in profileDirectory: URL
+        in directory: URL
     ) throws -> ChromeDevToolsEndpoint {
-        let portFileURL = profileDirectory.appendingPathComponent(
+        let directPortFileURL = directory.appendingPathComponent(
             "DevToolsActivePort",
             isDirectory: false
         )
+        let portFileURL: URL
+        if FileManager.default.fileExists(atPath: directPortFileURL.path) {
+            portFileURL = directPortFileURL
+        } else {
+            // Keep the reader tolerant of callers/tests that still pass a
+            // profile directory from the old layout.
+            portFileURL = directory
+                .deletingLastPathComponent()
+                .appendingPathComponent("DevToolsActivePort", isDirectory: false)
+        }
+
         let contents = try String(contentsOf: portFileURL, encoding: .utf8)
         let lines = contents
             .split(whereSeparator: \.isNewline)
@@ -156,15 +187,31 @@ final class ChromeLauncher {
     }
 
     private func arguments(
+        userDataDirectory: URL,
         profileDirectory: URL,
         mode: LaunchMode,
         initialURLs: [URL],
-        requiresDevTools: Bool
+        requiresDevTools: Bool,
+        storagePolicy: StoragePolicy
     ) -> [String] {
         var arguments = [
-            "--user-data-dir=\(profileDirectory.path)",
+            "--user-data-dir=\(userDataDirectory.path)",
+            "--profile-directory=\(profileDirectory.lastPathComponent)",
             "--no-first-run",
+            "--no-default-browser-check",
         ]
+
+        switch storagePolicy {
+        case .minimal:
+            arguments.append("--disable-extensions")
+            arguments.append("--disable-sync")
+        case .signIn:
+            // Keep Chrome Sync available for the explicit Google sign-in tab,
+            // but never install/run extensions in the helper profile.
+            arguments.append("--disable-extensions")
+        case .full:
+            break
+        }
 
         if requiresDevTools {
             arguments.append("--remote-debugging-port=0")
@@ -185,12 +232,12 @@ final class ChromeLauncher {
     }
 
     private func waitForDevToolsEndpoint(
-        in profileDirectory: URL
+        in userDataDirectory: URL
     ) async throws -> ChromeDevToolsEndpoint {
         let attempts = 100
         for _ in 0..<attempts {
             do {
-                return try Self.readDevToolsEndpoint(in: profileDirectory)
+                return try Self.readDevToolsEndpoint(in: userDataDirectory)
             } catch {
                 try await sleep(100_000_000)
             }
@@ -199,8 +246,8 @@ final class ChromeLauncher {
         throw ChatGPTAPIError.network("Chrome did not open its sign-in connection in time.")
     }
 
-    private func removeStaleDevToolsPortFile(in profileDirectory: URL) {
-        let portFileURL = profileDirectory.appendingPathComponent(
+    private func removeStaleDevToolsPortFile(in userDataDirectory: URL) {
+        let portFileURL = userDataDirectory.appendingPathComponent(
             "DevToolsActivePort",
             isDirectory: false
         )

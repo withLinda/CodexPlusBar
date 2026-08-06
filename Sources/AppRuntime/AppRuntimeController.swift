@@ -1,11 +1,18 @@
 import AppKit
 import Foundation
+import OSLog
 
 @MainActor
 final class AppRuntimeController {
+    private static let logger = Logger(
+        subsystem: "com.linda.CodexPlusBar",
+        category: "ChromeStorage"
+    )
+
     let controller: PlusProfileController
     let clock: AppMinuteClock
 
+    private let chromeProfileStore: ChromeProfileStore
     private let profileManagerWindowPresenter: ProfileManagerWindowPresenter
     private let emailToolsWindowPresenter: EmailToolsWindowPresenter
     private let singleInstanceCoordinator: SingleInstanceCoordinator
@@ -23,11 +30,24 @@ final class AppRuntimeController {
     private var localReopenObserver: Any?
 
     init(singleInstanceCoordinator: SingleInstanceCoordinator = SingleInstanceCoordinator()) {
-        let controller = PlusProfileController()
+        let chromeProfileStore = ChromeProfileStore()
+        let chromeLauncher = ChromeLauncher(profileStore: chromeProfileStore)
+        let chromeSessionManager = DefaultChromeSessionManager(
+            launcher: chromeLauncher,
+            profileStore: chromeProfileStore
+        )
+        let dataService = PlusProfileDataService(
+            chromeSessionManager: chromeSessionManager
+        )
+        let controller = PlusProfileController(
+            dataService: dataService,
+            autoStart: false
+        )
         let dotTrickController = DotTrickController()
         let clock = AppMinuteClock()
         self.controller = controller
         self.clock = clock
+        self.chromeProfileStore = chromeProfileStore
         self.profileManagerWindowPresenter = ProfileManagerWindowPresenter(
             controller: controller,
             clock: clock
@@ -61,6 +81,21 @@ final class AppRuntimeController {
             return
         }
 
+        do {
+            let report = try chromeProfileStore.migrateAndPrune(
+                profiles: controller.profiles.map(\.profile)
+            )
+            Self.logger.info(
+                "Chrome storage prepared: migrated=\(report.migratedProfileCount, privacy: .public), orphans=\(report.removedOrphanCount, privacy: .public), disposableItems=\(report.removedDisposableItemCount, privacy: .public)"
+            )
+        } catch {
+            // A failed cleanup must not prevent the app from opening.  The
+            // launcher still performs per-profile migration on demand.
+            controller.statusMessage = "Chrome storage cleanup will retry next time."
+            Self.logger.error("Chrome storage preparation failed: \(String(describing: error), privacy: .public)")
+        }
+
+        controller.startBackgroundTasks()
         menuBarStatusItemController.start()
         clock.start()
     }
