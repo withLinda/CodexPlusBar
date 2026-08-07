@@ -17,7 +17,7 @@ struct ProfileListPresentation: Equatable, Sendable {
             filter: filter,
             shownCount: displayedProfiles.count,
             totalCount: profiles.count,
-            fullFiveHourLimitCount: profiles.count(where: \.hasFullFiveHourLimit),
+            limitCounts: ProfileLimitCounts(snapshots: profiles),
             tagCounts: ProfileTagCounts(snapshots: profiles),
             providerCounts: ProfileProviderCounts(snapshots: profiles)
         )
@@ -29,7 +29,7 @@ struct ProfileListControlsBar: View {
     @Binding var displayOrder: ProfileDisplayOrder
     let textScale: Double
     let clearFilter: () -> Void
-    let toggleFullLimit: () -> Void
+    let toggleLimit: (ProfileLimitFilter) -> Void
     let toggleTag: (PlusProfileTag) -> Void
     let toggleProvider: (ProfileProvider) -> Void
 
@@ -38,7 +38,7 @@ struct ProfileListControlsBar: View {
         displayOrder: Binding<ProfileDisplayOrder>,
         textScale: Double = 1,
         clearFilter: @escaping () -> Void,
-        toggleFullLimit: @escaping () -> Void,
+        toggleLimit: @escaping (ProfileLimitFilter) -> Void,
         toggleTag: @escaping (PlusProfileTag) -> Void,
         toggleProvider: @escaping (ProfileProvider) -> Void
     ) {
@@ -46,7 +46,7 @@ struct ProfileListControlsBar: View {
         _displayOrder = displayOrder
         self.textScale = textScale
         self.clearFilter = clearFilter
-        self.toggleFullLimit = toggleFullLimit
+        self.toggleLimit = toggleLimit
         self.toggleTag = toggleTag
         self.toggleProvider = toggleProvider
     }
@@ -57,7 +57,7 @@ struct ProfileListControlsBar: View {
                 presentation: filterPresentation,
                 textScale: textScale,
                 clearFilter: clearFilter,
-                toggleFullLimit: toggleFullLimit,
+                toggleLimit: toggleLimit,
                 toggleTag: toggleTag,
                 toggleProvider: toggleProvider
             )
@@ -78,7 +78,7 @@ struct ProfileFilterBarPresentation: Equatable, Sendable {
     let filter: ProfileFilter
     let shownCount: Int
     let totalCount: Int
-    let fullFiveHourLimitCount: Int
+    let limitCounts: ProfileLimitCounts
     let tagCounts: ProfileTagCounts
     let providerCounts: ProfileProviderCounts
 
@@ -86,14 +86,14 @@ struct ProfileFilterBarPresentation: Equatable, Sendable {
         filter: ProfileFilter,
         shownCount: Int,
         totalCount: Int,
-        fullFiveHourLimitCount: Int = 0,
+        limitCounts: ProfileLimitCounts = ProfileLimitCounts(),
         tagCounts: ProfileTagCounts = ProfileTagCounts(),
         providerCounts: ProfileProviderCounts = ProfileProviderCounts()
     ) {
         self.filter = filter
         self.shownCount = shownCount
         self.totalCount = totalCount
-        self.fullFiveHourLimitCount = fullFiveHourLimitCount
+        self.limitCounts = limitCounts
         self.tagCounts = tagCounts
         self.providerCounts = providerCounts
     }
@@ -115,25 +115,24 @@ struct ProfileFilterBarPresentation: Equatable, Sendable {
     }
 
     var controlSummaryText: String {
-        if let selectedProvider = filter.selectedProvider {
-            return "\(selectedProvider.displayName) · \(visibleSummaryText)"
+        let activeLabels = activeFilterLabels
+        switch activeLabels.count {
+        case 0:
+            return visibleSummaryText
+        case 1:
+            return "\(activeLabels[0]) · \(visibleSummaryText)"
+        default:
+            return "\(activeLabels.count) filters · \(visibleSummaryText)"
         }
-
-        return visibleSummaryText
     }
 
     var accessibilitySummaryText: String {
-        let fullLimitText = fullFiveHourLimitCount == 1
-            ? "1 profile with full 5-hour limit"
-            : "\(fullFiveHourLimitCount) profiles with full 5-hour limits"
         var parts = [visibleSummaryText]
-        if providerCounts.total > 0 {
-            parts.append(providerCounts.accessibilityText)
-        }
-        parts.append(fullLimitText)
-        parts.append(tagCounts.accessibilityText)
-        if let selectedProvider = filter.selectedProvider {
-            parts.append("\(selectedProvider.displayName) only")
+        let descriptions = activeFilterDescriptions
+        if descriptions.isEmpty {
+            parts.append("no filters")
+        } else {
+            parts.append(contentsOf: descriptions)
         }
         return parts.joined(separator: ", ")
     }
@@ -150,16 +149,16 @@ struct ProfileFilterBarPresentation: Equatable, Sendable {
         filter.isSelected(provider)
     }
 
-    var isFullFiveHourLimitSelected: Bool {
-        filter.showsOnlyFullFiveHourLimit
+    func isSelected(_ limit: ProfileLimitFilter) -> Bool {
+        filter.isSelected(limit)
     }
 
     var statusCountText: String {
         tagCounts.statusText
     }
 
-    var segments: [ProfileFilterSegment] {
-        let allSegment = ProfileFilterSegment(
+    var allSegment: ProfileFilterSegment {
+        ProfileFilterSegment(
             kind: .all,
             title: "All",
             count: totalCount,
@@ -167,10 +166,12 @@ struct ProfileFilterBarPresentation: Equatable, Sendable {
             isEnabled: totalCount > 0,
             accessibilityLabel: "All profiles"
         )
+    }
 
-        let providerSegments: [ProfileFilterSegment] = if providerCounts.total > 0
+    var providerSegments: [ProfileFilterSegment] {
+        if providerCounts.total > 0
             || filter.selectedProvider != nil {
-            ProfileProvider.allCases.map { provider in
+            return ProfileProvider.allCases.map { provider in
                 let count = providerCounts.count(for: provider)
                 return ProfileFilterSegment(
                     kind: .provider(provider),
@@ -181,20 +182,27 @@ struct ProfileFilterBarPresentation: Equatable, Sendable {
                     accessibilityLabel: "\(provider.displayName) profiles"
                 )
             }
-        } else {
-            []
         }
 
-        let fullLimitSegment = ProfileFilterSegment(
-            kind: .fullFiveHourLimit,
-            title: "Full",
-            count: fullFiveHourLimitCount,
-            isSelected: isFullFiveHourLimitSelected,
-            isEnabled: fullFiveHourLimitCount > 0 || isFullFiveHourLimitSelected,
-            accessibilityLabel: "Full 5-hour limit, 100 percent remaining"
-        )
+        return []
+    }
 
-        let tagSegments = PlusProfileTag.allCases.map { tag in
+    var limitSegments: [ProfileFilterSegment] {
+        ProfileLimitFilter.selectableCases.map { limit in
+            let count = limitCounts.count(for: limit)
+            return ProfileFilterSegment(
+                kind: .limit(limit),
+                title: limit.shortTitle,
+                count: count,
+                isSelected: isSelected(limit),
+                isEnabled: count > 0 || isSelected(limit),
+                accessibilityLabel: limit.accessibilityLabel
+            )
+        }
+    }
+
+    var tagSegments: [ProfileFilterSegment] {
+        PlusProfileTag.allCases.map { tag in
             let count = tagCounts.count(for: tag)
             return ProfileFilterSegment(
                 kind: .tag(tag),
@@ -205,15 +213,41 @@ struct ProfileFilterBarPresentation: Equatable, Sendable {
                 accessibilityLabel: tag.displayName
             )
         }
+    }
 
-        return [allSegment] + providerSegments + [fullLimitSegment] + tagSegments
+    var segments: [ProfileFilterSegment] {
+        [allSegment] + providerSegments + limitSegments + tagSegments
+    }
+
+    private var activeFilterLabels: [String] {
+        var labels: [String] = []
+        if let selectedProvider = filter.selectedProvider {
+            labels.append(selectedProvider.displayName)
+        }
+        if filter.selectedLimit != .any {
+            labels.append(filter.selectedLimit.shortTitle)
+        }
+        labels.append(contentsOf: filter.selectedTags.map(\.shortDisplayName))
+        return labels
+    }
+
+    private var activeFilterDescriptions: [String] {
+        var descriptions: [String] = []
+        if let selectedProvider = filter.selectedProvider {
+            descriptions.append("\(selectedProvider.displayName) only")
+        }
+        if filter.selectedLimit != .any {
+            descriptions.append(filter.selectedLimit.accessibilityLabel)
+        }
+        descriptions.append(contentsOf: filter.selectedTags.map { "\($0.displayName) status" })
+        return descriptions
     }
 }
 
 enum ProfileFilterSegmentKind: Hashable, Sendable {
     case all
     case provider(ProfileProvider)
-    case fullFiveHourLimit
+    case limit(ProfileLimitFilter)
     case tag(PlusProfileTag)
 
     var id: String {
@@ -222,8 +256,8 @@ enum ProfileFilterSegmentKind: Hashable, Sendable {
             return "all"
         case let .provider(provider):
             return "provider-\(provider.id)"
-        case .fullFiveHourLimit:
-            return "full-five-hour-limit"
+        case let .limit(limit):
+            return "limit-\(limit.id)"
         case let .tag(tag):
             return "tag-\(tag.id)"
         }
@@ -245,14 +279,22 @@ enum ProfileFilterSegmentKind: Hashable, Sendable {
         return provider
     }
 
+    var limit: ProfileLimitFilter? {
+        guard case let .limit(limit) = self else {
+            return nil
+        }
+
+        return limit
+    }
+
     var systemImage: String {
         switch self {
         case .all:
             return "line.3.horizontal.decrease.circle"
         case let .provider(provider):
             return provider.systemImage
-        case .fullFiveHourLimit:
-            return "gauge.high"
+        case let .limit(limit):
+            return limit.systemImage
         case let .tag(tag):
             return tag.systemImage
         }
@@ -279,6 +321,10 @@ struct ProfileFilterSegment: Identifiable, Equatable, Sendable {
         kind.provider
     }
 
+    var limit: ProfileLimitFilter? {
+        kind.limit
+    }
+
     var displayText: String {
         "\(title) \(count)"
     }
@@ -288,7 +334,7 @@ struct ProfileFilterBar: View {
     let presentation: ProfileFilterBarPresentation
     let textScale: Double
     let clearFilter: () -> Void
-    let toggleFullLimit: () -> Void
+    let toggleLimit: (ProfileLimitFilter) -> Void
     let toggleTag: (PlusProfileTag) -> Void
     let toggleProvider: (ProfileProvider) -> Void
 
@@ -296,14 +342,14 @@ struct ProfileFilterBar: View {
         presentation: ProfileFilterBarPresentation,
         textScale: Double = 1,
         clearFilter: @escaping () -> Void,
-        toggleFullLimit: @escaping () -> Void,
+        toggleLimit: @escaping (ProfileLimitFilter) -> Void,
         toggleTag: @escaping (PlusProfileTag) -> Void,
         toggleProvider: @escaping (ProfileProvider) -> Void
     ) {
         self.presentation = presentation
         self.textScale = textScale
         self.clearFilter = clearFilter
-        self.toggleFullLimit = toggleFullLimit
+        self.toggleLimit = toggleLimit
         self.toggleTag = toggleTag
         self.toggleProvider = toggleProvider
     }
@@ -327,7 +373,7 @@ struct ProfileFilterBar: View {
                 presentation: presentation,
                 textScale: textScale,
                 clearFilter: clearFilter,
-                toggleFullLimit: toggleFullLimit,
+                toggleLimit: toggleLimit,
                 toggleTag: toggleTag,
                 toggleProvider: toggleProvider
             )
@@ -346,8 +392,8 @@ struct ProfileFilterBar: View {
         switch segment.kind {
         case .all:
             clearFilter()
-        case .fullFiveHourLimit:
-            toggleFullLimit()
+        case let .limit(limit):
+            toggleLimit(limit)
         case let .tag(tag):
             toggleTag(tag)
         case let .provider(provider):
@@ -428,11 +474,11 @@ private struct ProfileFilterSegmentButton: View {
             ).opacity(0.34)
         }
 
-        if segment.kind == .fullFiveHourLimit {
-            return CodexTheme.usagePercentageColor(forRemainingPercent: 100).opacity(0.28)
+        if segment.limit != nil {
+            return CodexTheme.filterAction.opacity(0.28)
         }
 
-        return CodexTheme.accentBlue.opacity(0.28)
+        return CodexTheme.filterAction.opacity(0.28)
     }
 
     private var selectedIconColor: Color {
@@ -444,8 +490,8 @@ private struct ProfileFilterSegmentButton: View {
             return CodexTheme.profileProviderAccent(for: provider)
         }
 
-        if segment.kind == .fullFiveHourLimit {
-            return CodexTheme.usagePercentageColor(forRemainingPercent: 100)
+        if segment.limit != nil {
+            return CodexTheme.filterAction
         }
 
         return CodexTheme.primaryText
@@ -453,17 +499,28 @@ private struct ProfileFilterSegmentButton: View {
 
     private var helpText: String {
         if segment.isEnabled == false {
-            if segment.kind == .fullFiveHourLimit {
-                return "No profiles have a full 5H limit"
+            if let limit = segment.limit {
+                return "No profiles match \(limit.accessibilityLabel.lowercased())"
             }
 
             return "No \(segment.accessibilityLabel.lowercased()) profiles"
         }
 
-        if segment.kind == .fullFiveHourLimit {
-            return segment.isSelected
-                ? "Stop showing only full 5H limits"
-                : "Show only profiles with 5H at 100%"
+        if let limit = segment.limit {
+            if segment.isSelected {
+                return "Remove \(limit.summaryTitle.lowercased()) filter"
+            }
+
+            switch limit {
+            case .any:
+                return "Show profiles with any limit"
+            case .usable:
+                return "Show only profiles where every known limit is above 0%"
+            case .aboveThirtyFive:
+                return "Show only profiles where every known limit is above 35%"
+            case .fullFiveHour:
+                return "Show only profiles with 5H at 100%"
+            }
         }
 
         if let provider = segment.provider {
@@ -489,19 +546,32 @@ private struct ProfileFilterMenu: View {
     let presentation: ProfileFilterBarPresentation
     let textScale: Double
     let clearFilter: () -> Void
-    let toggleFullLimit: () -> Void
+    let toggleLimit: (ProfileLimitFilter) -> Void
     let toggleTag: (PlusProfileTag) -> Void
     let toggleProvider: (ProfileProvider) -> Void
 
     var body: some View {
         Menu {
-            ForEach(presentation.segments) { segment in
-                Button {
-                    activate(segment)
+            segmentButton(presentation.allSegment)
+
+            if presentation.providerSegments.isEmpty == false {
+                Menu {
+                    segmentButtons(presentation.providerSegments)
                 } label: {
-                    Label(segment.displayText, systemImage: symbolName(for: segment))
+                    Label("Provider", systemImage: "person.2")
                 }
-                .disabled(segment.isEnabled == false)
+            }
+
+            Menu {
+                segmentButtons(presentation.limitSegments)
+            } label: {
+                Label("Limits", systemImage: "gauge")
+            }
+
+            Menu {
+                segmentButtons(presentation.tagSegments)
+            } label: {
+                Label("Status", systemImage: "tag")
             }
 
             if presentation.isAllSelected == false {
@@ -542,6 +612,22 @@ private struct ProfileFilterMenu: View {
         .accessibilityValue(presentation.accessibilitySummaryText)
     }
 
+    @ViewBuilder
+    private func segmentButtons(_ segments: [ProfileFilterSegment]) -> some View {
+        ForEach(segments) { segment in
+            segmentButton(segment)
+        }
+    }
+
+    private func segmentButton(_ segment: ProfileFilterSegment) -> some View {
+        Button {
+            activate(segment)
+        } label: {
+            Label(segment.displayText, systemImage: symbolName(for: segment))
+        }
+        .disabled(segment.isEnabled == false)
+    }
+
     private func activate(_ segment: ProfileFilterSegment) {
         guard segment.isEnabled else {
             return
@@ -550,8 +636,8 @@ private struct ProfileFilterMenu: View {
         switch segment.kind {
         case .all:
             clearFilter()
-        case .fullFiveHourLimit:
-            toggleFullLimit()
+        case let .limit(limit):
+            toggleLimit(limit)
         case let .tag(tag):
             toggleTag(tag)
         case let .provider(provider):

@@ -714,6 +714,17 @@ struct PlusProfileSnapshot: Identifiable, Equatable, Sendable {
         usage?.fiveHourRemainingPercent == 100
     }
 
+    var minimumRemainingLimitPercent: Int? {
+        guard let usage else {
+            return nil
+        }
+
+        return min(
+            usage.fiveHourRemainingPercent,
+            usage.sevenDayRemainingPercent ?? usage.fiveHourRemainingPercent
+        )
+    }
+
     var nextResetAt: Date? {
         guard let usage else {
             return nil
@@ -869,24 +880,106 @@ enum ProfileDisplayOrder: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+enum ProfileLimitFilter: String, CaseIterable, Hashable, Identifiable, Sendable {
+    case any
+    case usable
+    case aboveThirtyFive
+    case fullFiveHour
+
+    static let selectableCases: [ProfileLimitFilter] = [
+        .usable,
+        .aboveThirtyFive,
+        .fullFiveHour,
+    ]
+
+    var id: String {
+        rawValue
+    }
+
+    var shortTitle: String {
+        switch self {
+        case .any:
+            return "Any"
+        case .usable:
+            return "Usable"
+        case .aboveThirtyFive:
+            return ">35%"
+        case .fullFiveHour:
+            return "Full"
+        }
+    }
+
+    var summaryTitle: String {
+        switch self {
+        case .any:
+            return "Any limit"
+        case .usable:
+            return "Usable limits"
+        case .aboveThirtyFive:
+            return "Limits above 35%"
+        case .fullFiveHour:
+            return "Full 5H"
+        }
+    }
+
+    var accessibilityLabel: String {
+        switch self {
+        case .any:
+            return "Any limits"
+        case .usable:
+            return "Every known limit above 0 percent"
+        case .aboveThirtyFive:
+            return "Every known limit above 35 percent"
+        case .fullFiveHour:
+            return "Full 5-hour limit, 100 percent remaining"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .any:
+            return "line.3.horizontal.decrease.circle"
+        case .usable:
+            return "checkmark.circle"
+        case .aboveThirtyFive:
+            return "chart.bar.fill"
+        case .fullFiveHour:
+            return "gauge.high"
+        }
+    }
+
+    func includes(_ snapshot: PlusProfileSnapshot) -> Bool {
+        switch self {
+        case .any:
+            return true
+        case .usable:
+            return snapshot.minimumRemainingLimitPercent.map { $0 > 0 } ?? false
+        case .aboveThirtyFive:
+            return snapshot.minimumRemainingLimitPercent.map { $0 > 35 } ?? false
+        case .fullFiveHour:
+            return snapshot.hasFullFiveHourLimit
+        }
+    }
+}
+
 struct ProfileFilter: Equatable, Sendable {
     private(set) var selectedTags: [PlusProfileTag]
-    private(set) var showsOnlyFullFiveHourLimit: Bool
+    private(set) var selectedLimit: ProfileLimitFilter
     private(set) var selectedProvider: ProfileProvider?
 
     init(
         _ selectedTags: [PlusProfileTag] = [],
-        showsOnlyFullFiveHourLimit: Bool = false,
+        limit: ProfileLimitFilter = .any,
         provider: ProfileProvider? = nil
     ) {
         self.selectedTags = PlusProfile.normalizedTags(selectedTags)
-        self.showsOnlyFullFiveHourLimit = showsOnlyFullFiveHourLimit
+        selectedLimit = limit
         selectedProvider = provider
     }
 
     var isEmpty: Bool {
         selectedTags.isEmpty
-            && showsOnlyFullFiveHourLimit == false
+            && selectedLimit == .any
             && selectedProvider == nil
     }
 
@@ -898,14 +991,18 @@ struct ProfileFilter: Equatable, Sendable {
         selectedProvider == provider
     }
 
+    func isSelected(_ limit: ProfileLimitFilter) -> Bool {
+        selectedLimit == limit
+    }
+
     func includes(_ snapshot: PlusProfileSnapshot) -> Bool {
         let matchesSelectedTags = selectedTags.isEmpty || selectedTags.contains { selectedTag in
             snapshot.tags.contains(selectedTag)
         }
-        let matchesFullFiveHourLimit = showsOnlyFullFiveHourLimit == false || snapshot.hasFullFiveHourLimit
+        let matchesLimit = selectedLimit.includes(snapshot)
         let matchesProvider = selectedProvider == nil || snapshot.profile.provider == selectedProvider
 
-        return matchesSelectedTags && matchesFullFiveHourLimit && matchesProvider
+        return matchesSelectedTags && matchesLimit && matchesProvider
     }
 
     func apply(to snapshots: [PlusProfileSnapshot]) -> [PlusProfileSnapshot] {
@@ -930,14 +1027,45 @@ struct ProfileFilter: Equatable, Sendable {
         selectedProvider = selectedProvider == provider ? nil : provider
     }
 
-    mutating func toggleFullFiveHourLimit() {
-        showsOnlyFullFiveHourLimit.toggle()
+    mutating func toggle(_ limit: ProfileLimitFilter) {
+        selectedLimit = selectedLimit == limit ? .any : limit
     }
 
     mutating func clear() {
         selectedTags = []
-        showsOnlyFullFiveHourLimit = false
+        selectedLimit = .any
         selectedProvider = nil
+    }
+}
+
+struct ProfileLimitCounts: Equatable, Sendable {
+    let usable: Int
+    let aboveThirtyFive: Int
+    let fullFiveHour: Int
+
+    init(usable: Int = 0, aboveThirtyFive: Int = 0, fullFiveHour: Int = 0) {
+        self.usable = usable
+        self.aboveThirtyFive = aboveThirtyFive
+        self.fullFiveHour = fullFiveHour
+    }
+
+    init(snapshots: [PlusProfileSnapshot]) {
+        usable = snapshots.count(where: ProfileLimitFilter.usable.includes)
+        aboveThirtyFive = snapshots.count(where: ProfileLimitFilter.aboveThirtyFive.includes)
+        fullFiveHour = snapshots.count(where: ProfileLimitFilter.fullFiveHour.includes)
+    }
+
+    func count(for filter: ProfileLimitFilter) -> Int {
+        switch filter {
+        case .any:
+            return 0
+        case .usable:
+            return usable
+        case .aboveThirtyFive:
+            return aboveThirtyFive
+        case .fullFiveHour:
+            return fullFiveHour
+        }
     }
 }
 

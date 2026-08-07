@@ -579,6 +579,7 @@ enum CodexTheme {
     static var searchInputText: Color { searchInputTextToken().color }
     static var searchPromptText: Color { searchPromptTextToken().color }
     static var searchAction: Color { searchActionToken().color }
+    static var filterAction: Color { filterActionToken().color }
     static var searchFieldFill: Color { searchFieldFillToken().color }
     static var searchFocusBorder: Color { searchFocusBorderToken().color }
     static var oneTimePasswordCodeText: Color { oneTimePasswordCodeTextToken().color }
@@ -664,6 +665,17 @@ enum CodexTheme {
 
     static func searchFocusBorderToken(preset: CodexThemePreset = activePreset) -> CodexColorToken {
         searchActionToken(preset: preset)
+    }
+
+    static func filterActionToken(preset: CodexThemePreset = activePreset) -> CodexColorToken {
+        readableAccentToken(
+            palette(for: preset).accBlue,
+            preset: preset,
+            additionalBackgrounds: [
+                surfaceToken(for: .subtle, preset: preset),
+                surfaceToken(for: .strong, preset: preset),
+            ]
+        )
     }
 
     static func successTextToken(preset: CodexThemePreset = activePreset) -> CodexColorToken {

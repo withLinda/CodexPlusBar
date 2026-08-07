@@ -583,7 +583,7 @@ struct ProfileManagerWindowView: View {
                         filterPresentation: listPresentation.filterBar,
                         displayOrder: $profileDisplayOrder,
                         clearFilter: clearSidebarFilter,
-                        toggleFullLimit: toggleSidebarFullLimitFilter,
+                        toggleLimit: toggleSidebarLimitFilter,
                         toggleTag: toggleSidebarTagFilter,
                         toggleProvider: toggleSidebarProviderFilter
                     )
@@ -1438,8 +1438,8 @@ struct ProfileManagerWindowView: View {
         keepSelectedProfileVisible()
     }
 
-    private func toggleSidebarFullLimitFilter() {
-        sidebarFilter.toggleFullFiveHourLimit()
+    private func toggleSidebarLimitFilter(_ limit: ProfileLimitFilter) {
+        sidebarFilter.toggle(limit)
         keepSelectedProfileVisible()
     }
 

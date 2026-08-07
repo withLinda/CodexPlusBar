@@ -687,7 +687,7 @@ struct PlusProfileControllerTests {
     }
 
     @Test
-    func profileFilterCombinesAnySelectedTagWithExactFullFiveHourLimit() {
+    func profileFilterCombinesTagsWithOneClearLimitMode() {
         let active = menuBarSnapshot(
             label: "active@example.com",
             state: .ready,
@@ -744,6 +744,30 @@ struct PlusProfileControllerTests {
             sortOrder: 6,
             tags: []
         )
+        let emptyFiveHour = menuBarSnapshot(
+            label: "empty-five-hour@example.com",
+            state: .ready,
+            fiveHourRemainingPercent: 0,
+            sevenDayRemainingPercent: 80,
+            sortOrder: 7,
+            tags: []
+        )
+        let emptySevenDay = menuBarSnapshot(
+            label: "empty-seven-day@example.com",
+            state: .ready,
+            fiveHourRemainingPercent: 80,
+            sevenDayRemainingPercent: 0,
+            sortOrder: 8,
+            tags: []
+        )
+        let exactThirtyFive = menuBarSnapshot(
+            label: "exact-thirty-five@example.com",
+            state: .ready,
+            fiveHourRemainingPercent: 82,
+            sevenDayRemainingPercent: 35,
+            sortOrder: 9,
+            tags: []
+        )
         let rows = [
             active,
             pending,
@@ -752,6 +776,9 @@ struct PlusProfileControllerTests {
             fullActive,
             fullPending,
             secondaryFullOnly,
+            emptyFiveHour,
+            emptySevenDay,
+            exactThirtyFive,
         ]
 
         #expect(ProfileFilter().apply(to: rows).map(\.id) == rows.map(\.id))
@@ -764,23 +791,47 @@ struct PlusProfileControllerTests {
                 == [pending.id, mixed.id, fullPending.id]
         )
         #expect(
-            ProfileFilter(showsOnlyFullFiveHourLimit: true).apply(to: rows).map(\.id)
+            ProfileFilter(limit: .usable).apply(to: rows).map(\.id)
+                == [
+                    active.id,
+                    untagged.id,
+                    fullActive.id,
+                    fullPending.id,
+                    secondaryFullOnly.id,
+                    exactThirtyFive.id,
+                ]
+        )
+        #expect(
+            ProfileFilter(limit: .aboveThirtyFive).apply(to: rows).map(\.id)
+                == [active.id, fullActive.id, fullPending.id, secondaryFullOnly.id]
+        )
+        #expect(
+            ProfileFilter(limit: .fullFiveHour).apply(to: rows).map(\.id)
                 == [fullActive.id, fullPending.id]
         )
+        let limitCounts = ProfileLimitCounts(snapshots: rows)
+        #expect(limitCounts.usable == 6)
+        #expect(limitCounts.aboveThirtyFive == 4)
+        #expect(limitCounts.fullFiveHour == 2)
         #expect(
             ProfileFilter(
                 [.active],
-                showsOnlyFullFiveHourLimit: true
-            ).apply(to: rows).map(\.id) == [fullActive.id]
+                limit: .aboveThirtyFive
+            ).apply(to: rows).map(\.id) == [active.id, fullActive.id]
         )
 
         var mutableFilter = ProfileFilter()
-        mutableFilter.toggleFullFiveHourLimit()
+        mutableFilter.toggle(.usable)
         #expect(mutableFilter.isEmpty == false)
-        #expect(mutableFilter.showsOnlyFullFiveHourLimit)
+        #expect(mutableFilter.selectedLimit == .usable)
+        mutableFilter.toggle(.aboveThirtyFive)
+        #expect(mutableFilter.selectedLimit == .aboveThirtyFive)
+        mutableFilter.toggle(.aboveThirtyFive)
+        #expect(mutableFilter.isEmpty)
+        mutableFilter.toggle(.fullFiveHour)
         mutableFilter.clear()
         #expect(mutableFilter.isEmpty)
-        #expect(mutableFilter.showsOnlyFullFiveHourLimit == false)
+        #expect(mutableFilter.selectedLimit == .any)
     }
 
     @Test

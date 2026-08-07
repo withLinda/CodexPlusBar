@@ -335,7 +335,7 @@ struct ProfileManagerWindowViewTests {
             filter: ProfileFilter([.active]),
             shownCount: 2,
             totalCount: 5,
-            fullFiveHourLimitCount: 1,
+            limitCounts: ProfileLimitCounts(usable: 4, aboveThirtyFive: 2, fullFiveHour: 1),
             tagCounts: ProfileTagCounts(active: 2, needAction: 1, pending: 2)
         )
 
@@ -343,11 +343,11 @@ struct ProfileManagerWindowViewTests {
         #expect(presentation.visibleSummaryText == "2 of 5 shown")
         #expect(
             presentation.accessibilitySummaryText
-                == "2 of 5 shown, 1 profile with full 5-hour limit, 2 active, 1 need action, 2 pending"
+                == "2 of 5 shown, Active status"
         )
         #expect(presentation.statusCountText == "2 active · 1 need action · 2 pending")
         #expect(presentation.isAllSelected == false)
-        #expect(presentation.isFullFiveHourLimitSelected == false)
+        #expect(presentation.isSelected(.fullFiveHour) == false)
         #expect(presentation.isSelected(.active))
         #expect(presentation.isSelected(.pending) == false)
     }

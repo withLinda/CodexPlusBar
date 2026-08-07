@@ -102,7 +102,7 @@ struct MenuBarRootViewTests {
             filter: ProfileFilter(),
             shownCount: 3,
             totalCount: 3,
-            fullFiveHourLimitCount: 1,
+            limitCounts: ProfileLimitCounts(usable: 3, aboveThirtyFive: 2, fullFiveHour: 1),
             tagCounts: ProfileTagCounts(active: 1, needAction: 1, pending: 1)
         )
 
@@ -110,14 +110,14 @@ struct MenuBarRootViewTests {
         #expect(presentation.visibleSummaryText == "3 profiles")
         #expect(
             presentation.accessibilitySummaryText
-                == "3 profiles, 1 profile with full 5-hour limit, 1 active, 1 need action, 1 pending"
+                == "3 profiles, no filters"
         )
         #expect(
             presentation.segments.map(\.displayText)
-                == ["All 3", "Full 1", "Active 1", "Action 1", "Pending 1"]
+                == ["All 3", "Usable 3", ">35% 2", "Full 1", "Active 1", "Action 1", "Pending 1"]
         )
         #expect(presentation.isAllSelected)
-        #expect(presentation.isFullFiveHourLimitSelected == false)
+        #expect(presentation.isSelected(.fullFiveHour) == false)
         #expect(presentation.isSelected(.active) == false)
     }
 
@@ -130,7 +130,11 @@ struct MenuBarRootViewTests {
             tagCounts: ProfileTagCounts(active: 2, needAction: 0, pending: 1)
         )
 
-        let fullLimit = try #require(presentation.segments.first { $0.kind == .fullFiveHourLimit })
+        let fullLimit = try #require(presentation.segments.first { $0.kind == .limit(.fullFiveHour) })
+        let usableLimit = try #require(presentation.segments.first { $0.kind == .limit(.usable) })
+        let aboveThirtyFive = try #require(
+            presentation.segments.first { $0.kind == .limit(.aboveThirtyFive) }
+        )
         let active = try #require(presentation.segments.first { $0.tag == .active })
         let needAction = try #require(presentation.segments.first { $0.tag == .needAction })
 
@@ -140,6 +144,8 @@ struct MenuBarRootViewTests {
         #expect(fullLimit.accessibilityLabel == "Full 5-hour limit, 100 percent remaining")
         #expect(fullLimit.isSelected == false)
         #expect(fullLimit.isEnabled == false)
+        #expect(usableLimit.isEnabled == false)
+        #expect(aboveThirtyFive.isEnabled == false)
         #expect(active.displayText == "Active 2")
         #expect(active.isSelected)
         #expect(active.isEnabled)
@@ -150,20 +156,32 @@ struct MenuBarRootViewTests {
     }
 
     @Test
-    func fullLimitFilterSegmentShowsExactSelectedState() throws {
+    func limitFilterSegmentsShowExactSelectedState() throws {
         let presentation = ProfileFilterBarPresentation(
-            filter: ProfileFilter(showsOnlyFullFiveHourLimit: true),
+            filter: ProfileFilter(limit: .aboveThirtyFive),
             shownCount: 2,
             totalCount: 5,
-            fullFiveHourLimitCount: 2
+            limitCounts: ProfileLimitCounts(usable: 4, aboveThirtyFive: 2, fullFiveHour: 1)
         )
 
-        let fullLimit = try #require(presentation.segments.first { $0.kind == .fullFiveHourLimit })
+        let usableLimit = try #require(presentation.segments.first { $0.kind == .limit(.usable) })
+        let aboveThirtyFive = try #require(
+            presentation.segments.first { $0.kind == .limit(.aboveThirtyFive) }
+        )
+        let fullLimit = try #require(
+            presentation.segments.first { $0.kind == .limit(.fullFiveHour) }
+        )
 
         #expect(presentation.isAllSelected == false)
-        #expect(presentation.isFullFiveHourLimitSelected)
-        #expect(fullLimit.displayText == "Full 2")
-        #expect(fullLimit.isSelected)
+        #expect(presentation.isSelected(.aboveThirtyFive))
+        #expect(presentation.controlSummaryText == ">35% · 2 of 5 shown")
+        #expect(presentation.accessibilitySummaryText == "2 of 5 shown, Every known limit above 35 percent")
+        #expect(usableLimit.displayText == "Usable 4")
+        #expect(usableLimit.isSelected == false)
+        #expect(aboveThirtyFive.displayText == ">35% 2")
+        #expect(aboveThirtyFive.isSelected)
+        #expect(fullLimit.displayText == "Full 1")
+        #expect(fullLimit.isSelected == false)
         #expect(fullLimit.isEnabled)
     }
 

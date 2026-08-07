@@ -67,7 +67,7 @@ struct MenuBarRootView: View {
                         displayOrder: $profileDisplayOrder,
                         textScale: panelTextScale,
                         clearFilter: clearProfileFilter,
-                        toggleFullLimit: toggleFullLimitFilter,
+                        toggleLimit: toggleLimitFilter,
                         toggleTag: toggleProfileTagFilter,
                         toggleProvider: toggleProfileProviderFilter
                     )
@@ -360,8 +360,8 @@ struct MenuBarRootView: View {
         isProfileSearchPresented = false
     }
 
-    private func toggleFullLimitFilter() {
-        profileFilter.toggleFullFiveHourLimit()
+    private func toggleLimitFilter(_ limit: ProfileLimitFilter) {
+        profileFilter.toggle(limit)
     }
 
     private func toggleProfileTagFilter(_ tag: PlusProfileTag) {

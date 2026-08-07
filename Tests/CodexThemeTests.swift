@@ -431,6 +431,44 @@ struct CodexThemeTests {
     }
 
     @Test
+    func profileFilterControlPassesWCAGAndDeltaLStarForEveryPreset() {
+        for preset in CodexThemePreset.allCases {
+            let palette = CodexTheme.palette(for: preset)
+            let unselectedFill = CodexTheme.surfaceToken(for: .subtle, preset: preset)
+            let selectedFill = CodexTheme.surfaceToken(for: .strong, preset: preset)
+            let filterAction = CodexTheme.filterActionToken(preset: preset)
+
+            let textPairs = [
+                (palette.supportText, unselectedFill, "unselected"),
+                (palette.primaryText, selectedFill, "selected"),
+            ]
+
+            for (text, fill, state) in textPairs {
+                #expect(
+                    contrastRatio(text, fill) >= 4.5,
+                    "\(preset.id) \(state) filter text should pass WCAG normal text contrast"
+                )
+                #expect(
+                    deltaLStar(text, fill) >= 40,
+                    "\(preset.id) \(state) filter text should keep enough perceptual lightness separation"
+                )
+            }
+
+            for fill in [unselectedFill, selectedFill] {
+                #expect(
+                    contrastRatio(filterAction, fill) >= 3,
+                    "\(preset.id) filter icon should pass WCAG non-text contrast"
+                )
+            }
+
+            #expect(
+                filterAction != CodexTheme.actionTextToken(preset: preset),
+                "\(preset.id) filters should keep the blue view-changing role separate from orange primary actions"
+            )
+        }
+    }
+
+    @Test
     func dataLabelsAndValuesStaySemanticallySeparatedForEveryPreset() {
         for preset in CodexThemePreset.allCases {
             let palette = CodexTheme.palette(for: preset)
