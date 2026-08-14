@@ -1,7 +1,7 @@
 ---
 title: CodexPlusBar Learnings
 status: active
-last_updated: 2026-03-18
+last_updated: 2026-08-14
 purpose: "Keep non-obvious project knowledge in one place so future agents can avoid repeated tool mistakes, API misunderstandings, and fragile fixes."
 update_policy:
   - "Read this file before debugging, tool-heavy work, networking changes, or test repair."
@@ -40,6 +40,8 @@ update_policy:
 - 2026-03-18: For normal local verification in this repo, prefer the Makefile entry points the project already wraps: `make test`, `make agent-verify`, and `TRACE_PRIVATE_API=1 make build-and-run-background`.
 
 ## Tooling Notes
+- 2026-08-14: `lean-ctx ctx_read` rejects files outside the project root unless an extra root is configured. When reviewing external skill instructions, use a direct read or configure the allowed root; keep repository reads on lean-ctx.
+- Stable rule: Treat lean-ctx's project-root boundary as intentional, not as a transient read failure.
 - 2026-03-18: Proxyman is useful for confirming private ChatGPT web calls in this app. It is especially helpful for checking real request headers like `ChatGPT-Account-ID` and matching them to returned account data.
 - 2026-03-18: When you need quick repo-wide search here, `rg` is enough for most code and test discovery. There is no existing root onboarding file beyond `AGENTS.md`, so future onboarding rules should live there.
 - 2026-03-19: Pencil MCP flagged `SF Pro Display`, `SF Pro Text`, and `SF Mono` as invalid font families during the menubar/app redesign, but the canvas still rendered readable fallback text. For Pencil work here, always verify with screenshots instead of trusting font validation warnings alone.

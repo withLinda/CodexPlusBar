@@ -1,14 +1,26 @@
 # CodexPlusBar
 
-CodexPlusBar is a native macOS menu bar app for people who use more than one Codex (ChatGPT) or Claude account. It keeps every saved account in a separate local browser profile and shows the remaining usage without making you switch accounts by hand.
+> Stop checking accounts one by one. See the right Codex or Claude account before you work.
 
-The app shows the remaining 5-hour and 7-day usage, reset times, sign-in state, and Codex account expiry when ChatGPT supplies it. You sign in with Google Chrome. No OpenAI or Anthropic API key is needed.
+CodexPlusBar is a native macOS menu bar app for people who use more than one ChatGPT/Codex or Claude browser account. It keeps every account in its own local Chrome profile and puts live remaining usage, reset times, and sign-in status in one place.
 
-## Screenshots
+[Download the latest release](https://github.com/withLinda/CodexPlusBar/releases/latest) · [View the source](https://github.com/withLinda/CodexPlusBar)
 
-### Menu bar panel
+## Why use it?
 
-![CodexPlusBar menu bar panel with profile filters and usage cards](docs/screenshots/codexplusbar-menu-bar-panel.png)
+Opening accounts one at a time is slow and easy to get wrong. CodexPlusBar works like a small control panel: check your limits at a glance, choose an account with enough capacity, and fix a sign-in before it blocks your work.
+
+- **One glance:** See every saved account from the menu bar.
+- **Better account choice:** Find accounts with usable, high, or full limits before starting a task.
+- **Less account confusion:** Each account has its own named Chrome profile and provider session.
+- **Faster recovery:** Profiles that need login or failed refresh are clearly marked.
+- **No API key setup:** Sign in through Chrome and let the app read the signed-in web session.
+
+## See it in action
+
+### Menu bar dashboard
+
+![CodexPlusBar menu bar dashboard with profile filters and usage cards](docs/screenshots/codexplusbar-menu-bar-panel.png)
 
 ### Profile Manager
 
@@ -16,182 +28,111 @@ The app shows the remaining 5-hour and 7-day usage, reset times, sign-in state, 
 
 Private values in these screenshots are masked or covered.
 
-## Why It Is Useful
+## What you can do
 
-Checking many accounts one by one is slow. CodexPlusBar works like a small fuel gauge for your accounts: you can quickly see which account has enough usage left, which account needs a new sign-in, and when a limit will reset.
+### Check usage without account hopping
 
-## Features
+- Track **Codex (ChatGPT)** and **Claude** profiles together.
+- See remaining **5H** and **7D** usage, live reset countdowns, refresh time, sign-in state, and Codex account expiry when ChatGPT provides it.
+- Refresh all profiles on launch, every five minutes, or on demand; refresh one profile when you only need a quick check.
+- Keep healthy cards visible when another profile fails to refresh.
 
-### Menu Bar Dashboard
+### Find the right profile quickly
 
-- Shows a compact profile list directly from the macOS menu bar. The app does not add a normal Dock icon.
-- Shows the saved provider, masked email label, manual status tags, 5H and 7D remaining usage, reset countdowns, and account expiry.
-- Shows the last update time and how many profiles are currently visible.
-- Pins one profile so its label and usage drive the macOS menu bar status. If the pinned profile is missing or not ready, the app chooses a ready profile that needs attention.
-- Searches saved profiles by full or partial email address or phone number.
-- Filters by provider (`Codex` or `Claude`).
-- Filters by manual status tags: `Active`, `Need action`, and `Pending`.
-- Filters by usage:
-  - `Usable`: every known limit is above 0%.
-  - `>35%`: every known limit is above 35%.
-  - `Full`: the 5H limit has exactly 100% remaining.
-- Shows a count beside each filter and provides one Reset action to clear active filters.
-- Sorts profiles by the next 5H or 7D reset, account expiry, or saved order. The selected sort is remembered.
-- Gives each profile quick actions to copy its label, open its saved link, open the manager, or pin it.
-- Uses `A-` and `A+` controls to change the menu bar panel text size from 90% to 135%.
-- Provides footer shortcuts for Refresh all, Profile Manager, Email Tools, theme settings, and Quit.
+- Search by full or partial email address or phone number.
+- Filter by provider (`Codex` or `Claude`), tag (`Active`, `Need action`, `Pending`), or limit (`Usable`, `>35%`, `Full`).
+- Sort by next reset, account expiry, or saved order; the selected sort is remembered.
+- See counts beside filters and clear all filters with one action.
+- Copy a profile label, open its saved link, open Profile Manager, or pin a profile from its card.
+- Pin one profile so its label and usage appear in the macOS menu bar status.
+- Adjust panel text size with `A-` and `A+` controls.
 
-### Usage and Provider Support
+### Keep profile details together
 
-- Supports Codex usage from ChatGPT and Claude usage from Claude.ai.
-- Gives every profile its own provider choice. You can change a profile between Codex and Claude.
-- Keeps each profile in its own local Chrome sign-in, so accounts do not share provider cookies.
-- Refreshes all profiles when the app starts and then every five minutes.
-- Refreshes all profiles together or only one selected profile.
-- Opens a ready profile on its provider account page in the correct saved Chrome profile.
-- Keeps one profile failure local. Other healthy profile cards can still show their usage.
-- Shows both remaining percentages and live reset countdowns. A missing provider value is shown as unavailable instead of using a guessed number.
-- Fetches Codex account expiry when ChatGPT supplies it. Claude account expiry is not fetched.
-- Uses clear provider badges and different provider card colors.
+Profile Manager lets you add, rename, reorder, select a provider for, and remove profiles. Optional fields include:
 
-### Profile Manager
+- profile label and web/email link
+- password and 2FA secret (copy helpers)
+- phone number and private notes
+- status tags
 
-- Adds, selects, renames, moves, and removes saved profiles.
-- Saves these optional fields for each profile:
-  - Profile label
-  - Web or email link
-  - Password
-  - 2FA secret key
-  - Phone number
-  - Notes
-  - Status tags
-- Copies the label, password, 2FA key, phone number, or current OTP with one click.
-- Hides password and 2FA values until you choose Show.
-- Generates a current TOTP code from a saved 2FA secret.
-- Keeps the OTP covered by default. You can copy it without showing it on the screen.
-- Shows the OTP expiry countdown and reports an invalid 2FA key.
-- Uses a searchable phone-number picker made from numbers already saved in other profiles.
-- Includes a Phone summary page with three groups: shared numbers, numbers used once, and profiles with no number.
-- Shows expiry information in the Phone summary and opens any listed profile directly.
-- Uses the Move up and Move down actions to change the real saved order. Changing the display sort does not rewrite that order.
-- Repairs duplicate saved profile rows automatically and keeps the first current copy.
+Private fields stay covered until you choose **Show**. A saved 2FA secret can generate a current TOTP code, show its expiry countdown, and copy the code without revealing it first. The phone summary groups shared numbers, one-use numbers, and profiles with no number, then opens a profile directly.
 
-### Sign-In and Session Tools
+### Sign in through the correct Chrome profile
 
-- Opens Codex or Claude sign-in in the correct dedicated Chrome profile.
-- Imports the signed-in provider cookies locally when you return to CodexPlusBar, then refreshes usage automatically.
-- Can check the Chrome session immediately with `Check now` or cancel an open sign-in flow.
-- Tries to restore a saved Claude Chrome sign-in before asking you to log in again.
-- Includes `Touch ID help` for Codex passkeys. This opens a fuller Chrome mode that can use Google Password Manager or a synced OpenAI passkey.
-- Uses a smaller Chrome mode with extensions and Chrome Sync disabled for normal account pages and background cookie checks.
-- Clears only the selected profile session when you want to sign in again.
-- Removes the selected profile and its local browser data when you use Remove profile.
+- Open Codex or Claude in the profile's dedicated Chrome window.
+- Sign in yourself, then return to CodexPlusBar; the app imports the local session and refreshes usage.
+- Use **Check now**, **Cancel**, or **Clear session** when a sign-in needs attention.
+- Use **Touch ID help** when a Codex passkey needs a fuller Chrome sign-in flow.
+- A ready profile opens its saved provider account page; a profile that needs login opens the repair flow.
 
-### Bulk Import
+The app does not type passwords into provider pages for you.
 
-- Imports many profiles from `email|password|2FA` rows.
-- Accepts normal rows and numbered rows such as `1. email|password|2FA`.
-- Ignores blank lines and shows the exact line that needs a fix.
-- Previews the number of valid profiles before import.
-- Creates imported rows as Codex profiles. You can change the provider after import.
-- Adds `https://2fa.live` as the saved link for an imported profile. You can replace this link later.
-- Does not send the saved 2FA key to that link. The link only opens in your browser.
+### Import many profiles at once
 
-Example:
+Bulk import accepts one profile per line in this format:
 
 ```text
 person@example.com|your-password|YOURBASE32SECRET
 2. second@example.com|another-password|ANOTHERBASE32SECRET
 ```
 
-### Email Tools
+It previews valid rows, reports the exact lines that need fixing, ignores blank lines, and creates the imported rows as Codex profiles. You can change the provider after import. Imported rows use `https://2fa.live` as their starting saved link; the app does not send your 2FA key to that link.
 
-- Opens from the envelope button in the menu bar panel.
-- Generates every single-dot Gmail variation for a username. For example, `johndoe` produces `j.ohndoe@gmail.com`, `jo.hndoe@gmail.com`, and the other one-dot positions.
-- Removes existing dots and normalizes the username before generation.
-- Saves generated sessions locally and avoids duplicate sessions for the same Gmail username.
-- Searches a long variation list.
-- Copies one variation or all currently unused variations.
-- Marks variations as used or unused and remembers that state.
-- Shows how many variations exist and how many are already used.
-- Removes a saved Email Tools session after a confirmation.
+### Generate Gmail dot variations
 
-### Appearance and Readability
+**Email Tools** generates every single-dot variation for a Gmail username, such as `johndoe@gmail.com` → `j.ohndoe@gmail.com`. Save sessions, search long lists, copy one or all unused variations, and mark variations as used so you do not repeat work.
 
-- Uses an Everforest-based interface.
-- Supports System, Dark, and Light appearance.
-- Supports Hard, Medium, and Soft contrast.
-- Updates theme colors without resetting the current selection, search, or scroll position.
-- Uses both icons and colors for provider and status meaning.
-- Adds accessibility labels and help text to the main controls.
-- Masks the middle of email addresses in compact profile lists while keeping the full saved value available in the detail form.
+### Make the interface fit your workflow
 
-## Quick Start
+- Everforest-based interface with **System**, **Dark**, and **Light** appearance.
+- **Hard**, **Medium**, and **Soft** contrast choices.
+- Provider colors, status icons, accessibility labels, and masked email labels for quick scanning.
 
-1. Open CodexPlusBar. Its status appears in the macOS menu bar.
-2. Open Profile Manager from the overlapping-window button.
-3. Click Add profile, or click Import to add many profiles.
-4. Choose Codex or Claude for the selected profile.
-5. Add any useful private fields, phone number, notes, and status tags, then save the changes.
-6. Click Open Codex or Open Claude and sign in inside the Chrome window.
-7. Return to CodexPlusBar. The app imports the session and refreshes the usage.
-8. Pin the profile you want in the top menu bar status.
-9. Use search, filters, and sorting to find the best profile quickly.
+## Quick start
 
-Passwords are saved only as copyable helper values. CodexPlusBar does not type a password into a provider page for you.
+1. Open CodexPlusBar. Its status appears in the macOS menu bar; it does not add a normal Dock icon.
+2. Choose **Profile Manager** from the menu bar panel.
+3. Select **Add profile**, or choose **Import** for multiple profiles.
+4. Select **Codex** or **Claude**, add a label, and save.
+5. Choose **Open Codex** or **Open Claude** and sign in in the Chrome window that opens.
+6. Return to CodexPlusBar. If needed, select **Check now**; usage will then refresh automatically.
+7. Pin a profile, or use search, filters, and sorting to choose one for your next task.
 
-## How Usage Is Shown
+## How usage is shown
 
-- Percentages mean **remaining usage**, not used usage.
-- `5H` is the provider's five-hour window.
-- `7D` is the provider's seven-day window.
-- `—` and `Unavailable` mean the provider did not return that value.
-- Reset text is calculated from the real reset date, so the countdown stays useful while the app is open.
-- The full 5H state uses its own accent so a profile with 100% remaining is easy to notice.
+- Percentages are **remaining** usage, not used usage.
+- `5H` is the provider's five-hour window; `7D` is its seven-day window.
+- `—` or `Unavailable` means the provider did not return that value; the app does not guess.
+- Countdown text uses the provider's reset time, so it stays useful while the app is open.
+- Codex expiry comes from ChatGPT account data. Claude expiry is not fetched.
 
-CodexPlusBar reads the signed-in web services used by ChatGPT and Claude. These are website endpoints, not a stable public API. A provider website change can temporarily break refresh or sign-in until the app is updated.
-
-## Chrome Storage
-
-CodexPlusBar stores helper Chrome data here:
-
-```text
-~/Library/Application Support/CodexPlusBar/ChromeProfiles
-```
-
-All saved accounts share this one Chrome data folder, but each account has its own named Chrome profile inside it. This avoids storing a full copy of Chrome extensions, speech models, and component downloads for every account.
-
-At startup, the app moves old per-account Chrome folders into the shared layout and removes generated caches and downloads. It keeps cookies, passwords, passkeys, bookmarks, normal and protected Google account settings, web-app metadata, and website data.
-
-Close Chrome before changing this folder by hand.
+CodexPlusBar reads the signed-in web services used by ChatGPT and Claude. These are provider website endpoints, not stable public APIs, so a provider website change can temporarily affect refresh or sign-in until the app is updated.
 
 ## Install
 
-Download the latest signed and notarized DMG from GitHub:
-
-- [Latest release page](https://github.com/withLinda/CodexPlusBar/releases/latest)
-- [Direct notarized DMG download](https://github.com/withLinda/CodexPlusBar/releases/download/snapshot-2026-08-08-profile-limit-filters/CodexPlusBar-snapshot-2026-08-08-profile-limit-filters.dmg)
-- [SHA-256 checksum](https://github.com/withLinda/CodexPlusBar/releases/download/snapshot-2026-08-08-profile-limit-filters/CodexPlusBar-snapshot-2026-08-08-profile-limit-filters.dmg.sha256)
-
-1. Download `CodexPlusBar-snapshot-2026-08-08-profile-limit-filters.dmg`.
-2. Optional: download the checksum file into the same folder, open Terminal in that folder, and run:
+1. Open the [latest release](https://github.com/withLinda/CodexPlusBar/releases/latest).
+2. Download the `.dmg` file. If a matching `.sha256` file is available, download it too and verify the DMG in the same folder:
 
    ```bash
-   shasum -a 256 -c CodexPlusBar-snapshot-2026-08-08-profile-limit-filters.dmg.sha256
+   shasum -a 256 -c <matching-file>.sha256
    ```
 
-   A correct download prints `CodexPlusBar-snapshot-2026-08-08-profile-limit-filters.dmg: OK`.
+3. Open the DMG and drag `CodexPlusBar.app` to **Applications**.
+4. Eject the DMG and open CodexPlusBar from **Applications**.
 
-3. Double-click the DMG.
-4. Drag `CodexPlusBar.app` onto the `Applications` folder shown inside the DMG.
-5. Replace the older copy if macOS asks.
-6. Eject the DMG and open CodexPlusBar from Applications.
+The published DMG is signed and notarized. You do not need Xcode to install it.
 
-The DMG and app are signed and notarized, so macOS should verify them normally.
+## Requirements
 
-## Build From Source
+- macOS 14 or newer
+- Google Chrome
+- Internet access
+- One ChatGPT or Claude account for each profile you want to track
 
-The current project uses Swift 6 with strict concurrency checks and treats warnings as errors.
+## Build from source
+
+Developers can build the current macOS project with Xcode 26 or newer:
 
 ```bash
 git clone https://github.com/withLinda/CodexPlusBar.git
@@ -199,10 +140,9 @@ cd CodexPlusBar
 make build-and-run
 ```
 
-Other useful commands:
+Useful checks:
 
 ```bash
-make build
 make test
 make agent-verify
 make dmg
@@ -210,30 +150,15 @@ make dmg
 
 `make dmg` writes a local developer DMG to `build/dist/CodexPlusBar.dmg`.
 
-## Requirements
+## Local data and privacy
 
-- macOS 14 or newer.
-- Google Chrome.
-- Internet access.
-- A ChatGPT or Claude account for each profile you want to track.
-- Xcode 26 or newer when building the current source.
+CodexPlusBar has no profile-sync server of its own. It connects directly to ChatGPT or Claude through the browser sessions created on your Mac.
 
-## Local Data, Privacy, and Security
+- Profile data is stored at `~/Library/Application Support/CodexPlusBar/profiles.json`.
+- Email Tools sessions are stored at `~/Library/Application Support/CodexPlusBar/dot-trick-sessions.json`.
+- Named Chrome profiles are stored at `~/Library/Application Support/CodexPlusBar/ChromeProfiles`.
+- Profile labels, links, passwords, 2FA keys, phone numbers, notes, and tags stay on your Mac.
+- Passwords and 2FA keys are **not** stored in the macOS Keychain and are **not encrypted by CodexPlusBar**.
+- Removing a profile also removes its local browser data.
 
-CodexPlusBar has no profile-sync server of its own. It connects directly to ChatGPT or Claude with the browser session that you created for each profile.
-
-The profile catalog is stored here:
-
-```text
-~/Library/Application Support/CodexPlusBar/profiles.json
-```
-
-Email Tools sessions are stored here:
-
-```text
-~/Library/Application Support/CodexPlusBar/dot-trick-sessions.json
-```
-
-Important: profile labels, saved links, passwords, 2FA secret keys, phone numbers, notes, and tags are stored in the local profile JSON file. Passwords and 2FA keys are **not** stored in the macOS Keychain and are **not** encrypted by CodexPlusBar. Provider cookies also stay in the app's local browser and web-session storage.
-
-Use this app only on a Mac user account that you trust. FileVault can add disk-level protection, but it does not change the plain local file format. Do not share your profile JSON file, Chrome profile folder, screenshots with visible private data, or real import rows.
+Use the app only on a Mac user account you trust. Do not share the profile JSON file, Chrome profile folder, screenshots with private values, or real import rows.
