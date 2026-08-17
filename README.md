@@ -4,7 +4,7 @@
 
 CodexPlusBar is a native macOS menu bar app for people who use more than one ChatGPT/Codex or Claude browser account. It keeps every account in its own local Chrome profile and puts live remaining usage, reset times, and sign-in status in one place.
 
-[Download the latest release](https://github.com/withLinda/CodexPlusBar/releases/latest) · [View the source](https://github.com/withLinda/CodexPlusBar)
+[Download CodexPlusBar.dmg](https://github.com/withLinda/CodexPlusBar/releases/latest/download/CodexPlusBar.dmg) · [Release notes and checksum](https://github.com/withLinda/CodexPlusBar/releases/latest) · [View the source](https://github.com/withLinda/CodexPlusBar)
 
 ## Why use it?
 
@@ -111,11 +111,11 @@ CodexPlusBar reads the signed-in web services used by ChatGPT and Claude. These 
 
 ## Install
 
-1. Open the [latest release](https://github.com/withLinda/CodexPlusBar/releases/latest).
-2. Download the `.dmg` file. If a matching `.sha256` file is available, download it too and verify the DMG in the same folder:
+1. [Download `CodexPlusBar.dmg`](https://github.com/withLinda/CodexPlusBar/releases/latest/download/CodexPlusBar.dmg).
+2. Optional: download [`CodexPlusBar.dmg.sha256`](https://github.com/withLinda/CodexPlusBar/releases/latest/download/CodexPlusBar.dmg.sha256) into the same folder, then verify the DMG:
 
    ```bash
-   shasum -a 256 -c <matching-file>.sha256
+   shasum -a 256 -c CodexPlusBar.dmg.sha256
    ```
 
 3. Open the DMG and drag `CodexPlusBar.app` to **Applications**.

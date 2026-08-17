@@ -15,7 +15,7 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "9AEC6FFD1D7E99AEF436E3E0"
+               BlueprintIdentifier = "C2616F332A62EF224A2B7F2C"
                BuildableName = "CodexPlusBar.app"
                BlueprintName = "CodexPlusBar"
                ReferencedContainer = "container:CodexPlusBar.xcodeproj">
@@ -32,7 +32,7 @@
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "9AEC6FFD1D7E99AEF436E3E0"
+            BlueprintIdentifier = "C2616F332A62EF224A2B7F2C"
             BuildableName = "CodexPlusBar.app"
             BlueprintName = "CodexPlusBar"
             ReferencedContainer = "container:CodexPlusBar.xcodeproj">
@@ -44,7 +44,7 @@
             parallelizable = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "FF179ECE54C652AB1605064B"
+               BlueprintIdentifier = "131996EA357DA4ED5C40A138"
                BuildableName = "CodexPlusBarTests.xctest"
                BlueprintName = "CodexPlusBarTests"
                ReferencedContainer = "container:CodexPlusBar.xcodeproj">
@@ -68,7 +68,7 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "9AEC6FFD1D7E99AEF436E3E0"
+            BlueprintIdentifier = "C2616F332A62EF224A2B7F2C"
             BuildableName = "CodexPlusBar.app"
             BlueprintName = "CodexPlusBar"
             ReferencedContainer = "container:CodexPlusBar.xcodeproj">
@@ -87,7 +87,7 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "9AEC6FFD1D7E99AEF436E3E0"
+            BlueprintIdentifier = "C2616F332A62EF224A2B7F2C"
             BuildableName = "CodexPlusBar.app"
             BlueprintName = "CodexPlusBar"
             ReferencedContainer = "container:CodexPlusBar.xcodeproj">

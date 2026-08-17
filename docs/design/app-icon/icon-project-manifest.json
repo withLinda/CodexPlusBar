@@ -1,0 +1,232 @@
+{
+  "schema_version": 2,
+  "project_name": "CodexPlusBar App Icon From User-Edited Master SVG, 2026-08-17 13:57 WIB",
+  "icon_basename": "AppIcon",
+  "output_directory": ".",
+  "platforms": ["macos"],
+  "canvas": {
+    "shared_px": 1024,
+    "watch_px": 1088
+  },
+  "color_contract": {
+    "source_profile": "sRGB",
+    "icon_composer_untagged_svg_profile": "sRGB",
+    "comparison_profile": "sRGB",
+    "required_text_contrast": 4.5,
+    "essential_symbol_contrast": 3.0,
+    "required_delta_l_star": 40.0,
+    "palette_roles": [
+      {"role": "icon.background", "value": "#EFEBD4", "purpose": "Stable pale warm full-bleed field from the edited master SVG"},
+      {"role": "icon.recognizer", "value": "#543A48", "purpose": "Dark ends of the Codex gradient, cursor, and menu slots"},
+      {"role": "icon.recognizer_warm", "value": "#E67E80", "purpose": "Salmon center of the Codex mark gradient"},
+      {"role": "icon.tile", "value": "#EFEBD4", "purpose": "Large subtle Codex tile that separates through Icon Composer material"},
+      {"role": "icon.cursor_boundary", "value": "#E5DFC5", "purpose": "Pale cursor separation edge"}
+    ]
+  },
+  "design": {
+    "app_purpose": "Help people choose and manage the right Codex or Claude account from the macOS menu bar.",
+    "metaphor": "A cursor choosing a Codex terminal badge from a menu bar.",
+    "primary_silhouette": "One large dark-to-salmon Codex mark with a terminal prompt cutout.",
+    "supporting_idea": "Three top menu slots and one large cursor show menu-bar selection.",
+    "small_size_target_px": 64,
+    "optical_occupancy": {
+      "measurement_basis": "non_background_visible_bounds",
+      "visible_bounds_px": [0, 107, 1024, 853],
+      "width_percent": 100.0,
+      "height_percent": 72.8516,
+      "review_contexts": ["official_grid", "64_px", "neighbor_comparison"],
+      "notes": "Measured from the corrected full-bleed 1024 px source composite. The 100% width comes from the user's deliberate left and right menu-slot bleed; the central Codex recognizer stays well inside the mask. The Apple grid, 64 px preview, neighboring-app scale, and compiled 256/128/16 px results all passed."
+    },
+    "brand_palette_source": "User-edited docs/design/app-icon/sketch/AppIcon-master.svg saved 2026-08-17 13:57 WIB",
+    "background_strategy": {
+      "mode": "appearance_adaptive",
+      "source": "full_bleed_layer",
+      "default_value": "#EFEBD4",
+      "dark_value": "Icon Composer automatic blue adaptation",
+      "reason": "Default keeps the user's pale warm field. Icon Composer remaps the same source geometry for Dark, Clear, and Tinted system appearances. One full-canvas opaque SVG removes the source's unintended 20 px transparent strip while preserving every foreground transform."
+    },
+    "geometry_contract": {
+      "model": "stacked",
+      "depth_vector": [0, 0],
+      "occlusion_rule": "Background, pale Codex tile, gradient Codex mark, cursor, then menu slots from back to front. The right slot intentionally covers the cursor where they overlap.",
+      "alignment_anchors": [
+        "foreground.master_offset = [20,0]",
+        "codex_tile.bounds = [171,262,893,937]",
+        "codex_mark.origin = codex_tile.origin",
+        "interaction_group.origin = [-43.3125,118]",
+        "cursor.stroke = #E5DFC5",
+        "menu_slots.left_and_right = deliberate canvas bleed"
+      ],
+      "notes": "Flat stacked geometry from the edited SVG. No source-drawn extrusion. Cursor and menu slots are split because they overlap and need independent material edges."
+    },
+    "notes": "The edited master is the design authority. Foreground colors, shapes, transforms, and painting order are preserved. Only the background translation is corrected so the final platform mask never exposes a clear strip."
+  },
+  "groups": [
+    {
+      "z": 1,
+      "name": "01_background",
+      "purpose": "Exact stable pale warm background field",
+      "material_mode": "individual",
+      "notes": "Effects off; this is the only opaque source matte."
+    },
+    {
+      "z": 2,
+      "name": "02_codex-tile",
+      "purpose": "Large pale supporting tile",
+      "material_mode": "individual",
+      "notes": "Individual mode; specular, blur, and translucency off at group level; neutral shadow. The tile layer keeps its own restrained effects on."
+    },
+    {
+      "z": 3,
+      "name": "03_codex-logo",
+      "purpose": "Gradient Codex mark and overlapping cursor",
+      "material_mode": "individual",
+      "notes": "Individual mode; group effects stay quiet. The mark and cursor are separate layers and both keep layer effects off so their source boundaries remain exact."
+    },
+    {
+      "z": 4,
+      "name": "04_menu-slots",
+      "purpose": "Three front-most menu slots",
+      "material_mode": "individual",
+      "notes": "Individual mode with quiet group settings. The slot layer keeps restrained effects on and remains above the cursor where they overlap."
+    }
+  ],
+  "layers": [
+    {
+      "z": 1,
+      "name": "01_background",
+      "file": "layers/01_background.svg",
+      "format": "svg",
+      "group": "01_background",
+      "role": "background",
+      "purpose": "Exact full-bleed pale warm background.",
+      "physical_object": "background field",
+      "material_unit": "opaque background field",
+      "contains_overlapping_independent_objects": false,
+      "glass_expected": false,
+      "contains_text": false,
+      "expected_transform": {"x": 0, "y": 0, "scale": 1, "rotation": 0, "reason": "Full-canvas source coordinates"},
+      "notes": "Corrects the edited master's 20 px transparent strip without moving its foreground artwork."
+    },
+    {
+      "z": 2,
+      "name": "02_codex-tile",
+      "file": "layers/02_codex-tile.svg",
+      "format": "svg",
+      "group": "02_codex-tile",
+      "role": "support",
+      "purpose": "Large pale tile behind the Codex mark.",
+      "physical_object": "Codex badge",
+      "material_unit": "badge tile",
+      "contains_overlapping_independent_objects": false,
+      "glass_expected": true,
+      "contains_text": false,
+      "expected_transform": {"x": 0, "y": 0, "scale": 1, "rotation": 0, "reason": "Full-canvas source coordinates"},
+      "notes": "The fill matches the background, so Icon Composer material supplies its subtle boundary."
+    },
+    {
+      "z": 3,
+      "name": "03_codex-mark",
+      "file": "layers/03_codex-mark.svg",
+      "format": "svg",
+      "group": "03_codex-logo",
+      "role": "recognizer",
+      "purpose": "Large dark-to-salmon Codex mark with terminal glyph cutouts.",
+      "physical_object": "Codex badge",
+      "material_unit": "gradient Codex mark",
+      "contains_overlapping_independent_objects": false,
+      "glass_expected": false,
+      "contains_text": false,
+      "expected_transform": {"x": 0, "y": 0, "scale": 1, "rotation": 0, "reason": "Full-canvas source coordinates"},
+      "notes": "Deliberate SVG gradient #543A48 through #E67E80 to #543A48. Use the normal source audit, not strict-flat."
+    },
+    {
+      "z": 4,
+      "name": "04_cursor",
+      "file": "layers/04_cursor.svg",
+      "format": "svg",
+      "group": "03_codex-logo",
+      "role": "support",
+      "purpose": "Large dark cursor with a pale separation edge.",
+      "physical_object": "cursor",
+      "material_unit": "cursor with separation stroke",
+      "contains_overlapping_independent_objects": false,
+      "glass_expected": false,
+      "contains_text": false,
+      "expected_transform": {"x": 0, "y": 0, "scale": 1, "rotation": 0, "reason": "Full-canvas source coordinates"},
+      "notes": "Preserves the edited master path, fill, transform, and 20.4 px stroke."
+    },
+    {
+      "z": 5,
+      "name": "05_menu-slots",
+      "file": "layers/05_menu-slots.svg",
+      "format": "svg",
+      "group": "04_menu-slots",
+      "role": "support",
+      "purpose": "Three front-most menu slots with deliberate canvas-edge bleed.",
+      "physical_object": "menu bar slots",
+      "material_unit": "three disjoint slots with one shared material behavior",
+      "contains_overlapping_independent_objects": false,
+      "glass_expected": true,
+      "contains_text": false,
+      "expected_transform": {"x": 0, "y": 0, "scale": 1, "rotation": 0, "reason": "Full-canvas source coordinates"},
+      "notes": "Separated from the cursor so the overlapping right slot and cursor keep independent material edges."
+    }
+  ],
+  "appearances": {
+    "default": {"status": "pass", "notes": "The exported Default icon preserves the edited pale, plum, and salmon design and stays readable from 1024 through 16 px."},
+    "dark": {"status": "pass", "notes": "Icon Composer's blue Dark adaptation keeps the same Codex mark, cursor, terminal glyph, menu slots, and z order."},
+    "clear_light": {"status": "pass", "notes": "The Clear Light export keeps every recognizer in a coherent light monochrome rendering."},
+    "clear_dark": {"status": "pass", "notes": "The Clear Dark export keeps every recognizer in a stronger dark monochrome rendering."},
+    "tinted_light": {"status": "pass", "notes": "The Tinted Light export keeps the same silhouette and hierarchy in the system violet tint."},
+    "tinted_dark": {"status": "pass_with_exception", "notes": "The darkest system tint is intentionally low contrast, but the Codex cloud, terminal cutouts, cursor, and menu slots remain visible at 64 px."},
+    "watch_default": {"status": "not_applicable", "notes": "CodexPlusBar is macOS only."}
+  },
+  "qa": {
+    "source_audit": {"status": "pass", "notes": "Normal audit: 5 SVG, 0 PNG, 0 errors, 0 warnings. Strict-flat is intentionally not used because the edited Codex mark contains a deliberate SVG gradient."},
+    "flat_preview_64": {"status": "pass", "notes": "The Codex mark, terminal cutouts, cursor, and menu slots remain readable at 1024, 256, 128, and 64 px in review/source-refresh-20260817-1401."},
+    "optical_scale": {"status": "pass", "notes": "Source bounds are [0,107,1024,853], or 100% × 72.8516%. The full width is intentional menu-slot bleed. The Apple grid and compiled 256, 128, and 16 px icons show balanced scale without mask crowding."},
+    "geometry_integrity": {"status": "pass", "notes": "Five truthful stacked material layers preserve the edited SVG painting order. There is no extrusion, detached geometry, or unsafe merged overlap."},
+    "material_edge_integrity": {"status": "pass", "notes": "Default was checked near -48°, +89°, and -170° light angles. The tile and menu-slot effects stay restrained; source-defined mark and cursor boundaries remain crisp."},
+    "transform_audit": {"status": "pass", "notes": "All five imported full-canvas layers were verified at x 0 pt, y 0 pt, scale 100%, with no rotation before save. The reopened official file still reports 5 layers in 4 groups."},
+    "background_appearance": {"status": "pass_with_exception", "notes": "Default uses one opaque full-bleed #EFEBD4 layer and preserves the user's foreground +20 px transform. Dark, Clear, and Tinted are deliberate Icon Composer system adaptations of the same geometry."},
+    "rendered_matrix": {"status": "pass", "notes": "Default, Dark, and Mono were inspected at 1024, 128, and 64 px, on solid and built-in image backgrounds, with the grid both on and off and with three light angles. All six flattened appearances were inspected at 1024 and 64 px."},
+    "color_audit": {"status": "pass_with_exception", "notes": "Source-token audit: #543A48 on #EFEBD4 passes at 8.432648:1 and delta L* 65.064489; #E5DFC5 on #543A48 passes at 7.560076:1 and delta L* 60.947381. The deliberate salmon gradient midpoint #E67E80 on #EFEBD4 is 2.284948:1 and delta L* 28.045708; it is supporting dynamic color, not the only recognizer, and needs rendered small-size review."},
+    "export_decode": {
+      "status": "pass",
+      "notes": "verify_icon_exports.py decoded every exported PNG and found all required macOS appearances and sizes.",
+      "directory": "review/user-svg-refresh-20260817-1401/AppIcon Exports",
+      "png_count": 60,
+      "decoded_count": 60,
+      "appearances_found": ["default", "dark", "clear_light", "clear_dark", "tinted_light", "tinted_dark"],
+      "sizes_found": [1024, 512, 256, 128, 64, 32, 16]
+    },
+    "reopen_check": {"status": "pass", "notes": "Resources/AppIcon.icon was saved, closed, and reopened from its absolute path. It retained 5 layers in 4 groups, macOS Only on, watchOS off, sRGB treatment, appearances, and transforms."},
+    "simulator_or_device": {"status": "pass", "notes": "The strict Debug macOS build succeeded. actool compiled Resources/AppIcon.icon as AppIcon; the built bundle contains AppIcon.icns and Assets.car, and the compiled 256, 128, and 16 px icons were visually checked."},
+    "dynamic_color_notes": "Default must preserve the user's edited colors. Dark, Clear, Tinted, and Mono may remap color, but must keep the same Codex mark, terminal glyph, cursor, menu slots, and z order.",
+    "text_pair_audits": [],
+    "essential_symbol_pairs": [
+      {"foreground": "#543A48 dark recognizer", "background": "#EFEBD4 icon field", "wcag_ratio": 8.432648, "delta_l_star": 65.064489, "status": "pass", "notes": "Dark Codex edges, cursor, and menu slots against the stable field."},
+      {"foreground": "#E5DFC5 cursor boundary", "background": "#543A48 cursor fill", "wcag_ratio": 7.560076, "delta_l_star": 60.947381, "status": "pass", "notes": "Essential cursor separation edge."}
+    ]
+  },
+  "deliverables": {
+    "sketch_file": "sketch/AppIcon-master-20260817-1357.sketch",
+    "icon_file": "../../../Resources/AppIcon.icon",
+    "xcode_in_scope": true,
+    "review_export_directory": "review/user-svg-refresh-20260817-1401/AppIcon Exports",
+    "review_exports": [
+      "review/user-svg-refresh-20260817-1401/AppIcon Exports/AppIcon-macOS-Default-1024x1024@1x.png",
+      "review/user-svg-refresh-20260817-1401/AppIcon Exports/AppIcon-macOS-Dark-1024x1024@1x.png",
+      "review/user-svg-refresh-20260817-1401/AppIcon Exports/AppIcon-macOS-ClearLight-1024x1024@1x.png",
+      "review/user-svg-refresh-20260817-1401/AppIcon Exports/AppIcon-macOS-ClearDark-1024x1024@1x.png",
+      "review/user-svg-refresh-20260817-1401/AppIcon Exports/AppIcon-macOS-TintedLight-1024x1024@1x.png",
+      "review/user-svg-refresh-20260817-1401/AppIcon Exports/AppIcon-macOS-TintedDark-1024x1024@1x.png",
+      "review/user-svg-refresh-20260817-1401/built-app-refresh-20260817-1437.iconset/icon_128x128@2x.png",
+      "review/user-svg-refresh-20260817-1401/built-app-refresh-20260817-1437.iconset/icon_16x16.png",
+      "review/neighbor-comparison.png"
+    ],
+    "qa_report": "review/qa-report.md",
+    "notes": "Resources/AppIcon.icon is the canonical macOS-only Icon Composer document. The older production icon is preserved in work/checkpoint-before-user-svg-refresh-20260817-1401. The strict Debug build consumed the canonical file successfully."
+  }
+}

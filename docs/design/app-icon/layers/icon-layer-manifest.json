@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "canvas": {
+    "width": 1024,
+    "height": 1024,
+    "profile": "sRGB"
+  },
+  "geometry_contract": {
+    "model": "stacked",
+    "depth_vector": [0, 0],
+    "occlusion_rule": "The full-bleed background is rear-most. The pale Codex tile sits above it, the gradient Codex mark sits above the tile, the cursor sits above the mark, and the three menu slots are front-most so the right slot covers the cursor where they overlap.",
+    "alignment_anchors": [
+      "foreground.master_offset = [20,0]",
+      "codex_tile.bounds = [171,262,893,937]",
+      "codex_mark.origin = codex_tile.origin",
+      "interaction_group.origin = [-43.3125,118]",
+      "cursor.stroke = #E5DFC5",
+      "menu_slots.left_and_right = deliberate canvas bleed"
+    ],
+    "notes": "No source-drawn extrusion. The user's foreground transforms are preserved in full-canvas layer coordinates. Only the background ignores the outer +20 px translation so it stays opaque and full-bleed."
+  },
+  "layers": [
+    {
+      "z": 1,
+      "path": "01_background.svg",
+      "format": "svg",
+      "role": "background",
+      "purpose": "Exact full-bleed pale warm background.",
+      "physical_object": "background field",
+      "material_unit": "opaque background field",
+      "contains_overlapping_independent_objects": false,
+      "glass_expected": false
+    },
+    {
+      "z": 2,
+      "path": "02_codex-tile.svg",
+      "format": "svg",
+      "role": "support",
+      "purpose": "Large pale Codex tile behind the gradient mark.",
+      "physical_object": "Codex badge",
+      "material_unit": "badge tile",
+      "contains_overlapping_independent_objects": false,
+      "glass_expected": true
+    },
+    {
+      "z": 3,
+      "path": "03_codex-mark.svg",
+      "format": "svg",
+      "role": "recognizer",
+      "purpose": "Large dark-to-salmon Codex mark with terminal glyph cutouts.",
+      "physical_object": "Codex badge",
+      "material_unit": "gradient Codex mark",
+      "contains_overlapping_independent_objects": false,
+      "glass_expected": false
+    },
+    {
+      "z": 4,
+      "path": "04_cursor.svg",
+      "format": "svg",
+      "role": "support",
+      "purpose": "Large dark cursor with a pale separation edge.",
+      "physical_object": "cursor",
+      "material_unit": "cursor with separation stroke",
+      "contains_overlapping_independent_objects": false,
+      "glass_expected": false
+    },
+    {
+      "z": 5,
+      "path": "05_menu-slots.svg",
+      "format": "svg",
+      "role": "support",
+      "purpose": "Three front-most menu slots that intentionally bleed past the left and right canvas edges.",
+      "physical_object": "menu bar slots",
+      "material_unit": "three disjoint slots with one shared material behavior",
+      "contains_overlapping_independent_objects": false,
+      "glass_expected": true
+    }
+  ]
+}

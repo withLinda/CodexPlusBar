@@ -1,7 +1,7 @@
 ---
 title: CodexPlusBar Learnings
 status: active
-last_updated: 2026-08-14
+last_updated: 2026-08-17
 purpose: "Keep non-obvious project knowledge in one place so future agents can avoid repeated tool mistakes, API misunderstandings, and fragile fixes."
 update_policy:
   - "Read this file before debugging, tool-heavy work, networking changes, or test repair."
@@ -40,6 +40,29 @@ update_policy:
 - 2026-03-18: For normal local verification in this repo, prefer the Makefile entry points the project already wraps: `make test`, `make agent-verify`, and `TRACE_PRIVATE_API=1 make build-and-run-background`.
 
 ## Tooling Notes
+- 2026-08-17: A single `ctx_read` request that mixes project files with an out-of-root skill file fails before reading any path. Split those reads: keep project files in `ctx_read`, then use a direct read-only shell for the external skill. The lean shell can also block Apple tools such as `security` and `plutil`; do not retry them there, and use the approved unrestricted shell path for the exact signing or metadata check. Before staging generated Markdown evidence, run `git diff --check` because export reports can contain invisible trailing spaces.
+- 2026-08-17: `@oai/sky` keyboard combinations use one xdotool-style string such as `super+z` or `alt+super+shift+s`; a separate `modifiers` array does not send Command shortcuts. In Icon Composer, Command-Shift-S creates a duplicate, while Option-Shift-Command-S opens the real Save As sheet.
+- 2026-08-17: Dragging a layer row onto another Icon Composer group can create extra wrapper groups instead of reparenting the layer. If the canvas count rises above four groups, undo with `super+z`, read fresh state, and keep the last verified four-group structure instead of repeating the drag.
+- 2026-08-17: A one-shot headless Chrome screenshot can write the PNG but leave its temporary-profile processes alive. Check only processes whose command contains that task's unique profile name, then terminate those exact PIDs; never stop the user's normal Chrome process.
+- Stable rule: In Icon Composer, trust the fresh canvas count and the window's absolute file URL after every structural drag or Save As operation.
+- 2026-08-17: Current Sketch can replace the old `Make Exportable` label with a small `+` beside the collapsed `Export` section. Select the top-level 1024 × 1024 Graphic, click that `+`, choose SVG at 1x, keep transparent-pixel trimming off, then save the Sketch document so the preset remains available.
+- 2026-08-17: The lean-ctx shell allowlist can also block `xmllint`. Do not retry the wrapped command; run the read-only XML validation directly, just as with other trusted commands blocked by the wrapper.
+- 2026-08-17: `lean-ctx ctx_read` can reject a plain-text `.svg` as `Binary file detected`. For SVG source inspection, use a direct text read and validate the result with `xmllint`; keep `ctx_read` for normal text/code files.
+- 2026-08-17: Icon Composer 1.6 exposes a fixed root-background color grid, not an arbitrary hex field. For an exact brand color, import a full-bleed SVG as layer 1, keep a dark root fallback behind it, and disable material effects on that background layer.
+- 2026-08-17: The icon layer auditor requires positive `z` values starting at 1, and each numbered filename prefix must equal its `z`. Add a new back layer by renumbering every production layer before running the strict audit.
+- 2026-08-17: XcodeGen 2.44 ignored a target-level `resources:` list in this project. Put resources under `sources:` with `buildPhase: resources`; exclude `AppIcon.icon` from the broad Resources group and add it again with `type: file` so Xcode compiles the package without copying loose JSON/SVG files. Keep `Sources` as `type: group` here because the synchronized-folder form copied `Sources/Info.plist` into the app and produced a build warning.
+- 2026-08-17: The `@oai/sky` Computer Use API clicks accessibility nodes with `element_index`, not `target`; key names are `Down`, `Up`, and `Return`, not DOM-style names such as `ARROWDOWN`. Read fresh app state after every action because Icon Composer renumbers controls in menus and sheets.
+- 2026-08-17: Closing Icon Composer's last saved window can make the next state read return `noWindowsAvailable` even though close succeeded. Send Command-O, go to the exact `.icon` path, then click the open panel's `Open` button because Go to Folder selects the package but does not open it.
+- 2026-08-17: lean-ctx's built-in shell allowlist can block `xcodegen` permanently. Do not retry the same wrapped command; run the trusted local `xcodegen generate` directly (or add it to the allowlist) and keep lean-ctx for the long `xcodebuild` output.
+- 2026-08-17: `audit_screenshot_color.py` has two separate modes. Region sampling takes an image, while explicit `--foreground`/`--background` contrast math must be run without an image argument.
+- 2026-08-17: An SVG loaded through an HTML `<img>` can lose nested external SVG `<image href>` layers. For trustworthy review rasters, inline the layer paths into the composite SVG; keep the generated layer-preview HTML beside the source layers or rewrite its relative paths after copying it.
+- 2026-08-17: Opening an SVG directly in Sketch can create a blank-looking document. Create a blank Sketch document, use `Insert > Image` with the exact SVG path, confirm the imported 1024 × 1024 Graphic at X 0/Y 0, then save the `.sketch` file.
+- 2026-08-17: Icon Composer's `New Group` action can finish successfully while Computer Use reports a stale accessibility element. Read fresh app state and count the groups before retrying, or a second click can create a duplicate group.
+- 2026-08-17: In Icon Composer file sheets, `Go to Folder` can retain the previous file path. Read the sheet first; replace the selected path, or use Command-A, Backspace, and then type the exact absolute path. Do not use accessibility `set_value` for this field because macOS can resolve only the first `/` and navigate to the filesystem root.
+- 2026-08-17: Computer Use screenshots are objects with a `url` field. Pass `state.screenshot.url` to `nodeRepl.emitImage`; passing the whole screenshot object reports an unsupported value.
+- 2026-08-17: Computer Use cannot inspect Icon Composer while the Mac is locked. Save early, verify the `.icon` package on disk, ask the user to unlock once, and resume from fresh app state instead of repeating UI actions.
+- 2026-08-17: `validate_icon_manifest.py` resolves layer and deliverable paths under the manifest's `output_directory`. When the manifest already lives inside the output folder, set `output_directory` to `.`; repeating `docs/design/app-icon` makes every path resolve with that directory twice and passes the plan check but fails final existence checks.
+- 2026-08-17: `apply_patch` rejects a patch that deletes and adds the same path in one operation. For a full file replacement, delete it in one patch and immediately add it back in the next patch, or use a normal update hunk when practical.
 - 2026-08-14: `lean-ctx ctx_read` rejects files outside the project root unless an extra root is configured. When reviewing external skill instructions, use a direct read or configure the allowed root; keep repository reads on lean-ctx.
 - Stable rule: Treat lean-ctx's project-root boundary as intentional, not as a transient read failure.
 - 2026-03-18: Proxyman is useful for confirming private ChatGPT web calls in this app. It is especially helpful for checking real request headers like `ChatGPT-Account-ID` and matching them to returned account data.

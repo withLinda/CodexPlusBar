@@ -35,9 +35,17 @@ targets:
     bundleId: com.linda.CodexPlusBar
     sources:
       - path: Sources
-        type: syncedFolder
-    resources:
-      - Resources
+        type: group
+        excludes:
+          - Info.plist
+      - path: Resources
+        type: group
+        buildPhase: resources
+        excludes:
+          - AppIcon.icon
+      - path: Resources/AppIcon.icon
+        type: file
+        buildPhase: resources
     settings:
       base:
         INFOPLIST_FILE: Sources/Info.plist
