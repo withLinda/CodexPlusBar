@@ -29,9 +29,15 @@
           "name" : "04_cursor"
         },
         {
-          "glass" : false,
-          "image-name" : "03_codex-mark.svg",
-          "name" : "03_codex-mark"
+          "image-name" : "Shape.png",
+          "name" : "03_codex-mark",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              -29.25,
+              104.09375
+            ]
+          }
         }
       ],
       "name" : "03_codex-logo",

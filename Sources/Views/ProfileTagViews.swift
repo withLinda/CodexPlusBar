@@ -515,7 +515,7 @@ private struct ProfileFilterSegmentButton: View {
             case .any:
                 return "Show profiles with any limit"
             case .usable:
-                return "Show only profiles where every known limit is above 0%"
+                return "Show only profiles where every known limit is at least 10%"
             case .aboveThirtyFive:
                 return "Show only profiles where every known limit is above 35%"
             case .fullFiveHour:

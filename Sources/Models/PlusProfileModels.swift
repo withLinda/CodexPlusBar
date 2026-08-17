@@ -927,7 +927,7 @@ enum ProfileLimitFilter: String, CaseIterable, Hashable, Identifiable, Sendable 
         case .any:
             return "Any limits"
         case .usable:
-            return "Every known limit above 0 percent"
+            return "Every known limit at least 10 percent"
         case .aboveThirtyFive:
             return "Every known limit above 35 percent"
         case .fullFiveHour:
@@ -953,7 +953,7 @@ enum ProfileLimitFilter: String, CaseIterable, Hashable, Identifiable, Sendable 
         case .any:
             return true
         case .usable:
-            return snapshot.minimumRemainingLimitPercent.map { $0 > 0 } ?? false
+            return snapshot.minimumRemainingLimitPercent.map { $0 >= 10 } ?? false
         case .aboveThirtyFive:
             return snapshot.minimumRemainingLimitPercent.map { $0 > 35 } ?? false
         case .fullFiveHour:

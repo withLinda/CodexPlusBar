@@ -768,6 +768,30 @@ struct PlusProfileControllerTests {
             sortOrder: 9,
             tags: []
         )
+        let lowFiveHour = menuBarSnapshot(
+            label: "low-five-hour@example.com",
+            state: .ready,
+            fiveHourRemainingPercent: 9,
+            sevenDayRemainingPercent: 80,
+            sortOrder: 10,
+            tags: []
+        )
+        let lowSevenDay = menuBarSnapshot(
+            label: "low-seven-day@example.com",
+            state: .ready,
+            fiveHourRemainingPercent: 80,
+            sevenDayRemainingPercent: 9,
+            sortOrder: 11,
+            tags: []
+        )
+        let exactTen = menuBarSnapshot(
+            label: "exact-ten@example.com",
+            state: .ready,
+            fiveHourRemainingPercent: 10,
+            sevenDayRemainingPercent: 10,
+            sortOrder: 12,
+            tags: []
+        )
         let rows = [
             active,
             pending,
@@ -779,6 +803,9 @@ struct PlusProfileControllerTests {
             emptyFiveHour,
             emptySevenDay,
             exactThirtyFive,
+            lowFiveHour,
+            lowSevenDay,
+            exactTen,
         ]
 
         #expect(ProfileFilter().apply(to: rows).map(\.id) == rows.map(\.id))
@@ -799,6 +826,7 @@ struct PlusProfileControllerTests {
                     fullPending.id,
                     secondaryFullOnly.id,
                     exactThirtyFive.id,
+                    exactTen.id,
                 ]
         )
         #expect(
@@ -810,7 +838,7 @@ struct PlusProfileControllerTests {
                 == [fullActive.id, fullPending.id]
         )
         let limitCounts = ProfileLimitCounts(snapshots: rows)
-        #expect(limitCounts.usable == 6)
+        #expect(limitCounts.usable == 7)
         #expect(limitCounts.aboveThirtyFive == 4)
         #expect(limitCounts.fullFiveHour == 2)
         #expect(

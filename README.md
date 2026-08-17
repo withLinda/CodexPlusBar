@@ -109,19 +109,21 @@ It previews valid rows, reports the exact lines that need fixing, ignores blank 
 
 CodexPlusBar reads the signed-in web services used by ChatGPT and Claude. These are provider website endpoints, not stable public APIs, so a provider website change can temporarily affect refresh or sign-in until the app is updated.
 
-## Install
+## Install from the DMG
+
+The easiest way to install CodexPlusBar is the signed and notarized GitHub DMG. You do not need Xcode.
 
 1. [Download `CodexPlusBar.dmg`](https://github.com/withLinda/CodexPlusBar/releases/latest/download/CodexPlusBar.dmg).
-2. Optional: download [`CodexPlusBar.dmg.sha256`](https://github.com/withLinda/CodexPlusBar/releases/latest/download/CodexPlusBar.dmg.sha256) into the same folder, then verify the DMG:
+2. Optional: download [`CodexPlusBar.dmg.sha256`](https://github.com/withLinda/CodexPlusBar/releases/latest/download/CodexPlusBar.dmg.sha256) into the same folder, then verify the download:
 
    ```bash
    shasum -a 256 -c CodexPlusBar.dmg.sha256
    ```
 
-3. Open the DMG and drag `CodexPlusBar.app` to **Applications**.
-4. Eject the DMG and open CodexPlusBar from **Applications**.
+3. Open the DMG and drag `CodexPlusBar.app` to **Applications**. If an older copy is there, replace it after quitting the running app.
+4. Eject the DMG, then open CodexPlusBar from **Applications**. Its status appears in the menu bar; it does not add a normal Dock icon.
 
-The published DMG is signed and notarized. You do not need Xcode to install it.
+The published DMG is signed and notarized by Apple, so macOS can verify it during a normal first launch.
 
 ## Requirements
 
