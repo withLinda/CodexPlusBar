@@ -1,7 +1,7 @@
 ---
 title: CodexPlusBar Learnings
 status: active
-last_updated: 2026-08-17
+last_updated: 2026-09-08
 purpose: "Keep non-obvious project knowledge in one place so future agents can avoid repeated tool mistakes, API misunderstandings, and fragile fixes."
 update_policy:
   - "Read this file before debugging, tool-heavy work, networking changes, or test repair."
@@ -40,6 +40,9 @@ update_policy:
 - 2026-03-18: For normal local verification in this repo, prefer the Makefile entry points the project already wraps: `make test`, `make agent-verify`, and `TRACE_PRIVATE_API=1 make build-and-run-background`.
 
 ## Tooling Notes
+- 2026-09-08: Figma native save sheets can appear late. Read fresh state, set the filename, then save in separate steps; batching focus changes and keyboard shortcuts can send them to the canvas. Full-canvas SVG export frames with invisible fill and Clip content off preserve aligned 1024px bounds.
+- 2026-09-08: Icon Composer 2.0 exports all macOS appearances and sizes as 60 PNGs; a repeat export creates `Exports 2` instead of replacing the first folder. Verify and report the newest folder. System Light on every foreground Mono layer removes a two-color C seam, but dark system tints can still miss contrast targets. Audit ICC-aware exported pixels and keep that limit explicit.
+- 2026-08-17: `gh release view --json` does not expose an `isLatest` field. Use supported release fields for asset checks and `gh release list` to confirm which release is marked Latest.
 - 2026-08-17: A later explicit `git add` can reject a path for a file that is already deleted. Stage removed paths with `git add -u -- <path>` and existing paths with normal `git add -- <paths>`, then rerun `git diff --cached --check`.
 - 2026-08-17: lean-ctx's built-in shell allowlist blocks `nl`. Do not retry the wrapped command; use `rg -n` when only matching line numbers are needed, or run the trusted read-only `nl` command directly when every line needs a number.
 - 2026-08-17: A single `ctx_read` request that mixes project files with an out-of-root skill file fails before reading any path. Split those reads: keep project files in `ctx_read`, then use a direct read-only shell for the external skill. The lean shell can also block Apple tools such as `security` and `plutil`; do not retry them there, and use the approved unrestricted shell path for the exact signing or metadata check. Before staging generated Markdown evidence, run `git diff --check` because export reports can contain invisible trailing spaces.

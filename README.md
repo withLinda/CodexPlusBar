@@ -111,19 +111,24 @@ CodexPlusBar reads the signed-in web services used by ChatGPT and Claude. These 
 
 ## Install from the DMG
 
-The easiest way to install CodexPlusBar is the signed and notarized GitHub DMG. You do not need Xcode.
+The easiest way to install CodexPlusBar is the signed and notarized GitHub DMG. You do not need Xcode. One download supports both Apple silicon and Intel Macs running macOS 14 or newer.
+
+The [September 8, 2026 release](https://github.com/withLinda/CodexPlusBar/releases/tag/snapshot-2026-09-08-capacity-c) includes the new Capacity C app icon. The download link below always opens the latest release.
 
 1. [Download `CodexPlusBar.dmg`](https://github.com/withLinda/CodexPlusBar/releases/latest/download/CodexPlusBar.dmg).
-2. Optional: download [`CodexPlusBar.dmg.sha256`](https://github.com/withLinda/CodexPlusBar/releases/latest/download/CodexPlusBar.dmg.sha256) into the same folder, then verify the download:
+2. Optional: download [`CodexPlusBar.dmg.sha256`](https://github.com/withLinda/CodexPlusBar/releases/latest/download/CodexPlusBar.dmg.sha256) into the same folder. In Terminal, go to that folder (usually `~/Downloads`) and verify the download:
 
    ```bash
+   cd ~/Downloads
    shasum -a 256 -c CodexPlusBar.dmg.sha256
    ```
 
 3. Open the DMG and drag `CodexPlusBar.app` to **Applications**. If an older copy is there, replace it after quitting the running app.
 4. Eject the DMG, then open CodexPlusBar from **Applications**. Its status appears in the menu bar; it does not add a normal Dock icon.
 
-The published DMG is signed and notarized by Apple, so macOS can verify it during a normal first launch.
+The published app and DMG are Developer ID signed and notarized by Apple, so macOS can verify them during a normal first launch.
+
+To update later, download the latest DMG and repeat steps 3–4. Replacing the app keeps your saved profiles and Chrome sign-ins in `~/Library/Application Support/CodexPlusBar`.
 
 ## Requirements
 
@@ -150,7 +155,7 @@ make agent-verify
 make dmg
 ```
 
-`make dmg` writes a local developer DMG to `build/dist/CodexPlusBar.dmg`.
+`make dmg` writes a local developer DMG to `build/dist/CodexPlusBar.dmg`. It does not perform Developer ID signing or Apple notarization; use the published GitHub DMG for normal installation.
 
 ## Local data and privacy
 
