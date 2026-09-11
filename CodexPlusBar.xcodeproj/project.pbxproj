@@ -19,6 +19,7 @@
 		27CDE503346F4D51A31A9AE3 /* CodexAppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25E2086F686897E104CED98A /* CodexAppDelegate.swift */; };
 		28E0C29A3990704FA9270764 /* OneTimePasswordGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2CCF039048CB5F92D4BDF6C /* OneTimePasswordGenerator.swift */; };
 		2ECE03F2044A2EB02194E7B5 /* ChromeSessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BAB88AED342C0D907A72DB5 /* ChromeSessionManager.swift */; };
+		30A42609C8309CD976874B31 /* OpenCodeLocalRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A7364EC8C0544A1929A0EEA /* OpenCodeLocalRuntime.swift */; };
 		3368A1D640D1806C17637EED /* DotTrickSessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EF3F7392900410162228D43 /* DotTrickSessionStore.swift */; };
 		337BA6DF10CDCC0A8E90CA90 /* WindowChromeSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4111BF7FB72F714EF7A7D42A /* WindowChromeSupport.swift */; };
 		343E01025CF7ADC65CD4FAC0 /* AccountCatalogModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B7391381874E52F3048629C /* AccountCatalogModels.swift */; };
@@ -33,6 +34,7 @@
 		577DD9832B8EE84B257838A0 /* MacSystemActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A0441E818BD8B568CBC6AE1 /* MacSystemActions.swift */; };
 		5CC0C7EECA8FBEDC683AE2F3 /* ProfileCatalogStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA93438B8CFDA14DDC4B2D65 /* ProfileCatalogStore.swift */; };
 		5EA2CC7B31972AB30800A229 /* ProfileDisplayOrderPreference.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FBDDA2EC7DC9B304A1496C4 /* ProfileDisplayOrderPreference.swift */; };
+		6078DE1363303B5FF332063B /* OpenCodeOpenAIAuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7591CAFBBC23ED052EDF1ACC /* OpenCodeOpenAIAuthService.swift */; };
 		64FA25D57C1F29959BB5115B /* ChromeProfileStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68B451BFB2C027E9029F6F23 /* ChromeProfileStore.swift */; };
 		65524DD1986A37E77A147FC9 /* HTTPTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53E8040E2C459A442745D324 /* HTTPTransport.swift */; };
 		667B35A7AE95C23DA2C7A569 /* DotTrickController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1618DDE37504A73E53F29D5 /* DotTrickController.swift */; };
@@ -111,6 +113,7 @@
 		33360E8618EAD73760FD014F /* Inter-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Inter-Medium.ttf"; sourceTree = "<group>"; };
 		38D97AFB21D00935D66A3DE2 /* WorkspaceLimitService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceLimitService.swift; sourceTree = "<group>"; };
 		39C5A0B333E8C1A19467704E /* AccountWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountWindowView.swift; sourceTree = "<group>"; };
+		3A7364EC8C0544A1929A0EEA /* OpenCodeLocalRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodeLocalRuntime.swift; sourceTree = "<group>"; };
 		3EF3F7392900410162228D43 /* DotTrickSessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DotTrickSessionStore.swift; sourceTree = "<group>"; };
 		3F48206EF19934DC5F3ABC94 /* PlusProfileController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlusProfileController.swift; sourceTree = "<group>"; };
 		400D81A1F70064BA2F950787 /* MenuBarProfilePreference.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarProfilePreference.swift; sourceTree = "<group>"; };
@@ -134,6 +137,7 @@
 		68B451BFB2C027E9029F6F23 /* ChromeProfileStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChromeProfileStore.swift; sourceTree = "<group>"; };
 		6D8F3E4D732AD127E1A70D2C /* WorkspacePayloadSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspacePayloadSupport.swift; sourceTree = "<group>"; };
 		709228E93767951B3499A1C3 /* DotTrickGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DotTrickGenerator.swift; sourceTree = "<group>"; };
+		7591CAFBBC23ED052EDF1ACC /* OpenCodeOpenAIAuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodeOpenAIAuthService.swift; sourceTree = "<group>"; };
 		7755A62F2846FD0B38D5D005 /* EmailToolsWindowPresenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmailToolsWindowPresenter.swift; sourceTree = "<group>"; };
 		77CB4E67AC5FFFB8307F18C5 /* WorkspaceModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceModels.swift; sourceTree = "<group>"; };
 		7D6E8D24A2C7E16B085B2581 /* MenuBarPanelTextScalePreference.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarPanelTextScalePreference.swift; sourceTree = "<group>"; };
@@ -218,6 +222,8 @@
 				80F5D0C3B1F4F079A0CF0221 /* JSONDecoder+ChatGPT.swift */,
 				252004FBE714815D978A9765 /* JSONFileStorage.swift */,
 				D2CCF039048CB5F92D4BDF6C /* OneTimePasswordGenerator.swift */,
+				3A7364EC8C0544A1929A0EEA /* OpenCodeLocalRuntime.swift */,
+				7591CAFBBC23ED052EDF1ACC /* OpenCodeOpenAIAuthService.swift */,
 				1F0C740A5ED0A2BB15A75554 /* PlusProfileDataService.swift */,
 				FA93438B8CFDA14DDC4B2D65 /* ProfileCatalogStore.swift */,
 				AC100253BC756ECF8B338B48 /* ProfileRuntimeRegistry.swift */,
@@ -497,6 +503,8 @@
 				177E39EDA3111E142BC4F794 /* MenuBarRootView.swift in Sources */,
 				EF220468E18F70E23DBE1256 /* MenuBarStatusItemController.swift in Sources */,
 				28E0C29A3990704FA9270764 /* OneTimePasswordGenerator.swift in Sources */,
+				30A42609C8309CD976874B31 /* OpenCodeLocalRuntime.swift in Sources */,
+				6078DE1363303B5FF332063B /* OpenCodeOpenAIAuthService.swift in Sources */,
 				73BB12CD8E133AA0E131CC9F /* PhoneSummaryView.swift in Sources */,
 				BE69C4616EDF974EA6B65106 /* PlusProfileController.swift in Sources */,
 				AEAB7F867EAA417C39CA40EA /* PlusProfileDataService.swift in Sources */,

@@ -113,7 +113,7 @@ CodexPlusBar reads the signed-in web services used by ChatGPT and Claude. These 
 
 The easiest way to install CodexPlusBar is the signed and notarized GitHub DMG. You do not need Xcode. One download supports both Apple silicon and Intel Macs running macOS 14 or newer.
 
-The [September 11, 2026 release](https://github.com/withLinda/CodexPlusBar/releases/tag/snapshot-2026-09-11-account-switch) includes the account-switching reliability update. The download link below always opens the latest release.
+The latest release includes the current account-switching and local OpenChamber/OpenAI integration updates. The download link below always opens the latest release.
 
 1. [Download `CodexPlusBar.dmg`](https://github.com/withLinda/CodexPlusBar/releases/latest/download/CodexPlusBar.dmg).
 2. Optional: download [`CodexPlusBar.dmg.sha256`](https://github.com/withLinda/CodexPlusBar/releases/latest/download/CodexPlusBar.dmg.sha256) into the same folder. In Terminal, go to that folder (usually `~/Downloads`) and verify the download:

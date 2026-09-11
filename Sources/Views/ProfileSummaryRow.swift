@@ -148,6 +148,7 @@ struct ProfileSummaryRow: View {
     let emailAction: (() -> Void)?
     let pinAction: (() -> Void)?
     let switchAction: (() -> Void)?
+    let openChamberSwitchAction: (() -> Void)?
 
     init(
         snapshot: PlusProfileSnapshot,
@@ -159,7 +160,8 @@ struct ProfileSummaryRow: View {
         copyAction: (() -> Void)? = nil,
         emailAction: (() -> Void)? = nil,
         pinAction: (() -> Void)? = nil,
-        switchAction: (() -> Void)? = nil
+        switchAction: (() -> Void)? = nil,
+        openChamberSwitchAction: (() -> Void)? = nil
     ) {
         self.init(
             presentation: ProfileSummaryRowPresentation(
@@ -174,7 +176,8 @@ struct ProfileSummaryRow: View {
             copyAction: copyAction,
             emailAction: emailAction,
             pinAction: pinAction,
-            switchAction: switchAction
+            switchAction: switchAction,
+            openChamberSwitchAction: openChamberSwitchAction
         )
     }
 
@@ -186,7 +189,8 @@ struct ProfileSummaryRow: View {
         copyAction: (() -> Void)? = nil,
         emailAction: (() -> Void)? = nil,
         pinAction: (() -> Void)? = nil,
-        switchAction: (() -> Void)? = nil
+        switchAction: (() -> Void)? = nil,
+        openChamberSwitchAction: (() -> Void)? = nil
     ) {
         self.presentation = presentation
         self.mode = mode
@@ -196,6 +200,7 @@ struct ProfileSummaryRow: View {
         self.emailAction = emailAction
         self.pinAction = pinAction
         self.switchAction = switchAction
+        self.openChamberSwitchAction = openChamberSwitchAction
     }
 
     var body: some View {
@@ -374,6 +379,17 @@ struct ProfileSummaryRow: View {
                 size: 24,
                 action: switchAction ?? {}
             )
+
+            if presentation.provider == .codex {
+                ProfileSummaryInlineIconButton(
+                    symbolName: "bubble.left.and.bubble.right",
+                    label: "Switch OpenChamber OpenAI",
+                    helpText: "Switch OpenChamber OpenAI · local instance. Save a sign-in in the manager first.",
+                    isDisabled: openChamberSwitchAction == nil,
+                    size: 24,
+                    action: openChamberSwitchAction ?? {}
+                )
+            }
 
             ProfileSummaryInlineIconButton(
                 symbolName: "doc.on.doc",

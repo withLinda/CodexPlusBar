@@ -73,7 +73,14 @@ struct MenuBarRootView: View {
                     )
                 }
 
-                if let bannerMessage = controller.statusMessage {
+                if let status = controller.openChamberActionStatus {
+                    CodexStatusBanner(
+                        title: "OpenChamber OpenAI",
+                        message: status.message,
+                        tone: status.tone,
+                        symbolName: "bubble.left.and.bubble.right"
+                    )
+                } else if let bannerMessage = controller.statusMessage {
                     CodexStatusBanner(
                         title: controller.dashboardStatus.title,
                         message: bannerMessage,
@@ -210,7 +217,10 @@ struct MenuBarRootView: View {
                         openManagerWindow(snapshot.id)
                     },
                     switchAndOpen: snapshot.profile.codexAccountKey == nil || !controller.switchingProfileIDs.isEmpty ? nil : {
-                        Task { await controller.switchAndOpen(profileID: snapshot.id) }
+                        Task<Void, Never> { @MainActor in await controller.switchAndOpen(profileID: snapshot.id) }
+                    },
+                    switchOpenChamber: snapshot.profile.openCodeOpenAIAccount == nil || !controller.openCodeSwitchingProfileIDs.isEmpty ? nil : {
+                        Task<Void, Never> { @MainActor in await controller.switchOpenChamberAuth(profileID: snapshot.id) }
                     },
                     copyProfileLabel: {
                         copyProfileLabel(snapshot.label)
@@ -223,6 +233,13 @@ struct MenuBarRootView: View {
                     }
                 )
                 .contextMenu {
+                    if snapshot.profile.provider == .codex {
+                        Button("Switch OpenChamber OpenAI") {
+                            Task { await controller.switchOpenChamberAuth(profileID: snapshot.id) }
+                        }
+                        .disabled(snapshot.profile.openCodeOpenAIAccount == nil || !controller.openCodeSwitchingProfileIDs.isEmpty)
+                        Divider()
+                    }
                     Button(isPinned ? "Current" : "Show on top") {
                         setPinnedProfile(snapshot.id)
                     }
@@ -567,6 +584,7 @@ private struct MenuBarProfileRow: View {
     let searchPhoneNumber: String?
     let openManagerWindow: () -> Void
     let switchAndOpen: (() -> Void)?
+    let switchOpenChamber: (() -> Void)?
     let copyProfileLabel: () -> Void
     let openEmailLink: () -> Void
     let pinProfile: () -> Void
@@ -582,7 +600,8 @@ private struct MenuBarProfileRow: View {
             copyAction: copyProfileLabel,
             emailAction: openEmailLink,
             pinAction: pinProfile,
-            switchAction: switchAndOpen
+            switchAction: switchAndOpen,
+            openChamberSwitchAction: switchOpenChamber
         )
     }
 }

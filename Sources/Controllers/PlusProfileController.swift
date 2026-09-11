@@ -56,6 +56,12 @@ private struct ProfileStateCounts {
     }
 }
 
+struct OpenChamberActionStatus: Equatable {
+    let profileID: UUID
+    let message: String
+    let tone: CodexStatusTone
+}
+
 @Observable
 @MainActor
 final class PlusProfileController {
@@ -68,10 +74,13 @@ final class PlusProfileController {
     var dashboardStatus: PlusDashboardStatus = .empty
     var chromeSignInProfileIDs: Set<UUID> = []
     var switchingProfileIDs: Set<UUID> = []
+    var openCodeSwitchingProfileIDs: Set<UUID> = []
+    var openChamberActionStatus: OpenChamberActionStatus?
 
     @ObservationIgnored private let catalogStore: ProfileCatalogStore
     @ObservationIgnored private let dataService: PlusProfileDataServing
     @ObservationIgnored private let accountSwitchService: CodexAccountSwitchService
+    @ObservationIgnored private let openCodeAuthService: any OpenCodeOpenAIAuthServing
     @ObservationIgnored private let autoRefreshIntervalNanoseconds: UInt64
     @ObservationIgnored private let maxConcurrentProfileRefreshes: Int
     @ObservationIgnored private let autoRefreshSleep: @Sendable (UInt64) async throws -> Void
@@ -82,6 +91,7 @@ final class PlusProfileController {
         catalogStore: ProfileCatalogStore = ProfileCatalogStore(),
         dataService: PlusProfileDataServing = PlusProfileDataService(),
         accountSwitchService: CodexAccountSwitchService = CodexAccountSwitchService(),
+        openCodeAuthService: any OpenCodeOpenAIAuthServing = OpenCodeOpenAIAuthService(),
         autoRefreshInterval: TimeInterval = 300,
         maxConcurrentProfileRefreshes: Int = 3,
         autoRefreshSleep: @escaping @Sendable (UInt64) async throws -> Void = {
@@ -92,6 +102,7 @@ final class PlusProfileController {
         self.catalogStore = catalogStore
         self.dataService = dataService
         self.accountSwitchService = accountSwitchService
+        self.openCodeAuthService = openCodeAuthService
         self.autoRefreshIntervalNanoseconds = UInt64(autoRefreshInterval * 1_000_000_000)
         self.maxConcurrentProfileRefreshes = max(1, maxConcurrentProfileRefreshes)
         self.autoRefreshSleep = autoRefreshSleep
@@ -443,6 +454,49 @@ final class PlusProfileController {
             statusMessage = "Switched to \(profile.displayLabel) and reopened ChatGPT."
         } catch {
             statusMessage = error.localizedDescription
+        }
+    }
+
+    func saveOpenChamberAuth(profileID: UUID) async {
+        guard openCodeSwitchingProfileIDs.isEmpty, let index = indexOfProfile(profileID),
+              profiles[index].profile.provider == .codex else { return }
+        let profile = profiles[index].profile
+        openCodeSwitchingProfileIDs.insert(profileID)
+        openChamberActionStatus = .init(profileID: profileID, message: "Checking the local OpenChamber sign-in…", tone: .info)
+        defer { openCodeSwitchingProfileIDs.remove(profileID) }
+        do {
+            let identity = try await openCodeAuthService.saveCurrent(for: profile)
+            // Profile edits/removal can happen while the local backend is checked.
+            guard let currentIndex = indexOfProfile(profileID), profiles[currentIndex].profile == profile else {
+                throw OpenCodeOpenAIAuthError.changedWhileReading
+            }
+            let previous = profiles[currentIndex]
+            var updated = previous.profile
+            updated.openCodeOpenAIAccount = identity
+            profiles[currentIndex] = previous.updating(profile: updated)
+            guard persistProfiles() else {
+                profiles[currentIndex] = previous
+                throw OpenCodeOpenAIAuthError.writeFailed
+            }
+            openChamberActionStatus = .init(profileID: profileID, message: "OpenChamber sign-in saved.", tone: .success)
+        } catch {
+            openChamberActionStatus = .init(profileID: profileID, message: error.localizedDescription, tone: .critical)
+        }
+    }
+
+    func switchOpenChamberAuth(profileID: UUID) async {
+        guard openCodeSwitchingProfileIDs.isEmpty, let index = indexOfProfile(profileID),
+              profiles[index].profile.provider == .codex else { return }
+        openCodeSwitchingProfileIDs.insert(profileID)
+        let profile = profiles[index].profile
+        openChamberActionStatus = .init(profileID: profileID, message: "Switching OpenChamber OpenAI…", tone: .info)
+        defer { openCodeSwitchingProfileIDs.remove(profileID) }
+        do {
+            try await openCodeAuthService.switchTo(profile: profile)
+            openChamberActionStatus = .init(profileID: profileID,
+                message: "OpenChamber OpenAI switched. New requests use this account.", tone: .success)
+        } catch {
+            openChamberActionStatus = .init(profileID: profileID, message: error.localizedDescription, tone: .critical)
         }
     }
 

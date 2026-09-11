@@ -106,6 +106,8 @@ struct PlusProfile: Identifiable, Codable, Equatable, Sendable {
     var label: String
     /// Stable key used by codex-auth to select the saved login for this profile.
     var codexAccountKey: String?
+    /// Identity only; OAuth tokens live in the private OpenChamber sign-in store.
+    var openCodeOpenAIAccount: OpenCodeOpenAIIdentity?
     var emailLink: String?
     var detectedNote: String?
     var password: String?
@@ -125,6 +127,7 @@ struct PlusProfile: Identifiable, Codable, Equatable, Sendable {
         case provider
         case label
         case codexAccountKey
+        case openCodeOpenAIAccount
         case emailLink
         case detectedNote
         case password
@@ -145,6 +148,7 @@ struct PlusProfile: Identifiable, Codable, Equatable, Sendable {
         provider: ProfileProvider = .codex,
         label: String,
         codexAccountKey: String? = nil,
+        openCodeOpenAIAccount: OpenCodeOpenAIIdentity? = nil,
         emailLink: String?,
         detectedNote: String?,
         password: String? = nil,
@@ -163,6 +167,7 @@ struct PlusProfile: Identifiable, Codable, Equatable, Sendable {
         self.provider = provider
         self.label = label
         self.codexAccountKey = codexAccountKey
+        self.openCodeOpenAIAccount = openCodeOpenAIAccount
         self.emailLink = emailLink
         self.detectedNote = detectedNote
         self.password = password
@@ -185,6 +190,7 @@ struct PlusProfile: Identifiable, Codable, Equatable, Sendable {
         provider = (try? container.decodeIfPresent(ProfileProvider.self, forKey: .provider)) ?? .codex
         label = try container.decode(String.self, forKey: .label)
         codexAccountKey = try container.decodeIfPresent(String.self, forKey: .codexAccountKey)
+        openCodeOpenAIAccount = try container.decodeIfPresent(OpenCodeOpenAIIdentity.self, forKey: .openCodeOpenAIAccount)
         emailLink = try container.decodeIfPresent(String.self, forKey: .emailLink)
         detectedNote = try container.decodeIfPresent(String.self, forKey: .detectedNote)
         password = try container.decodeIfPresent(String.self, forKey: .password)
@@ -209,6 +215,7 @@ struct PlusProfile: Identifiable, Codable, Equatable, Sendable {
         try container.encode(provider, forKey: .provider)
         try container.encode(label, forKey: .label)
         try container.encodeIfPresent(codexAccountKey, forKey: .codexAccountKey)
+        try container.encodeIfPresent(openCodeOpenAIAccount, forKey: .openCodeOpenAIAccount)
         try container.encodeIfPresent(emailLink, forKey: .emailLink)
         try container.encodeIfPresent(detectedNote, forKey: .detectedNote)
         try container.encodeIfPresent(password, forKey: .password)

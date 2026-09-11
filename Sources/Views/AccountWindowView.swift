@@ -644,6 +644,16 @@ struct ProfileManagerWindowView: View {
             ScrollView(.vertical) {
                 VStack(alignment: .leading, spacing: metrics.detailStackSpacing) {
                     detailTopGrid(for: snapshot, metrics: metrics)
+                    if snapshot.profile.provider == .codex {
+                        OpenChamberProfileActions(
+                            hasSavedSignIn: snapshot.profile.openCodeOpenAIAccount != nil,
+                            isWorking: !controller.openCodeSwitchingProfileIDs.isEmpty,
+                            status: controller.openChamberActionStatus.flatMap { $0.profileID == snapshot.id ? $0 : nil },
+                            save: { Task { await controller.saveOpenChamberAuth(profileID: snapshot.id) } },
+                            switchAccount: { Task { await controller.switchOpenChamberAuth(profileID: snapshot.id) } }
+                        )
+                        .padding(.horizontal, metrics.compactCardPadding)
+                    }
                     usagePanel(for: snapshot, metrics: metrics)
                     chromeSignInPanel(for: snapshot, metrics: metrics)
                 }
@@ -1520,6 +1530,48 @@ struct ProfileManagerWindowView: View {
         Task {
             await controller.closeChromeSignIn(for: profileID)
         }
+    }
+}
+
+struct OpenChamberProfileActions: View {
+    let hasSavedSignIn: Bool
+    let isWorking: Bool
+    let status: OpenChamberActionStatus?
+    let save: () -> Void
+    let switchAccount: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("OpenChamber · Local OpenAI")
+                .font(ProfileManagerTypography.smallStrong)
+                .foregroundStyle(CodexTheme.headingText)
+
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) { actions }
+                VStack(alignment: .leading, spacing: 8) { actions }
+            }
+
+            Text(status?.message ?? (hasSavedSignIn
+                ? "Sign-in saved. Also used by the local OpenCode CLI."
+                : "Sign in to this account in OpenChamber, then save it here."))
+                .font(ProfileManagerTypography.small)
+                .foregroundStyle(status?.tone.foregroundColor ?? CodexTheme.supportText)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("OpenChamber OpenAI sign-in")
+    }
+
+    @ViewBuilder private var actions: some View {
+        Button("Switch OpenChamber OpenAI", action: switchAccount)
+            .buttonStyle(CodexSecondaryButtonStyle())
+            .disabled(!hasSavedSignIn || isWorking)
+            .help("Switch the local OpenAI connection for new requests. Other providers keep their sign-ins.")
+        Button("Save current sign-in", action: save)
+            .buttonStyle(CodexQuietButtonStyle())
+            .disabled(isWorking)
+            .help("Save the current local OpenChamber sign-in after checking it belongs to this profile.")
     }
 }
 
