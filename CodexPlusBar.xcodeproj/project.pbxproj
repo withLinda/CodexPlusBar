@@ -51,6 +51,7 @@
 		9926C4922CF7D033DCF17CEE /* EmailToolsWindowPresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7755A62F2846FD0B38D5D005 /* EmailToolsWindowPresenter.swift */; };
 		9D5213CA95982FACB901C44F /* CodexTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B83C451759354D40D65FAC2 /* CodexTheme.swift */; };
 		9EB1AA96F01BEF5E5ED8A336 /* WebSessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E654F84109D3509039ADB773 /* WebSessionStore.swift */; };
+		9F4BB893794F0163A8A84E66 /* CodexAccountSwitchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF562E09FAC0315C1413120C /* CodexAccountSwitchService.swift */; };
 		A46CCD4FC90E071D45142211 /* Inter-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 1BC15159CBDD759D56C8596E /* Inter-Regular.ttf */; };
 		A899E6D55407F7CD8C0ACA04 /* ChatGPTAPIError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81400FBA3D7B45736A65F770 /* ChatGPTAPIError.swift */; };
 		AA02EDD36F547BD1E6727C0D /* ClaudeRequestSigner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 924C221CA29B37E3E43DE9F4 /* ClaudeRequestSigner.swift */; };
@@ -161,6 +162,7 @@
 		D2CCF039048CB5F92D4BDF6C /* OneTimePasswordGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OneTimePasswordGenerator.swift; sourceTree = "<group>"; };
 		D2D8B357AE9E8E39D52E54D8 /* ProfileTagViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileTagViews.swift; sourceTree = "<group>"; };
 		D6EC5BF584B2DCC0B7B9E2B9 /* SingleInstanceCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SingleInstanceCoordinator.swift; sourceTree = "<group>"; };
+		DF562E09FAC0315C1413120C /* CodexAccountSwitchService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexAccountSwitchService.swift; sourceTree = "<group>"; };
 		E654F84109D3509039ADB773 /* WebSessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSessionStore.swift; sourceTree = "<group>"; };
 		E7491AD60A2C37B5BE8C9C1B /* CormorantGaramond-Italic.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "CormorantGaramond-Italic.ttf"; sourceTree = "<group>"; };
 		F369067FAFB972FD6B6E3E08 /* ProfilePhoneNumberComboBox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfilePhoneNumberComboBox.swift; sourceTree = "<group>"; };
@@ -209,6 +211,7 @@
 				8EB2884883172C543A1D3822 /* ClaudeBootstrapService.swift */,
 				924C221CA29B37E3E43DE9F4 /* ClaudeRequestSigner.swift */,
 				5B0D9071FF9E12547FAB4DEF /* ClaudeUsageService.swift */,
+				DF562E09FAC0315C1413120C /* CodexAccountSwitchService.swift */,
 				8DB2AA3A3AF7C0E47B6DF5CE /* CookieBackedTransport.swift */,
 				3EF3F7392900410162228D43 /* DotTrickSessionStore.swift */,
 				53E8040E2C459A442745D324 /* HTTPTransport.swift */,
@@ -473,6 +476,7 @@
 				492905C0F183829A8DD4F40D /* ClaudeBootstrapService.swift in Sources */,
 				AA02EDD36F547BD1E6727C0D /* ClaudeRequestSigner.swift in Sources */,
 				12A58B7E69D7EAC0C1FB8E9E /* ClaudeUsageService.swift in Sources */,
+				9F4BB893794F0163A8A84E66 /* CodexAccountSwitchService.swift in Sources */,
 				27CDE503346F4D51A31A9AE3 /* CodexAppDelegate.swift in Sources */,
 				9D5213CA95982FACB901C44F /* CodexTheme.swift in Sources */,
 				EF1F0FFB25BAAE2ECF131F33 /* CookieBackedTransport.swift in Sources */,

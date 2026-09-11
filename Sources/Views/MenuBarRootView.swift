@@ -209,6 +209,9 @@ struct MenuBarRootView: View {
                     openManagerWindow: {
                         openManagerWindow(snapshot.id)
                     },
+                    switchAndOpen: snapshot.profile.codexAccountKey == nil || !controller.switchingProfileIDs.isEmpty ? nil : {
+                        Task { await controller.switchAndOpen(profileID: snapshot.id) }
+                    },
                     copyProfileLabel: {
                         copyProfileLabel(snapshot.label)
                     },
@@ -563,6 +566,7 @@ private struct MenuBarProfileRow: View {
     let textScale: Double
     let searchPhoneNumber: String?
     let openManagerWindow: () -> Void
+    let switchAndOpen: (() -> Void)?
     let copyProfileLabel: () -> Void
     let openEmailLink: () -> Void
     let pinProfile: () -> Void
@@ -577,7 +581,8 @@ private struct MenuBarProfileRow: View {
             primaryAction: openManagerWindow,
             copyAction: copyProfileLabel,
             emailAction: openEmailLink,
-            pinAction: pinProfile
+            pinAction: pinProfile,
+            switchAction: switchAndOpen
         )
     }
 }

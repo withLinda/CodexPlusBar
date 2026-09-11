@@ -67,9 +67,11 @@ final class PlusProfileController {
     var isRefreshing = false
     var dashboardStatus: PlusDashboardStatus = .empty
     var chromeSignInProfileIDs: Set<UUID> = []
+    var switchingProfileIDs: Set<UUID> = []
 
     @ObservationIgnored private let catalogStore: ProfileCatalogStore
     @ObservationIgnored private let dataService: PlusProfileDataServing
+    @ObservationIgnored private let accountSwitchService: CodexAccountSwitchService
     @ObservationIgnored private let autoRefreshIntervalNanoseconds: UInt64
     @ObservationIgnored private let maxConcurrentProfileRefreshes: Int
     @ObservationIgnored private let autoRefreshSleep: @Sendable (UInt64) async throws -> Void
@@ -79,6 +81,7 @@ final class PlusProfileController {
     init(
         catalogStore: ProfileCatalogStore = ProfileCatalogStore(),
         dataService: PlusProfileDataServing = PlusProfileDataService(),
+        accountSwitchService: CodexAccountSwitchService = CodexAccountSwitchService(),
         autoRefreshInterval: TimeInterval = 300,
         maxConcurrentProfileRefreshes: Int = 3,
         autoRefreshSleep: @escaping @Sendable (UInt64) async throws -> Void = {
@@ -88,6 +91,7 @@ final class PlusProfileController {
     ) {
         self.catalogStore = catalogStore
         self.dataService = dataService
+        self.accountSwitchService = accountSwitchService
         self.autoRefreshIntervalNanoseconds = UInt64(autoRefreshInterval * 1_000_000_000)
         self.maxConcurrentProfileRefreshes = max(1, maxConcurrentProfileRefreshes)
         self.autoRefreshSleep = autoRefreshSleep
@@ -428,6 +432,20 @@ final class PlusProfileController {
         await refreshProfile(id: profileID, isBackgroundBatch: false)
     }
 
+    func switchAndOpen(profileID: UUID) async {
+        guard switchingProfileIDs.isEmpty, let index = indexOfProfile(profileID) else { return }
+        let profile = profiles[index].profile
+        switchingProfileIDs.insert(profileID)
+        defer { switchingProfileIDs.remove(profileID) }
+        do {
+            try await accountSwitchService.switchAndOpen(profile: profile)
+            await refreshProfile(id: profileID)
+            statusMessage = "Switched to \(profile.displayLabel) and reopened ChatGPT."
+        } catch {
+            statusMessage = error.localizedDescription
+        }
+    }
+
     func clearSession(for profileID: UUID) async {
         guard let index = indexOfProfile(profileID) else { return }
         let snapshot = profiles[index]
@@ -642,7 +660,12 @@ final class PlusProfileController {
 
         do {
             let loadResult = try catalogStore.loadProfilesWithReport()
-            storedProfiles = loadResult.profiles
+            let migration = accountSwitchService.migrate(loadResult.profiles)
+            storedProfiles = migration.0
+            if migration.changed {
+                try? catalogStore.saveProfiles(storedProfiles)
+                repairMessage = "Linked saved Codex logins to the current profiles."
+            }
 
             if loadResult.removedDuplicateCount > 0 {
                 do {

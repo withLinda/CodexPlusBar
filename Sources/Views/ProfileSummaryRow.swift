@@ -147,6 +147,7 @@ struct ProfileSummaryRow: View {
     let copyAction: (() -> Void)?
     let emailAction: (() -> Void)?
     let pinAction: (() -> Void)?
+    let switchAction: (() -> Void)?
 
     init(
         snapshot: PlusProfileSnapshot,
@@ -157,7 +158,8 @@ struct ProfileSummaryRow: View {
         primaryAction: (() -> Void)? = nil,
         copyAction: (() -> Void)? = nil,
         emailAction: (() -> Void)? = nil,
-        pinAction: (() -> Void)? = nil
+        pinAction: (() -> Void)? = nil,
+        switchAction: (() -> Void)? = nil
     ) {
         self.init(
             presentation: ProfileSummaryRowPresentation(
@@ -171,7 +173,8 @@ struct ProfileSummaryRow: View {
             primaryAction: primaryAction,
             copyAction: copyAction,
             emailAction: emailAction,
-            pinAction: pinAction
+            pinAction: pinAction,
+            switchAction: switchAction
         )
     }
 
@@ -182,7 +185,8 @@ struct ProfileSummaryRow: View {
         primaryAction: (() -> Void)? = nil,
         copyAction: (() -> Void)? = nil,
         emailAction: (() -> Void)? = nil,
-        pinAction: (() -> Void)? = nil
+        pinAction: (() -> Void)? = nil,
+        switchAction: (() -> Void)? = nil
     ) {
         self.presentation = presentation
         self.mode = mode
@@ -191,6 +195,7 @@ struct ProfileSummaryRow: View {
         self.copyAction = copyAction
         self.emailAction = emailAction
         self.pinAction = pinAction
+        self.switchAction = switchAction
     }
 
     var body: some View {
@@ -361,6 +366,15 @@ struct ProfileSummaryRow: View {
 
     private var topActionRail: some View {
         HStack(spacing: 5) {
+            ProfileSummaryInlineIconButton(
+                symbolName: "arrow.triangle.2.circlepath",
+                label: "Switch and open ChatGPT",
+                helpText: "Switch to this account and reopen ChatGPT",
+                isDisabled: switchAction == nil,
+                size: 24,
+                action: switchAction ?? {}
+            )
+
             ProfileSummaryInlineIconButton(
                 symbolName: "doc.on.doc",
                 label: "Copy profile label",

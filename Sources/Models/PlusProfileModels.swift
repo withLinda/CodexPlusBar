@@ -104,6 +104,8 @@ struct PlusProfile: Identifiable, Codable, Equatable, Sendable {
     let id: UUID
     var provider: ProfileProvider
     var label: String
+    /// Stable key used by codex-auth to select the saved login for this profile.
+    var codexAccountKey: String?
     var emailLink: String?
     var detectedNote: String?
     var password: String?
@@ -122,6 +124,7 @@ struct PlusProfile: Identifiable, Codable, Equatable, Sendable {
         case id
         case provider
         case label
+        case codexAccountKey
         case emailLink
         case detectedNote
         case password
@@ -141,6 +144,7 @@ struct PlusProfile: Identifiable, Codable, Equatable, Sendable {
         id: UUID,
         provider: ProfileProvider = .codex,
         label: String,
+        codexAccountKey: String? = nil,
         emailLink: String?,
         detectedNote: String?,
         password: String? = nil,
@@ -158,6 +162,7 @@ struct PlusProfile: Identifiable, Codable, Equatable, Sendable {
         self.id = id
         self.provider = provider
         self.label = label
+        self.codexAccountKey = codexAccountKey
         self.emailLink = emailLink
         self.detectedNote = detectedNote
         self.password = password
@@ -179,6 +184,7 @@ struct PlusProfile: Identifiable, Codable, Equatable, Sendable {
         id = try container.decode(UUID.self, forKey: .id)
         provider = (try? container.decodeIfPresent(ProfileProvider.self, forKey: .provider)) ?? .codex
         label = try container.decode(String.self, forKey: .label)
+        codexAccountKey = try container.decodeIfPresent(String.self, forKey: .codexAccountKey)
         emailLink = try container.decodeIfPresent(String.self, forKey: .emailLink)
         detectedNote = try container.decodeIfPresent(String.self, forKey: .detectedNote)
         password = try container.decodeIfPresent(String.self, forKey: .password)
@@ -202,6 +208,7 @@ struct PlusProfile: Identifiable, Codable, Equatable, Sendable {
         try container.encode(id, forKey: .id)
         try container.encode(provider, forKey: .provider)
         try container.encode(label, forKey: .label)
+        try container.encodeIfPresent(codexAccountKey, forKey: .codexAccountKey)
         try container.encodeIfPresent(emailLink, forKey: .emailLink)
         try container.encodeIfPresent(detectedNote, forKey: .detectedNote)
         try container.encodeIfPresent(password, forKey: .password)

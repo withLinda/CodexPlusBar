@@ -1,7 +1,7 @@
 ---
 title: CodexPlusBar Learnings
 status: active
-last_updated: 2026-09-08
+last_updated: 2026-09-11
 purpose: "Keep non-obvious project knowledge in one place so future agents can avoid repeated tool mistakes, API misunderstandings, and fragile fixes."
 update_policy:
   - "Read this file before debugging, tool-heavy work, networking changes, or test repair."
@@ -197,3 +197,7 @@ update_policy:
 - 2026-07-27: The first dark aqua was still too bright and green across the large selected card. Replace it in practice with deeper, more neutral aqua (`#294441`, `#304A48`, `#37514F`) and keep the selected fill within delta L* 1 of its base surface; this preserves provider identity without adding a bright visual layer.
 - 2026-07-27: The second dark aqua still felt too bright at full card size. Replace it in practice with `#1E2D2B`, `#253432`, and `#2C3B39`; Dark Hard then resolves to `#232E2F` unselected and `#2C383A` selected. Keep the selected fill 3.5-5 delta L* darker than its normal base, while preserving at least 4 delta L* between selected and unselected cards.
 - 2026-08-08: Stopping a yielded tool cell does not always stop `make` or `xcodebuild` processes started inside lean-ctx. After the complete test summary and test host exit, check the exact process IDs and stop only that test run; do not assume that stopping the tool cell cleaned up its child processes.
+
+- 2026-09-11: Symptom: CodexPlusBar switched the account but reported `codex-auth returned exit code 1` and did not reliably reopen ChatGPT. Root cause: the wrapper trusted the CLI exit code even when `registry.json` had the requested active account, and app launch depended on a path string. Guardrail: launch by the registered `com.openai.codex` bundle ID and, for a nonzero switch exit, verify the registry active account before reporting failure.
+
+- 2026-09-11 (correction to the earlier switch note): The reproduced cause of switching without reopening was `status=$?`: `status` is read-only in zsh, which exits with code 1 before `open`. The prior registry fallback hid this shell failure; there was no evidence of a codex-auth post-switch failure or a broken app path. Run switch and reopen as separate awaited processes, check launch results separately, and test execution using harmless fake commands. Register `Process.terminationHandler` before `run()` so fast children cannot leave a continuation waiting. Never test a real force-close from the ChatGPT task being closed.

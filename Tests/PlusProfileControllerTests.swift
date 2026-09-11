@@ -6,6 +6,25 @@ import WebKit
 @MainActor
 struct PlusProfileControllerTests {
     @Test
+    func switchingAnotherProfileIsBlockedUntilCurrentSwitchFinishes() async throws {
+        let directory = makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = ProfileCatalogStore(fileURL: directory.appendingPathComponent("profiles.json"))
+        let profile = sampleProfile(label: "test@example.com", sortOrder: 0)
+        try store.saveProfiles([profile])
+        let controller = PlusProfileController(
+            catalogStore: store, dataService: StubPlusProfileDataService(refreshResults: [:]),
+            accountSwitchService: CodexAccountSwitchService(homeDirectory: directory), autoStart: false
+        )
+        let otherProfileID = UUID()
+        controller.switchingProfileIDs = [otherProfileID]
+        controller.statusMessage = "Existing switch"
+        await controller.switchAndOpen(profileID: profile.id)
+        #expect(controller.switchingProfileIDs == [otherProfileID])
+        #expect(controller.statusMessage == "Existing switch")
+    }
+
+    @Test
     func loadingRepairsDuplicateProfileIdentifiersAndKeepsCurrentCopy() throws {
         let tempDirectory = makeTemporaryDirectory()
         let fileURL = tempDirectory.appendingPathComponent("profiles.json", isDirectory: false)
