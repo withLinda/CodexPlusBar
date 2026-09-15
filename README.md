@@ -20,13 +20,13 @@ Opening accounts one at a time is slow and easy to get wrong. CodexPlusBar works
 
 ### Menu bar dashboard
 
-![CodexPlusBar menu bar dashboard with profile filters and usage cards](docs/screenshots/codexplusbar-menu-bar-panel.png)
+![Compact CodexPlusBar menu bar dashboard](docs/design/compact-20260915/panel-dark.png)
 
 ### Profile Manager
 
-![CodexPlusBar Profile Manager with saved profile details and usage](docs/screenshots/codexplusbar-profile-manager.png)
+![CodexPlusBar Profile Manager with capacity first and disclosed editing](docs/design/compact-20260915/manager-dark-hard.png)
 
-Private values in these screenshots are masked or covered.
+Screenshots show the 1.1.0 interface using sample profiles.
 
 ## What you can do
 
@@ -42,14 +42,14 @@ Private values in these screenshots are masked or covered.
 - Search by full or partial email address or phone number.
 - Filter by provider (`Codex` or `Claude`), tag (`Active`, `Need action`, `Pending`), or limit (`Usable`, `>35%`, `Full`).
 - Sort by next reset, account expiry, or saved order; the selected sort is remembered.
-- See counts beside filters and clear all filters with one action.
+- See counts in the Filter menu and clear all filters with one action.
 - Copy a profile label, open its saved link, open Profile Manager, or pin a profile from its card.
 - Pin one profile so its label and usage appear in the macOS menu bar status.
-- Adjust panel text size with `A-` and `A+` controls.
+- Adjust panel text size from **More → Larger text / Smaller text**.
 
 ### Keep profile details together
 
-Profile Manager lets you add, rename, reorder, select a provider for, and remove profiles. Optional fields include:
+Profile Manager puts remaining capacity first. Expand **Profile details** to edit, or **Connection setup** to change the provider. The **More** menu holds reorder and removal actions. Optional fields include:
 
 - profile label and web/email link
 - password and 2FA secret (copy helpers)
@@ -83,6 +83,8 @@ It previews valid rows, reports the exact lines that need fixing, ignores blank 
 
 **Email Tools** generates every single-dot variation for a Gmail username, such as `johndoe@gmail.com` → `j.ohndoe@gmail.com`. Save sessions, search long lists, copy one or all unused variations, and mark variations as used so you do not repeat work.
 
+The compact list keeps used addresses readable, supports keyboard checkbox navigation, and groups session removal in a More menu with a native confirmation.
+
 ### Make the interface fit your workflow
 
 - Everforest-based interface with **System**, **Dark**, and **Light** appearance.
@@ -92,9 +94,9 @@ It previews valid rows, reports the exact lines that need fixing, ignores blank 
 ## Quick start
 
 1. Open CodexPlusBar. Its status appears in the macOS menu bar; it does not add a normal Dock icon.
-2. Choose **Profile Manager** from the menu bar panel.
-3. Select **Add profile**, or choose **Import** for multiple profiles.
-4. Select **Codex** or **Claude**, add a label, and save.
+2. Choose **Manage profiles** from the menu bar panel.
+3. Select **Add profile**, or choose **More → Import profiles…** for multiple profiles.
+4. Edit the label in **Profile details**, save, then choose **Codex** or **Claude** in **Connection setup**.
 5. Choose **Open Codex** or **Open Claude** and sign in in the Chrome window that opens.
 6. Return to CodexPlusBar. If needed, select **Check now**; usage will then refresh automatically.
 7. Pin a profile, or use search, filters, and sorting to choose one for your next task.
@@ -113,7 +115,7 @@ CodexPlusBar reads the signed-in web services used by ChatGPT and Claude. These 
 
 The easiest way to install CodexPlusBar is the signed and notarized GitHub DMG. You do not need Xcode. One download supports both Apple silicon and Intel Macs running macOS 14 or newer.
 
-The latest release includes the current account-switching and local OpenChamber/OpenAI integration updates. The download link below always opens the latest release.
+Version **1.1.0** brings a compact, capacity-first Profile Manager, simpler menu bar and Email Tools controls, and fixes for live Dark/Light theme changes. It also includes account switching and the local OpenChamber/OpenAI integration. The download link below always downloads the latest published DMG; [the 1.1.0 release](https://github.com/withLinda/CodexPlusBar/releases/tag/v1.1.0) has version-specific downloads and release notes.
 
 1. [Download `CodexPlusBar.dmg`](https://github.com/withLinda/CodexPlusBar/releases/latest/download/CodexPlusBar.dmg).
 2. Optional: download [`CodexPlusBar.dmg.sha256`](https://github.com/withLinda/CodexPlusBar/releases/latest/download/CodexPlusBar.dmg.sha256) into the same folder. In Terminal, go to that folder (usually `~/Downloads`) and verify the download:
@@ -156,6 +158,27 @@ make dmg
 ```
 
 `make dmg` writes a local developer DMG to `build/dist/CodexPlusBar.dmg`. It does not perform Developer ID signing or Apple notarization; use the published GitHub DMG for normal installation.
+
+### Native design checks
+
+```bash
+bash scripts/render_design.sh --build --output /tmp/codexplusbar-preview.png
+bash scripts/render_design.sh --compact --light --output /tmp/codexplusbar-compact.png
+bash scripts/render_design.sh --panel --large-text --output /tmp/codexplusbar-panel.png
+# Interactive, isolated fixture window:
+bash scripts/render_design.sh --details
+# In another terminal:
+osascript scripts/inspect_design.applescript
+# Email utility preview and interaction check:
+bash scripts/render_design.sh --email-tools --compact
+osascript scripts/inspect_email_tools.applescript
+# Native theme-transition regression (Pillow required):
+bash scripts/render_design.sh --missing-expiry --cycle-theme --output /tmp/theme.png
+bash scripts/render_design.sh --missing-expiry --light --output /tmp/theme-fresh-light.png
+python3 scripts/verify_theme_transition.py /tmp/theme.png /tmp/theme-fresh-light.png
+```
+
+The preview uses a separate bundle ID, sample profiles, and stub services. Screen capture needs macOS Screen Recording permission; interaction checks need Accessibility permission. Enable Keyboard navigation for the email Tab/Space check and restore your preference afterward. The email check preserves and restores the clipboard. See the [design contract and verification results](docs/design/compact-redesign.md).
 
 ## Local data and privacy
 

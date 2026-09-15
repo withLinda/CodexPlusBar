@@ -1,0 +1,930 @@
+{
+  "version": 1,
+  "required_states": {
+    "used-text": [
+      "idle"
+    ],
+    "unused-text": [
+      "idle"
+    ],
+    "copy-text": [
+      "idle"
+    ],
+    "input-prompt": [
+      "idle"
+    ],
+    "checkbox-mark": [
+      "on"
+    ],
+    "checkbox-off-edge": [
+      "off"
+    ]
+  },
+  "accent_footprint": {
+    "primary_filled_elements": 1,
+    "largest_primary_plate": "intrinsic_control",
+    "orange_used_for_generic_toggles": false
+  },
+  "pairs": [
+    {
+      "name": "dark-hard used-text",
+      "component": "used-text",
+      "semantic_role": "used-text",
+      "state": "idle",
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "screenshot": {
+        "image": "email-dark-hard.png",
+        "foreground_region": [
+          300,
+          246,
+          1,
+          1
+        ],
+        "background_region": [
+          580,
+          239,
+          8,
+          8
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "dark-hard unused-text",
+      "component": "unused-text",
+      "semantic_role": "unused-text",
+      "state": "idle",
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "screenshot": {
+        "image": "email-dark-hard.png",
+        "foreground_region": [
+          418,
+          326,
+          1,
+          1
+        ],
+        "background_region": [
+          580,
+          322,
+          8,
+          8
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "dark-hard copy-text",
+      "component": "copy-text",
+      "semantic_role": "copy-text",
+      "state": "idle",
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "screenshot": {
+        "image": "email-dark-hard.png",
+        "foreground_region": [
+          697,
+          242,
+          1,
+          1
+        ],
+        "background_region": [
+          690,
+          232,
+          5,
+          5
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "dark-hard input-prompt",
+      "component": "input-prompt",
+      "semantic_role": "input-prompt",
+      "state": "idle",
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "screenshot": {
+        "image": "email-dark-hard.png",
+        "foreground_region": [
+          27,
+          102,
+          1,
+          1
+        ],
+        "background_region": [
+          450,
+          94,
+          8,
+          8
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "dark-hard checkbox-mark",
+      "component": "checkbox-mark",
+      "semantic_role": "checkbox-mark",
+      "state": "on",
+      "kind": "nontext",
+      "minimum_contrast": 3,
+      "minimum_delta_l_star": 0,
+      "screenshot": {
+        "image": "email-dark-hard.png",
+        "foreground_region": [
+          276,
+          247,
+          1,
+          1
+        ],
+        "background_region": [
+          273,
+          239,
+          1,
+          1
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "dark-hard checkbox-off-edge",
+      "component": "checkbox-off-edge",
+      "semantic_role": "checkbox-off-edge",
+      "state": "off",
+      "kind": "nontext",
+      "minimum_contrast": 3,
+      "minimum_delta_l_star": 0,
+      "screenshot": {
+        "image": "email-dark-hard.png",
+        "foreground_region": [
+          270,
+          323,
+          1,
+          1
+        ],
+        "background_region": [
+          262,
+          320,
+          5,
+          5
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "dark-medium used-text",
+      "component": "used-text",
+      "semantic_role": "used-text",
+      "state": "idle",
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "screenshot": {
+        "image": "email-dark-medium.png",
+        "foreground_region": [
+          300,
+          246,
+          1,
+          1
+        ],
+        "background_region": [
+          580,
+          239,
+          8,
+          8
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "dark-medium unused-text",
+      "component": "unused-text",
+      "semantic_role": "unused-text",
+      "state": "idle",
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "screenshot": {
+        "image": "email-dark-medium.png",
+        "foreground_region": [
+          418,
+          326,
+          1,
+          1
+        ],
+        "background_region": [
+          580,
+          322,
+          8,
+          8
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "dark-medium copy-text",
+      "component": "copy-text",
+      "semantic_role": "copy-text",
+      "state": "idle",
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "screenshot": {
+        "image": "email-dark-medium.png",
+        "foreground_region": [
+          697,
+          242,
+          1,
+          1
+        ],
+        "background_region": [
+          690,
+          232,
+          5,
+          5
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "dark-medium input-prompt",
+      "component": "input-prompt",
+      "semantic_role": "input-prompt",
+      "state": "idle",
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "screenshot": {
+        "image": "email-dark-medium.png",
+        "foreground_region": [
+          27,
+          102,
+          1,
+          1
+        ],
+        "background_region": [
+          450,
+          94,
+          8,
+          8
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "dark-medium checkbox-mark",
+      "component": "checkbox-mark",
+      "semantic_role": "checkbox-mark",
+      "state": "on",
+      "kind": "nontext",
+      "minimum_contrast": 3,
+      "minimum_delta_l_star": 0,
+      "screenshot": {
+        "image": "email-dark-medium.png",
+        "foreground_region": [
+          276,
+          247,
+          1,
+          1
+        ],
+        "background_region": [
+          273,
+          239,
+          1,
+          1
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "dark-medium checkbox-off-edge",
+      "component": "checkbox-off-edge",
+      "semantic_role": "checkbox-off-edge",
+      "state": "off",
+      "kind": "nontext",
+      "minimum_contrast": 3,
+      "minimum_delta_l_star": 0,
+      "screenshot": {
+        "image": "email-dark-medium.png",
+        "foreground_region": [
+          270,
+          323,
+          1,
+          1
+        ],
+        "background_region": [
+          262,
+          320,
+          5,
+          5
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "dark-soft used-text",
+      "component": "used-text",
+      "semantic_role": "used-text",
+      "state": "idle",
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "screenshot": {
+        "image": "email-dark-soft.png",
+        "foreground_region": [
+          300,
+          246,
+          1,
+          1
+        ],
+        "background_region": [
+          580,
+          239,
+          8,
+          8
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "dark-soft unused-text",
+      "component": "unused-text",
+      "semantic_role": "unused-text",
+      "state": "idle",
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "screenshot": {
+        "image": "email-dark-soft.png",
+        "foreground_region": [
+          301,
+          329,
+          1,
+          1
+        ],
+        "background_region": [
+          580,
+          322,
+          8,
+          8
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "dark-soft copy-text",
+      "component": "copy-text",
+      "semantic_role": "copy-text",
+      "state": "idle",
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "screenshot": {
+        "image": "email-dark-soft.png",
+        "foreground_region": [
+          697,
+          242,
+          1,
+          1
+        ],
+        "background_region": [
+          690,
+          232,
+          5,
+          5
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "dark-soft input-prompt",
+      "component": "input-prompt",
+      "semantic_role": "input-prompt",
+      "state": "idle",
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "screenshot": {
+        "image": "email-dark-soft.png",
+        "foreground_region": [
+          27,
+          102,
+          1,
+          1
+        ],
+        "background_region": [
+          450,
+          94,
+          8,
+          8
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "dark-soft checkbox-mark",
+      "component": "checkbox-mark",
+      "semantic_role": "checkbox-mark",
+      "state": "on",
+      "kind": "nontext",
+      "minimum_contrast": 3,
+      "minimum_delta_l_star": 0,
+      "screenshot": {
+        "image": "email-dark-soft.png",
+        "foreground_region": [
+          276,
+          247,
+          1,
+          1
+        ],
+        "background_region": [
+          273,
+          239,
+          1,
+          1
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "dark-soft checkbox-off-edge",
+      "component": "checkbox-off-edge",
+      "semantic_role": "checkbox-off-edge",
+      "state": "off",
+      "kind": "nontext",
+      "minimum_contrast": 3,
+      "minimum_delta_l_star": 0,
+      "screenshot": {
+        "image": "email-dark-soft.png",
+        "foreground_region": [
+          270,
+          323,
+          1,
+          1
+        ],
+        "background_region": [
+          262,
+          320,
+          5,
+          5
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "light-hard used-text",
+      "component": "used-text",
+      "semantic_role": "used-text",
+      "state": "idle",
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "screenshot": {
+        "image": "email-light-hard.png",
+        "foreground_region": [
+          300,
+          246,
+          1,
+          1
+        ],
+        "background_region": [
+          580,
+          239,
+          8,
+          8
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "light-hard unused-text",
+      "component": "unused-text",
+      "semantic_role": "unused-text",
+      "state": "idle",
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "screenshot": {
+        "image": "email-light-hard.png",
+        "foreground_region": [
+          400,
+          326,
+          1,
+          1
+        ],
+        "background_region": [
+          580,
+          322,
+          8,
+          8
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "light-hard copy-text",
+      "component": "copy-text",
+      "semantic_role": "copy-text",
+      "state": "idle",
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "screenshot": {
+        "image": "email-light-hard.png",
+        "foreground_region": [
+          697,
+          243,
+          1,
+          1
+        ],
+        "background_region": [
+          690,
+          232,
+          5,
+          5
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "light-hard input-prompt",
+      "component": "input-prompt",
+      "semantic_role": "input-prompt",
+      "state": "idle",
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "screenshot": {
+        "image": "email-light-hard.png",
+        "foreground_region": [
+          27,
+          102,
+          1,
+          1
+        ],
+        "background_region": [
+          450,
+          94,
+          8,
+          8
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "light-hard checkbox-mark",
+      "component": "checkbox-mark",
+      "semantic_role": "checkbox-mark",
+      "state": "on",
+      "kind": "nontext",
+      "minimum_contrast": 3,
+      "minimum_delta_l_star": 0,
+      "screenshot": {
+        "image": "email-light-hard.png",
+        "foreground_region": [
+          276,
+          247,
+          1,
+          1
+        ],
+        "background_region": [
+          273,
+          239,
+          1,
+          1
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "light-hard checkbox-off-edge",
+      "component": "checkbox-off-edge",
+      "semantic_role": "checkbox-off-edge",
+      "state": "off",
+      "kind": "nontext",
+      "minimum_contrast": 3,
+      "minimum_delta_l_star": 0,
+      "screenshot": {
+        "image": "email-light-hard.png",
+        "foreground_region": [
+          270,
+          324,
+          1,
+          1
+        ],
+        "background_region": [
+          262,
+          320,
+          5,
+          5
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "light-medium used-text",
+      "component": "used-text",
+      "semantic_role": "used-text",
+      "state": "idle",
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "screenshot": {
+        "image": "email-light-medium.png",
+        "foreground_region": [
+          300,
+          246,
+          1,
+          1
+        ],
+        "background_region": [
+          580,
+          239,
+          8,
+          8
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "light-medium unused-text",
+      "component": "unused-text",
+      "semantic_role": "unused-text",
+      "state": "idle",
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "screenshot": {
+        "image": "email-light-medium.png",
+        "foreground_region": [
+          386,
+          331,
+          1,
+          1
+        ],
+        "background_region": [
+          580,
+          322,
+          8,
+          8
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "light-medium copy-text",
+      "component": "copy-text",
+      "semantic_role": "copy-text",
+      "state": "idle",
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "screenshot": {
+        "image": "email-light-medium.png",
+        "foreground_region": [
+          697,
+          243,
+          1,
+          1
+        ],
+        "background_region": [
+          690,
+          232,
+          5,
+          5
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "light-medium input-prompt",
+      "component": "input-prompt",
+      "semantic_role": "input-prompt",
+      "state": "idle",
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "screenshot": {
+        "image": "email-light-medium.png",
+        "foreground_region": [
+          27,
+          102,
+          1,
+          1
+        ],
+        "background_region": [
+          450,
+          94,
+          8,
+          8
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "light-medium checkbox-mark",
+      "component": "checkbox-mark",
+      "semantic_role": "checkbox-mark",
+      "state": "on",
+      "kind": "nontext",
+      "minimum_contrast": 3,
+      "minimum_delta_l_star": 0,
+      "screenshot": {
+        "image": "email-light-medium.png",
+        "foreground_region": [
+          276,
+          247,
+          1,
+          1
+        ],
+        "background_region": [
+          273,
+          239,
+          1,
+          1
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "light-medium checkbox-off-edge",
+      "component": "checkbox-off-edge",
+      "semantic_role": "checkbox-off-edge",
+      "state": "off",
+      "kind": "nontext",
+      "minimum_contrast": 3,
+      "minimum_delta_l_star": 0,
+      "screenshot": {
+        "image": "email-light-medium.png",
+        "foreground_region": [
+          270,
+          323,
+          1,
+          1
+        ],
+        "background_region": [
+          262,
+          320,
+          5,
+          5
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "light-soft used-text",
+      "component": "used-text",
+      "semantic_role": "used-text",
+      "state": "idle",
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "screenshot": {
+        "image": "email-light-soft.png",
+        "foreground_region": [
+          300,
+          246,
+          1,
+          1
+        ],
+        "background_region": [
+          580,
+          239,
+          8,
+          8
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "light-soft unused-text",
+      "component": "unused-text",
+      "semantic_role": "unused-text",
+      "state": "idle",
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "screenshot": {
+        "image": "email-light-soft.png",
+        "foreground_region": [
+          384,
+          329,
+          1,
+          1
+        ],
+        "background_region": [
+          580,
+          322,
+          8,
+          8
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "light-soft copy-text",
+      "component": "copy-text",
+      "semantic_role": "copy-text",
+      "state": "idle",
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "screenshot": {
+        "image": "email-light-soft.png",
+        "foreground_region": [
+          697,
+          243,
+          1,
+          1
+        ],
+        "background_region": [
+          690,
+          232,
+          5,
+          5
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "light-soft input-prompt",
+      "component": "input-prompt",
+      "semantic_role": "input-prompt",
+      "state": "idle",
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "screenshot": {
+        "image": "email-light-soft.png",
+        "foreground_region": [
+          27,
+          102,
+          1,
+          1
+        ],
+        "background_region": [
+          450,
+          94,
+          8,
+          8
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "light-soft checkbox-mark",
+      "component": "checkbox-mark",
+      "semantic_role": "checkbox-mark",
+      "state": "on",
+      "kind": "nontext",
+      "minimum_contrast": 3,
+      "minimum_delta_l_star": 0,
+      "screenshot": {
+        "image": "email-light-soft.png",
+        "foreground_region": [
+          276,
+          247,
+          1,
+          1
+        ],
+        "background_region": [
+          273,
+          239,
+          1,
+          1
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "light-soft checkbox-off-edge",
+      "component": "checkbox-off-edge",
+      "semantic_role": "checkbox-off-edge",
+      "state": "off",
+      "kind": "nontext",
+      "minimum_contrast": 3,
+      "minimum_delta_l_star": 0,
+      "screenshot": {
+        "image": "email-light-soft.png",
+        "foreground_region": [
+          270,
+          323,
+          1,
+          1
+        ],
+        "background_region": [
+          262,
+          320,
+          5,
+          5
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    }
+  ]
+}

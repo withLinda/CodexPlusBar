@@ -53,7 +53,7 @@ struct MenuBarRootViewTests {
     }
 
     @Test
-    func menuBarRootViewExposesPanelZoomControls() throws {
+    func menuBarRootViewKeepsUtilityCommandsInMenu() throws {
         let tempDirectory = makeTemporaryDirectory()
         let store = ProfileCatalogStore(
             fileURL: tempDirectory.appendingPathComponent("profiles.json", isDirectory: false)
@@ -83,7 +83,8 @@ struct MenuBarRootViewTests {
         flushViewHierarchy(for: hostingView)
 
         let bodyDescription = String(reflecting: type(of: rootView.body))
-        #expect(bodyDescription.contains("MenuBarZoomControls") == true)
+        #expect(bodyDescription.contains("Menu<") == true)
+        #expect(bodyDescription.contains("MenuBarZoomControls") == false)
     }
 
     @Test

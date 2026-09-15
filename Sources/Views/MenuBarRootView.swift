@@ -2,6 +2,9 @@ import AppKit
 import SwiftUI
 
 struct MenuBarRootView: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @AppStorage(CodexThemeSettings.Keys.appearanceMode) private var themeAppearance = CodexThemeSettings.defaultAppearanceMode
+    @AppStorage(CodexThemeSettings.Keys.contrast) private var themeContrast = CodexThemeSettings.defaultContrast
     @Bindable var controller: PlusProfileController
     @Environment(\.openSettings) private var openSettings
     @AppStorage(MenuBarProfilePreference.preferredProfileIDKey) private var preferredProfileIDStorage = ""
@@ -90,7 +93,7 @@ struct MenuBarRootView: View {
                 }
 
                 ScrollView(.vertical) {
-                    VStack(alignment: .leading, spacing: MenuBarPanelMetrics.rowSpacing) {
+                    LazyVStack(alignment: .leading, spacing: MenuBarPanelMetrics.rowSpacing) {
                         content(displayedProfiles: listPresentation.displayedProfiles)
                     }
                     .frame(width: panelContentWidth, alignment: .leading)
@@ -111,6 +114,7 @@ struct MenuBarRootView: View {
             alignment: .topLeading
         )
         .onAppear(perform: clearStalePreferredProfileID)
+        .tint(CodexTheme.searchActionToken(preset: CodexThemeRefreshContext(appearanceMode: themeAppearance, contrast: themeContrast, systemVariant: colorScheme == .dark ? .dark : .light).preset).color)
         .onChange(of: controller.profiles.map(\.id)) { _, _ in
             clearStalePreferredProfileID()
             if controller.profiles.isEmpty {
@@ -140,27 +144,18 @@ struct MenuBarRootView: View {
                     )
                 }
 
-                MenuBarZoomControls(
-                    textScale: panelTextScale,
-                    canZoomOut: panelTextScale > MenuBarPanelTextScalePreference.minimumScale,
-                    canZoomIn: panelTextScale < MenuBarPanelTextScalePreference.maximumScale,
-                    zoomOut: zoomPanelOut,
-                    zoomIn: zoomPanelIn
-                )
-
-                CodexStatusBadge(
-                    title: controller.dashboardStatus.title,
-                    tone: controller.dashboardStatus.tone
-                )
-
-                if controller.isRefreshing {
-                    ProgressView()
-                        .controlSize(.mini)
-                        .tint(CodexTheme.accentOrange)
+                Button(action: refreshAll) {
+                    Image(systemName: "arrow.clockwise")
+                        .frame(width: 28, height: 28)
                 }
+                .buttonStyle(CodexQuietButtonStyle(horizontalPadding: 0, verticalPadding: 0))
+                .disabled(controller.isRefreshing)
+                .keyboardShortcut("r")
+                .help(controller.isRefreshing ? "Refreshing profiles…" : "Refresh all profiles")
+                .accessibilityLabel("Refresh all profiles")
             }
 
-            Text(headerMetaText(filterBar: listPresentation.filterBar))
+            Text(controller.isRefreshing ? "Refreshing…" : headerMetaText(filterBar: listPresentation.filterBar))
                 .font(ProfileManagerTypography.small(scale: panelTextScale))
                 .foregroundStyle(CodexTheme.mutedText)
                 .lineLimit(1)
@@ -265,20 +260,47 @@ struct MenuBarRootView: View {
 
     private var footer: some View {
         HStack(spacing: 8) {
-            ForEach(MenuBarFooterAction.allCases) { footerAction in
-                CodexIconButton(
-                    symbolName: footerAction.symbolName,
-                    helpText: footerAction.helpText,
-                    tone: footerAction.tone,
-                    isDisabled: footerAction == .refreshAll && controller.isRefreshing,
-                    action: {
-                        performFooterAction(footerAction)
-                    }
-                )
+            Button {
+                performFooterAction(.openManager)
+            } label: {
+                Label("Manage profiles", systemImage: "rectangle.on.rectangle")
             }
+            .buttonStyle(CodexSecondaryButtonStyle())
 
             Spacer(minLength: 0)
+
+            Button {
+                performFooterAction(.openThemeSettings)
+            } label: {
+                Image(systemName: "gearshape")
+                    .frame(width: 28, height: 28)
+            }
+            .buttonStyle(CodexQuietButtonStyle(horizontalPadding: 0, verticalPadding: 0))
+            .help("Settings")
+            .accessibilityLabel("Settings")
+
+            Menu {
+                Button("Email tools…", systemImage: "envelope") { performFooterAction(.openEmailTools) }
+                Divider()
+                Button("Larger text", systemImage: "textformat.size.larger", action: zoomPanelIn)
+                    .disabled(panelTextScale >= MenuBarPanelTextScalePreference.maximumScale)
+                Button("Smaller text", systemImage: "textformat.size.smaller", action: zoomPanelOut)
+                    .disabled(panelTextScale <= MenuBarPanelTextScalePreference.minimumScale)
+                Divider()
+                Button("Quit CodexPlusBar", action: quitApp)
+                    .keyboardShortcut("q")
+            } label: {
+                Image(systemName: "ellipsis")
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .accessibilityLabel("More options")
+            .help("More options")
         }
+        .padding(.top, 4)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -477,38 +499,8 @@ enum MenuBarFooterAction: CaseIterable, Identifiable {
     }
 }
 
-private struct MenuBarZoomControls: View {
-    let textScale: Double
-    let canZoomOut: Bool
-    let canZoomIn: Bool
-    let zoomOut: () -> Void
-    let zoomIn: () -> Void
-
-    var body: some View {
-        HStack(spacing: 5) {
-            MenuBarZoomButton(
-                title: "A-",
-                helpText: "Zoom out menu bar panel",
-                textScale: textScale,
-                isDisabled: canZoomOut == false,
-                action: zoomOut
-            )
-
-            MenuBarZoomButton(
-                title: "A+",
-                helpText: "Zoom in menu bar panel",
-                textScale: textScale,
-                isDisabled: canZoomIn == false,
-                action: zoomIn
-            )
-        }
-        .fixedSize(horizontal: true, vertical: false)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Menu bar panel zoom")
-    }
-}
-
 private struct MenuBarSearchButton: View {
+    @Environment(\.codexThemeRefreshContext) private var themeContext
     let isActive: Bool
     let textScale: Double
     let action: () -> Void
@@ -520,7 +512,7 @@ private struct MenuBarSearchButton: View {
                 .frame(minWidth: 30, minHeight: 28)
         }
         .buttonStyle(.plain)
-        .foregroundStyle(isActive ? CodexTheme.searchAction : CodexTheme.primaryText)
+        .foregroundStyle(isActive ? CodexTheme.searchActionToken(preset: themeContext.preset).color : CodexTheme.palette(for: themeContext.preset).primaryText.color)
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(
@@ -543,36 +535,6 @@ private struct MenuBarSearchButton: View {
         .opacity(isActive ? 0 : 1)
         .allowsHitTesting(isActive == false)
         .accessibilityHidden(isActive)
-    }
-}
-
-private struct MenuBarZoomButton: View {
-    let title: String
-    let helpText: String
-    let textScale: Double
-    let isDisabled: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(ProfileManagerTypography.caption(scale: textScale))
-                .monospacedDigit()
-                .frame(minWidth: 30, minHeight: 28)
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(isDisabled ? CodexTheme.disabledText : CodexTheme.primaryText)
-        .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(CodexTheme.surfaceFill(for: .subtle))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .stroke(CodexTheme.surfaceBorder(for: .subtle), lineWidth: 1)
-                )
-        )
-        .accessibilityLabel(helpText)
-        .help(helpText)
-        .disabled(isDisabled)
     }
 }
 
@@ -607,11 +569,11 @@ private struct MenuBarProfileRow: View {
 }
 
 enum MenuBarPanelMetrics {
-    static let width: CGFloat = 484
+    static let width: CGFloat = 440
     static let height: CGFloat = 560
-    static let chromeInset: CGFloat = 10
-    static let innerPadding: CGFloat = 18
-    static let stackSpacing: CGFloat = 14
-    static let rowSpacing: CGFloat = 10
+    static let chromeInset: CGFloat = 0
+    static let innerPadding: CGFloat = 16
+    static let stackSpacing: CGFloat = 12
+    static let rowSpacing: CGFloat = 6
     static let contentWidth = width - (chromeInset * 2) - (innerPadding * 2)
 }

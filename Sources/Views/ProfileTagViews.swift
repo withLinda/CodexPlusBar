@@ -355,194 +355,24 @@ struct ProfileFilterBar: View {
     }
 
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 4 * CGFloat(textScale)) {
-                ForEach(presentation.segments) { segment in
-                    ProfileFilterSegmentButton(
-                        segment: segment,
-                        textScale: textScale,
-                        action: {
-                            activate(segment)
-                        }
-                    )
-                }
-            }
-            .fixedSize(horizontal: true, vertical: false)
-
-            ProfileFilterMenu(
+        ProfileFilterMenu(
                 presentation: presentation,
                 textScale: textScale,
                 clearFilter: clearFilter,
                 toggleLimit: toggleLimit,
                 toggleTag: toggleTag,
                 toggleProvider: toggleProvider
-            )
-        }
+        )
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Profile filters")
         .accessibilityValue(presentation.accessibilitySummaryText)
     }
 
-    private func activate(_ segment: ProfileFilterSegment) {
-        guard segment.isEnabled else {
-            return
-        }
-
-        switch segment.kind {
-        case .all:
-            clearFilter()
-        case let .limit(limit):
-            toggleLimit(limit)
-        case let .tag(tag):
-            toggleTag(tag)
-        case let .provider(provider):
-            toggleProvider(provider)
-        }
-    }
-}
-
-private struct ProfileFilterSegmentButton: View {
-    let segment: ProfileFilterSegment
-    let textScale: Double
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 4 * CGFloat(textScale)) {
-                if segment.isSelected, segment.kind != .all {
-                    Image(systemName: segment.kind.systemImage)
-                        .font(.system(size: 8 * CGFloat(textScale), weight: .semibold))
-                        .frame(width: 9 * CGFloat(textScale), height: 9 * CGFloat(textScale))
-                        .foregroundStyle(selectedIconColor)
-                }
-
-                Text(segment.title)
-                    .lineLimit(1)
-
-                Text("\(segment.count)")
-                    .monospacedDigit()
-                    .lineLimit(1)
-            }
-        }
-        .font(ProfileManagerTypography.micro(scale: textScale))
-        .padding(.horizontal, 6 * CGFloat(textScale))
-        .padding(.vertical, 5 * CGFloat(textScale))
-        .background(backgroundShape)
-        .foregroundStyle(foregroundStyle)
-        .buttonStyle(.plain)
-        .disabled(segment.isEnabled == false)
-        .help(helpText)
-        .accessibilityLabel(segment.accessibilityLabel)
-        .accessibilityValue(accessibilityValue)
-    }
-
-    private var backgroundShape: some View {
-        RoundedRectangle(cornerRadius: 7, style: .continuous)
-            .fill(
-                segment.isSelected
-                    ? CodexTheme.surfaceFill(for: .strong)
-                    : CodexTheme.surfaceFill(for: .subtle)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .stroke(borderColor, lineWidth: CodexTheme.profileTagBorderLineWidth)
-            )
-    }
-
-    private var foregroundStyle: Color {
-        guard segment.isEnabled else {
-            return CodexTheme.quietText
-        }
-
-        return segment.isSelected ? CodexTheme.primaryText : CodexTheme.supportText
-    }
-
-    private var borderColor: Color {
-        guard segment.isSelected else {
-            return CodexTheme.surfaceBorder(for: .subtle)
-        }
-
-        if let tag = segment.tag {
-            return tag.profileTagTone.borderColor(isSelected: true)
-        }
-
-        if let provider = segment.provider {
-            return CodexTheme.profileProviderAccent(
-                for: provider,
-                isSelected: segment.isSelected
-            ).opacity(0.34)
-        }
-
-        if segment.limit != nil {
-            return CodexTheme.filterAction.opacity(0.28)
-        }
-
-        return CodexTheme.filterAction.opacity(0.28)
-    }
-
-    private var selectedIconColor: Color {
-        if let tag = segment.tag {
-            return tag.profileTagTone.foregroundColor
-        }
-
-        if let provider = segment.provider {
-            return CodexTheme.profileProviderAccent(for: provider)
-        }
-
-        if segment.limit != nil {
-            return CodexTheme.filterAction
-        }
-
-        return CodexTheme.primaryText
-    }
-
-    private var helpText: String {
-        if segment.isEnabled == false {
-            if let limit = segment.limit {
-                return "No profiles match \(limit.accessibilityLabel.lowercased())"
-            }
-
-            return "No \(segment.accessibilityLabel.lowercased()) profiles"
-        }
-
-        if let limit = segment.limit {
-            if segment.isSelected {
-                return "Remove \(limit.summaryTitle.lowercased()) filter"
-            }
-
-            switch limit {
-            case .any:
-                return "Show profiles with any limit"
-            case .usable:
-                return "Show only profiles where every known limit is at least 10%"
-            case .aboveThirtyFive:
-                return "Show only profiles where every known limit is above 35%"
-            case .fullFiveHour:
-                return "Show only profiles with 5H at 100%"
-            }
-        }
-
-        if let provider = segment.provider {
-            return segment.isSelected
-                ? "Remove \(provider.displayName) filter"
-                : "Show only \(provider.displayName) profiles"
-        }
-
-        if segment.isSelected, segment.tag != nil {
-            return "Remove \(segment.accessibilityLabel) filter"
-        }
-
-        return segment.tag == nil ? "Show all profiles" : "Filter by \(segment.accessibilityLabel)"
-    }
-
-    private var accessibilityValue: String {
-        let profileText = segment.count == 1 ? "1 profile" : "\(segment.count) profiles"
-        return segment.isSelected ? "\(profileText), selected" : profileText
-    }
 }
 
 private struct ProfileFilterMenu: View {
+    @Environment(\.codexThemeRefreshContext) private var themeContext
     let presentation: ProfileFilterBarPresentation
     let textScale: Double
     let clearFilter: () -> Void
@@ -587,13 +417,15 @@ private struct ProfileFilterMenu: View {
                 Text("Filter")
                     .lineLimit(1)
 
-                Text(presentation.controlSummaryText)
-                    .foregroundStyle(CodexTheme.mutedText)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                if !presentation.isAllSelected {
+                    Text(presentation.controlSummaryText)
+                        .foregroundStyle(CodexTheme.mutedText)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
             }
             .font(ProfileManagerTypography.caption(scale: textScale))
-            .foregroundStyle(CodexTheme.primaryText)
+            .foregroundStyle(CodexTheme.palette(for: themeContext.preset).primaryText.color)
             .padding(.horizontal, 9 * CGFloat(textScale))
             .padding(.vertical, 6 * CGFloat(textScale))
             .background(
@@ -655,6 +487,7 @@ private struct ProfileFilterMenu: View {
 }
 
 private struct ProfileDisplayOrderMenu: View {
+    @Environment(\.codexThemeRefreshContext) private var themeContext
     @Binding var displayOrder: ProfileDisplayOrder
     let textScale: Double
 
@@ -676,7 +509,7 @@ private struct ProfileDisplayOrderMenu: View {
                     .lineLimit(1)
             }
             .font(ProfileManagerTypography.caption(scale: textScale))
-            .foregroundStyle(CodexTheme.primaryText)
+            .foregroundStyle(CodexTheme.palette(for: themeContext.preset).primaryText.color)
             .padding(.horizontal, 9 * CGFloat(textScale))
             .padding(.vertical, 6 * CGFloat(textScale))
             .background(
@@ -698,6 +531,7 @@ private struct ProfileDisplayOrderMenu: View {
 }
 
 struct ProfileTagSummaryStrip: View {
+    @Environment(\.codexThemeRefreshContext) private var themeContext
     let summary: ProfileTagSummary
     let textScale: Double
 
@@ -715,7 +549,7 @@ struct ProfileTagSummaryStrip: View {
                     Text("+\(summary.overflowCount)")
                         .font(ProfileManagerTypography.micro(scale: textScale))
                         .monospacedDigit()
-                        .foregroundStyle(CodexTheme.mutedText)
+                        .foregroundStyle(CodexTheme.palette(for: themeContext.preset).mutedText.color)
                         .padding(.horizontal, 6 * CGFloat(textScale))
                         .padding(.vertical, 3 * CGFloat(textScale))
                         .background(
@@ -736,6 +570,7 @@ struct ProfileTagSummaryStrip: View {
 }
 
 private struct ProfileTagSummaryChip: View {
+    @Environment(\.codexThemeRefreshContext) private var themeContext
     let tag: PlusProfileTag
     let textScale: Double
 
@@ -750,16 +585,16 @@ private struct ProfileTagSummaryChip: View {
                 .minimumScaleFactor(0.9)
         }
         .font(ProfileManagerTypography.micro(scale: textScale))
-        .foregroundStyle(tag.profileTagTone.foregroundColor)
+        .foregroundStyle(CodexTheme.profileTagTextToken(for: tag.profileTagTone, preset: themeContext.preset).color)
         .padding(.horizontal, 6 * CGFloat(textScale))
         .padding(.vertical, 3 * CGFloat(textScale))
         .background(
             RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(tag.profileTagTone.fillColor(isSelected: true))
+                .fill(CodexTheme.profileTagFillToken(for: tag.profileTagTone, isSelected: true, preset: themeContext.preset).color)
                 .overlay(
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
                         .stroke(
-                            tag.profileTagTone.borderColor(isSelected: true),
+                             CodexTheme.profileTagBorderToken(for: tag.profileTagTone, isSelected: true, preset: themeContext.preset).color,
                             lineWidth: CodexTheme.profileTagBorderLineWidth
                         )
                 )
@@ -769,6 +604,7 @@ private struct ProfileTagSummaryChip: View {
 }
 
 struct ProfileTagToggleChip: View {
+    @Environment(\.codexThemeRefreshContext) private var themeContext
     let title: String
     let systemImage: String
     let isSelected: Bool
@@ -829,7 +665,8 @@ struct ProfileTagToggleChip: View {
     }
 
     private var accentColor: Color {
-        tagTone?.foregroundColor ?? CodexTheme.accentBlue
+        tagTone.map { CodexTheme.profileTagTextToken(for: $0, preset: themeContext.preset).color }
+            ?? CodexTheme.searchActionToken(preset: themeContext.preset).color
     }
 
     private var foregroundColor: Color {
@@ -837,7 +674,8 @@ struct ProfileTagToggleChip: View {
             return accentColor
         }
 
-        return tagTone == nil ? CodexTheme.supportText : CodexTheme.quietText
+        let palette = CodexTheme.palette(for: themeContext.preset)
+        return tagTone == nil ? palette.supportText.color : palette.quietText.color
     }
 
     private var iconColor: Color {
@@ -845,15 +683,15 @@ struct ProfileTagToggleChip: View {
             return accentColor
         }
 
-        return CodexTheme.supportText
+        return CodexTheme.palette(for: themeContext.preset).supportText.color
     }
 
     private var backgroundColor: Color {
         guard let tagTone else {
-            return isSelected ? CodexTheme.surfaceFill(for: .strong) : CodexTheme.surfaceFill(for: .subtle)
+            return CodexTheme.surfaceToken(for: isSelected ? .strong : .subtle, preset: themeContext.preset).color
         }
 
-        return tagTone.fillColor(isSelected: isSelected)
+        return CodexTheme.profileTagFillToken(for: tagTone, isSelected: isSelected, preset: themeContext.preset).color
     }
 
     private var borderColor: Color {
@@ -863,18 +701,19 @@ struct ProfileTagToggleChip: View {
                 : CodexTheme.surfaceBorder(for: .subtle)
         }
 
-        return tagTone.borderColor(isSelected: isSelected)
+        return CodexTheme.profileTagBorderToken(for: tagTone, isSelected: isSelected, preset: themeContext.preset).color
     }
 }
 
 struct ProfileFilterEmptyState: View {
+    @Environment(\.codexThemeRefreshContext) private var themeContext
     let clearFilter: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("No profiles match these filters.")
                 .font(ProfileManagerTypography.small)
-                .foregroundStyle(CodexTheme.mutedText)
+                .foregroundStyle(CodexTheme.palette(for: themeContext.preset).mutedText.color)
                 .fixedSize(horizontal: false, vertical: true)
 
             Button("Show all", action: clearFilter)

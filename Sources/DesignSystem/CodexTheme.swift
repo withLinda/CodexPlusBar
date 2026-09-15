@@ -540,20 +540,20 @@ enum CodexTheme {
     }
 
     enum Radius {
-        static let strongSurface: CGFloat = 18
-        static let surface: CGFloat = 16
-        static let nested: CGFloat = 12
-        static let field: CGFloat = 10
-        static let button: CGFloat = 10
-        static let icon: CGFloat = 10
-        static let badge: CGFloat = 8
+        static let strongSurface: CGFloat = 12
+        static let surface: CGFloat = 10
+        static let nested: CGFloat = 8
+        static let field: CGFloat = 6
+        static let button: CGFloat = 6
+        static let icon: CGFloat = 6
+        static let badge: CGFloat = 5
     }
 
     enum Spacing {
-        static let outerPage: CGFloat = 26
+        static let outerPage: CGFloat = 16
         static let panel: CGFloat = 16
         static let section: CGFloat = 16
-        static let content: CGFloat = 20
+        static let content: CGFloat = 16
         static let micro: CGFloat = 6
     }
 
@@ -607,9 +607,36 @@ enum CodexTheme {
     static let chromePadding = Spacing.outerPage
 
     static var surfaceLine: Color { surfaceBorder(for: .regular) }
+    static var controlBoundary: Color { controlBoundaryToken(preset: activePreset).color }
+
+    static func controlBoundaryToken(preset: CodexThemePreset) -> CodexColorToken {
+        let palette = palette(for: preset)
+        let background = surfaceToken(for: .nested, preset: preset)
+        for step in 0...20 {
+            let candidate = palette.gray2.mixed(with: palette.strongText, fraction: Double(step) / 20)
+            if contrastRatio(candidate, background) >= 3 { return candidate }
+        }
+        return palette.strongText
+    }
+
+    static func controlFillToken(
+        isPrimary: Bool,
+        isHovered: Bool = false,
+        isPressed: Bool = false,
+        isEnabled: Bool = true,
+        preset: CodexThemePreset
+    ) -> CodexColorToken {
+        let palette = palette(for: preset)
+        guard isEnabled else { return palette.bg1 }
+        if isPrimary {
+            return palette.accOrange.mixed(with: palette.primaryText, fraction: isPressed ? 0.10 : isHovered ? 0.05 : 0)
+        }
+        if isPressed { return palette.bg2 }
+        return isHovered ? palette.bg1.mixed(with: palette.bg2, fraction: 0.5) : palette.bg1
+    }
     static var warmBorder: Color { accentOrange.opacity(isDarkTheme ? 0.28 : 0.46) }
     static var primaryActionTokens: [CodexColorToken] {
-        [activePalette.accOrange, activePalette.accRed]
+        [activePalette.accOrange, activePalette.accOrange]
     }
 
     static func readableAccentToken(
@@ -845,19 +872,17 @@ enum CodexTheme {
     ) -> Color {
         let palette = palette(for: preset)
 
-        if let accent {
-            return accent.opacity(tier == .strong ? 0.36 : 0.28)
-        }
-
+        // Structural edges are quiet; focus and field boundaries have separate roles.
+        _ = accent
         switch tier {
         case .strong:
-            return palette.gray2.color(alpha: palette.isDark ? 0.42 : 0.62)
+            return palette.gray2.color(alpha: palette.isDark ? 0.24 : 0.30)
         case .regular:
-            return palette.gray1.color(alpha: palette.isDark ? 0.34 : 0.56)
+            return palette.gray1.color(alpha: palette.isDark ? 0.18 : 0.24)
         case .nested:
-            return palette.gray1.color(alpha: palette.isDark ? 0.28 : 0.50)
+            return palette.gray1.color(alpha: palette.isDark ? 0.14 : 0.20)
         case .subtle:
-            return palette.gray1.color(alpha: palette.isDark ? 0.30 : 0.44)
+            return palette.gray1.color(alpha: palette.isDark ? 0.12 : 0.18)
         }
     }
 
@@ -879,17 +904,7 @@ enum CodexTheme {
         for tier: CodexSurfaceTier,
         preset: CodexThemePreset
     ) -> (top: Double, middle: Double) {
-        let palette = palette(for: preset)
-        switch tier {
-        case .strong:
-            return palette.isDark ? (0.022, 0.007) : (0.16, 0.06)
-        case .regular:
-            return palette.isDark ? (0.016, 0.005) : (0.13, 0.05)
-        case .nested:
-            return palette.isDark ? (0.012, 0.004) : (0.10, 0.04)
-        case .subtle:
-            return palette.isDark ? (0.006, 0.0) : (0.08, 0.0)
-        }
+        (0, 0)
     }
 
     static func shadow(for tier: CodexSurfaceTier) -> CodexShadowStyle {
@@ -1120,33 +1135,11 @@ enum CodexTheme {
     }
 
     static func utilityFont(size: CGFloat, weight: Font.Weight) -> Font {
-        if let font = NSFont(name: interPostScriptName(for: weight), size: size) {
-            return Font(font)
-        }
-
-        if let fallback = NSFontManager.shared.font(
-            withFamily: "Inter",
-            traits: [],
-            weight: appKitWeight(for: weight),
-            size: size
-        ) {
-            return Font(fallback)
-        }
-
-        return .system(size: size, weight: weight)
+        .system(size: size, weight: weight)
     }
 
     static func sansFont(size: CGFloat, weight: Font.Weight) -> Font {
-        if let font = NSFontManager.shared.font(
-            withFamily: "Manrope",
-            traits: [],
-            weight: appKitWeight(for: weight),
-            size: size
-        ) {
-            return Font(font)
-        }
-
-        return .system(size: size, weight: weight)
+        .system(size: size, weight: weight)
     }
 
     static func canvasDarkeningOverlay(preset: CodexThemePreset) -> LinearGradient {
@@ -1302,11 +1295,12 @@ extension Color {
 }
 
 private struct CodexThemeRefreshModifier: ViewModifier {
+    @Environment(\.colorScheme) private var colorScheme
     @AppStorage(CodexThemeSettings.Keys.appearanceMode) private var appearanceMode = CodexThemeSettings.defaultAppearanceMode
     @AppStorage(CodexThemeSettings.Keys.contrast) private var contrast = CodexThemeSettings.defaultContrast
 
     private var refreshContext: CodexThemeRefreshContext {
-        CodexThemeRefreshContext(appearanceMode: appearanceMode, contrast: contrast)
+        CodexThemeRefreshContext(appearanceMode: appearanceMode, contrast: contrast, systemVariant: colorScheme == .dark ? .dark : .light)
     }
 
     func body(content: Content) -> some View {
@@ -1329,36 +1323,22 @@ extension View {
 }
 
 struct CodexBackdrop: View {
+    @Environment(\.colorScheme) private var colorScheme
     @AppStorage(CodexThemeSettings.Keys.appearanceMode) private var appearanceMode = CodexThemeSettings.defaultAppearanceMode
     @AppStorage(CodexThemeSettings.Keys.contrast) private var contrast = CodexThemeSettings.defaultContrast
 
     private var themeContext: CodexThemeRefreshContext {
-        CodexThemeRefreshContext(appearanceMode: appearanceMode, contrast: contrast)
+        CodexThemeRefreshContext(appearanceMode: appearanceMode, contrast: contrast, systemVariant: colorScheme == .dark ? .dark : .light)
     }
 
     var body: some View {
-        let palette = CodexTheme.palette(for: themeContext.preset)
-
-        ZStack {
-            CodexTheme.canvasFillToken(for: themeContext.preset).color
-
-            LinearGradient(
-                colors: [
-                    palette.bg1.color(alpha: palette.isDark ? 0.30 : 0.64),
-                    .clear,
-                    palette.isDark ? Color.black.opacity(0.20) : palette.bg2.color(alpha: 0.50),
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-
-            CodexTheme.canvasDarkeningOverlay(preset: themeContext.preset)
-        }
-        .ignoresSafeArea()
+        CodexTheme.canvasFillToken(for: themeContext.preset).color
+            .ignoresSafeArea()
     }
 }
 
 struct CodexShell<Content: View>: View {
+    @Environment(\.colorScheme) private var colorScheme
     @AppStorage(CodexThemeSettings.Keys.appearanceMode) private var appearanceMode = CodexThemeSettings.defaultAppearanceMode
     @AppStorage(CodexThemeSettings.Keys.contrast) private var contrast = CodexThemeSettings.defaultContrast
 
@@ -1377,11 +1357,10 @@ struct CodexShell<Content: View>: View {
     }
 
     private var themeContext: CodexThemeRefreshContext {
-        CodexThemeRefreshContext(appearanceMode: appearanceMode, contrast: contrast)
+        CodexThemeRefreshContext(appearanceMode: appearanceMode, contrast: contrast, systemVariant: colorScheme == .dark ? .dark : .light)
     }
 
     var body: some View {
-        let shadow = CodexTheme.shadow(for: .strong, preset: themeContext.preset)
         let shellShape = RoundedRectangle(
             cornerRadius: CodexTheme.shellCornerRadius,
             style: .continuous
@@ -1411,7 +1390,6 @@ struct CodexShell<Content: View>: View {
                             .offset(x: padding, y: padding)
                     }
                 }
-                .shadow(color: shadow.color, radius: shadow.radius, y: shadow.y)
         }
         .environment(\.codexThemeRefreshContext, themeContext)
         .preferredColorScheme(themeContext.preferredColorScheme)
@@ -1442,7 +1420,7 @@ struct CodexCard<Content: View>: View {
         tier: CodexSurfaceTier = .regular,
         accent: Color? = nil,
         padding: CGFloat = CodexTheme.panelPadding,
-        shadow: Bool = true,
+        shadow: Bool = false,
         fillToken: CodexColorToken? = nil,
         fillProvider: ProfileProvider? = nil,
         @ViewBuilder content: () -> Content
@@ -1499,6 +1477,7 @@ struct CodexCard<Content: View>: View {
 }
 
 struct CodexStatusBadge: View {
+    @Environment(\.codexThemeRefreshContext) private var themeContext
     let title: String
     let tone: CodexStatusTone
 
@@ -1516,7 +1495,7 @@ struct CodexStatusBadge: View {
         .padding(.vertical, 6)
         .background(
             RoundedRectangle(cornerRadius: CodexTheme.Radius.badge, style: .continuous)
-                .fill(CodexTheme.surfaceFill(for: .subtle))
+                .fill(CodexTheme.surfaceToken(for: .subtle, preset: themeContext.preset).color)
                 .overlay(
                     RoundedRectangle(cornerRadius: CodexTheme.Radius.badge, style: .continuous)
                         .fill(tone.backgroundColor)
@@ -1530,6 +1509,7 @@ struct CodexStatusBadge: View {
 }
 
 struct CodexStatusBanner: View {
+    @Environment(\.codexThemeRefreshContext) private var themeContext
     let title: String
     let message: String
     let tone: CodexStatusTone
@@ -1572,7 +1552,7 @@ struct CodexStatusBanner: View {
             VStack(alignment: .leading, spacing: CodexTheme.Spacing.micro) {
                 Text(title)
                     .font(titleFont)
-                    .foregroundStyle(CodexTheme.headingText)
+                    .foregroundStyle(CodexTheme.palette(for: themeContext.preset).strongText.color)
 
                 Text(message)
                     .font(messageFont)
@@ -1597,6 +1577,7 @@ struct CodexStatusBanner: View {
 }
 
 struct CodexIconButtonStyle: ButtonStyle {
+    @Environment(\.codexThemeRefreshContext) private var themeContext
     @Environment(\.isEnabled) private var isEnabled
 
     let tone: CodexControlTone
@@ -1610,8 +1591,7 @@ struct CodexIconButtonStyle: ButtonStyle {
             .overlay(borderShape)
             .shadow(color: shadowColor, radius: shadowRadius, y: shadowYOffset)
             .opacity(configuration.isPressed ? 0.92 : 1)
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
-            .animation(.easeOut(duration: 0.16), value: configuration.isPressed)
+            .tint(CodexTheme.searchActionToken(preset: themeContext.preset).color)
     }
 
     private var foregroundColor: Color {
@@ -1759,6 +1739,7 @@ struct CodexIconButton: View {
 }
 
 struct CodexPrimaryButtonStyle: ButtonStyle {
+    @Environment(\.codexThemeRefreshContext) private var themeContext
     @Environment(\.isEnabled) private var isEnabled
 
     let font: Font
@@ -1768,7 +1749,7 @@ struct CodexPrimaryButtonStyle: ButtonStyle {
     init(
         font: Font = .codexSmallStrong,
         horizontalPadding: CGFloat = 14,
-        verticalPadding: CGFloat = 10
+        verticalPadding: CGFloat = 6
     ) {
         self.font = font
         self.horizontalPadding = horizontalPadding
@@ -1778,46 +1759,28 @@ struct CodexPrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(font)
-            .foregroundStyle(isEnabled ? CodexTheme.accentInk : CodexTheme.disabledText)
+            .foregroundStyle(isEnabled ? CodexTheme.palette(for: themeContext.preset).onAccentText.color : CodexTheme.palette(for: themeContext.preset).quietText.color)
             .padding(.horizontal, horizontalPadding)
             .padding(.vertical, verticalPadding)
-            .background(
-                RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
-                    .fill(
-                        isEnabled
-                            ? AnyShapeStyle(CodexTheme.accentGradient)
-                            : AnyShapeStyle(CodexTheme.surfaceFill(for: .subtle))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
-                            .stroke(
-                                isEnabled
-                                    ? Color.white.opacity(0.08)
-                                    : CodexTheme.surfaceBorder(for: .subtle),
-                                lineWidth: 1
-                            )
-                    )
-            )
-            .shadow(color: isEnabled ? CodexTheme.accentOrange.opacity(0.20) : .clear, radius: 12, y: 6)
-            .opacity(configuration.isPressed ? 0.92 : 1)
-            .scaleEffect(configuration.isPressed ? 0.99 : 1)
-            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
+            .frame(minHeight: 28)
+            .modifier(CodexButtonSurface(isPrimary: true, isPressed: configuration.isPressed))
     }
 }
 
 struct CodexSecondaryButtonStyle: ButtonStyle {
+    @Environment(\.codexThemeRefreshContext) private var themeContext
     @Environment(\.isEnabled) private var isEnabled
 
     let font: Font
-    let foregroundColor: Color
+    let foregroundColor: Color?
     let horizontalPadding: CGFloat
     let verticalPadding: CGFloat
 
     init(
         font: Font = .codexSmallStrong,
-        foregroundColor: Color = CodexTheme.actionText,
+        foregroundColor: Color? = nil,
         horizontalPadding: CGFloat = 14,
-        verticalPadding: CGFloat = 10
+        verticalPadding: CGFloat = 6
     ) {
         self.font = font
         self.foregroundColor = foregroundColor
@@ -1828,29 +1791,16 @@ struct CodexSecondaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(font)
-            .foregroundStyle(isEnabled ? foregroundColor : CodexTheme.disabledText)
+            .foregroundStyle(isEnabled ? (foregroundColor ?? CodexTheme.palette(for: themeContext.preset).primaryText.color) : CodexTheme.palette(for: themeContext.preset).quietText.color)
             .padding(.horizontal, horizontalPadding)
             .padding(.vertical, verticalPadding)
-            .background(
-                RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
-                    .fill(CodexTheme.surfaceFill(for: .subtle))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
-                            .fill(CodexTheme.surfaceSheen(for: .subtle))
-                    )
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
-                    .stroke(CodexTheme.surfaceBorder(for: .subtle), lineWidth: 1)
-            )
-            .shadow(color: isEnabled ? .black.opacity(0.16) : .clear, radius: 8, y: 4)
-            .opacity(configuration.isPressed ? 0.92 : 1)
-            .scaleEffect(configuration.isPressed ? 0.99 : 1)
-            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
+            .frame(minHeight: 28)
+            .modifier(CodexButtonSurface(isPrimary: false, isPressed: configuration.isPressed))
     }
 }
 
 struct CodexQuietButtonStyle: ButtonStyle {
+    @Environment(\.codexThemeRefreshContext) private var themeContext
     @Environment(\.isEnabled) private var isEnabled
 
     let font: Font
@@ -1861,7 +1811,7 @@ struct CodexQuietButtonStyle: ButtonStyle {
     init(
         font: Font = .codexCaption,
         horizontalPadding: CGFloat = 10,
-        verticalPadding: CGFloat = 8,
+        verticalPadding: CGFloat = 6,
         cornerRadius: CGFloat = CodexTheme.controlCornerRadius
     ) {
         self.font = font
@@ -1873,17 +1823,89 @@ struct CodexQuietButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(font)
-            .foregroundStyle(isEnabled ? CodexTheme.mutedText : CodexTheme.disabledText)
+            .foregroundStyle(isEnabled ? CodexTheme.palette(for: themeContext.preset).mutedText.color : CodexTheme.palette(for: themeContext.preset).quietText.color)
             .padding(.horizontal, horizontalPadding)
             .padding(.vertical, verticalPadding)
-            .background(
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(CodexTheme.surfaceFill(for: .subtle).opacity(configuration.isPressed ? 0.98 : 0.84))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(CodexTheme.surfaceBorder(for: .subtle), lineWidth: 1)
-            )
+            .frame(minHeight: 28)
+            .modifier(CodexButtonSurface(isPrimary: false, isPressed: configuration.isPressed))
+    }
+}
+
+struct CodexButtonSurface: ViewModifier {
+    @Environment(\.codexThemeRefreshContext) private var themeContext
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.isFocused) private var isFocused
+    @Environment(\.colorSchemeContrast) private var contrast
+    @State private var isHovered = false
+    let isPrimary: Bool
+    let isPressed: Bool
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
+        content
+            .background {
+                shape.fill(CodexTheme.controlFillToken(
+                    isPrimary: isPrimary,
+                    isHovered: isHovered,
+                    isPressed: isPressed,
+                    isEnabled: isEnabled,
+                    preset: themeContext.preset
+                ).color)
+            }
+            .overlay {
+                shape.strokeBorder(
+                    isFocused ? CodexTheme.searchFocusBorderToken(preset: themeContext.preset).color : (contrast == .increased ? CodexTheme.controlBoundaryToken(preset: themeContext.preset).color : .clear),
+                    lineWidth: isFocused ? 2 : 1
+                )
+            }
+            .contentShape(shape)
+            .onHover { isHovered = $0 }
+    }
+}
+
+/// Exact matte paint keeps the native Toggle semantics while making both states legible.
+struct CodexCheckboxStyle: ToggleStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        CodexCheckboxControl(configuration: configuration)
+    }
+}
+
+private struct CodexCheckboxControl: View {
+    @Environment(\.codexThemeRefreshContext) private var themeContext
+    @Environment(\.isEnabled) private var isEnabled
+    @FocusState private var isFocused: Bool
+    let configuration: ToggleStyleConfiguration
+
+    var body: some View {
+        let palette = CodexTheme.palette(for: themeContext.preset)
+        Button {
+            configuration.isOn.toggle()
+        } label: {
+            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                .fill(configuration.isOn && isEnabled ? palette.accBlue.color : palette.bg1.color)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                        .strokeBorder(CodexTheme.controlBoundaryToken(preset: themeContext.preset).color, lineWidth: 1)
+                    if configuration.isOn {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(isEnabled ? palette.onAccentText.color : palette.quietText.color)
+                    }
+                }
+                .frame(width: 16, height: 16)
+                .frame(width: 28, height: 28)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .focused($isFocused)
+        .overlay {
+            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                .strokeBorder(isFocused ? CodexTheme.searchFocusBorderToken(preset: themeContext.preset).color : .clear, lineWidth: 2)
+        }
+        .accessibilityRepresentation {
+            Toggle(isOn: configuration.$isOn) { configuration.label }
+                .toggleStyle(.checkbox)
+        }
     }
 }
 

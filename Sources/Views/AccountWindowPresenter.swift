@@ -31,7 +31,7 @@ final class ProfileManagerWindowPresenter {
             )
         )
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 1120, height: 780),
+            contentRect: NSRect(origin: .zero, size: controller.profiles.isEmpty ? ProfileManagerLayout.emptySize : ProfileManagerLayout.defaultSize),
             styleMask: [.titled, .closable, .resizable, .miniaturizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -46,7 +46,7 @@ final class ProfileManagerWindowPresenter {
         window.backgroundColor = .clear
         window.isOpaque = false
         window.isReleasedWhenClosed = false
-        window.minSize = NSSize(width: 980, height: 720)
+        window.minSize = controller.profiles.isEmpty ? ProfileManagerLayout.emptyMinimumSize : ProfileManagerLayout.minimumSize
         window.center()
         return window
     }

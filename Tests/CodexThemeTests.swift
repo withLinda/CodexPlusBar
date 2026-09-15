@@ -715,10 +715,51 @@ struct CodexThemeTests {
     }
 
     @Test
-    func primaryActionGradientStaysOrangeToSalmon() {
+    func primaryActionKeepsOneMatteOrangeFamily() {
         #expect(CodexTheme.primaryActionTokens.count == 2)
         #expect(CodexTheme.primaryActionTokens[0] == CodexTheme.Palette.accOrange)
-        #expect(CodexTheme.primaryActionTokens[1] == CodexTheme.Palette.accRed)
+        #expect(CodexTheme.primaryActionTokens[1] == CodexTheme.Palette.accOrange)
+    }
+
+    @Test
+    func fieldBoundariesPassNonTextContrastAcrossAllPresets() {
+        for preset in CodexThemePreset.allCases {
+            #expect(contrastRatio(
+                CodexTheme.controlBoundaryToken(preset: preset),
+                CodexTheme.surfaceToken(for: .nested, preset: preset)
+            ) >= 3)
+        }
+    }
+
+    @Test
+    func checkboxMarkAndBoundaryPassNonTextContrastAcrossEveryPreset() {
+        for preset in CodexThemePreset.allCases {
+            let palette = CodexTheme.palette(for: preset)
+            #expect(contrastRatio(palette.onAccentText, palette.accBlue) >= 3)
+            #expect(contrastRatio(
+                CodexTheme.controlBoundaryToken(preset: preset),
+                CodexTheme.surfaceToken(for: .subtle, preset: preset)
+            ) >= 3)
+        }
+    }
+
+    @Test
+    func matteControlStatesKeepReadableTextAcrossEveryPreset() {
+        for preset in CodexThemePreset.allCases {
+            let palette = CodexTheme.palette(for: preset)
+            for state in 0...3 {
+                for isPrimary in [false, true] {
+                    let enabled = state != 3
+                    let fill = CodexTheme.controlFillToken(
+                        isPrimary: isPrimary, isHovered: state == 1, isPressed: state == 2,
+                        isEnabled: enabled, preset: preset
+                    )
+                    let foreground = !enabled ? palette.quietText : isPrimary ? palette.onAccentText : palette.primaryText
+                    #expect(contrastRatio(foreground, fill) >= 4.5, "\(preset.id) state \(state) primary \(isPrimary)")
+                    #expect(deltaLStar(foreground, fill) >= 40)
+                }
+            }
+        }
     }
 
     @Test

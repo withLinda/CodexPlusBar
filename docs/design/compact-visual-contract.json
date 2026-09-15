@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "phase": "final",
+  "surface_mode": "desktop",
+  "surface_kind": "compact_utility",
+  "default_window_or_view_size": {"width": 1000, "height": 680},
+  "one_main_job": "Find an account with available capacity and open it.",
+  "primary_action": {"label": "Save changes", "presentation": "intrinsic", "contains_context": false, "reason": "Only editing needs a filled forward action; navigation stays neutral or blue."},
+  "current_status": {"location": "selected profile header and paired usage readout", "semantic_role": "capacity"},
+  "reading_order": ["profile identity", "capacity and resets", "open and refresh", "details and connection setup"],
+  "semantic_groups": [{"id": "profiles", "purpose": "Find and select an account"}, {"id": "detail", "purpose": "Inspect capacity and act on the selected account"}],
+  "group_relationship": "primary-support",
+  "group_proportion": "adaptive",
+  "content_sufficiency": "A fixed readable sidebar supports a flexible selected-account work area.",
+  "shared_anchors": [{"name": "identity-leading", "edge": "leading", "expected_max_drift_pt": 1}, {"name": "actions-trailing", "edge": "trailing", "expected_max_drift_pt": 1}],
+  "row_heights": [{"name": "control", "points": 28}, {"name": "disclosure", "points": 36}, {"name": "standard-profile-row", "points": 106}],
+  "spacing_roles": [{"name": "related", "points": 4, "job": "Join label and value"}, {"name": "controls", "points": 8, "job": "Group actions"}, {"name": "internal", "points": 12, "job": "Pad compact content"}, {"name": "sections", "points": 16, "job": "Separate tasks"}],
+  "typography_roles": [{"name": "title", "style": "20pt semibold", "purpose": "Identity"}, {"name": "body", "style": "13pt regular/semibold", "purpose": "Labels and controls"}, {"name": "support", "style": "12pt regular", "purpose": "Resets and metadata"}, {"name": "capacity", "style": "28pt semibold monospaced digits", "purpose": "Remaining capacity"}],
+  "accent_roles": [{"role": "primaryAction", "element": "Save changes"}, {"role": "navigationAction", "element": "Open/search/reveal"}, {"role": "healthyState", "element": "Capacity with numeric label"}],
+  "accent_footprint": {"primary_filled_elements": 1, "largest_primary_plate": "intrinsic_control", "reason": "Only the contextually relevant forward action is filled."},
+  "boundary_jobs": [{"element": "window", "job": "native outer silhouette"}, {"element": "content section", "job": "quiet structural grouping"}, {"element": "field", "job": "identify editable content"}, {"element": "keyboard focus", "job": "strong state outline"}],
+  "compact_fallback": "900 × 600 minimum; independent scrolling, equal usage lanes, explicit disclosures for details/setup.",
+  "required_states": ["idle", "hover", "pressed", "focus", "disabled", "selected", "empty", "loading", "error", "large-text", "editing"],
+  "platform_metrics": {"default_control_target_pt": 28, "minimum_control_target_pt": 20, "default_text_pt": 13, "minimum_text_pt": 10},
+  "rendered_evidence": {
+    "default_image": "compact-20260915/manager-dark-hard.png",
+    "compact_image": "compact-20260915/manager-compact.png",
+    "alignment_max_drift_pt": 0,
+    "color_audit_passed": true
+  }
+}

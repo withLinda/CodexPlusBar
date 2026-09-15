@@ -1,0 +1,618 @@
+{
+  "version": 1,
+  "required_states": {
+    "heading": ["idle"],
+    "support": ["idle"],
+    "capacity": ["idle"],
+    "save": ["idle"],
+    "field-text": ["idle"],
+    "field-boundary": ["idle"]
+  },
+  "accent_footprint": {
+    "primary_filled_elements": 1,
+    "largest_primary_plate": "intrinsic_control",
+    "orange_used_for_generic_toggles": false
+  },
+  "pairs": [
+    {
+      "name": "dark-hard heading",
+      "component": "heading",
+      "semantic_role": "heading",
+      "state": "idle",
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "screenshot": {
+        "image": "manager-dark-hard.png",
+        "foreground_region": [
+          18,
+          52,
+          1,
+          1
+        ],
+        "background_region": [
+          150,
+          50,
+          8,
+          8
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "dark-hard support",
+      "component": "support",
+      "semantic_role": "support",
+      "state": "idle",
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "screenshot": {
+        "image": "manager-dark-hard.png",
+        "foreground_region": [
+          337,
+          307,
+          1,
+          1
+        ],
+        "background_region": [
+          400,
+          305,
+          8,
+          8
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "dark-hard capacity",
+      "component": "capacity",
+      "semantic_role": "capacity",
+      "state": "idle",
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "screenshot": {
+        "image": "manager-dark-hard.png",
+        "foreground_region": [
+          540,
+          291,
+          1,
+          1
+        ],
+        "background_region": [
+          520,
+          275,
+          8,
+          8
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "dark-medium heading",
+      "component": "heading",
+      "semantic_role": "heading",
+      "state": "idle",
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "screenshot": {
+        "image": "manager-dark-medium.png",
+        "foreground_region": [
+          18,
+          52,
+          1,
+          1
+        ],
+        "background_region": [
+          150,
+          50,
+          8,
+          8
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "dark-medium support",
+      "component": "support",
+      "semantic_role": "support",
+      "state": "idle",
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "screenshot": {
+        "image": "manager-dark-medium.png",
+        "foreground_region": [
+          337,
+          307,
+          1,
+          1
+        ],
+        "background_region": [
+          400,
+          305,
+          8,
+          8
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "dark-medium capacity",
+      "component": "capacity",
+      "semantic_role": "capacity",
+      "state": "idle",
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "screenshot": {
+        "image": "manager-dark-medium.png",
+        "foreground_region": [
+          540,
+          291,
+          1,
+          1
+        ],
+        "background_region": [
+          520,
+          275,
+          8,
+          8
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "dark-soft heading",
+      "component": "heading",
+      "semantic_role": "heading",
+      "state": "idle",
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "screenshot": {
+        "image": "manager-dark-soft.png",
+        "foreground_region": [
+          18,
+          52,
+          1,
+          1
+        ],
+        "background_region": [
+          150,
+          50,
+          8,
+          8
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "dark-soft support",
+      "component": "support",
+      "semantic_role": "support",
+      "state": "idle",
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "screenshot": {
+        "image": "manager-dark-soft.png",
+        "foreground_region": [
+          337,
+          307,
+          1,
+          1
+        ],
+        "background_region": [
+          400,
+          305,
+          8,
+          8
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "dark-soft capacity",
+      "component": "capacity",
+      "semantic_role": "capacity",
+      "state": "idle",
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "screenshot": {
+        "image": "manager-dark-soft.png",
+        "foreground_region": [
+          540,
+          291,
+          1,
+          1
+        ],
+        "background_region": [
+          520,
+          275,
+          8,
+          8
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "light-hard heading",
+      "component": "heading",
+      "semantic_role": "heading",
+      "state": "idle",
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "screenshot": {
+        "image": "manager-light-hard.png",
+        "foreground_region": [
+          18,
+          52,
+          1,
+          1
+        ],
+        "background_region": [
+          150,
+          50,
+          8,
+          8
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "light-hard support",
+      "component": "support",
+      "semantic_role": "support",
+      "state": "idle",
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "screenshot": {
+        "image": "manager-light-hard.png",
+        "foreground_region": [
+          337,
+          307,
+          1,
+          1
+        ],
+        "background_region": [
+          400,
+          305,
+          8,
+          8
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "light-hard capacity",
+      "component": "capacity",
+      "semantic_role": "capacity",
+      "state": "idle",
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "screenshot": {
+        "image": "manager-light-hard.png",
+        "foreground_region": [
+          540,
+          291,
+          1,
+          1
+        ],
+        "background_region": [
+          520,
+          275,
+          8,
+          8
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "light-medium heading",
+      "component": "heading",
+      "semantic_role": "heading",
+      "state": "idle",
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "screenshot": {
+        "image": "manager-light-medium.png",
+        "foreground_region": [
+          18,
+          52,
+          1,
+          1
+        ],
+        "background_region": [
+          150,
+          50,
+          8,
+          8
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "light-medium support",
+      "component": "support",
+      "semantic_role": "support",
+      "state": "idle",
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "screenshot": {
+        "image": "manager-light-medium.png",
+        "foreground_region": [
+          337,
+          307,
+          1,
+          1
+        ],
+        "background_region": [
+          400,
+          305,
+          8,
+          8
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "light-medium capacity",
+      "component": "capacity",
+      "semantic_role": "capacity",
+      "state": "idle",
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "screenshot": {
+        "image": "manager-light-medium.png",
+        "foreground_region": [
+          540,
+          291,
+          1,
+          1
+        ],
+        "background_region": [
+          520,
+          275,
+          8,
+          8
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "light-soft heading",
+      "component": "heading",
+      "semantic_role": "heading",
+      "state": "idle",
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "screenshot": {
+        "image": "manager-light-soft.png",
+        "foreground_region": [
+          18,
+          52,
+          1,
+          1
+        ],
+        "background_region": [
+          150,
+          50,
+          8,
+          8
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "light-soft support",
+      "component": "support",
+      "semantic_role": "support",
+      "state": "idle",
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "screenshot": {
+        "image": "manager-light-soft.png",
+        "foreground_region": [
+          337,
+          307,
+          1,
+          1
+        ],
+        "background_region": [
+          400,
+          305,
+          8,
+          8
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "light-soft capacity",
+      "component": "capacity",
+      "semantic_role": "capacity",
+      "state": "idle",
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "screenshot": {
+        "image": "manager-light-soft.png",
+        "foreground_region": [
+          540,
+          291,
+          1,
+          1
+        ],
+        "background_region": [
+          520,
+          275,
+          8,
+          8
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "dark save",
+      "component": "save",
+      "semantic_role": "save",
+      "state": "idle",
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "screenshot": {
+        "image": "editor-dark.png",
+        "foreground_region": [
+          827,
+          157,
+          1,
+          1
+        ],
+        "background_region": [
+          792,
+          155,
+          6,
+          6
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "dark field-text",
+      "component": "field-text",
+      "semantic_role": "field-text",
+      "state": "idle",
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "screenshot": {
+        "image": "editor-dark.png",
+        "foreground_region": [
+          511,
+          199,
+          1,
+          1
+        ],
+        "background_region": [
+          700,
+          191,
+          8,
+          8
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "dark field-boundary",
+      "component": "field-boundary",
+      "semantic_role": "field-boundary",
+      "state": "idle",
+      "kind": "nontext",
+      "minimum_contrast": 3,
+      "minimum_delta_l_star": 0,
+      "screenshot": {
+        "image": "editor-dark.png",
+        "foreground_region": [
+          520,
+          185,
+          1,
+          1
+        ],
+        "background_region": [
+          700,
+          191,
+          8,
+          8
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "light save",
+      "component": "save",
+      "semantic_role": "save",
+      "state": "idle",
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "screenshot": {
+        "image": "editor-light.png",
+        "foreground_region": [
+          827,
+          157,
+          1,
+          1
+        ],
+        "background_region": [
+          792,
+          155,
+          6,
+          6
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "light field-text",
+      "component": "field-text",
+      "semantic_role": "field-text",
+      "state": "idle",
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "screenshot": {
+        "image": "editor-light.png",
+        "foreground_region": [
+          567,
+          202,
+          1,
+          1
+        ],
+        "background_region": [
+          700,
+          191,
+          8,
+          8
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    },
+    {
+      "name": "light field-boundary",
+      "component": "field-boundary",
+      "semantic_role": "field-boundary",
+      "state": "idle",
+      "kind": "nontext",
+      "minimum_contrast": 3,
+      "minimum_delta_l_star": 0,
+      "screenshot": {
+        "image": "editor-light.png",
+        "foreground_region": [
+          520,
+          185,
+          1,
+          1
+        ],
+        "background_region": [
+          700,
+          191,
+          8,
+          8
+        ],
+        "minimum_dominant_share": 0.9
+      }
+    }
+  ]
+}

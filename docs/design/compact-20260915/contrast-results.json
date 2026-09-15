@@ -1,0 +1,934 @@
+{
+  "accent_footprint": {
+    "errors": [],
+    "largest_primary_plate": "intrinsic_control",
+    "orange_used_for_generic_toggles": false,
+    "passed": true,
+    "primary_filled_elements": 1
+  },
+  "errors": [],
+  "manifest": "docs/design/compact-20260915/contrast-manifest.json",
+  "pairs": [
+    {
+      "background_srgb": "#272E32",
+      "component": "heading",
+      "delta_l_star_d50": 75.88026988813996,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          150,
+          50,
+          8,
+          8
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          18,
+          52,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/manager-dark-hard.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#F1EFDE",
+      "index": 0,
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "name": "dark-hard heading",
+      "passed": true,
+      "semantic_role": "heading",
+      "state": "idle",
+      "wcag_contrast": 11.910753103900309
+    },
+    {
+      "background_srgb": "#272E32",
+      "component": "support",
+      "delta_l_star_d50": 62.03188896238802,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          400,
+          305,
+          8,
+          8
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          337,
+          307,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/manager-dark-hard.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#D3C6AA",
+      "index": 1,
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "name": "dark-hard support",
+      "passed": true,
+      "semantic_role": "support",
+      "state": "idle",
+      "wcag_contrast": 8.159463861254585
+    },
+    {
+      "background_srgb": "#272E32",
+      "component": "capacity",
+      "delta_l_star_d50": 56.2521056827288,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          520,
+          275,
+          8,
+          8
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          540,
+          291,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/manager-dark-hard.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#A7C080",
+      "index": 2,
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "name": "dark-hard capacity",
+      "passed": true,
+      "semantic_role": "capacity",
+      "state": "idle",
+      "wcag_contrast": 6.890222344446126
+    },
+    {
+      "background_srgb": "#2E353B",
+      "component": "heading",
+      "delta_l_star_d50": 71.23385874195927,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          150,
+          50,
+          8,
+          8
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          18,
+          52,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/manager-dark-medium.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#EFEBD4",
+      "index": 3,
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "name": "dark-medium heading",
+      "passed": true,
+      "semantic_role": "heading",
+      "state": "idle",
+      "wcag_contrast": 10.366311356219295
+    },
+    {
+      "background_srgb": "#2E353B",
+      "component": "support",
+      "delta_l_star_d50": 58.73950913662009,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          400,
+          305,
+          8,
+          8
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          337,
+          307,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/manager-dark-medium.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#D3C6AA",
+      "index": 4,
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "name": "dark-medium support",
+      "passed": true,
+      "semantic_role": "support",
+      "state": "idle",
+      "wcag_contrast": 7.360025005865858
+    },
+    {
+      "background_srgb": "#2E353B",
+      "component": "capacity",
+      "delta_l_star_d50": 55.610804310204024,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          520,
+          275,
+          8,
+          8
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          540,
+          291,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/manager-dark-medium.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#B2C68D",
+      "index": 5,
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "name": "dark-medium capacity",
+      "passed": true,
+      "semantic_role": "capacity",
+      "state": "idle",
+      "wcag_contrast": 6.7247986635079116
+    },
+    {
+      "background_srgb": "#333C43",
+      "component": "heading",
+      "delta_l_star_d50": 68.26929669579164,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          150,
+          50,
+          8,
+          8
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          18,
+          52,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/manager-dark-soft.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#F3EAD3",
+      "index": 6,
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "name": "dark-soft heading",
+      "passed": true,
+      "semantic_role": "heading",
+      "state": "idle",
+      "wcag_contrast": 9.37861119080902
+    },
+    {
+      "background_srgb": "#333C43",
+      "component": "support",
+      "delta_l_star_d50": 55.72140859629915,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          400,
+          305,
+          8,
+          8
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          337,
+          307,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/manager-dark-soft.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#D3C6AA",
+      "index": 7,
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "name": "dark-soft support",
+      "passed": true,
+      "semantic_role": "support",
+      "state": "idle",
+      "wcag_contrast": 6.652483095378518
+    },
+    {
+      "background_srgb": "#333C43",
+      "component": "capacity",
+      "delta_l_star_d50": 56.40298792255542,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          520,
+          275,
+          8,
+          8
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          540,
+          291,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/manager-dark-soft.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#C1CF9D",
+      "index": 8,
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "name": "dark-soft capacity",
+      "passed": true,
+      "semantic_role": "capacity",
+      "state": "idle",
+      "wcag_contrast": 6.7871715881828045
+    },
+    {
+      "background_srgb": "#FFFBEF",
+      "component": "heading",
+      "delta_l_star_d50": 85.386957688802,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          150,
+          50,
+          8,
+          8
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          18,
+          52,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/manager-light-hard.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#1E2326",
+      "index": 9,
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "name": "light-hard heading",
+      "passed": true,
+      "semantic_role": "heading",
+      "state": "idle",
+      "wcag_contrast": 15.334843800653994
+    },
+    {
+      "background_srgb": "#FFFBEF",
+      "component": "support",
+      "delta_l_star_d50": 54.837060563987016,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          400,
+          305,
+          8,
+          8
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          337,
+          307,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/manager-light-hard.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#5C6A72",
+      "index": 10,
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "name": "light-hard support",
+      "passed": true,
+      "semantic_role": "support",
+      "state": "idle",
+      "wcag_contrast": 5.3987030395489635
+    },
+    {
+      "background_srgb": "#FFFBEF",
+      "component": "capacity",
+      "delta_l_star_d50": 57.09319373586912,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          520,
+          275,
+          8,
+          8
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          540,
+          291,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/manager-light-hard.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#5A6813",
+      "index": 11,
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "name": "light-hard capacity",
+      "passed": true,
+      "semantic_role": "capacity",
+      "state": "idle",
+      "wcag_contrast": 5.9274892707632745
+    },
+    {
+      "background_srgb": "#FDF6E3",
+      "component": "heading",
+      "delta_l_star_d50": 80.52235468342172,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          150,
+          50,
+          8,
+          8
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          18,
+          52,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/manager-light-medium.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#232A2F",
+      "index": 12,
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "name": "light-medium heading",
+      "passed": true,
+      "semantic_role": "heading",
+      "state": "idle",
+      "wcag_contrast": 13.484847695281857
+    },
+    {
+      "background_srgb": "#FDF6E3",
+      "component": "support",
+      "delta_l_star_d50": 54.83781506421543,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          400,
+          305,
+          8,
+          8
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          337,
+          307,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/manager-light-medium.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#58666E",
+      "index": 13,
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "name": "light-medium support",
+      "passed": true,
+      "semantic_role": "support",
+      "state": "idle",
+      "wcag_contrast": 5.498442149581831
+    },
+    {
+      "background_srgb": "#FDF6E3",
+      "component": "capacity",
+      "delta_l_star_d50": 58.63581859696903,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          520,
+          275,
+          8,
+          8
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          540,
+          291,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/manager-light-medium.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#52601A",
+      "index": 14,
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "name": "light-medium capacity",
+      "passed": true,
+      "semantic_role": "capacity",
+      "state": "idle",
+      "wcag_contrast": 6.389602133650086
+    },
+    {
+      "background_srgb": "#F3EAD3",
+      "component": "heading",
+      "delta_l_star_d50": 73.18692006912377,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          150,
+          50,
+          8,
+          8
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          18,
+          52,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/manager-light-soft.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#2A3135",
+      "index": 15,
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "name": "light-soft heading",
+      "passed": true,
+      "semantic_role": "heading",
+      "state": "idle",
+      "wcag_contrast": 11.0249800557797
+    },
+    {
+      "background_srgb": "#F3EAD3",
+      "component": "support",
+      "delta_l_star_d50": 53.23626742732736,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          400,
+          305,
+          8,
+          8
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          337,
+          307,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/manager-light-soft.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#526067",
+      "index": 16,
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "name": "light-soft support",
+      "passed": true,
+      "semantic_role": "support",
+      "state": "idle",
+      "wcag_contrast": 5.428110164171887
+    },
+    {
+      "background_srgb": "#F3EAD3",
+      "component": "capacity",
+      "delta_l_star_d50": 57.55764080850375,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          520,
+          275,
+          8,
+          8
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          540,
+          291,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/manager-light-soft.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#4C5822",
+      "index": 17,
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "name": "light-soft capacity",
+      "passed": true,
+      "semantic_role": "capacity",
+      "state": "idle",
+      "wcag_contrast": 6.426575128208181
+    },
+    {
+      "background_srgb": "#E69875",
+      "component": "save",
+      "delta_l_star_d50": 57.012811770132906,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          792,
+          155,
+          6,
+          6
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          827,
+          157,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/editor-dark.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#1E2326",
+      "index": 18,
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "name": "dark save",
+      "passed": true,
+      "semantic_role": "save",
+      "state": "idle",
+      "wcag_contrast": 6.8848081083888495
+    },
+    {
+      "background_srgb": "#374144",
+      "component": "field-text",
+      "delta_l_star_d50": 67.90305724198618,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          700,
+          191,
+          8,
+          8
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          511,
+          199,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/editor-dark.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#F2F0DF",
+      "index": 19,
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "name": "dark field-text",
+      "passed": true,
+      "semantic_role": "field-text",
+      "state": "idle",
+      "wcag_contrast": 9.143211543186682
+    },
+    {
+      "background_srgb": "#374144",
+      "component": "field-boundary",
+      "delta_l_star_d50": 41.37012478188253,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          700,
+          191,
+          8,
+          8
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          520,
+          185,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/editor-dark.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#9DA9A0",
+      "index": 20,
+      "kind": "nontext",
+      "minimum_contrast": 3,
+      "minimum_delta_l_star": 0,
+      "name": "dark field-boundary",
+      "passed": true,
+      "semantic_role": "field-boundary",
+      "state": "idle",
+      "wcag_contrast": 4.303831237712029
+    },
+    {
+      "background_srgb": "#F47D26",
+      "component": "save",
+      "delta_l_star_d50": 52.40914224744811,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          792,
+          155,
+          6,
+          6
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          827,
+          157,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/editor-light.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#1E2326",
+      "index": 21,
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "name": "light save",
+      "passed": true,
+      "semantic_role": "save",
+      "state": "idle",
+      "wcag_contrast": 5.8990828406227145
+    },
+    {
+      "background_srgb": "#F1EFDE",
+      "component": "field-text",
+      "delta_l_star_d50": 81.44827533264385,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          700,
+          191,
+          8,
+          8
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          567,
+          202,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/editor-light.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#1D2225",
+      "index": 22,
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "name": "light field-text",
+      "passed": true,
+      "semantic_role": "field-text",
+      "state": "idle",
+      "wcag_contrast": 13.872145669207907
+    },
+    {
+      "background_srgb": "#F1EFDE",
+      "component": "field-boundary",
+      "delta_l_star_d50": 37.59110490742023,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          700,
+          191,
+          8,
+          8
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          520,
+          185,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/editor-light.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#7D8C7C",
+      "index": 23,
+      "kind": "nontext",
+      "minimum_contrast": 3,
+      "minimum_delta_l_star": 0,
+      "name": "light field-boundary",
+      "passed": true,
+      "semantic_role": "field-boundary",
+      "state": "idle",
+      "wcag_contrast": 3.067415570673901
+    }
+  ],
+  "passed": true,
+  "state_coverage": {
+    "capacity": {
+      "missing": [],
+      "observed": [
+        "idle"
+      ],
+      "required": [
+        "idle"
+      ]
+    },
+    "field-boundary": {
+      "missing": [],
+      "observed": [
+        "idle"
+      ],
+      "required": [
+        "idle"
+      ]
+    },
+    "field-text": {
+      "missing": [],
+      "observed": [
+        "idle"
+      ],
+      "required": [
+        "idle"
+      ]
+    },
+    "heading": {
+      "missing": [],
+      "observed": [
+        "idle"
+      ],
+      "required": [
+        "idle"
+      ]
+    },
+    "save": {
+      "missing": [],
+      "observed": [
+        "idle"
+      ],
+      "required": [
+        "idle"
+      ]
+    },
+    "support": {
+      "missing": [],
+      "observed": [
+        "idle"
+      ],
+      "required": [
+        "idle"
+      ]
+    }
+  }
+}

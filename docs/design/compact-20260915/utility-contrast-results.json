@@ -1,0 +1,1366 @@
+{
+  "accent_footprint": {
+    "errors": [],
+    "largest_primary_plate": "intrinsic_control",
+    "orange_used_for_generic_toggles": false,
+    "passed": true,
+    "primary_filled_elements": 1
+  },
+  "errors": [],
+  "manifest": "docs/design/compact-20260915/utility-contrast-manifest.json",
+  "pairs": [
+    {
+      "background_srgb": "#2A3338",
+      "component": "used-text",
+      "delta_l_star_d50": 59.86179795008523,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          580,
+          239,
+          8,
+          8
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          300,
+          246,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/email-dark-hard.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#D3C6AA",
+      "index": 0,
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "name": "dark-hard used-text",
+      "passed": true,
+      "semantic_role": "used-text",
+      "state": "idle",
+      "wcag_contrast": 7.62874731972733
+    },
+    {
+      "background_srgb": "#2A3338",
+      "component": "unused-text",
+      "delta_l_star_d50": 74.0593265200607,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          580,
+          322,
+          8,
+          8
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          418,
+          326,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/email-dark-hard.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#F2F0DF",
+      "index": 1,
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "name": "dark-hard unused-text",
+      "passed": true,
+      "semantic_role": "unused-text",
+      "state": "idle",
+      "wcag_contrast": 11.236396093361472
+    },
+    {
+      "background_srgb": "#2E383C",
+      "component": "copy-text",
+      "delta_l_star_d50": 50.366557910792075,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          690,
+          232,
+          5,
+          5
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          697,
+          242,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/email-dark-hard.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#84BFB5",
+      "index": 2,
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "name": "dark-hard copy-text",
+      "passed": true,
+      "semantic_role": "copy-text",
+      "state": "idle",
+      "wcag_contrast": 5.781434192972286
+    },
+    {
+      "background_srgb": "#374144",
+      "component": "input-prompt",
+      "delta_l_star_d50": 53.70552867201071,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          450,
+          94,
+          8,
+          8
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          27,
+          102,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/email-dark-hard.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#D3C6AA",
+      "index": 3,
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "name": "dark-hard input-prompt",
+      "passed": true,
+      "semantic_role": "input-prompt",
+      "state": "idle",
+      "wcag_contrast": 6.207617635960237
+    },
+    {
+      "background_srgb": "#7FBBB3",
+      "component": "checkbox-mark",
+      "delta_l_star_d50": 58.310077260326274,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          273,
+          239,
+          1,
+          1
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          276,
+          247,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/email-dark-hard.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#1E2326",
+      "index": 4,
+      "kind": "nontext",
+      "minimum_contrast": 3,
+      "minimum_delta_l_star": 0,
+      "name": "dark-hard checkbox-mark",
+      "passed": true,
+      "semantic_role": "checkbox-mark",
+      "state": "on",
+      "wcag_contrast": 7.299361749063854
+    },
+    {
+      "background_srgb": "#2A3338",
+      "component": "checkbox-off-edge",
+      "delta_l_star_d50": 47.23033333612965,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          262,
+          320,
+          5,
+          5
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          270,
+          323,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/email-dark-hard.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#9DA89F",
+      "index": 5,
+      "kind": "nontext",
+      "minimum_contrast": 3,
+      "minimum_delta_l_star": 0,
+      "name": "dark-hard checkbox-off-edge",
+      "passed": true,
+      "semantic_role": "checkbox-off-edge",
+      "state": "off",
+      "wcag_contrast": 5.239334442715567
+    },
+    {
+      "background_srgb": "#303A3F",
+      "component": "used-text",
+      "delta_l_star_d50": 56.76603144624485,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          580,
+          239,
+          8,
+          8
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          300,
+          246,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/email-dark-medium.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#D3C6AA",
+      "index": 6,
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "name": "dark-medium used-text",
+      "passed": true,
+      "semantic_role": "used-text",
+      "state": "idle",
+      "wcag_contrast": 6.894127051350176
+    },
+    {
+      "background_srgb": "#303A3F",
+      "component": "unused-text",
+      "delta_l_star_d50": 69.61053805517147,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          580,
+          322,
+          8,
+          8
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          418,
+          326,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/email-dark-medium.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#F0ECD5",
+      "index": 7,
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "name": "dark-medium unused-text",
+      "passed": true,
+      "semantic_role": "unused-text",
+      "state": "idle",
+      "wcag_contrast": 9.798804330334033
+    },
+    {
+      "background_srgb": "#343F44",
+      "component": "copy-text",
+      "delta_l_star_d50": 51.03273218440772,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          690,
+          232,
+          5,
+          5
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          697,
+          242,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/email-dark-medium.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#9BC7BB",
+      "index": 8,
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "name": "dark-medium copy-text",
+      "passed": true,
+      "semantic_role": "copy-text",
+      "state": "idle",
+      "wcag_contrast": 5.813311550116144
+    },
+    {
+      "background_srgb": "#3D484D",
+      "component": "input-prompt",
+      "delta_l_star_d50": 50.66406025350832,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          450,
+          94,
+          8,
+          8
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          27,
+          102,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/email-dark-medium.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#D3C6AA",
+      "index": 9,
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "name": "dark-medium input-prompt",
+      "passed": true,
+      "semantic_role": "input-prompt",
+      "state": "idle",
+      "wcag_contrast": 5.566717839306987
+    },
+    {
+      "background_srgb": "#7FBBB3",
+      "component": "checkbox-mark",
+      "delta_l_star_d50": 58.310077260326274,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          273,
+          239,
+          1,
+          1
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          276,
+          247,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/email-dark-medium.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#1E2326",
+      "index": 10,
+      "kind": "nontext",
+      "minimum_contrast": 3,
+      "minimum_delta_l_star": 0,
+      "name": "dark-medium checkbox-mark",
+      "passed": true,
+      "semantic_role": "checkbox-mark",
+      "state": "on",
+      "wcag_contrast": 7.299361749063854
+    },
+    {
+      "background_srgb": "#303A3F",
+      "component": "checkbox-off-edge",
+      "delta_l_star_d50": 44.134566832289266,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          262,
+          320,
+          5,
+          5
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          270,
+          323,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/email-dark-medium.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#9DA89F",
+      "index": 11,
+      "kind": "nontext",
+      "minimum_contrast": 3,
+      "minimum_delta_l_star": 0,
+      "name": "dark-medium checkbox-off-edge",
+      "passed": true,
+      "semantic_role": "checkbox-off-edge",
+      "state": "off",
+      "wcag_contrast": 4.734805833611897
+    },
+    {
+      "background_srgb": "#364147",
+      "component": "used-text",
+      "delta_l_star_d50": 53.6989853336363,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          580,
+          239,
+          8,
+          8
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          300,
+          246,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/email-dark-soft.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#D3C6AA",
+      "index": 12,
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "name": "dark-soft used-text",
+      "passed": true,
+      "semantic_role": "used-text",
+      "state": "idle",
+      "wcag_contrast": 6.201656530596621
+    },
+    {
+      "background_srgb": "#364147",
+      "component": "unused-text",
+      "delta_l_star_d50": 66.59693109085038,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          580,
+          322,
+          8,
+          8
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          301,
+          329,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/email-dark-soft.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#F4EBD4",
+      "index": 13,
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "name": "dark-soft unused-text",
+      "passed": true,
+      "semantic_role": "unused-text",
+      "state": "idle",
+      "wcag_contrast": 8.82285713073782
+    },
+    {
+      "background_srgb": "#39464C",
+      "component": "copy-text",
+      "delta_l_star_d50": 52.329932390698275,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          690,
+          232,
+          5,
+          5
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          697,
+          242,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/email-dark-soft.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#B4D0C1",
+      "index": 14,
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "name": "dark-soft copy-text",
+      "passed": true,
+      "semantic_role": "copy-text",
+      "state": "idle",
+      "wcag_contrast": 5.9102707477390295
+    },
+    {
+      "background_srgb": "#424F55",
+      "component": "input-prompt",
+      "delta_l_star_d50": 47.78126814774462,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          450,
+          94,
+          8,
+          8
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          27,
+          102,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/email-dark-soft.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#D3C6AA",
+      "index": 15,
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "name": "dark-soft input-prompt",
+      "passed": true,
+      "semantic_role": "input-prompt",
+      "state": "idle",
+      "wcag_contrast": 5.008775455700489
+    },
+    {
+      "background_srgb": "#7FBBB3",
+      "component": "checkbox-mark",
+      "delta_l_star_d50": 58.310077260326274,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          273,
+          239,
+          1,
+          1
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          276,
+          247,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/email-dark-soft.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#1E2326",
+      "index": 16,
+      "kind": "nontext",
+      "minimum_contrast": 3,
+      "minimum_delta_l_star": 0,
+      "name": "dark-soft checkbox-mark",
+      "passed": true,
+      "semantic_role": "checkbox-mark",
+      "state": "on",
+      "wcag_contrast": 7.299361749063854
+    },
+    {
+      "background_srgb": "#364147",
+      "component": "checkbox-off-edge",
+      "delta_l_star_d50": 41.067520719680715,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          262,
+          320,
+          5,
+          5
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          270,
+          323,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/email-dark-soft.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#9DA89F",
+      "index": 17,
+      "kind": "nontext",
+      "minimum_contrast": 3,
+      "minimum_delta_l_star": 0,
+      "name": "dark-soft checkbox-off-edge",
+      "passed": true,
+      "semantic_role": "checkbox-off-edge",
+      "state": "off",
+      "wcag_contrast": 4.259225178244358
+    },
+    {
+      "background_srgb": "#FCF8EA",
+      "component": "used-text",
+      "delta_l_star_d50": 53.759089446288634,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          580,
+          239,
+          8,
+          8
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          300,
+          246,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/email-light-hard.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#5C6A72",
+      "index": 18,
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "name": "light-hard used-text",
+      "passed": true,
+      "semantic_role": "used-text",
+      "state": "idle",
+      "wcag_contrast": 5.2542434632338315
+    },
+    {
+      "background_srgb": "#FCF8EA",
+      "component": "unused-text",
+      "delta_l_star_d50": 84.7958101170751,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          580,
+          322,
+          8,
+          8
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          400,
+          326,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/email-light-hard.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#1D2225",
+      "index": 19,
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "name": "light-hard unused-text",
+      "passed": true,
+      "semantic_role": "unused-text",
+      "state": "idle",
+      "wcag_contrast": 15.105248807383129
+    },
+    {
+      "background_srgb": "#F9F5E4",
+      "component": "copy-text",
+      "delta_l_star_d50": 55.60725686572529,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          690,
+          232,
+          5,
+          5
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          697,
+          243,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/email-light-hard.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#306785",
+      "index": 20,
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "name": "light-hard copy-text",
+      "passed": true,
+      "semantic_role": "copy-text",
+      "state": "idle",
+      "wcag_contrast": 5.64235291232244
+    },
+    {
+      "background_srgb": "#F1EFDE",
+      "component": "input-prompt",
+      "delta_l_star_d50": 50.41155466185737,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          450,
+          94,
+          8,
+          8
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          27,
+          102,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/email-light-hard.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#5C6A72",
+      "index": 21,
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "name": "light-hard input-prompt",
+      "passed": true,
+      "semantic_role": "input-prompt",
+      "state": "idle",
+      "wcag_contrast": 4.8253181151069295
+    },
+    {
+      "background_srgb": "#3994C5",
+      "component": "checkbox-mark",
+      "delta_l_star_d50": 44.28460554016393,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          273,
+          239,
+          1,
+          1
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          276,
+          247,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/email-light-hard.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#1E2326",
+      "index": 22,
+      "kind": "nontext",
+      "minimum_contrast": 3,
+      "minimum_delta_l_star": 0,
+      "name": "light-hard checkbox-mark",
+      "passed": true,
+      "semantic_role": "checkbox-mark",
+      "state": "on",
+      "wcag_contrast": 4.696399788720659
+    },
+    {
+      "background_srgb": "#FCF8EA",
+      "component": "checkbox-off-edge",
+      "delta_l_star_d50": 40.93863969185149,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          262,
+          320,
+          5,
+          5
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          270,
+          324,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/email-light-hard.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#7D8C7C",
+      "index": 23,
+      "kind": "nontext",
+      "minimum_contrast": 3,
+      "minimum_delta_l_star": 0,
+      "name": "light-hard checkbox-off-edge",
+      "passed": true,
+      "semantic_role": "checkbox-off-edge",
+      "state": "off",
+      "wcag_contrast": 3.3400799339584815
+    },
+    {
+      "background_srgb": "#F9F3DF",
+      "component": "used-text",
+      "delta_l_star_d50": 53.696553495592944,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          580,
+          239,
+          8,
+          8
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          300,
+          246,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/email-light-medium.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#58666E",
+      "index": 24,
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "name": "light-medium used-text",
+      "passed": true,
+      "semantic_role": "used-text",
+      "state": "idle",
+      "wcag_contrast": 5.341883332381609
+    },
+    {
+      "background_srgb": "#F9F3DF",
+      "component": "unused-text",
+      "delta_l_star_d50": 79.79665354160684,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          580,
+          322,
+          8,
+          8
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          386,
+          331,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/email-light-medium.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#23292D",
+      "index": 25,
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "name": "light-medium unused-text",
+      "passed": true,
+      "semantic_role": "unused-text",
+      "state": "idle",
+      "wcag_contrast": 13.258531720555883
+    },
+    {
+      "background_srgb": "#F4F0D9",
+      "component": "copy-text",
+      "delta_l_star_d50": 56.782944967311124,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          690,
+          232,
+          5,
+          5
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          697,
+          243,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/email-light-medium.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#2F5F7A",
+      "index": 26,
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "name": "light-medium copy-text",
+      "passed": true,
+      "semantic_role": "copy-text",
+      "state": "idle",
+      "wcag_contrast": 6.026303287286548
+    },
+    {
+      "background_srgb": "#EFEBD4",
+      "component": "input-prompt",
+      "delta_l_star_d50": 50.6877494446345,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          450,
+          94,
+          8,
+          8
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          27,
+          102,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/email-light-medium.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#58666E",
+      "index": 27,
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "name": "light-medium input-prompt",
+      "passed": true,
+      "semantic_role": "input-prompt",
+      "state": "idle",
+      "wcag_contrast": 4.943776275333004
+    },
+    {
+      "background_srgb": "#3994C5",
+      "component": "checkbox-mark",
+      "delta_l_star_d50": 44.28460554016393,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          273,
+          239,
+          1,
+          1
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          276,
+          247,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/email-light-medium.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#1E2326",
+      "index": 28,
+      "kind": "nontext",
+      "minimum_contrast": 3,
+      "minimum_delta_l_star": 0,
+      "name": "light-medium checkbox-mark",
+      "passed": true,
+      "semantic_role": "checkbox-mark",
+      "state": "on",
+      "wcag_contrast": 4.696399788720659
+    },
+    {
+      "background_srgb": "#F9F3DF",
+      "component": "checkbox-off-edge",
+      "delta_l_star_d50": 41.067725593703926,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          262,
+          320,
+          5,
+          5
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          270,
+          323,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/email-light-medium.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#798779",
+      "index": 29,
+      "kind": "nontext",
+      "minimum_contrast": 3,
+      "minimum_delta_l_star": 0,
+      "name": "light-medium checkbox-off-edge",
+      "passed": true,
+      "semantic_role": "checkbox-off-edge",
+      "state": "off",
+      "wcag_contrast": 3.4050111652183497
+    },
+    {
+      "background_srgb": "#F0E7CF",
+      "component": "used-text",
+      "delta_l_star_d50": 52.16599650039994,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          580,
+          239,
+          8,
+          8
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          300,
+          246,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/email-light-soft.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#526067",
+      "index": 30,
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "name": "light-soft used-text",
+      "passed": true,
+      "semantic_role": "used-text",
+      "state": "idle",
+      "wcag_contrast": 5.278075617346712
+    },
+    {
+      "background_srgb": "#F0E7CF",
+      "component": "unused-text",
+      "delta_l_star_d50": 72.60360909359484,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          580,
+          322,
+          8,
+          8
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          384,
+          329,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/email-light-soft.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#283036",
+      "index": 31,
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "name": "light-soft unused-text",
+      "passed": true,
+      "semantic_role": "unused-text",
+      "state": "idle",
+      "wcag_contrast": 10.877045167349822
+    },
+    {
+      "background_srgb": "#EAE4CA",
+      "component": "copy-text",
+      "delta_l_star_d50": 54.990490403386076,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          690,
+          232,
+          5,
+          5
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          697,
+          243,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/email-light-soft.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#30596F",
+      "index": 32,
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "name": "light-soft copy-text",
+      "passed": true,
+      "semantic_role": "copy-text",
+      "state": "idle",
+      "wcag_contrast": 5.9079439243024465
+    },
+    {
+      "background_srgb": "#E5DFC5",
+      "component": "input-prompt",
+      "delta_l_star_d50": 49.06562143132038,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          450,
+          94,
+          8,
+          8
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          27,
+          102,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/email-light-soft.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#526067",
+      "index": 33,
+      "kind": "text",
+      "minimum_contrast": 4.5,
+      "minimum_delta_l_star": 40,
+      "name": "light-soft input-prompt",
+      "passed": true,
+      "semantic_role": "input-prompt",
+      "state": "idle",
+      "wcag_contrast": 4.861843851355355
+    },
+    {
+      "background_srgb": "#3994C5",
+      "component": "checkbox-mark",
+      "delta_l_star_d50": 44.28460554016393,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          273,
+          239,
+          1,
+          1
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          276,
+          247,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/email-light-soft.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#1E2326",
+      "index": 34,
+      "kind": "nontext",
+      "minimum_contrast": 3,
+      "minimum_delta_l_star": 0,
+      "name": "light-soft checkbox-mark",
+      "passed": true,
+      "semantic_role": "checkbox-mark",
+      "state": "on",
+      "wcag_contrast": 4.696399788720659
+    },
+    {
+      "background_srgb": "#F0E7CF",
+      "component": "checkbox-off-edge",
+      "delta_l_star_d50": 40.5279773073255,
+      "errors": [],
+      "evidence": {
+        "background_dominant_share": 1.0,
+        "background_region": [
+          262,
+          320,
+          5,
+          5
+        ],
+        "conversion": "embedded ICC converted to sRGB with Pillow/ImageCms",
+        "foreground_dominant_share": 1.0,
+        "foreground_region": [
+          270,
+          323,
+          1,
+          1
+        ],
+        "image": "docs/design/compact-20260915/email-light-soft.png",
+        "profile": "Display",
+        "source": "rendered_screenshot"
+      },
+      "foreground_srgb": "#707E72",
+      "index": 35,
+      "kind": "nontext",
+      "minimum_contrast": 3,
+      "minimum_delta_l_star": 0,
+      "name": "light-soft checkbox-off-edge",
+      "passed": true,
+      "semantic_role": "checkbox-off-edge",
+      "state": "off",
+      "wcag_contrast": 3.465312408899792
+    }
+  ],
+  "passed": true,
+  "state_coverage": {
+    "checkbox-mark": {
+      "missing": [],
+      "observed": [
+        "on"
+      ],
+      "required": [
+        "on"
+      ]
+    },
+    "checkbox-off-edge": {
+      "missing": [],
+      "observed": [
+        "off"
+      ],
+      "required": [
+        "off"
+      ]
+    },
+    "copy-text": {
+      "missing": [],
+      "observed": [
+        "idle"
+      ],
+      "required": [
+        "idle"
+      ]
+    },
+    "input-prompt": {
+      "missing": [],
+      "observed": [
+        "idle"
+      ],
+      "required": [
+        "idle"
+      ]
+    },
+    "unused-text": {
+      "missing": [],
+      "observed": [
+        "idle"
+      ],
+      "required": [
+        "idle"
+      ]
+    },
+    "used-text": {
+      "missing": [],
+      "observed": [
+        "idle"
+      ],
+      "required": [
+        "idle"
+      ]
+    }
+  }
+}

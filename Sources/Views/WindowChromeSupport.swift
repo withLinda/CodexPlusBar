@@ -36,8 +36,9 @@ struct CodexWindowChromeContainer<Content: View>: View {
         }
         .frame(
             minWidth: minimumSize.width,
-            minHeight: minimumSize.height
+            minHeight: max(0, minimumSize.height - metrics.titleBarObscuredHeight)
         )
+        .ignoresSafeArea(.container, edges: .top)
         .background(Color.clear)
         .overlay(alignment: .topLeading) {
             WindowChromeMetricsReader(metrics: $metrics)
@@ -186,6 +187,8 @@ final class WindowChromeProbeView: NSView {
 }
 
 struct CodexWindowTitleBarGlass: View {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.colorSchemeContrast) private var contrast
     let height: CGFloat
     let seamOverlap: CGFloat
 
@@ -210,7 +213,9 @@ struct CodexWindowTitleBarGlass: View {
         Color.clear
             .overlay(alignment: .top) {
                 Group {
-                    if #available(macOS 26.0, *) {
+                    if reduceTransparency || contrast == .increased {
+                        CodexTheme.shellFillToken.color
+                    } else if #available(macOS 26.0, *) {
                         Rectangle()
                             .fill(.clear)
                             .glassEffect(

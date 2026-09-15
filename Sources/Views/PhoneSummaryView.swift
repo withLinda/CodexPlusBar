@@ -121,13 +121,14 @@ struct PhoneSummaryExpiryPresentation: Equatable, Sendable {
 }
 
 struct PhoneSummaryView: View {
+    @Environment(\.codexThemeRefreshContext) private var themeContext
     let presentation: PhoneSummaryPresentation
     let referenceDate: Date
     let openProfile: (UUID) -> Void
 
     var body: some View {
         ScrollView(.vertical) {
-            VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: 16) {
                 pageHeader
 
                 if presentation.totalProfileCount == 0 {
@@ -141,19 +142,13 @@ struct PhoneSummaryView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(presentation.title)
+        .accessibilityValue(presentation.summaryText)
     }
 
     private var pageHeader: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(presentation.title)
-                .font(ProfileManagerTypography.title)
-                .foregroundStyle(CodexTheme.headingText)
-
-            Text(presentation.summaryText)
-                .font(ProfileManagerTypography.body)
-                .foregroundStyle(CodexTheme.mutedText)
-                .fixedSize(horizontal: false, vertical: true)
-        }
+        Text(presentation.title)
+            .font(ProfileManagerTypography.title)
+            .foregroundStyle(CodexTheme.palette(for: themeContext.preset).strongText.color)
     }
 
     @ViewBuilder
@@ -227,6 +222,7 @@ struct PhoneSummaryView: View {
 }
 
 private struct PhoneSummarySection<Content: View>: View {
+    @Environment(\.codexThemeRefreshContext) private var themeContext
     let title: String
     let metaText: String
     let content: Content
@@ -246,7 +242,7 @@ private struct PhoneSummarySection<Content: View>: View {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text(title)
                     .font(ProfileManagerTypography.bodyStrong)
-                    .foregroundStyle(CodexTheme.headingText)
+                    .foregroundStyle(CodexTheme.palette(for: themeContext.preset).strongText.color)
 
                 Text(metaText)
                     .font(ProfileManagerTypography.caption)
@@ -263,17 +259,15 @@ private struct PhoneSummarySection<Content: View>: View {
 }
 
 private struct SharedNumberGroupView: View {
+    @Environment(\.codexThemeRefreshContext) private var themeContext
     let group: ProfilePhoneNumberGroup
     let referenceDate: Date
     let openProfile: (UUID) -> Void
 
     var body: some View {
-        CodexCard(tier: .regular, shadow: false) {
-            VStack(alignment: .leading, spacing: 12) {
+        CodexCard(tier: .regular, padding: 12, shadow: false) {
+            VStack(alignment: .leading, spacing: 8) {
                 groupHeader
-
-                Divider()
-                    .overlay(CodexTheme.surfaceLine)
 
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(group.profiles) { snapshot in
@@ -286,11 +280,9 @@ private struct SharedNumberGroupView: View {
 
     private var groupHeader: some View {
         HStack(alignment: .center, spacing: 12) {
-            PhoneSummaryIcon(systemName: "phone.fill", isNavigation: true)
-
             Text(group.phoneNumber)
-                .font(.system(size: 15, weight: .semibold, design: .monospaced))
-                .foregroundStyle(CodexTheme.dataValueText)
+                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                .foregroundStyle(CodexTheme.palette(for: themeContext.preset).dataValueText.color)
                 .textSelection(.enabled)
 
             Spacer(minLength: 12)
@@ -324,12 +316,13 @@ private struct SharedNumberGroupView: View {
 }
 
 private struct SingleUsePhoneNumberList: View {
+    @Environment(\.codexThemeRefreshContext) private var themeContext
     let groups: [ProfilePhoneNumberGroup]
     let referenceDate: Date
     let openProfile: (UUID) -> Void
 
     var body: some View {
-        CodexCard(tier: .regular, shadow: false) {
+        CodexCard(tier: .regular, padding: 12, shadow: false) {
             VStack(alignment: .leading, spacing: 4) {
                 ForEach(groups) { group in
                     if let snapshot = group.profiles.first {
@@ -337,29 +330,22 @@ private struct SingleUsePhoneNumberList: View {
                             openProfile(snapshot.id)
                         } label: {
                             HStack(alignment: .center, spacing: 10) {
-                                PhoneSummaryIcon(systemName: "phone", isNavigation: false)
-
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text(group.phoneNumber)
-                                        .font(.system(size: 14, weight: .semibold, design: .monospaced))
-                                        .foregroundStyle(CodexTheme.dataValueText)
+                                        .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                                        .foregroundStyle(CodexTheme.palette(for: themeContext.preset).dataValueText.color)
                                         .lineLimit(1)
 
-                                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                                        Text(DisplayFormatter.privateProfileLabel(snapshot.label))
-                                            .font(ProfileManagerTypography.caption)
-                                            .foregroundStyle(CodexTheme.mutedText)
-                                            .lineLimit(1)
-                                            .truncationMode(.middle)
-
-                                        PhoneSummaryExpiryText(
-                                            expiresAt: snapshot.expiresAt,
-                                            referenceDate: referenceDate
-                                        )
-                                    }
+                                    Text(DisplayFormatter.privateProfileLabel(snapshot.label))
+                                        .font(ProfileManagerTypography.caption)
+                                        .foregroundStyle(CodexTheme.mutedText)
+                                        .lineLimit(1)
+                                        .truncationMode(.middle)
                                 }
 
-                                Spacer(minLength: 12)
+                                Spacer(minLength: 8)
+
+                                PhoneSummaryExpiryText(expiresAt: snapshot.expiresAt, referenceDate: referenceDate)
 
                                 PhoneSummaryOpenProfileAccessory()
                             }
@@ -382,34 +368,28 @@ private struct SingleUsePhoneNumberList: View {
 }
 
 private struct MissingPhoneNumberList: View {
+    @Environment(\.codexThemeRefreshContext) private var themeContext
     let profiles: [PlusProfileSnapshot]
     let referenceDate: Date
     let openProfile: (UUID) -> Void
 
     var body: some View {
-        CodexCard(tier: .regular, shadow: false) {
+        CodexCard(tier: .regular, padding: 12, shadow: false) {
             VStack(alignment: .leading, spacing: 4) {
                 ForEach(profiles) { snapshot in
                     Button {
                         openProfile(snapshot.id)
                     } label: {
                         HStack(alignment: .center, spacing: 10) {
-                            PhoneSummaryIcon(systemName: "phone.down", isNavigation: false)
+                            Text(DisplayFormatter.privateProfileLabel(snapshot.label))
+                                .font(ProfileManagerTypography.smallStrong)
+                                .foregroundStyle(CodexTheme.palette(for: themeContext.preset).primaryText.color)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
 
-                            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                                Text(DisplayFormatter.privateProfileLabel(snapshot.label))
-                                    .font(ProfileManagerTypography.smallStrong)
-                                    .foregroundStyle(CodexTheme.primaryText)
-                                    .lineLimit(1)
-                                    .truncationMode(.middle)
+                            Spacer(minLength: 8)
 
-                                PhoneSummaryExpiryText(
-                                    expiresAt: snapshot.expiresAt,
-                                    referenceDate: referenceDate
-                                )
-                            }
-
-                            Spacer(minLength: 12)
+                            PhoneSummaryExpiryText(expiresAt: snapshot.expiresAt, referenceDate: referenceDate)
 
                             PhoneSummaryOpenProfileAccessory()
                         }
@@ -431,27 +411,21 @@ private struct MissingPhoneNumberList: View {
 }
 
 private struct PhoneSummaryAccountRow: View {
+    @Environment(\.codexThemeRefreshContext) private var themeContext
     let snapshot: PlusProfileSnapshot
     let referenceDate: Date
 
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
-            PhoneSummaryIcon(systemName: "person.crop.circle", isNavigation: false)
+            Text(DisplayFormatter.privateProfileLabel(snapshot.label))
+                .font(ProfileManagerTypography.smallStrong)
+                .foregroundStyle(CodexTheme.palette(for: themeContext.preset).primaryText.color)
+                .lineLimit(1)
+                .truncationMode(.middle)
 
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(DisplayFormatter.privateProfileLabel(snapshot.label))
-                    .font(ProfileManagerTypography.smallStrong)
-                    .foregroundStyle(CodexTheme.primaryText)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+            Spacer(minLength: 8)
 
-                PhoneSummaryExpiryText(
-                    expiresAt: snapshot.expiresAt,
-                    referenceDate: referenceDate
-                )
-            }
-
-            Spacer(minLength: 12)
+            PhoneSummaryExpiryText(expiresAt: snapshot.expiresAt, referenceDate: referenceDate)
 
             PhoneSummaryOpenProfileAccessory()
         }
@@ -460,6 +434,7 @@ private struct PhoneSummaryAccountRow: View {
 }
 
 private struct PhoneSummaryExpiryText: View {
+    @Environment(\.codexThemeRefreshContext) private var themeContext
     let expiresAt: Date?
     let referenceDate: Date
 
@@ -471,11 +446,12 @@ private struct PhoneSummaryExpiryText: View {
     }
 
     var body: some View {
+        let color = CodexTheme.expiryEmphasisToken(for: expiresAt, referenceDate: referenceDate, preset: themeContext.preset)?.color
+            ?? CodexTheme.palette(for: themeContext.preset).mutedText.color
         LabeledValueText(
             presentation: presentation.value,
-            prefix: "· ",
-            labelColor: presentation.emphasisToken?.color ?? CodexTheme.mutedText,
-            valueColor: presentation.emphasisToken?.color ?? CodexTheme.mutedText,
+            labelColor: CodexTheme.palette(for: themeContext.preset).mutedText.color,
+            valueColor: color,
             font: ProfileManagerTypography.caption
         )
         .fixedSize(horizontal: true, vertical: false)
@@ -483,29 +459,13 @@ private struct PhoneSummaryExpiryText: View {
     }
 }
 
-private struct PhoneSummaryIcon: View {
-    let systemName: String
-    let isNavigation: Bool
-
-    var body: some View {
-        Image(systemName: systemName)
-            .font(.system(size: 13, weight: .semibold))
-            .foregroundStyle(isNavigation ? CodexTheme.utilityActionText : CodexTheme.mutedText)
-            .frame(width: 28, height: 28)
-            .background(
-                RoundedRectangle(cornerRadius: CodexTheme.iconCornerRadius, style: .continuous)
-                    .fill(CodexTheme.surfaceFill(for: .nested))
-            )
-            .accessibilityHidden(true)
-    }
-}
-
 private struct PhoneSummaryOpenProfileAccessory: View {
+    @Environment(\.codexThemeRefreshContext) private var themeContext
     var body: some View {
         Image(systemName: "chevron.right")
             .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(CodexTheme.utilityActionText)
-            .frame(width: 28, height: 28, alignment: .trailing)
+            .foregroundStyle(CodexTheme.utilityActionTextToken(preset: themeContext.preset).color)
+            .frame(width: 16, height: 20, alignment: .trailing)
             .help("Open profile")
             .accessibilityHidden(true)
     }
@@ -514,23 +474,29 @@ private struct PhoneSummaryOpenProfileAccessory: View {
 private struct PhoneSummaryRowLayout: ViewModifier {
     func body(content: Content) -> some View {
         content
-            .padding(.horizontal, 10)
-            .padding(.vertical, 9)
-            .frame(maxWidth: .infinity, minHeight: 46, alignment: .leading)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
             .contentShape(Rectangle())
     }
 }
 
 private struct PhoneSummaryRowButtonStyle: ButtonStyle {
+    @Environment(\.codexThemeRefreshContext) private var themeContext
+    @Environment(\.isFocused) private var isFocused
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .background(
                 RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
                     .fill(
                         configuration.isPressed
-                            ? CodexTheme.surfaceFill(for: .nested)
+                            ? CodexTheme.surfaceToken(for: .regular, preset: themeContext.preset).color
                             : Color.clear
                     )
             )
+            .overlay {
+                RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
+                    .strokeBorder(isFocused ? CodexTheme.searchFocusBorderToken(preset: themeContext.preset).color : .clear, lineWidth: 2)
+            }
     }
 }

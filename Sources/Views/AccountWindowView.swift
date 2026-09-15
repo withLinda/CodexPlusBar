@@ -264,37 +264,16 @@ enum ProfileDetailsCopyField: Hashable, Sendable {
 
 struct ProfileManagerDetailLayoutMetrics: Equatable {
     let detailStackSpacing: CGFloat
-    let topGridSpacing: CGFloat
     let compactCardPadding: CGFloat
-    let actionPanelWidth: CGFloat
-    let actionGridColumnCount: Int
-    let actionButtonSize: CGFloat
-    let actionButtonSpacing: CGFloat
     let usageMetricSpacing: CGFloat
     let usageMetricTextScale: Double
 
     static let chromeSignIn = ProfileManagerDetailLayoutMetrics(
         detailStackSpacing: 12,
-        topGridSpacing: 12,
         compactCardPadding: 12,
-        actionPanelWidth: 168,
-        actionGridColumnCount: 3,
-        actionButtonSize: 36,
-        actionButtonSpacing: 8,
-        usageMetricSpacing: 10,
-        usageMetricTextScale: 0.9
+        usageMetricSpacing: 16,
+        usageMetricTextScale: 1
     )
-
-    var actionGridColumns: [GridItem] {
-        Array(
-            repeating: GridItem(
-                .fixed(actionButtonSize),
-                spacing: actionButtonSpacing,
-                alignment: .leading
-            ),
-            count: actionGridColumnCount
-        )
-    }
 }
 
 struct ProfileManagerSessionPanelPresentation: Equatable, Sendable {
@@ -359,7 +338,19 @@ enum ProfileManagerPage: Equatable, Sendable {
     case phoneSummary
 }
 
+enum ProfileManagerLayout {
+    static let defaultSize = CGSize(width: 1000, height: 680)
+    static let minimumSize = CGSize(width: 900, height: 600)
+    static let sidebarWidth: CGFloat = 288
+    static let fieldLabelWidth: CGFloat = 96
+    static let emptySize = CGSize(width: 640, height: 240)
+    static let emptyMinimumSize = CGSize(width: 600, height: 240)
+}
+
 struct ProfileManagerWindowView: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @AppStorage(CodexThemeSettings.Keys.appearanceMode) private var themeAppearance = CodexThemeSettings.defaultAppearanceMode
+    @AppStorage(CodexThemeSettings.Keys.contrast) private var themeContrast = CodexThemeSettings.defaultContrast
     @Bindable var controller: PlusProfileController
     let currentTime: AppMinuteClock
     @AppStorage(ProfileDisplayOrderPreference.orderKey) private var profileDisplayOrder = ProfileDisplayOrderPreference.defaultOrder
@@ -376,14 +367,22 @@ struct ProfileManagerWindowView: View {
     @State private var showsBulkImportSheet = false
     @State private var bulkImportText = ""
     @State private var page = ProfileManagerPage.profile
+    @State private var isDetailsExpanded: Bool
+    @State private var isConnectionSetupExpanded = false
+    @FocusState private var isNotesFocused: Bool
+    @State private var notesRevealTask: Task<Void, Never>?
 
     init(
         controller: PlusProfileController,
         currentTime: AppMinuteClock,
-        userDefaults: UserDefaults = .standard
+        userDefaults: UserDefaults = .standard,
+        initiallyShowsDetails: Bool = false,
+        initialPage: ProfileManagerPage = .profile
     ) {
         self.controller = controller
         self.currentTime = currentTime
+        _isDetailsExpanded = State(initialValue: initiallyShowsDetails)
+        _page = State(initialValue: initialPage)
         _profileDisplayOrder = AppStorage(
             wrappedValue: ProfileDisplayOrderPreference.defaultOrder,
             ProfileDisplayOrderPreference.orderKey,
@@ -392,7 +391,7 @@ struct ProfileManagerWindowView: View {
     }
 
     var body: some View {
-        CodexWindowChromeContainer(minimumSize: CGSize(width: 1080, height: 760)) {
+        CodexWindowChromeContainer(minimumSize: controller.profiles.isEmpty ? ProfileManagerLayout.emptyMinimumSize : ProfileManagerLayout.minimumSize) {
             VStack(alignment: .leading, spacing: CodexTheme.sectionSpacing) {
                 header
 
@@ -422,6 +421,7 @@ struct ProfileManagerWindowView: View {
                 },
                 submit: importBulkProfiles
             )
+            .codexThemeRefreshScope()
         }
         .onAppear {
             syncDrafts(with: controller.selectedProfile)
@@ -453,114 +453,110 @@ struct ProfileManagerWindowView: View {
         }
         .onDisappear {
             resetDetailsFeedback()
+            notesRevealTask?.cancel()
         }
+        .tint(CodexTheme.searchActionToken(preset: CodexThemeRefreshContext(appearanceMode: themeAppearance, contrast: themeContrast, systemVariant: colorScheme == .dark ? .dark : .light).preset).color)
     }
 
     private var header: some View {
-        HStack(alignment: .bottom, spacing: 20) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("CodexPlusBar")
-                    .font(ProfileManagerTypography.micro)
-                    .foregroundStyle(CodexTheme.utilityActionText)
-                    .kerning(1.4)
-
-                Text("Profile Manager")
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Profiles")
                     .font(ProfileManagerTypography.title)
                     .foregroundStyle(CodexTheme.headingText)
 
                 Text(headerMetaText)
-                    .font(ProfileManagerTypography.body)
+                    .font(ProfileManagerTypography.caption)
                     .foregroundStyle(CodexTheme.mutedText)
-                    .lineLimit(2)
+                    .lineLimit(1)
             }
 
             Spacer(minLength: 0)
 
-            VStack(alignment: .trailing, spacing: 12) {
-                HStack(spacing: 10) {
-                    CodexStatusBadge(
-                        title: controller.dashboardStatus.title,
-                        tone: controller.dashboardStatus.tone
-                    )
-
-                    if controller.isRefreshing {
-                        ProgressView()
-                            .controlSize(.small)
-                            .tint(CodexTheme.accentOrange)
-                    }
+            HStack(spacing: 8) {
+              if !controller.profiles.isEmpty {
+                Button(action: refreshAll) {
+                    Label(controller.isRefreshing ? "Refreshing…" : "Refresh all", systemImage: "arrow.clockwise")
                 }
+                .buttonStyle(CodexSecondaryButtonStyle())
+                .disabled(controller.isRefreshing || controller.profiles.isEmpty)
+                .keyboardShortcut("r", modifiers: [.command, .shift])
 
-                HStack(spacing: 10) {
-                    Button(action: refreshAll) {
-                        Label("Refresh all", systemImage: "arrow.clockwise")
-                    }
-                    .buttonStyle(CodexPrimaryButtonStyle(font: ProfileManagerTypography.smallStrong))
-                    .disabled(controller.isRefreshing || controller.profiles.isEmpty)
-
-                    Button(action: addProfile) {
-                        Label("Add profile", systemImage: "plus")
-                    }
-                    .buttonStyle(CodexSecondaryButtonStyle(font: ProfileManagerTypography.smallStrong))
-
-                    Button(action: showBulkImport) {
-                        Label("Import", systemImage: "tray.and.arrow.down")
-                    }
-                    .buttonStyle(CodexSecondaryButtonStyle(font: ProfileManagerTypography.smallStrong))
+                Button(action: addProfile) {
+                    Label("Add profile", systemImage: "plus")
                 }
+                .buttonStyle(CodexSecondaryButtonStyle())
+                .keyboardShortcut("n")
+              }
+
+                Menu {
+                    Button("Import profiles…", systemImage: "tray.and.arrow.down", action: showBulkImport)
+                    Button("Phone summary", systemImage: "person.2") { page = .phoneSummary }
+                    SettingsLink { Label("Settings…", systemImage: "gearshape") }
+                } label: {
+                    Image(systemName: "ellipsis").frame(width: 28, height: 28)
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .accessibilityLabel("More options")
             }
         }
     }
 
+    @ViewBuilder
     private var bodyContent: some View {
-        HStack(alignment: .top, spacing: CodexTheme.contentSpacing) {
+        if controller.profiles.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Track Codex and Claude usage from the menu bar.")
+                    .font(ProfileManagerTypography.body)
+                    .foregroundStyle(CodexTheme.supportText)
+                HStack(spacing: 8) {
+                    Button("Add profile", systemImage: "plus", action: addProfile)
+                        .buttonStyle(CodexPrimaryButtonStyle())
+                        .keyboardShortcut("n")
+                    Button("Import profiles…", systemImage: "tray.and.arrow.down", action: showBulkImport)
+                        .buttonStyle(CodexSecondaryButtonStyle())
+                }
+            }
+            .padding(.top, 12)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        } else {
+          HStack(alignment: .top, spacing: CodexTheme.contentSpacing) {
             sidebar
-                .frame(width: 280, alignment: .topLeading)
+                .frame(width: ProfileManagerLayout.sidebarWidth, alignment: .topLeading)
 
             detailPane
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+          }
+          .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private var sidebar: some View {
         let listPresentation = sidebarListPresentation
 
-        return CodexCard(tier: .regular) {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .center, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Saved profiles")
-                            .font(ProfileManagerTypography.bodyStrong)
-                            .foregroundStyle(CodexTheme.headingText)
-
-                        Text(sidebarMetaText(for: listPresentation))
-                            .font(ProfileManagerTypography.caption)
-                            .foregroundStyle(CodexTheme.mutedText)
-                    }
-
-                    Spacer(minLength: 0)
-
-                    if controller.profiles.isEmpty == false {
+        return VStack(alignment: .leading, spacing: 12) {
+                if controller.profiles.isEmpty == false {
+                    HStack(spacing: 8) {
                         Button(action: showProfileSearch) {
                             Image(systemName: "magnifyingglass")
+                                .frame(width: 28, height: 28)
                         }
-                        .buttonStyle(CodexSecondaryButtonStyle())
-                        .foregroundStyle(
-                            isProfileSearchPresented
-                                ? CodexTheme.searchAction
-                                : CodexTheme.actionText
-                        )
+                        .buttonStyle(CodexQuietButtonStyle(horizontalPadding: 0, verticalPadding: 0))
                         .accessibilityLabel("Search profiles")
                         .help("Search profiles")
-                        .opacity(isProfileSearchPresented ? 0 : 1)
-                        .allowsHitTesting(isProfileSearchPresented == false)
-                        .accessibilityHidden(isProfileSearchPresented)
-                    }
+                        .keyboardShortcut("f")
 
-                    Button(action: addProfile) {
-                        Image(systemName: "plus")
+                        ProfileListControlsBar(
+                            filterPresentation: listPresentation.filterBar,
+                            displayOrder: $profileDisplayOrder,
+                            clearFilter: clearSidebarFilter,
+                            toggleLimit: toggleSidebarLimitFilter,
+                            toggleTag: toggleSidebarTagFilter,
+                            toggleProvider: toggleSidebarProviderFilter
+                        )
                     }
-                    .buttonStyle(CodexSecondaryButtonStyle())
                 }
 
                 if controller.profiles.isEmpty {
@@ -570,23 +566,12 @@ struct ProfileManagerWindowView: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
-                    phoneSummaryNavigationButton
-
                     if isProfileSearchPresented {
                         ProfileSearchField(
                             text: $profileSearchQuery,
                             close: closeProfileSearch
                         )
                     }
-
-                    ProfileListControlsBar(
-                        filterPresentation: listPresentation.filterBar,
-                        displayOrder: $profileDisplayOrder,
-                        clearFilter: clearSidebarFilter,
-                        toggleLimit: toggleSidebarLimitFilter,
-                        toggleTag: toggleSidebarTagFilter,
-                        toggleProvider: toggleSidebarProviderFilter
-                    )
 
                     if listPresentation.displayedProfiles.isEmpty,
                        ProfileSearch.normalizedQuery(profileSearchQuery).isEmpty == false {
@@ -599,7 +584,7 @@ struct ProfileManagerWindowView: View {
                         ProfileFilterEmptyState(clearFilter: clearSidebarFilter)
                     } else {
                         ScrollView(.vertical) {
-                            VStack(alignment: .leading, spacing: 10) {
+                            LazyVStack(alignment: .leading, spacing: 6) {
                                 ForEach(listPresentation.displayedProfiles) { snapshot in
                                     Button {
                                         openProfile(snapshot.id)
@@ -618,14 +603,13 @@ struct ProfileManagerWindowView: View {
                                         )
                                     }
                                     .buttonStyle(.plain)
+                                    .accessibilityAddTraits(page == .profile && snapshot.id == controller.selectedProfileID ? .isSelected : [])
                                 }
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                         }
                     }
                 }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .frame(maxHeight: .infinity, alignment: .topLeading)
     }
@@ -641,9 +625,19 @@ struct ProfileManagerWindowView: View {
         } else if let snapshot = controller.selectedProfile {
             let metrics = ProfileManagerDetailLayoutMetrics.chromeSignIn
 
-            ScrollView(.vertical) {
+            ScrollViewReader { scrollProxy in
+              ScrollView(.vertical) {
                 VStack(alignment: .leading, spacing: metrics.detailStackSpacing) {
                     detailTopGrid(for: snapshot, metrics: metrics)
+                        .id("profile-overview")
+                    if snapshot.usage != nil || (snapshot.state != .needsLogin && snapshot.state != .idle) {
+                        usagePanel(for: snapshot, metrics: metrics)
+                    }
+
+                    if snapshot.state != .ready || controller.isChromeSignInOpen(for: snapshot.id) {
+                        chromeSignInPanel(for: snapshot, metrics: metrics)
+                    }
+
                     if snapshot.profile.provider == .codex {
                         OpenChamberProfileActions(
                             hasSavedSignIn: snapshot.profile.openCodeOpenAIAccount != nil,
@@ -652,13 +646,57 @@ struct ProfileManagerWindowView: View {
                             save: { Task { await controller.saveOpenChamberAuth(profileID: snapshot.id) } },
                             switchAccount: { Task { await controller.switchOpenChamberAuth(profileID: snapshot.id) } }
                         )
-                        .padding(.horizontal, metrics.compactCardPadding)
                     }
-                    usagePanel(for: snapshot, metrics: metrics)
-                    chromeSignInPanel(for: snapshot, metrics: metrics)
+
+                    profileDetailsSection(for: snapshot)
+                        .id("profile-details")
+
+                    DisclosureGroup("Connection setup", isExpanded: $isConnectionSetupExpanded) {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Picker("Usage service", selection: providerBinding(for: snapshot)) {
+                                ForEach(ProfileProvider.allCases) { provider in
+                                    Text(provider.displayName).tag(provider)
+                                }
+                            }
+                            .disabled(snapshot.isRefreshing)
+                            .pickerStyle(.menu)
+
+                            if snapshot.state == .ready && !controller.isChromeSignInOpen(for: snapshot.id) {
+                                chromeSignInPanel(for: snapshot, metrics: metrics)
+                            }
+                        }
+                        .padding(.top, 8)
+                    }
+                    .font(ProfileManagerTypography.smallStrong)
+                    .foregroundStyle(CodexTheme.primaryText)
+                    .padding(12)
+                    .background(CodexTheme.surfaceFill(for: .subtle), in: RoundedRectangle(cornerRadius: 8))
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.bottom, metrics.detailStackSpacing)
+              }
+              .onChange(of: isDetailsExpanded) { _, expanded in
+                  scrollProxy.scrollTo(expanded ? "profile-details" : "profile-overview", anchor: .top)
+              }
+              .task {
+                  if isDetailsExpanded {
+                      await Task.yield()
+                      scrollProxy.scrollTo("profile-details", anchor: .top)
+                  }
+              }
+              .onChange(of: detailsDraft.notes) { _, _ in
+                  revealFocusedNotes(using: scrollProxy)
+              }
+              .onChange(of: isNotesFocused) { _, _ in
+                  revealFocusedNotes(using: scrollProxy)
+              }
+              .background {
+                  GeometryReader { geometry in
+                      Color.clear.onChange(of: geometry.size) { _, _ in
+                          revealFocusedNotes(using: scrollProxy)
+                      }
+                  }
+              }
             }
         } else {
             CodexCard(tier: .strong) {
@@ -677,66 +715,25 @@ struct ProfileManagerWindowView: View {
         }
     }
 
-    private var phoneSummaryNavigationButton: some View {
-        Button {
-            page = .phoneSummary
-        } label: {
-            HStack(alignment: .center, spacing: 10) {
-                Image(systemName: "person.2")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(
-                        page == .phoneSummary
-                            ? CodexTheme.utilityActionText
-                            : CodexTheme.mutedText
-                    )
-                    .frame(width: 24)
-                    .accessibilityHidden(true)
-
-                Text(phoneSummaryPresentation.title)
-                    .font(ProfileManagerTypography.smallStrong)
-                    .foregroundStyle(CodexTheme.primaryText)
-
-                Spacer(minLength: 8)
-
-                if let countText = phoneSummaryPresentation.navigationCountText {
-                    Text(countText)
-                        .font(ProfileManagerTypography.caption)
-                        .foregroundStyle(CodexTheme.dataValueText)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(
-                            Capsule(style: .continuous)
-                                .fill(CodexTheme.surfaceFill(for: .nested))
-                        )
-                }
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 9)
-            .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
-                    .fill(
-                        page == .phoneSummary
-                            ? CodexTheme.surfaceFill(for: .nested)
-                            : Color.clear
-                    )
-            )
-            .contentShape(Rectangle())
+    private func revealFocusedNotes(using proxy: ScrollViewProxy) {
+        notesRevealTask?.cancel()
+        guard isNotesFocused else { return }
+        notesRevealTask = Task { @MainActor in
+            await Task.yield()
+            guard !Task.isCancelled, isNotesFocused else { return }
+            proxy.scrollTo("profile-notes", anchor: .bottom)
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(phoneSummaryPresentation.navigationAccessibilityLabel)
     }
 
     private func detailTopGrid(
         for snapshot: PlusProfileSnapshot,
         metrics: ProfileManagerDetailLayoutMetrics
     ) -> some View {
-        HStack(alignment: .top, spacing: metrics.topGridSpacing) {
+        VStack(alignment: .leading, spacing: 12) {
             detailHeader(for: snapshot, metrics: metrics)
                 .layoutPriority(1)
 
             actionPanel(for: snapshot, metrics: metrics)
-                .frame(width: metrics.actionPanelWidth, alignment: .topLeading)
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
     }
@@ -745,60 +742,55 @@ struct ProfileManagerWindowView: View {
         for snapshot: PlusProfileSnapshot,
         metrics: ProfileManagerDetailLayoutMetrics
     ) -> some View {
-        CodexCard(
-            tier: .strong,
-            accent: detailAccent(for: snapshot),
-            padding: metrics.compactCardPadding,
-            fillProvider: snapshot.profile.provider
-        ) {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .top, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 12) {
-                        profileDetailsForm(for: snapshot)
+        VStack(alignment: .leading, spacing: 8) {
+            Text(snapshot.label)
+                .font(ProfileManagerTypography.title)
+                .foregroundStyle(CodexTheme.headingText)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .textSelection(.enabled)
+                .help(snapshot.label)
 
-                        ProfileTagAssignmentSection(
-                            selectedTags: snapshot.tags,
-                            toggleTag: { tag in
-                                toggleTag(tag, for: snapshot.id)
-                            }
-                        )
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                    Spacer(minLength: 0)
-
-                    VStack(alignment: .trailing, spacing: 8) {
-                        ProfileProviderBadge(provider: snapshot.profile.provider)
-
-                        CodexStatusBadge(
-                            title: snapshot.state.title,
-                            tone: snapshot.state.tone
-                        )
-
-                        if snapshot.isRefreshing {
-                            ProgressView()
-                                .controlSize(.small)
-                                .tint(CodexTheme.accentOrange)
-                        }
-                    }
-                }
-
-                if let note = snapshot.note {
-                    Text(note)
-                        .font(ProfileManagerTypography.small)
-                        .foregroundStyle(CodexTheme.supportText)
-                }
-
-                if shouldShowExpiry(for: snapshot) {
-                    detailExpiryLine(for: snapshot)
-                }
-
-                Text(detailSummary(for: snapshot))
+            HStack(spacing: 8) {
+                ProfileProviderBadge(provider: snapshot.profile.provider)
+                Text(snapshot.isRefreshing ? "Refreshing…" : snapshot.state.title)
                     .font(ProfileManagerTypography.small)
-                    .foregroundStyle(CodexTheme.mutedText)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .foregroundStyle(snapshot.state.tone.foregroundColor)
+                Spacer(minLength: 0)
+                if shouldShowExpiry(for: snapshot) { detailExpiryLine(for: snapshot) }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func profileDetailsSection(for snapshot: PlusProfileSnapshot) -> some View {
+        DisclosureGroup(isExpanded: $isDetailsExpanded) {
+            VStack(alignment: .leading, spacing: 12) {
+                profileDetailsForm(for: snapshot)
+                ProfileTagAssignmentSection(selectedTags: snapshot.tags) { tag in
+                    toggleTag(tag, for: snapshot.id)
+                }
+            }
+            .padding(.top, 12)
+        } label: {
+            HStack {
+                Text("Profile details")
+                Spacer(minLength: 8)
+                if isDetailsSaveEnabled(for: snapshot) {
+                    Text("Unsaved changes")
+                        .font(ProfileManagerTypography.caption)
+                        .foregroundStyle(CodexTheme.supportText)
+                } else if !snapshot.tags.isEmpty {
+                    ProfileTagSummaryStrip(summary: ProfileTagSummary(tags: snapshot.tags))
+                }
+            }
+        }
+        .font(ProfileManagerTypography.smallStrong)
+        .foregroundStyle(CodexTheme.primaryText)
+        .padding(12)
+        .background(CodexTheme.surfaceFill(for: .subtle), in: RoundedRectangle(cornerRadius: 8))
+        .onChange(of: isDetailsExpanded) { _, expanded in
+            if !expanded { hideOneTimePassword() }
         }
     }
 
@@ -819,8 +811,9 @@ struct ProfileManagerWindowView: View {
                     } label: {
                         Label(formPresentation.saveTitle, systemImage: formPresentation.saveSymbolName)
                     }
-                    .buttonStyle(CodexSecondaryButtonStyle(font: ProfileManagerTypography.smallStrong))
+                    .buttonStyle(CodexPrimaryButtonStyle(font: ProfileManagerTypography.smallStrong))
                     .disabled(formPresentation.isSaveEnabled == false)
+                    .keyboardShortcut("s")
                 }
             }
 
@@ -919,8 +912,10 @@ struct ProfileManagerWindowView: View {
 
             ProfileManagerNotesDetailsField(
                 title: "Notes",
-                text: $detailsDraft.notes
+                text: $detailsDraft.notes,
+                focus: $isNotesFocused
             )
+            .id("profile-notes")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -962,7 +957,7 @@ struct ProfileManagerWindowView: View {
     ) -> some View {
         CodexCard(tier: .regular, padding: metrics.compactCardPadding) {
             VStack(alignment: .leading, spacing: 10) {
-                Text("Usage")
+                Text("Remaining capacity")
                     .font(ProfileManagerTypography.bodyStrong)
                     .foregroundStyle(CodexTheme.headingText)
 
@@ -998,72 +993,48 @@ struct ProfileManagerWindowView: View {
         for snapshot: PlusProfileSnapshot,
         metrics: ProfileManagerDetailLayoutMetrics
     ) -> some View {
-        CodexCard(tier: .regular, padding: metrics.compactCardPadding) {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Actions")
-                    .font(ProfileManagerTypography.bodyStrong)
-                    .foregroundStyle(CodexTheme.headingText)
-
-                LazyVGrid(
-                    columns: metrics.actionGridColumns,
-                    alignment: .leading,
-                    spacing: metrics.actionButtonSpacing
-                ) {
-                    CodexIconButton(
-                        symbolName: "arrow.clockwise",
-                        helpText: "Refresh profile",
-                        tone: .primary,
-                        isDisabled: snapshot.isRefreshing
-                    ) {
-                        refreshProfile(snapshot.id)
-                    }
-
-                    CodexIconButton(
-                        symbolName: "globe",
-                        helpText: "Open \(snapshot.profile.provider.displayName) in Chrome",
-                        tone: .secondary
-                    ) {
-                        openChrome(snapshot.id)
-                    }
-
-                    CodexIconButton(
-                        symbolName: "xmark.circle",
-                        helpText: "Clear session",
-                        tone: .danger
-                    ) {
-                        clearSession(snapshot.id)
-                    }
-
-                    CodexIconButton(
-                        symbolName: "arrow.up",
-                        helpText: "Move profile up",
-                        tone: .secondary,
-                        isDisabled: isMoveUpDisabled(for: snapshot)
-                    ) {
-                        controller.selectProfile(id: snapshot.id)
-                        controller.moveSelectedProfileUp()
-                    }
-
-                    CodexIconButton(
-                        symbolName: "arrow.down",
-                        helpText: "Move profile down",
-                        tone: .secondary,
-                        isDisabled: isMoveDownDisabled(for: snapshot)
-                    ) {
-                        controller.selectProfile(id: snapshot.id)
-                        controller.moveSelectedProfileDown()
-                    }
-
-                    CodexIconButton(
-                        symbolName: "trash",
-                        helpText: "Remove profile",
-                        tone: .danger
-                    ) {
-                        removeProfile(snapshot.id)
-                    }
-                }
+        HStack(spacing: 8) {
+          if snapshot.state == .ready && !controller.isChromeSignInOpen(for: snapshot.id) {
+            Button {
+                openChrome(snapshot.id)
+            } label: {
+                Label("Open \(snapshot.profile.provider.displayName)", systemImage: "globe")
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .buttonStyle(CodexSecondaryButtonStyle(foregroundColor: CodexTheme.utilityActionText))
+          }
+
+            Button {
+                refreshProfile(snapshot.id)
+            } label: {
+                Label("Refresh", systemImage: "arrow.clockwise")
+            }
+            .buttonStyle(CodexSecondaryButtonStyle())
+            .disabled(snapshot.isRefreshing)
+            .keyboardShortcut("r")
+
+            Menu {
+                Button("Copy profile label", systemImage: "doc.on.doc") { MacSystemActions.copyToPasteboard(snapshot.label) }
+                Button("Open email link", systemImage: "arrow.up.forward.square") { openEmailLink(for: snapshot.profile) }
+                    .disabled(snapshot.profile.resolvedEmailLinkURL == nil)
+                Divider()
+                Button("Move up", systemImage: "arrow.up") { controller.moveSelectedProfileUp() }
+                    .disabled(isMoveUpDisabled(for: snapshot))
+                Button("Move down", systemImage: "arrow.down") { controller.moveSelectedProfileDown() }
+                    .disabled(isMoveDownDisabled(for: snapshot))
+                Divider()
+                Button("Clear session", systemImage: "xmark.circle", role: .destructive) { clearSession(snapshot.id) }
+                Button("Remove profile", systemImage: "trash", role: .destructive) { removeProfile(snapshot.id) }
+            } label: {
+                Label("More", systemImage: "ellipsis")
+                    .font(ProfileManagerTypography.small)
+                    .padding(.horizontal, 8)
+                    .frame(height: 28)
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .accessibilityLabel("More profile actions")
+            Spacer(minLength: 0)
         }
     }
 
@@ -1077,33 +1048,14 @@ struct ProfileManagerWindowView: View {
             isChromeSignInOpen: controller.isChromeSignInOpen(for: snapshot.id)
         )
 
-        CodexCard(tier: .strong, padding: metrics.compactCardPadding) {
-            HStack(alignment: .center, spacing: 12) {
-                Image(systemName: "key.fill")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(CodexTheme.utilityActionText)
-                    .frame(width: 24, height: 24)
-                    .accessibilityHidden(true)
-
+        CodexCard(tier: .regular, padding: metrics.compactCardPadding) {
+            VStack(alignment: .leading, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 10) {
                         Text(presentation.title)
                             .font(ProfileManagerTypography.bodyStrong)
                             .foregroundStyle(CodexTheme.headingText)
 
-                        Picker(
-                            "Usage service",
-                            selection: providerBinding(for: snapshot)
-                        ) {
-                            ForEach(ProfileProvider.allCases) { provider in
-                                Text(provider.displayName).tag(provider)
-                            }
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.segmented)
-                        .frame(width: 150)
-                        .disabled(snapshot.isRefreshing)
-                        .accessibilityLabel("Usage service")
                     }
 
                     Text(presentation.summaryText)
@@ -1113,15 +1065,13 @@ struct ProfileManagerWindowView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                Spacer(minLength: 0)
-
                 HStack(spacing: 8) {
                     Button {
                         openChrome(snapshot.id)
                     } label: {
                         Label(presentation.primaryTitle, systemImage: "globe")
                     }
-                    .buttonStyle(CodexPrimaryButtonStyle(font: ProfileManagerTypography.smallStrong))
+                    .buttonStyle(CodexSecondaryButtonStyle(font: ProfileManagerTypography.smallStrong, foregroundColor: CodexTheme.utilityActionText))
                     .disabled(snapshot.isRefreshing)
 
                     if presentation.showsPasskeyHelp {
@@ -1191,41 +1141,6 @@ struct ProfileManagerWindowView: View {
             query: profileSearchQuery,
             displayOrder: profileDisplayOrder
         )
-    }
-
-    private func sidebarMetaText(for presentation: ProfileListPresentation) -> String {
-        if controller.profiles.isEmpty {
-            return "No saved profiles yet"
-        }
-
-        return presentation.filterBar.visibleSummaryText
-    }
-
-    private func detailSummary(for snapshot: PlusProfileSnapshot) -> String {
-        if let updatedText = DisplayFormatter.updatedText(snapshot.lastRefreshAt, referenceDate: currentTime.now) {
-            return updatedText
-        }
-
-        switch snapshot.state {
-        case .idle:
-            return "Ready for first login or first refresh."
-        case .loading:
-            return "Loading live usage for this profile."
-        case .ready:
-            return "Live usage is loaded."
-        case .needsLogin:
-            return "This profile needs a fresh \(snapshot.profile.provider.displayName) login."
-        case .failed:
-            return snapshot.statusMessage ?? "The last refresh failed."
-        }
-    }
-
-    private func detailAccent(for snapshot: PlusProfileSnapshot) -> Color? {
-        if let remaining = snapshot.usage?.fiveHourRemainingPercent {
-            return CodexTheme.usagePercentageColor(forRemainingPercent: remaining)
-        }
-
-        return snapshot.state == .ready ? nil : snapshot.state.tone.foregroundColor
     }
 
     private func isMoveUpDisabled(for snapshot: PlusProfileSnapshot) -> Bool {
@@ -1403,6 +1318,7 @@ struct ProfileManagerWindowView: View {
     }
 
     private func addProfile() {
+        isDetailsExpanded = true
         page = .profile
         controller.addProfile()
     }
@@ -1534,6 +1450,7 @@ struct ProfileManagerWindowView: View {
 }
 
 struct OpenChamberProfileActions: View {
+    @Environment(\.codexThemeRefreshContext) private var themeContext
     let hasSavedSignIn: Bool
     let isWorking: Bool
     let status: OpenChamberActionStatus?
@@ -1542,40 +1459,56 @@ struct OpenChamberProfileActions: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("OpenChamber · Local OpenAI")
-                .font(ProfileManagerTypography.smallStrong)
-                .foregroundStyle(CodexTheme.headingText)
-
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 8) { actions }
-                VStack(alignment: .leading, spacing: 8) { actions }
+            HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("OpenChamber")
+                        .font(ProfileManagerTypography.smallStrong)
+                        .foregroundStyle(CodexTheme.headingText)
+                    Text(hasSavedSignIn ? "OpenAI sign-in saved" : "OpenAI sign-in not saved")
+                        .font(ProfileManagerTypography.caption)
+                        .foregroundStyle(CodexTheme.supportText)
+                }
+                Spacer(minLength: 8)
+                actions
             }
 
-            Text(status?.message ?? (hasSavedSignIn
-                ? "Sign-in saved. Also used by the local OpenCode CLI."
-                : "Sign in to this account in OpenChamber, then save it here."))
-                .font(ProfileManagerTypography.small)
-                .foregroundStyle(status?.tone.foregroundColor ?? CodexTheme.supportText)
-                .fixedSize(horizontal: false, vertical: true)
+            if let status {
+                Text(status.message)
+                    .font(ProfileManagerTypography.small)
+                    .foregroundStyle(status.tone.foregroundColor)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
+        .padding(12)
+        .background(CodexTheme.surfaceToken(for: .subtle, preset: themeContext.preset).color, in: RoundedRectangle(cornerRadius: 8))
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("OpenChamber OpenAI sign-in")
     }
 
     @ViewBuilder private var actions: some View {
-        Button("Switch OpenChamber OpenAI", action: switchAccount)
-            .buttonStyle(CodexSecondaryButtonStyle())
+        Button("Switch", systemImage: "arrow.triangle.2.circlepath", action: switchAccount)
+            .buttonStyle(CodexSecondaryButtonStyle(foregroundColor: CodexTheme.utilityActionText))
             .disabled(!hasSavedSignIn || isWorking)
+            .accessibilityLabel("Switch OpenChamber OpenAI")
             .help("Switch the local OpenAI connection for new requests. Other providers keep their sign-ins.")
-        Button("Save current sign-in", action: save)
-            .buttonStyle(CodexQuietButtonStyle())
-            .disabled(isWorking)
-            .help("Save the current local OpenChamber sign-in after checking it belongs to this profile.")
+        Menu {
+            Text("Sign in to this account in OpenChamber first.")
+            Button("Save current sign-in", systemImage: "square.and.arrow.down", action: save)
+                .disabled(isWorking)
+        } label: {
+            Image(systemName: "ellipsis").frame(width: 28, height: 28)
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .accessibilityLabel("OpenChamber sign-in setup")
+        .help("Save the current local OpenChamber sign-in")
     }
 }
 
 private struct ProfileManagerBulkImportSheet: View {
+    @Environment(\.codexThemeRefreshContext) private var themeContext
     @Binding var rawText: String
     let cancel: () -> Void
     let submit: () -> Void
@@ -1603,7 +1536,7 @@ private struct ProfileManagerBulkImportSheet: View {
         }
         .padding(22)
         .frame(width: 560, alignment: .topLeading)
-        .background(CodexTheme.shellFill(for: .dialog))
+        .background(CodexTheme.shellFillToken(for: themeContext.preset).color)
         .onAppear {
             isEditorFocused = true
         }
@@ -1655,6 +1588,7 @@ private struct ProfileManagerBulkImportSheet: View {
                     .padding(10)
                     .foregroundStyle(CodexTheme.dataValueText)
                     .focused($isEditorFocused)
+                    .accessibilityIdentifier("profile-import.rows")
 
                 if rawText.isEmpty {
                     Text("email|password|2FA")
@@ -1673,11 +1607,12 @@ private struct ProfileManagerBulkImportSheet: View {
     }
 
     private var issueList: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        let dangerColor = CodexTheme.dangerTextToken(preset: themeContext.preset).color
+        return VStack(alignment: .leading, spacing: 8) {
             ForEach(preview.issues.prefix(3), id: \.lineNumber) { issue in
                 Label("Line \(issue.lineNumber): \(issue.message)", systemImage: "exclamationmark.triangle")
                     .font(ProfileManagerTypography.caption)
-                    .foregroundStyle(CodexTheme.dangerText)
+                    .foregroundStyle(dangerColor)
             }
 
             if preview.issues.count > 3 {
@@ -1700,9 +1635,9 @@ private struct ProfileManagerBulkImportSheet: View {
 
     private var footer: some View {
         HStack(spacing: 10) {
-            Text(BulkProfileImporter.twoFactorLiveLink)
+            Text("Default email link: \(URL(string: BulkProfileImporter.twoFactorLiveLink)?.host ?? BulkProfileImporter.twoFactorLiveLink)")
                 .font(ProfileManagerTypography.caption)
-                .foregroundStyle(CodexTheme.utilityActionText)
+                .foregroundStyle(CodexTheme.supportText)
                 .lineLimit(1)
 
             Spacer(minLength: 0)
@@ -1712,6 +1647,7 @@ private struct ProfileManagerBulkImportSheet: View {
             }
             .buttonStyle(CodexSecondaryButtonStyle(font: ProfileManagerTypography.smallStrong))
             .keyboardShortcut(.cancelAction)
+            .accessibilityIdentifier("profile-import.cancel")
 
             Button {
                 submit()
@@ -1721,6 +1657,7 @@ private struct ProfileManagerBulkImportSheet: View {
             .buttonStyle(CodexPrimaryButtonStyle(font: ProfileManagerTypography.smallStrong))
             .disabled(presentation.isSubmitDisabled)
             .keyboardShortcut(.defaultAction)
+            .accessibilityIdentifier("profile-import.submit")
         }
     }
 }
@@ -1759,6 +1696,7 @@ private struct ProfileTagAssignmentSection: View {
 }
 
 private struct ProfileManagerPhoneNumberField<TrailingContent: View>: View {
+    @Environment(\.codexThemeRefreshContext) private var themeContext
     let title: String
     @Binding var text: String
     let savedNumbers: [String]
@@ -1780,21 +1718,11 @@ private struct ProfileManagerPhoneNumberField<TrailingContent: View>: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(title)
-                    .font(ProfileManagerTypography.caption)
-                    .foregroundStyle(CodexTheme.dataLabelText)
-
-                Spacer(minLength: 0)
-
-                if savedNumbers.isEmpty == false {
-                    Text(savedNumbers.count == 1 ? "1 saved" : "\(savedNumbers.count) saved")
-                        .font(ProfileManagerTypography.micro)
-                        .foregroundStyle(CodexTheme.supportText)
-                        .accessibilityHidden(true)
-                }
-            }
+        HStack(alignment: .center, spacing: 12) {
+            Text(title)
+                .font(ProfileManagerTypography.small)
+                .foregroundStyle(CodexTheme.palette(for: themeContext.preset).dataLabelText.color)
+                .frame(width: ProfileManagerLayout.fieldLabelWidth, alignment: .leading)
 
             HStack(alignment: .center, spacing: 10) {
                 ProfilePhoneNumberComboBox(
@@ -1803,7 +1731,7 @@ private struct ProfileManagerPhoneNumberField<TrailingContent: View>: View {
                     onSubmit: onSubmit
                 )
                 .padding(.leading, 6)
-                .frame(maxWidth: .infinity, minHeight: 38, maxHeight: 38)
+                .frame(maxWidth: .infinity, minHeight: 32, maxHeight: 32)
                 .background(ProfileManagerFieldBackground())
 
                 trailingContent
@@ -1814,6 +1742,7 @@ private struct ProfileManagerPhoneNumberField<TrailingContent: View>: View {
 }
 
 private struct ProfileManagerDetailsTextField<TrailingContent: View>: View {
+    @Environment(\.codexThemeRefreshContext) private var themeContext
     let title: String
     @Binding var text: String
     let onSubmit: () -> Void
@@ -1832,22 +1761,24 @@ private struct ProfileManagerDetailsTextField<TrailingContent: View>: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        HStack(alignment: .center, spacing: 12) {
             Text(title)
-                .font(ProfileManagerTypography.caption)
+                .font(ProfileManagerTypography.small)
                 .foregroundStyle(CodexTheme.dataLabelText)
+                .frame(width: ProfileManagerLayout.fieldLabelWidth, alignment: .leading)
 
             HStack(alignment: .center, spacing: 10) {
                 TextField("", text: $text)
                     .font(ProfileManagerTypography.body)
                     .textFieldStyle(.plain)
                     .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
+                    .padding(.vertical, 8)
                     .frame(maxWidth: .infinity)
                     .background(ProfileManagerFieldBackground())
-                    .foregroundStyle(CodexTheme.dataValueText)
+                    .foregroundStyle(CodexTheme.palette(for: themeContext.preset).dataValueText.color)
                     .submitLabel(.done)
                     .onSubmit(onSubmit)
+                    .accessibilityLabel(title)
 
                 trailingContent
             }
@@ -1857,6 +1788,7 @@ private struct ProfileManagerDetailsTextField<TrailingContent: View>: View {
 }
 
 private struct ProfileManagerPrivateDetailsField: View {
+    @Environment(\.codexThemeRefreshContext) private var themeContext
     let title: String
     @Binding var text: String
     let presentation: ProfileManagerPrivateFieldPresentation
@@ -1865,10 +1797,11 @@ private struct ProfileManagerPrivateDetailsField: View {
     let copy: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        HStack(alignment: .center, spacing: 12) {
             Text(title)
-                .font(ProfileManagerTypography.caption)
+                .font(ProfileManagerTypography.small)
                 .foregroundStyle(CodexTheme.dataLabelText)
+                .frame(width: ProfileManagerLayout.fieldLabelWidth, alignment: .leading)
 
             HStack(alignment: .center, spacing: 10) {
                 Group {
@@ -1881,12 +1814,13 @@ private struct ProfileManagerPrivateDetailsField: View {
                 .font(ProfileManagerTypography.body)
                 .textFieldStyle(.plain)
                 .padding(.horizontal, 12)
-                .padding(.vertical, 10)
+                .padding(.vertical, 8)
                 .frame(maxWidth: .infinity)
                 .background(ProfileManagerFieldBackground())
-                .foregroundStyle(CodexTheme.dataValueText)
+                .foregroundStyle(CodexTheme.palette(for: themeContext.preset).dataValueText.color)
                 .submitLabel(.done)
                 .onSubmit(onSubmit)
+                .accessibilityLabel(title)
 
                 ProfileManagerInlineFieldActionButton(
                     title: presentation.revealTitle,
@@ -1914,6 +1848,7 @@ private struct ProfileManagerPrivateDetailsField: View {
 }
 
 private struct ProfileManagerOneTimePasswordPanel: View {
+    @Environment(\.codexThemeRefreshContext) private var themeContext
     let presentation: ProfileManagerOneTimePasswordPresentation
     let reveal: () -> Void
     let hide: () -> Void
@@ -1946,7 +1881,7 @@ private struct ProfileManagerOneTimePasswordPanel: View {
                         .foregroundStyle(
                             presentation.isCopyDisabled
                                 ? presentation.tone.foregroundColor
-                                : CodexTheme.oneTimePasswordStatusText
+                                : CodexTheme.oneTimePasswordStatusTextToken(preset: themeContext.preset).color
                         )
                 }
 
@@ -1961,8 +1896,8 @@ private struct ProfileManagerOneTimePasswordPanel: View {
                             .monospacedDigit()
                             .foregroundStyle(
                                 presentation.isCopyDisabled
-                                    ? CodexTheme.disabledText
-                                    : CodexTheme.oneTimePasswordCodeText
+                                     ? CodexTheme.palette(for: themeContext.preset).quietText.color
+                                     : CodexTheme.oneTimePasswordCodeTextToken(preset: themeContext.preset).color
                             )
                     }
                 }
@@ -2031,13 +1966,14 @@ private struct ProfileManagerOneTimePasswordPanel: View {
 }
 
 private struct ProfileManagerOneTimePasswordMask: View {
+    @Environment(\.codexThemeRefreshContext) private var themeContext
     private let segmentWidths: [CGFloat] = [14, 12, 13, 12, 14, 12]
 
     var body: some View {
         HStack(spacing: 5) {
             ForEach(segmentWidths.indices, id: \.self) { index in
                 RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .fill(CodexTheme.oneTimePasswordMaskFill)
+                    .fill(CodexTheme.oneTimePasswordMaskFillToken(preset: themeContext.preset).color)
                     .frame(width: segmentWidths[index], height: 18)
             }
         }
@@ -2045,7 +1981,7 @@ private struct ProfileManagerOneTimePasswordMask: View {
         .padding(.vertical, 6)
         .background(
             RoundedRectangle(cornerRadius: CodexTheme.Radius.field, style: .continuous)
-                .fill(CodexTheme.surfaceFill(for: .nested))
+                .fill(CodexTheme.surfaceToken(for: .nested, preset: themeContext.preset).color)
         )
         .overlay(
             RoundedRectangle(cornerRadius: CodexTheme.Radius.field, style: .continuous)
@@ -2056,41 +1992,49 @@ private struct ProfileManagerOneTimePasswordMask: View {
 }
 
 private struct ProfileManagerNotesDetailsField: View {
+    @Environment(\.codexThemeRefreshContext) private var themeContext
     let title: String
     @Binding var text: String
+    let focus: FocusState<Bool>.Binding
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        HStack(alignment: .top, spacing: 12) {
             Text(title)
-                .font(ProfileManagerTypography.caption)
+                .font(ProfileManagerTypography.small)
                 .foregroundStyle(CodexTheme.dataLabelText)
+                .frame(width: ProfileManagerLayout.fieldLabelWidth, alignment: .leading)
+                .padding(.top, 8)
 
             TextEditor(text: $text)
+                .focused(focus)
                 .font(ProfileManagerTypography.body)
                 .scrollContentBackground(.hidden)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 8)
                 .frame(minHeight: 72, maxHeight: 108)
                 .background(ProfileManagerFieldBackground())
-                .foregroundStyle(CodexTheme.dataValueText)
+                .foregroundStyle(CodexTheme.palette(for: themeContext.preset).dataValueText.color)
+                .accessibilityLabel(title)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
 private struct ProfileManagerFieldBackground: View {
+    @Environment(\.codexThemeRefreshContext) private var themeContext
+
     var body: some View {
         RoundedRectangle(
             cornerRadius: CodexTheme.fieldCornerRadius,
             style: .continuous
         )
-        .fill(CodexTheme.surfaceFill(for: .nested))
+        .fill(CodexTheme.surfaceToken(for: .nested, preset: themeContext.preset).color)
         .overlay {
             RoundedRectangle(
                 cornerRadius: CodexTheme.fieldCornerRadius,
                 style: .continuous
             )
-            .stroke(CodexTheme.surfaceBorder(for: .nested), lineWidth: 1)
+            .strokeBorder(CodexTheme.controlBoundaryToken(preset: themeContext.preset).color, lineWidth: 1)
         }
     }
 }
@@ -2157,6 +2101,7 @@ private struct ProfileManagerInlineFieldActionButton: View {
 }
 
 private struct ProfileManagerInlineFieldActionButtonStyle: ButtonStyle {
+    @Environment(\.codexThemeRefreshContext) private var themeContext
     @Environment(\.isEnabled) private var isEnabled
 
     let isConfirmed: Bool
@@ -2165,23 +2110,8 @@ private struct ProfileManagerInlineFieldActionButtonStyle: ButtonStyle {
         configuration.label
             .font(ProfileManagerTypography.caption)
             .foregroundStyle(foregroundColor)
-            .frame(width: 94, height: 38)
-            .background(
-                RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
-                    .fill(backgroundColor(isPressed: configuration.isPressed))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
-                            .fill(CodexTheme.surfaceSheen(for: .subtle))
-                    )
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: CodexTheme.controlCornerRadius, style: .continuous)
-                    .stroke(borderColor, lineWidth: 1)
-            )
-            .opacity(configuration.isPressed ? 0.92 : 1)
-            .scaleEffect(configuration.isPressed ? 0.99 : 1)
-            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
-            .animation(.easeInOut(duration: 0.16), value: isConfirmed)
+            .frame(width: 80, height: 32)
+            .modifier(CodexButtonSurface(isPrimary: false, isPressed: configuration.isPressed))
     }
 
     private var foregroundColor: Color {
@@ -2189,24 +2119,7 @@ private struct ProfileManagerInlineFieldActionButtonStyle: ButtonStyle {
             return CodexTheme.disabledText
         }
 
-        return isConfirmed ? CodexTheme.successText : CodexTheme.utilityActionText
+        return isConfirmed ? CodexTheme.successTextToken(preset: themeContext.preset).color : CodexTheme.utilityActionTextToken(preset: themeContext.preset).color
     }
 
-    private var borderColor: Color {
-        guard isEnabled else {
-            return CodexTheme.surfaceBorder(for: .subtle)
-        }
-
-        return isConfirmed
-            ? CodexTheme.accentAqua.opacity(0.34)
-            : CodexTheme.surfaceBorder(for: .subtle)
-    }
-
-    private func backgroundColor(isPressed: Bool) -> Color {
-        if isConfirmed {
-            return CodexTheme.accentAqua.opacity(isPressed ? 0.16 : 0.12)
-        }
-
-        return CodexTheme.surfaceFill(for: .subtle).opacity(isPressed ? 0.98 : 0.92)
-    }
 }

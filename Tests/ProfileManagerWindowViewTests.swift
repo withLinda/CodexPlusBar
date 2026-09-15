@@ -152,7 +152,7 @@ struct ProfileManagerWindowViewTests {
             dataService: StubProfileViewDataService(),
             autoStart: false
         )
-        let hostingView = makeHostingView(controller: controller)
+        let hostingView = makeHostingView(controller: controller, initiallyShowsDetails: true)
         let window = hostInWindow(hostingView)
         defer {
             window.orderOut(nil)
@@ -170,6 +170,19 @@ struct ProfileManagerWindowViewTests {
         let bodyType = String(reflecting: type(of: rootView.body))
         #expect(bodyType.contains("ProfileSearchField"))
         #expect(bodyType.contains("ProfileManagerPhoneNumberField"))
+    }
+
+    @Test
+    func collapsedDetailsDoNotMountEditors() throws {
+        let store = ProfileCatalogStore(fileURL: makeTemporaryDirectory().appendingPathComponent("profiles.json"))
+        try store.saveProfiles([sampleProfile(label: "studio@example.com", sortOrder: 0)])
+        let controller = PlusProfileController(catalogStore: store, dataService: StubProfileViewDataService(), autoStart: false)
+        let hostingView = makeHostingView(controller: controller)
+        let window = hostInWindow(hostingView)
+        defer { window.orderOut(nil) }
+        flushViewHierarchy(for: hostingView)
+        #expect(editableTextFieldCount(in: hostingView) == 0)
+        #expect(textEditorCount(in: hostingView) == 0)
     }
 
     @Test
@@ -323,10 +336,8 @@ struct ProfileManagerWindowViewTests {
         let metrics = ProfileManagerDetailLayoutMetrics.chromeSignIn
 
         #expect(metrics.detailStackSpacing < CodexTheme.contentSpacing)
-        #expect(metrics.topGridSpacing < CodexTheme.contentSpacing)
         #expect(metrics.compactCardPadding < CodexTheme.panelPadding)
-        #expect(metrics.actionPanelWidth <= 180)
-        #expect(metrics.actionGridColumnCount == 3)
+        #expect(metrics.usageMetricTextScale >= 1)
     }
 
     @Test
@@ -558,12 +569,14 @@ private func containsWebView(in rootView: NSView) -> Bool {
 
 @MainActor
 private func makeHostingView(
-    controller: PlusProfileController
+    controller: PlusProfileController,
+    initiallyShowsDetails: Bool = false
 ) -> NSHostingView<ProfileManagerWindowView> {
     let hostingView = NSHostingView(
         rootView: ProfileManagerWindowView(
             controller: controller,
-            currentTime: AppMinuteClock(now: Date(timeIntervalSince1970: 1_776_000_000))
+            currentTime: AppMinuteClock(now: Date(timeIntervalSince1970: 1_776_000_000)),
+            initiallyShowsDetails: initiallyShowsDetails
         )
     )
     hostingView.frame = NSRect(x: 0, y: 0, width: 1280, height: 900)

@@ -1,318 +1,220 @@
 import SwiftUI
 
+enum EmailToolsLayout {
+    static let defaultSize = CGSize(width: 900, height: 620)
+    static let minimumSize = CGSize(width: 760, height: 520)
+    static let emptySize = CGSize(width: 640, height: 240)
+    static let emptyMinimumSize = CGSize(width: 600, height: 240)
+    static let sidebarWidth: CGFloat = 224
+}
+
 struct EmailToolsWindowView: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @AppStorage(CodexThemeSettings.Keys.appearanceMode) private var appearance = CodexThemeSettings.defaultAppearanceMode
+    @AppStorage(CodexThemeSettings.Keys.contrast) private var contrast = CodexThemeSettings.defaultContrast
     @Bindable var controller: DotTrickController
     @State private var inputDraft = ""
     @State private var searchQuery = ""
     @State private var copyFeedback = TransientValue<String>()
     @State private var confirmingDeleteID: UUID?
+    @FocusState private var focusedField: Field?
+
+    private enum Field: Hashable { case input, filter }
+
+    private var themeContext: CodexThemeRefreshContext {
+        CodexThemeRefreshContext(appearanceMode: appearance, contrast: contrast, systemVariant: colorScheme == .dark ? .dark : .light)
+    }
 
     var body: some View {
-        CodexWindowChromeContainer(minimumSize: CGSize(width: 780, height: 560)) {
-            VStack(alignment: .leading, spacing: CodexTheme.sectionSpacing) {
+        CodexWindowChromeContainer(minimumSize: controller.sessions.isEmpty ? EmailToolsLayout.emptyMinimumSize : EmailToolsLayout.minimumSize) {
+            VStack(alignment: .leading, spacing: 16) {
                 header
-
+                inputBar
                 bodyContent
             }
-            .padding(.top, CodexTheme.chromePadding)
-            .padding(.horizontal, CodexTheme.chromePadding)
-            .padding(.bottom, CodexTheme.chromePadding)
+            .padding(16)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
-        .onDisappear {
-            copyFeedback.clear()
+        .tint(CodexTheme.utilityActionTextToken(preset: themeContext.preset).color)
+        .alert(sessionRemovalTitle, isPresented: Binding(
+            get: { confirmingDeleteID != nil },
+            set: { if !$0 { confirmingDeleteID = nil } }
+        )) {
+            Button("Cancel", role: .cancel) {}
+            Button("Remove", role: .destructive) {
+                if let id = confirmingDeleteID { controller.removeSession(id: id) }
+                confirmingDeleteID = nil
+            }
+        } message: {
+            Text("Its saved used-address marks will be removed.")
         }
+        .onChange(of: controller.selectedSessionID) { _, _ in searchQuery = "" }
+        .onDisappear { copyFeedback.clear() }
     }
-
-    // MARK: - Header
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("CodexPlusBar")
-                    .font(ProfileManagerTypography.micro)
-                    .foregroundStyle(CodexTheme.supportText)
-                    .kerning(1.4)
-
-                Text("Email Tools")
-                    .font(ProfileManagerTypography.title)
-                    .foregroundStyle(CodexTheme.primaryText)
-
-                Text(headerMetaText)
-                    .font(ProfileManagerTypography.body)
-                    .foregroundStyle(CodexTheme.mutedText)
-                    .lineLimit(2)
-            }
-
-            // Inline email input bar
-            HStack(spacing: 10) {
-                Image(systemName: "envelope")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(CodexTheme.mutedText)
-
-                TextField("username", text: $inputDraft)
-                    .textFieldStyle(.plain)
-                    .font(ProfileManagerTypography.body)
-                    .foregroundStyle(CodexTheme.primaryText)
-                    .onSubmit(generateFromDraft)
-
-                Text("@gmail.com")
-                    .font(ProfileManagerTypography.caption)
-                    .foregroundStyle(CodexTheme.mutedText)
-
-                Button("Generate") {
-                    generateFromDraft()
-                }
-                .buttonStyle(
-                    CodexPrimaryButtonStyle(
-                        font: ProfileManagerTypography.smallStrong,
-                        verticalPadding: 8
-                    )
-                )
-                .disabled(isInputValid == false)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(
-                RoundedRectangle(cornerRadius: CodexTheme.fieldCornerRadius, style: .continuous)
-                    .fill(CodexTheme.surfaceFill(for: .subtle))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: CodexTheme.fieldCornerRadius, style: .continuous)
-                            .stroke(
-                                isInputValid
-                                    ? CodexTheme.warmBorder
-                                    : CodexTheme.surfaceBorder(for: .subtle),
-                                lineWidth: 1
-                            )
-                    )
-            )
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text("Email tools")
+                .font(ProfileManagerTypography.title)
+                .foregroundStyle(CodexTheme.headingText)
+            Spacer(minLength: 0)
+            Text("Gmail address variants")
+                .font(ProfileManagerTypography.caption)
+                .foregroundStyle(CodexTheme.supportText)
         }
     }
 
-    private var headerMetaText: String {
-        let count = controller.sessions.count
-        if count == 0 {
-            return "Generate Gmail dot trick variations"
-        }
+    private var inputBar: some View {
+        HStack(spacing: 8) {
+            TextField("", text: $inputDraft, prompt: Text("Gmail username or address")
+                .foregroundStyle(CodexTheme.searchPromptTextToken(preset: themeContext.preset).color))
+                .font(ProfileManagerTypography.body)
+                .textFieldStyle(.plain)
+                .foregroundStyle(CodexTheme.dataValueText)
+                .padding(.horizontal, 10)
+                .frame(minHeight: 32)
+                .background(fieldBackground(isFocused: focusedField == .input))
+                .focused($focusedField, equals: .input)
+                .accessibilityLabel("Gmail username or address")
+                .accessibilityIdentifier("email-tools.input")
+                .onSubmit(generateFromDraft)
 
-        return count == 1 ? "1 saved session" : "\(count) saved sessions"
+            Button("Generate", action: generateFromDraft)
+                .buttonStyle(CodexPrimaryButtonStyle())
+                .disabled(!isInputValid)
+                .accessibilityIdentifier("email-tools.generate")
+        }
     }
 
-    // MARK: - Body
-
+    @ViewBuilder
     private var bodyContent: some View {
-        HStack(alignment: .top, spacing: CodexTheme.contentSpacing) {
-            sidebar
-                .frame(width: 260, alignment: .topLeading)
-
-            detailPane
+        if controller.sessions.isEmpty {
+            Text("Dots in a Gmail address all reach the same inbox.")
+                .font(ProfileManagerTypography.small)
+                .foregroundStyle(CodexTheme.supportText)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    }
-
-    // MARK: - Sidebar
-
-    private var sidebar: some View {
-        CodexCard(tier: .regular) {
-            VStack(alignment: .leading, spacing: 12) {
-                if controller.sessions.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("No sessions yet")
-                            .font(ProfileManagerTypography.small)
-                            .foregroundStyle(CodexTheme.mutedText)
-
-                        Text("Enter a Gmail username above to get started.")
-                            .font(ProfileManagerTypography.caption)
-                            .foregroundStyle(CodexTheme.mutedText)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                } else {
-                    Text("Sessions")
-                        .font(ProfileManagerTypography.caption)
-                        .foregroundStyle(CodexTheme.mutedText)
-
-                    ScrollView(.vertical) {
-                        VStack(alignment: .leading, spacing: 10) {
-                            ForEach(controller.sessions) { session in
-                                EmailToolsSidebarRow(
-                                    session: session,
-                                    isSelected: session.id == controller.selectedSessionID,
-                                    isConfirmingDelete: confirmingDeleteID == session.id,
-                                    onSelect: {
-                                        controller.selectSession(id: session.id)
-                                        searchQuery = ""
-                                    },
-                                    onDelete: {
-                                        confirmingDeleteID = session.id
-                                    },
-                                    onConfirmDelete: {
-                                        controller.removeSession(id: session.id)
-                                        confirmingDeleteID = nil
-                                    },
-                                    onCancelDelete: {
-                                        confirmingDeleteID = nil
-                                    }
-                                )
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    }
+        } else {
+            HStack(alignment: .top, spacing: 16) {
+                sidebar.frame(width: EmailToolsLayout.sidebarWidth)
+                if let session = controller.selectedSession {
+                    variationList(for: session)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
+    }
+
+    private var sidebar: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Saved addresses")
+                .font(ProfileManagerTypography.smallStrong)
+                .foregroundStyle(CodexTheme.headingText)
+            ScrollView(.vertical) {
+                LazyVStack(spacing: 4) {
+                    ForEach(controller.sessions) { session in
+                        EmailToolsSidebarRow(
+                            session: session,
+                            isSelected: session.id == controller.selectedSessionID,
+                            select: { controller.selectSession(id: session.id) },
+                            remove: { confirmingDeleteID = session.id }
+                        )
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
         .frame(maxHeight: .infinity, alignment: .topLeading)
     }
 
-    // MARK: - Detail Pane
-
-    @ViewBuilder
-    private var detailPane: some View {
-        if let session = controller.selectedSession {
-            variationList(for: session)
-        } else {
-            emptyDetailState
-        }
-    }
-
-    private var emptyDetailState: some View {
-        CodexCard(tier: .strong) {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Gmail Dot Trick")
-                    .font(ProfileManagerTypography.bodyStrong)
-                    .foregroundStyle(CodexTheme.primaryText)
-
-                Text("Gmail ignores dots in the local part of your email. Enter a username in the sidebar and click Generate to see all single-dot address variations.")
-                    .font(ProfileManagerTypography.small)
-                    .foregroundStyle(CodexTheme.mutedText)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-
     private func variationList(for session: DotTrickSession) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Detail header card
-            CodexCard(tier: .strong, accent: CodexTheme.accentBlue) {
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack(alignment: .center, spacing: 12) {
-                        Image(systemName: "envelope.badge.fill")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(CodexTheme.accentBlue)
-                            .frame(width: 24, height: 24)
-                            .accessibilityHidden(true)
+        let filtered = filteredVariations(for: session)
+        let unusedCount = session.variationCount - session.usedCount
+        let copiedAll = copyFeedback.current == "__all_\(session.id.uuidString)"
 
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(session.canonicalEmail)
-                                .font(ProfileManagerTypography.bodyStrong)
-                                .foregroundStyle(CodexTheme.primaryText)
-
-                            HStack(spacing: 0) {
-                                Text("\(session.variationCount) single-dot variation\(session.variationCount == 1 ? "" : "s")")
-                                    .font(ProfileManagerTypography.caption)
-                                    .foregroundStyle(CodexTheme.mutedText)
-
-                                if session.usedCount > 0 {
-                                    Text(" · \(session.usedCount) used")
-                                        .font(ProfileManagerTypography.caption)
-                                        .foregroundStyle(CodexTheme.dangerText)
-                                }
-                            }
-                        }
-
-                        Spacer(minLength: 0)
-
-                        Button {
-                            copyAllVariations(for: session)
-                        } label: {
-                            let marker = "__all_\(session.id.uuidString)"
-                            let isCopied = copyFeedback.current == marker
-                            let hasUsed = session.usedCount > 0
-                            Label(
-                                isCopied
-                                    ? (hasUsed ? "Copied unused" : "Copied all")
-                                    : (hasUsed ? "Copy unused" : "Copy all"),
-                                systemImage: isCopied ? "checkmark" : "doc.on.doc.fill"
-                            )
-                        }
-                        .buttonStyle(
-                            CodexSecondaryButtonStyle(
-                                font: ProfileManagerTypography.smallStrong,
-                                foregroundColor: CodexTheme.primaryText,
-                                horizontalPadding: 12,
-                                verticalPadding: 8
-                            )
-                        )
-                        .help(session.usedCount > 0 ? "Copies only variations not marked as used" : "Copy all variations")
-                    }
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(session.canonicalEmail)
+                        .font(ProfileManagerTypography.smallStrong)
+                        .foregroundStyle(CodexTheme.headingText)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .help(session.canonicalEmail)
+                    Text("\(unusedCount) unused · \(session.usedCount) used")
+                        .font(ProfileManagerTypography.caption)
+                        .foregroundStyle(CodexTheme.supportText)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                Spacer(minLength: 8)
+                Button {
+                    copyAllVariations(for: session)
+                } label: {
+                    Label(copiedAll ? "Copied" : session.usedCount > 0 ? "Copy unused" : "Copy all", systemImage: copiedAll ? "checkmark" : "doc.on.doc")
+                }
+                .buttonStyle(CodexSecondaryButtonStyle(font: ProfileManagerTypography.caption, foregroundColor: CodexTheme.utilityActionText, horizontalPadding: 10))
+                .disabled(unusedCount == 0)
+                .help("Copy addresses not marked as used")
+                .accessibilityIdentifier("email-tools.copy-unused")
             }
 
-            // Search bar
             if session.variationCount > 6 {
-                HStack(spacing: 8) {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(CodexTheme.mutedText)
-
-                    TextField("Filter variations…", text: $searchQuery)
-                        .textFieldStyle(.plain)
-                        .font(ProfileManagerTypography.small)
-                        .foregroundStyle(CodexTheme.primaryText)
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-                .background(
-                    RoundedRectangle(cornerRadius: CodexTheme.fieldCornerRadius, style: .continuous)
-                        .fill(CodexTheme.surfaceFill(for: .subtle))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: CodexTheme.fieldCornerRadius, style: .continuous)
-                                .stroke(CodexTheme.surfaceBorder(for: .subtle), lineWidth: 1)
-                        )
-                )
+                TextField("", text: $searchQuery, prompt: Text("Filter addresses")
+                    .foregroundStyle(CodexTheme.searchPromptTextToken(preset: themeContext.preset).color))
+                    .font(ProfileManagerTypography.small)
+                    .textFieldStyle(.plain)
+                    .foregroundStyle(CodexTheme.dataValueText)
+                    .padding(.horizontal, 10)
+                    .frame(minHeight: 32)
+                    .background(fieldBackground(isFocused: focusedField == .filter))
+                    .focused($focusedField, equals: .filter)
+                    .accessibilityLabel("Filter address variants")
+                    .accessibilityIdentifier("email-tools.filter")
+                    .onExitCommand { searchQuery = "" }
             }
 
-            // Count label
-            let filtered = filteredVariations(for: session)
-            if searchQuery.isEmpty == false {
-                Text("\(filtered.count) of \(session.variationCount) variations")
+            if !searchQuery.isEmpty {
+                Text("\(filtered.count) of \(session.variationCount) addresses")
                     .font(ProfileManagerTypography.caption)
                     .foregroundStyle(CodexTheme.supportText)
             }
 
-            // Variation list
+            if filtered.isEmpty {
+                Button("Clear filter") { searchQuery = "" }
+                    .buttonStyle(CodexQuietButtonStyle())
+            }
+
             ScrollView(.vertical) {
-                LazyVStack(alignment: .leading, spacing: 6) {
-                    ForEach(Array(filtered.enumerated()), id: \.element) { index, variation in
+                LazyVStack(spacing: 4) {
+                    ForEach(filtered, id: \.self) { variation in
                         EmailToolsVariationRow(
                             variation: variation,
-                            index: index + 1,
                             isUsed: session.isUsed(variation),
                             isCopied: copyFeedback.current == variation,
-                            onToggleUsed: {
-                                controller.toggleUsed(variation: variation, inSession: session.id)
-                            },
-                            onCopy: {
-                                copyVariation(variation)
-                            }
+                            toggleUsed: { controller.toggleUsed(variation: variation, inSession: session.id) },
+                            copy: { copyToPasteboard(variation, feedback: variation) }
                         )
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .frame(maxHeight: .infinity, alignment: .topLeading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
-    // MARK: - Helpers
+    private func fieldBackground(isFocused: Bool) -> some View {
+        RoundedRectangle(cornerRadius: CodexTheme.fieldCornerRadius, style: .continuous)
+            .fill(CodexTheme.surfaceFill(for: .nested))
+            .overlay {
+                RoundedRectangle(cornerRadius: CodexTheme.fieldCornerRadius, style: .continuous)
+                    .strokeBorder(isFocused ? CodexTheme.searchFocusBorder : CodexTheme.controlBoundary, lineWidth: isFocused ? 2 : 1)
+            }
+    }
 
-    private var isInputValid: Bool {
-        DotTrickGenerator.canonicalize(inputDraft).count >= 2
+    private var isInputValid: Bool { DotTrickGenerator.canonicalize(inputDraft).count >= 2 }
+
+    private var sessionRemovalTitle: String {
+        guard let session = controller.sessions.first(where: { $0.id == confirmingDeleteID }) else { return "Remove this session?" }
+        return "Remove \(session.canonicalEmail)?"
     }
 
     private func generateFromDraft() {
@@ -323,267 +225,124 @@ struct EmailToolsWindowView: View {
     }
 
     private func filteredVariations(for session: DotTrickSession) -> [String] {
-        let all = session.variations
         let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard query.isEmpty == false else {
-            return all
-        }
-
-        return all.filter { $0.localizedStandardContains(query) }
-    }
-
-    private func copyVariation(_ variation: String) {
-        copyToPasteboard(variation, feedback: variation)
+        return query.isEmpty ? session.variations : session.variations.filter { $0.localizedStandardContains(query) }
     }
 
     private func copyToPasteboard(_ text: String, feedback: String) {
-        if MacSystemActions.copyToPasteboard(text) {
-            copyFeedback.show(feedback)
-        }
+        if MacSystemActions.copyToPasteboard(text) { copyFeedback.show(feedback) }
     }
 
     private func copyAllVariations(for session: DotTrickSession) {
-        // Copy only unused variations when some are marked as used.
-        let toCopy = session.variations.filter { session.isUsed($0) == false }
-        guard toCopy.isEmpty == false else { return }
-
-        let marker = "__all_\(session.id.uuidString)"
-        copyToPasteboard(toCopy.joined(separator: "\n"), feedback: marker)
+        let unused = session.variations.filter { !session.isUsed($0) }
+        guard !unused.isEmpty else { return }
+        copyToPasteboard(unused.joined(separator: "\n"), feedback: "__all_\(session.id.uuidString)")
     }
 }
-
-// MARK: - Sidebar Row
 
 private struct EmailToolsSidebarRow: View {
+    @Environment(\.codexThemeRefreshContext) private var themeContext
     let session: DotTrickSession
     let isSelected: Bool
-    let isConfirmingDelete: Bool
-    let onSelect: () -> Void
-    let onDelete: () -> Void
-    let onConfirmDelete: () -> Void
-    let onCancelDelete: () -> Void
+    let select: () -> Void
+    let remove: () -> Void
 
     var body: some View {
-        Button(action: onSelect) {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(alignment: .center, spacing: 8) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(session.canonicalEmail)
-                            .font(ProfileManagerTypography.smallStrong)
-                            .foregroundStyle(CodexTheme.primaryText)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-
-                        HStack(spacing: 0) {
-                            Text("\(session.variationCount) variation\(session.variationCount == 1 ? "" : "s")")
-                                .font(ProfileManagerTypography.caption)
-                                .foregroundStyle(CodexTheme.mutedText)
-
-                            if session.usedCount > 0 {
-                                Text(" · \(session.usedCount) used")
-                                    .font(ProfileManagerTypography.caption)
-                                    .foregroundStyle(CodexTheme.dangerText)
-                            }
-                        }
+        let palette = CodexTheme.palette(for: themeContext.preset)
+        HStack(spacing: 4) {
+            Button(action: select) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(session.canonicalEmail)
+                        .font(ProfileManagerTypography.smallStrong)
+                        .foregroundStyle(palette.dataValueText.color)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    HStack(spacing: 4) {
+                        if isSelected { Image(systemName: "checkmark").accessibilityHidden(true) }
+                        Text("\(session.variationCount - session.usedCount) unused")
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                    if isConfirmingDelete == false {
-                        Button(action: onDelete) {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 9, weight: .semibold))
-                                .foregroundStyle(CodexTheme.mutedText)
-                                .frame(width: 22, height: 22)
-                        }
-                        .buttonStyle(.plain)
-                        .opacity(0.7)
-                        .help("Remove session")
-                    }
+                    .font(ProfileManagerTypography.caption)
+                    .foregroundStyle(palette.supportText.color)
                 }
-
-                if isConfirmingDelete {
-                    HStack(spacing: 6) {
-                        Text("Delete?")
-                            .font(ProfileManagerTypography.caption)
-                            .foregroundStyle(CodexTheme.dangerText)
-
-                        Spacer(minLength: 0)
-
-                        Button("Yes") {
-                            onConfirmDelete()
-                        }
-                        .buttonStyle(
-                            CodexDangerButtonStyle(
-                                font: ProfileManagerTypography.caption,
-                                horizontalPadding: 10,
-                                verticalPadding: 5,
-                                cornerRadius: 7
-                            )
-                        )
-
-                        Button("No") {
-                            onCancelDelete()
-                        }
-                        .buttonStyle(
-                            CodexQuietButtonStyle(
-                                font: ProfileManagerTypography.caption,
-                                horizontalPadding: 10,
-                                verticalPadding: 5,
-                                cornerRadius: 7
-                            )
-                        )
-                    }
-                }
+                .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
+                .contentShape(Rectangle())
             }
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(isSelected ? .isSelected : [])
+            .accessibilityIdentifier("email-tools.session.\(session.canonicalEmail)")
+            .help(session.canonicalEmail)
+
+            Menu {
+                Button("Remove session…", systemImage: "trash", role: .destructive, action: remove)
+            } label: {
+                Label("Actions for \(session.canonicalEmail)", systemImage: "ellipsis")
+                    .labelStyle(.iconOnly)
+                    .frame(width: 28, height: 28)
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .accessibilityLabel("Actions for \(session.canonicalEmail)")
+            .accessibilityIdentifier("email-tools.session-actions.\(session.canonicalEmail)")
+            .help("Actions for \(session.canonicalEmail)")
         }
-        .buttonStyle(.plain)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: CodexTheme.fieldCornerRadius, style: .continuous)
-                .fill(CodexTheme.cardFill(for: isSelected ? .strong : .nested))
-                .overlay(
-                    RoundedRectangle(cornerRadius: CodexTheme.fieldCornerRadius, style: .continuous)
-                        .stroke(
-                            isSelected
-                                ? CodexTheme.accentBlue.opacity(0.35)
-                                : CodexTheme.surfaceBorder(for: .nested),
-                            lineWidth: 1
-                        )
-                )
-        )
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(isSelected ? palette.bg1.color : .clear, in: RoundedRectangle(cornerRadius: 6))
     }
 }
 
-// MARK: - Variation Row
-
 private struct EmailToolsVariationRow: View {
+    @Environment(\.codexThemeRefreshContext) private var themeContext
     let variation: String
-    let index: Int
     let isUsed: Bool
     let isCopied: Bool
-    let onToggleUsed: () -> Void
-    let onCopy: () -> Void
-
-    @State private var isHovering = false
+    let toggleUsed: () -> Void
+    let copy: () -> Void
 
     var body: some View {
-        HStack(alignment: .center, spacing: 10) {
-            Text("\(index).")
-                .font(ProfileManagerTypography.caption)
-                .foregroundStyle(CodexTheme.mutedText)
-                .monospacedDigit()
-                .frame(width: 32, alignment: .trailing)
+        let palette = CodexTheme.palette(for: themeContext.preset)
+        HStack(spacing: 8) {
+            Toggle("Used", isOn: Binding(get: { isUsed }, set: { _ in toggleUsed() }))
+                .toggleStyle(CodexCheckboxStyle())
+                .labelsHidden()
+                .frame(width: 28, height: 28)
+                .accessibilityLabel("Used address: \(variation)")
+                .accessibilityIdentifier("email-tools.used.\(variation)")
+                .help(isUsed ? "Mark as unused" : "Mark as used")
 
-            // Used toggle button
-            Button(action: onToggleUsed) {
-                Image(systemName: isUsed ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 14, weight: isUsed ? .medium : .regular))
-                    .foregroundStyle(isUsed ? CodexTheme.accentRed : CodexTheme.mutedText)
-            }
-            .buttonStyle(.plain)
-            .opacity(isUsed ? 1 : (isHovering ? 0.7 : 0.22))
-            .animation(.easeOut(duration: 0.15), value: isHovering)
-            .animation(.easeOut(duration: 0.2), value: isUsed)
-            .help(isUsed ? "Unmark as used" : "Mark as used")
-            .accessibilityLabel(isUsed ? "Marked as used" : "Mark as used")
-
-            // Email text with optional strikethrough
             Text(highlightedVariation)
-                .font(.codexUtility(size: 14, weight: .regular, relativeTo: .body))
-                .foregroundStyle(isUsed ? CodexTheme.mutedText : CodexTheme.primaryText)
+                .font(.system(size: 13, design: .monospaced))
+                .foregroundStyle(isUsed ? palette.mutedText.color : palette.dataValueText.color)
+                .strikethrough(isUsed, color: palette.mutedText.color)
                 .textSelection(.enabled)
                 .lineLimit(1)
+                .truncationMode(.middle)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .overlay(alignment: .leading) {
-                    if isUsed {
-                        GeometryReader { proxy in
-                            Rectangle()
-                                .fill(CodexTheme.accentRed)
-                                .frame(width: proxy.size.width, height: 1.5)
-                                .offset(y: proxy.size.height / 2)
-                        }
-                        .allowsHitTesting(false)
-                    }
-                }
+                .help(variation)
 
-            if isUsed == false {
-                Button(action: onCopy) {
-                    HStack(spacing: 5) {
-                        Image(systemName: isCopied ? "checkmark" : "doc.on.doc")
-                            .font(.system(size: 10, weight: .semibold))
-
-                        Text(isCopied ? "Copied" : "Copy")
-                            .font(ProfileManagerTypography.caption)
-                    }
-                    .foregroundStyle(isCopied ? CodexTheme.successText : CodexTheme.primaryText)
-                }
-                .buttonStyle(EmailToolsCopyButtonStyle(isCopied: isCopied))
-                .disabled(isCopied)
+            Button(action: copy) {
+                Label(isCopied ? "Copied" : "Copy", systemImage: isCopied ? "checkmark" : "doc.on.doc")
+                    .frame(width: 58)
             }
+            .buttonStyle(CodexSecondaryButtonStyle(font: ProfileManagerTypography.caption, foregroundColor: isCopied ? CodexTheme.successTextToken(preset: themeContext.preset).color : CodexTheme.utilityActionTextToken(preset: themeContext.preset).color, horizontalPadding: 8))
+            .accessibilityLabel(isCopied ? "Address copied" : "Copy \(variation)")
+            .accessibilityIdentifier("email-tools.copy.\(variation)")
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 7)
-        .opacity(isUsed ? 0.55 : 1)
-        .background(
-            RoundedRectangle(cornerRadius: CodexTheme.fieldCornerRadius, style: .continuous)
-                .fill(CodexTheme.surfaceFill(for: .nested))
-                .overlay(
-                    RoundedRectangle(cornerRadius: CodexTheme.fieldCornerRadius, style: .continuous)
-                        .stroke(CodexTheme.surfaceBorder(for: .nested), lineWidth: 1)
-                )
-        )
-        .onHover { hovering in
-            isHovering = hovering
-        }
-        .animation(.easeOut(duration: 0.2), value: isUsed)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .frame(minHeight: 36)
+        .background(CodexTheme.surfaceToken(for: .subtle, preset: themeContext.preset).color, in: RoundedRectangle(cornerRadius: 6))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("email-tools.row.\(variation)")
     }
 
     private var highlightedVariation: AttributedString {
         var attributed = AttributedString(variation)
-
-        if isUsed {
-            // No dot highlight for used rows — keep them visually quiet.
-            return attributed
+        if !isUsed, let dot = attributed.range(of: ".") {
+            attributed[dot].foregroundColor = CodexTheme.utilityActionTextToken(preset: themeContext.preset).color
+            attributed[dot].font = .system(size: 13, weight: .bold, design: .monospaced)
         }
-
-        // Highlight the dot in a different color.
-        if let dotRange = attributed.range(of: ".") {
-            attributed[dotRange].foregroundColor = CodexTheme.accentBlue
-            attributed[dotRange].font = .codexUtility(size: 14, weight: .bold, relativeTo: .body)
-        }
-
         return attributed
-    }
-}
-
-private struct EmailToolsCopyButtonStyle: ButtonStyle {
-    let isCopied: Bool
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(
-                        isCopied
-                            ? CodexTheme.accentAqua.opacity(0.12)
-                            : CodexTheme.surfaceFill(for: .subtle)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .stroke(
-                                isCopied
-                                    ? CodexTheme.accentAqua.opacity(0.28)
-                                    : CodexTheme.surfaceBorder(for: .subtle),
-                                lineWidth: 1
-                            )
-                    )
-            )
-            .opacity(configuration.isPressed ? 0.92 : 1)
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
-            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
     }
 }

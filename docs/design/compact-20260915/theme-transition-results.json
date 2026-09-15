@@ -1,0 +1,101 @@
+{
+  "passed": true,
+  "checks": [
+    {
+      "transition": "dark-to-light",
+      "region": "missing expiry, selected",
+      "bounds": [
+        27,
+        225,
+        145,
+        243
+      ],
+      "maximum_srgb_channel_difference": 0,
+      "passed": true
+    },
+    {
+      "transition": "dark-to-light",
+      "region": "missing expiry, unselected",
+      "bounds": [
+        27,
+        337,
+        145,
+        355
+      ],
+      "maximum_srgb_channel_difference": 0,
+      "passed": true
+    },
+    {
+      "transition": "dark-to-light",
+      "region": "missing weekly reset",
+      "bounds": [
+        162,
+        647,
+        254,
+        665
+      ],
+      "maximum_srgb_channel_difference": 0,
+      "passed": true
+    },
+    {
+      "transition": "dark-to-light",
+      "region": "primary capacity",
+      "bounds": [
+        525,
+        250,
+        645,
+        281
+      ],
+      "maximum_srgb_channel_difference": 0,
+      "passed": true
+    },
+    {
+      "transition": "light-to-dark",
+      "region": "missing expiry, selected",
+      "bounds": [
+        27,
+        225,
+        145,
+        243
+      ],
+      "maximum_srgb_channel_difference": 0,
+      "passed": true
+    },
+    {
+      "transition": "light-to-dark",
+      "region": "missing expiry, unselected",
+      "bounds": [
+        27,
+        337,
+        145,
+        355
+      ],
+      "maximum_srgb_channel_difference": 0,
+      "passed": true
+    },
+    {
+      "transition": "light-to-dark",
+      "region": "missing weekly reset",
+      "bounds": [
+        162,
+        647,
+        254,
+        665
+      ],
+      "maximum_srgb_channel_difference": 0,
+      "passed": true
+    },
+    {
+      "transition": "light-to-dark",
+      "region": "primary capacity",
+      "bounds": [
+        525,
+        250,
+        645,
+        281
+      ],
+      "maximum_srgb_channel_difference": 0,
+      "passed": true
+    }
+  ]
+}

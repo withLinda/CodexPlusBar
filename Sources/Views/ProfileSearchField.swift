@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct ProfileSearchField: View {
+    @Environment(\.codexThemeRefreshContext) private var themeContext
     @Binding var text: String
     @FocusState private var isFocused: Bool
     let textScale: Double
@@ -31,7 +32,7 @@ struct ProfileSearchField: View {
             )
             .font(ProfileManagerTypography.small(scale: textScale))
             .textFieldStyle(.plain)
-            .foregroundStyle(CodexTheme.searchInputText)
+            .foregroundStyle(CodexTheme.searchInputTextToken(preset: themeContext.preset).color)
             .focused($isFocused)
             .accessibilityLabel("Search profiles by email or phone number")
             .accessibilityHint("Type all or part of an email address or phone number.")
@@ -40,7 +41,7 @@ struct ProfileSearchField: View {
             Button(action: closeSearch) {
                 Image(systemName: "xmark")
                     .font(.system(size: scaled(11), weight: .semibold))
-                    .frame(width: scaled(22), height: scaled(22))
+                    .frame(width: max(28, scaled(22)), height: max(28, scaled(22)))
                     .contentShape(.rect)
             }
             .buttonStyle(.plain)
@@ -84,6 +85,7 @@ struct ProfileSearchField: View {
 }
 
 struct ProfileSearchEmptyState: View {
+    @Environment(\.codexThemeRefreshContext) private var themeContext
     let query: String
     let clearsFilter: Bool
     let textScale: Double
@@ -105,7 +107,7 @@ struct ProfileSearchEmptyState: View {
         VStack(alignment: .leading, spacing: 10 * CGFloat(textScale)) {
             Label("No matching profile", systemImage: "magnifyingglass")
                 .font(ProfileManagerTypography.smallStrong(scale: textScale))
-                .foregroundStyle(CodexTheme.primaryText)
+                .foregroundStyle(CodexTheme.palette(for: themeContext.preset).primaryText.color)
 
             Text("No saved email or phone number contains “\(query.trimmingCharacters(in: .whitespacesAndNewlines))”.")
                 .font(ProfileManagerTypography.small(scale: textScale))

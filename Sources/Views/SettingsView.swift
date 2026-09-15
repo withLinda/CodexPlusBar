@@ -11,9 +11,6 @@ struct CodexSettingsView: View {
                     .font(ProfileManagerTypography.title)
                     .foregroundStyle(CodexTheme.primaryText)
 
-                Text("Choose the room brightness that helps you focus.")
-                    .font(ProfileManagerTypography.body)
-                    .foregroundStyle(CodexTheme.mutedText)
             }
 
             CodexCard(tier: .regular, shadow: false) {
@@ -43,7 +40,7 @@ struct CodexSettingsView: View {
                 }
             }
         }
-        .padding(24)
+        .padding(20)
         .frame(width: 460, alignment: .topLeading)
         .background(CodexBackdrop())
         .codexThemeRefreshScope()
@@ -51,6 +48,7 @@ struct CodexSettingsView: View {
 }
 
 private struct CodexSettingsPickerRow<Control: View>: View {
+    @Environment(\.codexThemeRefreshContext) private var themeContext
     let title: String
     let control: Control
 
@@ -63,7 +61,7 @@ private struct CodexSettingsPickerRow<Control: View>: View {
         HStack(alignment: .center, spacing: 16) {
             Text(title)
                 .font(ProfileManagerTypography.bodyStrong)
-                .foregroundStyle(CodexTheme.primaryText)
+                .foregroundStyle(CodexTheme.palette(for: themeContext.preset).primaryText.color)
                 .frame(width: 96, alignment: .leading)
 
             control

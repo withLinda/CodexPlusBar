@@ -139,6 +139,8 @@ struct ProfileSummaryRowPresentation: Equatable, Sendable {
 
 struct ProfileSummaryRow: View {
     @Environment(\.codexThemeRefreshContext) private var themeContext
+    @Environment(\.colorSchemeContrast) private var contrast
+    @State private var isHovered = false
 
     let presentation: ProfileSummaryRowPresentation
     let mode: ProfileSummaryRowMode
@@ -212,9 +214,10 @@ struct ProfileSummaryRow: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, isMenuBarMode ? 10 : 12)
-        .padding(.vertical, isMenuBarMode ? scaled(8) : 10)
+        .padding(.horizontal, 12)
+        .padding(.vertical, scaled(8))
         .background(backgroundShape)
+        .onHover { isHovered = $0 }
     }
 
     private var isMenuBarMode: Bool {
@@ -234,7 +237,7 @@ struct ProfileSummaryRow: View {
     }
 
     private var sidebarContent: some View {
-        VStack(alignment: .leading, spacing: 9) {
+        VStack(alignment: .leading, spacing: 8) {
             wrappedPrimaryAction {
                 sidebarContentBody
             }
@@ -243,7 +246,7 @@ struct ProfileSummaryRow: View {
     }
 
     private var sidebarContentBody: some View {
-        VStack(alignment: .leading, spacing: 9) {
+        VStack(alignment: .leading, spacing: 8) {
             titleRow
 
             if let searchPhoneNumber = presentation.searchPhoneNumber {
@@ -254,7 +257,7 @@ struct ProfileSummaryRow: View {
                 usageSummaryView(usageSummary, spacing: 8)
             }
 
-            supportLine
+            metadataLine
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -271,11 +274,11 @@ struct ProfileSummaryRow: View {
                     accessoryView
                 }
 
+                Spacer(minLength: 0)
+
                 if presentation.showsInlineSecondaryActions {
                     topActionRail
                 }
-
-                Spacer(minLength: 0)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -285,18 +288,11 @@ struct ProfileSummaryRow: View {
                         phoneSearchContextLine(searchPhoneNumber)
                     }
 
-                    if presentation.showsTags {
-                        ProfileTagSummaryStrip(
-                            summary: presentation.compactTagSummary,
-                            textScale: effectiveTextScale
-                        )
-                    }
-
                     if let usageSummary = presentation.usageSummary {
                         usageSummaryView(usageSummary, spacing: scaled(6))
                     }
 
-                    supportLine
+                    metadataLine
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -308,24 +304,23 @@ struct ProfileSummaryRow: View {
     private var titleRow: some View {
         HStack(alignment: .top, spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                ProfileProviderBadge(provider: presentation.provider, textScale: 0.92)
+                ProfileProviderBadge(provider: presentation.provider, showsText: false)
 
                 Text(presentation.title)
                     .font(ProfileManagerTypography.smallStrong)
                     .foregroundStyle(CodexTheme.dataValueText)
                     .lineLimit(1)
                     .allowsTightening(true)
-                    .minimumScaleFactor(0.88)
+                    .truncationMode(.middle)
             }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .layoutPriority(1)
 
-            if presentation.showsTags {
-                ProfileTagSummaryStrip(
-                    summary: presentation.compactTagSummary,
-                    textScale: 0.92
-                )
-                .layoutPriority(2)
+            if case .sidebar(isSelected: true) = mode {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(CodexTheme.dataValueText)
+                    .accessibilityLabel("Selected profile")
             }
 
             if presentation.accessory != .none {
@@ -347,7 +342,6 @@ struct ProfileSummaryRow: View {
                 .foregroundStyle(CodexTheme.dataValueText)
                 .lineLimit(1)
                 .truncationMode(.middle)
-                .minimumScaleFactor(0.9)
                 .frame(minWidth: 40, alignment: .leading)
         }
     }
@@ -370,46 +364,24 @@ struct ProfileSummaryRow: View {
     }
 
     private var topActionRail: some View {
-        HStack(spacing: 5) {
-            ProfileSummaryInlineIconButton(
-                symbolName: "arrow.triangle.2.circlepath",
-                label: "Switch and open ChatGPT",
-                helpText: "Switch to this account and reopen ChatGPT",
-                isDisabled: switchAction == nil,
-                size: 24,
-                action: switchAction ?? {}
-            )
-
+        HStack(spacing: 4) {
             if presentation.provider == .codex {
+                ProfileSummaryInlineIconButton(
+                    symbolName: "arrow.triangle.2.circlepath",
+                    label: "Switch and open ChatGPT",
+                    helpText: "Switch to this account and reopen ChatGPT",
+                    isDisabled: switchAction == nil,
+                    action: switchAction ?? {}
+                )
+
                 ProfileSummaryInlineIconButton(
                     symbolName: "bubble.left.and.bubble.right",
                     label: "Switch OpenChamber OpenAI",
                     helpText: "Switch OpenChamber OpenAI · local instance. Save a sign-in in the manager first.",
                     isDisabled: openChamberSwitchAction == nil,
-                    size: 24,
                     action: openChamberSwitchAction ?? {}
                 )
             }
-
-            ProfileSummaryInlineIconButton(
-                symbolName: "doc.on.doc",
-                label: "Copy profile label",
-                helpText: "Copy profile label",
-                isDisabled: copyAction == nil,
-                size: 24,
-                action: copyAction ?? {}
-            )
-
-            ProfileSummaryInlineIconButton(
-                symbolName: "arrow.up.forward.square",
-                label: "Open email link",
-                helpText: presentation.canOpenEmailLink
-                    ? "Open email link"
-                    : "Add an email link in the manager to open it here",
-                isDisabled: presentation.canOpenEmailLink == false || emailAction == nil,
-                size: 24,
-                action: emailAction ?? {}
-            )
 
             if presentation.showsPinAction {
                 ProfileSummaryInlineIconButton(
@@ -418,14 +390,51 @@ struct ProfileSummaryRow: View {
                     helpText: presentation.isPinned
                         ? "This profile already drives the top menu bar summary."
                         : "Show this profile in the top menu bar summary.",
-                    tone: presentation.isPinned ? .selected : .accent,
+                    tone: presentation.isPinned ? .selected : .quiet,
                     isDisabled: presentation.isPinned || pinAction == nil,
-                    size: 24,
                     action: pinAction ?? {}
                 )
             }
+
+            Menu {
+                Button("Copy profile label", systemImage: "doc.on.doc", action: copyAction ?? {})
+                    .disabled(copyAction == nil)
+                Button("Open email link", systemImage: "arrow.up.forward.square", action: emailAction ?? {})
+                    .disabled(!presentation.canOpenEmailLink || emailAction == nil)
+                Divider()
+                Button("Edit profile…", systemImage: "slider.horizontal.3", action: primaryAction ?? {})
+                    .disabled(primaryAction == nil)
+            } label: {
+                Image(systemName: "ellipsis")
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .foregroundStyle(CodexTheme.utilityActionText)
+            .accessibilityLabel("More actions for \(presentation.title)")
+            .help("More profile actions")
         }
         .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private var metadataLine: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) {
+                supportLine
+                Spacer(minLength: 0)
+                if presentation.showsTags {
+                    ProfileTagSummaryStrip(summary: presentation.compactTagSummary, textScale: effectiveTextScale)
+                }
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                supportLine
+                if presentation.showsTags {
+                    ProfileTagSummaryStrip(summary: presentation.compactTagSummary, textScale: effectiveTextScale)
+                }
+            }
+        }
     }
 
     private func usageSummaryView(_ usageSummary: ProfileUsageSummary, spacing: CGFloat) -> some View {
@@ -459,7 +468,8 @@ struct ProfileSummaryRow: View {
             Text(presentation.supportText)
                 .font(ProfileManagerTypography.caption(scale: effectiveTextScale))
                 .foregroundStyle(presentation.supportStyle.foregroundStyle)
-                .lineLimit(1)
+                .lineLimit(2)
+                .help(presentation.supportText)
         }
     }
 
@@ -506,15 +516,15 @@ struct ProfileSummaryRow: View {
                 ).color
             )
             .overlay {
+                if isHovered {
+                    RoundedRectangle(cornerRadius: CodexTheme.fieldCornerRadius, style: .continuous)
+                        .fill(CodexTheme.primaryText.opacity(0.035))
+                }
                 RoundedRectangle(cornerRadius: CodexTheme.fieldCornerRadius, style: .continuous)
                     .stroke(
-                        isSelected
-                            ? CodexTheme.profileProviderAccentToken(
-                                for: presentation.provider,
-                                isSelected: true,
-                                preset: themeContext.preset
-                            ).color.opacity(0.42)
-                            : CodexTheme.surfaceBorder(for: .nested),
+                        contrast == .increased && isSelected
+                            ? CodexTheme.controlBoundary
+                            : .clear,
                         lineWidth: 1
                     )
             }
@@ -623,16 +633,8 @@ private struct ProfileSummaryInlineIconButton: View {
                 .font(.system(size: size <= 24 ? 10.5 : 11, weight: .semibold))
                 .frame(width: size, height: size)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(CodexQuietButtonStyle(horizontalPadding: 0, verticalPadding: 0))
         .foregroundStyle(foregroundStyle)
-        .background(
-            RoundedRectangle(cornerRadius: size <= 24 ? 7 : 8, style: .continuous)
-                .fill(backgroundFill)
-                .overlay(
-                    RoundedRectangle(cornerRadius: size <= 24 ? 7 : 8, style: .continuous)
-                        .stroke(borderColor, lineWidth: 1)
-                )
-        )
         .accessibilityLabel(label)
         .accessibilityHint(helpText)
         .help(helpText)
@@ -654,27 +656,6 @@ private struct ProfileSummaryInlineIconButton: View {
         }
     }
 
-    private var backgroundFill: Color {
-        switch tone {
-        case .quiet:
-            return CodexTheme.surfaceFill(for: .subtle)
-        case .accent:
-            return CodexTheme.accentOrange.opacity(0.10)
-        case .selected:
-            return CodexTheme.surfaceFill(for: .subtle)
-        }
-    }
-
-    private var borderColor: Color {
-        switch tone {
-        case .quiet:
-            return CodexTheme.surfaceBorder(for: .subtle)
-        case .accent:
-            return CodexTheme.accentOrange.opacity(0.24)
-        case .selected:
-            return CodexTheme.surfaceBorder(for: .subtle)
-        }
-    }
 }
 
 private struct ProfileSummaryPinnedAccessory: View {
@@ -696,6 +677,7 @@ private struct ProfileSummaryPinnedAccessory: View {
 }
 
 private struct ProfileSummaryExpiryLine: View {
+    @Environment(\.codexThemeRefreshContext) private var themeContext
     let presentation: DisplayFormatter.LabeledValue
     let emphasisToken: CodexColorToken?
     let textScale: Double
@@ -713,14 +695,15 @@ private struct ProfileSummaryExpiryLine: View {
     var body: some View {
         LabeledValueText(
             presentation: presentation,
-            labelColor: CodexTheme.dataLabelText,
-            valueColor: emphasisToken?.color ?? CodexTheme.dataValueText,
+            labelColor: CodexTheme.palette(for: themeContext.preset).dataLabelText.color,
+            valueColor: emphasisToken?.color ?? CodexTheme.palette(for: themeContext.preset).dataValueText.color,
             font: ProfileManagerTypography.caption(scale: textScale)
         )
     }
 }
 
 struct ProfileUsageMetricBlock: View {
+    @Environment(\.codexThemeRefreshContext) private var themeContext
     let summary: ProfileUsageMetricSummary
     let density: UsageMetricDensity
     let textScale: Double
@@ -737,61 +720,50 @@ struct ProfileUsageMetricBlock: View {
 
     private var accent: Color {
         if let remainingPercent = summary.remainingPercent {
-            return CodexTheme.usagePercentageColor(forRemainingPercent: remainingPercent)
+            return CodexTheme.progressTextToken(forRemainingPercent: remainingPercent, preset: themeContext.preset).color
         }
 
-        return CodexTheme.mutedText
+        return CodexTheme.palette(for: themeContext.preset).mutedText.color
     }
 
     var body: some View {
-        CodexCard(
-            tier: density.cardTier,
-            accent: density == .expanded ? accent : nil,
-            padding: density.padding(scale: textScale),
-            shadow: false
-        ) {
-            VStack(alignment: .leading, spacing: density.contentSpacing(scale: textScale)) {
-                if density == .compact {
-                    HStack(alignment: .firstTextBaseline, spacing: 6 * CGFloat(textScale)) {
-                        Text(summary.shortTitle)
-                            .font(ProfileManagerTypography.caption(scale: textScale))
-                            .foregroundStyle(CodexTheme.dataLabelText)
-
-                        Text(summary.valueText)
-                            .font(ProfileManagerTypography.metricCompact(scale: textScale))
-                            .foregroundStyle(accent)
-                            .monospacedDigit()
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.82)
-                    }
-                } else {
+        VStack(alignment: .leading, spacing: 4 * CGFloat(textScale)) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(summary.shortTitle)
                         .font(ProfileManagerTypography.caption(scale: textScale))
-                        .foregroundStyle(CodexTheme.dataLabelText)
+                        .foregroundStyle(CodexTheme.palette(for: themeContext.preset).dataLabelText.color)
+
+                    if density == .expanded { Spacer(minLength: 0) }
 
                     Text(summary.valueText)
-                        .font(ProfileManagerTypography.metricExpanded(scale: textScale))
+                        .font(density == .compact
+                              ? ProfileManagerTypography.metricCompact(scale: textScale)
+                              : ProfileManagerTypography.metricExpanded(scale: textScale))
                         .foregroundStyle(accent)
                         .monospacedDigit()
+                        .lineLimit(1)
+                    if density == .compact { Spacer(minLength: 0) }
+                }
+
+                if density == .expanded, let percent = summary.remainingPercent {
+                    CapacityRail(remainingPercent: percent)
+                        .padding(.vertical, 4)
                 }
 
                 if summary.isAvailable {
                     let label = Text("Reset ")
-                        .foregroundStyle(CodexTheme.dataLabelText)
+                        .foregroundStyle(CodexTheme.palette(for: themeContext.preset).dataLabelText.color)
                     let value = Text(summary.resetText)
-                        .foregroundStyle(CodexTheme.resetCountdownEmphasisColor)
+                        .foregroundStyle(CodexTheme.palette(for: themeContext.preset).supportText.color)
                     Text("\(label)\(value)")
                     .font(density.resetFont(scale: textScale))
                     .lineLimit(1)
-                    .minimumScaleFactor(0.85)
                 } else {
                     Text(summary.resetText)
                         .font(density.resetFont(scale: textScale))
-                        .foregroundStyle(CodexTheme.mutedText)
+                        .foregroundStyle(CodexTheme.palette(for: themeContext.preset).mutedText.color)
                         .lineLimit(1)
                 }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .ignore)
@@ -800,41 +772,35 @@ struct ProfileUsageMetricBlock: View {
     }
 }
 
+private struct CapacityRail: View {
+    @Environment(\.codexThemeRefreshContext) private var themeContext
+    let remainingPercent: Int
+
+    var body: some View {
+        // The bar is redundant with the numeric value and is intentionally quiet.
+        Color.clear
+            .frame(height: 4)
+            .background(CodexTheme.surfaceToken(for: .nested, preset: themeContext.preset).color, in: Capsule())
+            .overlay(alignment: .leading) {
+                Color.clear
+                    .overlay(alignment: .leading) {
+                        Capsule()
+                            .fill(CodexTheme.progressTextToken(forRemainingPercent: remainingPercent, preset: themeContext.preset).color)
+                            .scaleEffect(x: CGFloat(min(max(remainingPercent, 0), 100)) / 100, y: 1, anchor: .leading)
+                    }
+            }
+            .accessibilityHidden(true)
+    }
+}
+
 enum UsageMetricDensity {
     case compact
     case expanded
 
-    var cardTier: CodexSurfaceTier {
-        switch self {
-        case .compact:
-            return .subtle
-        case .expanded:
-            return .nested
-        }
-    }
-
-    func padding(scale: Double = 1) -> CGFloat {
-        switch self {
-        case .compact:
-            return 7 * CGFloat(scale)
-        case .expanded:
-            return 12 * CGFloat(scale)
-        }
-    }
-
-    func contentSpacing(scale: Double = 1) -> CGFloat {
-        switch self {
-        case .compact:
-            return 4 * CGFloat(scale)
-        case .expanded:
-            return 8 * CGFloat(scale)
-        }
-    }
-
     func resetFont(scale: Double = 1) -> Font {
         switch self {
         case .compact:
-            return ProfileManagerTypography.micro(scale: scale)
+            return ProfileManagerTypography.caption(scale: scale)
         case .expanded:
             return ProfileManagerTypography.small(scale: scale)
         }
@@ -843,9 +809,9 @@ enum UsageMetricDensity {
 
 enum ProfileManagerTypography {
     static let micro = Font.codexUtility(size: 11, weight: .medium, relativeTo: .caption2)
-    static let title = Font.codexUtility(size: 34, weight: .semibold, relativeTo: .largeTitle)
-    static let body = Font.codexUtility(size: 15, weight: .regular, relativeTo: .body)
-    static let bodyStrong = Font.codexUtility(size: 15, weight: .semibold, relativeTo: .body)
+    static let title = Font.codexUtility(size: 20, weight: .semibold, relativeTo: .title2)
+    static let body = Font.codexUtility(size: 13, weight: .regular, relativeTo: .body)
+    static let bodyStrong = Font.codexUtility(size: 13, weight: .semibold, relativeTo: .body)
     static let small = Font.codexUtility(size: 13, weight: .regular, relativeTo: .subheadline)
     static let smallStrong = Font.codexUtility(size: 13, weight: .semibold, relativeTo: .subheadline)
     static let caption = Font.codexUtility(size: 12, weight: .medium, relativeTo: .caption)
@@ -855,7 +821,7 @@ enum ProfileManagerTypography {
     }
 
     static func bodyStrong(scale: Double) -> Font {
-        Font.codexUtility(size: scaled(15, by: scale), weight: .semibold, relativeTo: .body)
+        Font.codexUtility(size: scaled(13, by: scale), weight: .semibold, relativeTo: .body)
     }
 
     static func small(scale: Double) -> Font {
@@ -875,10 +841,10 @@ enum ProfileManagerTypography {
     }
 
     static func metricExpanded(scale: Double) -> Font {
-        Font.codexUtility(size: scaled(30, by: scale), weight: .semibold, relativeTo: .title2)
+        Font.codexUtility(size: scaled(28, by: scale), weight: .semibold, relativeTo: .title2)
     }
 
     private static func scaled(_ size: CGFloat, by scale: Double) -> CGFloat {
-        size * CGFloat(MenuBarPanelTextScalePreference.normalizedTextScale(scale))
+        max(10, size * CGFloat(MenuBarPanelTextScalePreference.normalizedTextScale(scale)))
     }
 }

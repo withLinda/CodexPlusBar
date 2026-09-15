@@ -22,7 +22,7 @@ final class EmailToolsWindowPresenter {
             rootView: EmailToolsWindowView(controller: controller)
         )
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 920, height: 680),
+            contentRect: NSRect(origin: .zero, size: controller.sessions.isEmpty ? EmailToolsLayout.emptySize : EmailToolsLayout.defaultSize),
             styleMask: [.titled, .closable, .resizable, .miniaturizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -37,7 +37,7 @@ final class EmailToolsWindowPresenter {
         window.backgroundColor = .clear
         window.isOpaque = false
         window.isReleasedWhenClosed = false
-        window.minSize = NSSize(width: 780, height: 560)
+        window.minSize = controller.sessions.isEmpty ? EmailToolsLayout.emptyMinimumSize : EmailToolsLayout.minimumSize
         window.center()
         return window
     }

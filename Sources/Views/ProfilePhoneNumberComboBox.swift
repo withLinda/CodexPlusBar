@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 
 struct ProfilePhoneNumberComboBox: NSViewRepresentable {
+    @Environment(\.codexThemeRefreshContext) private var themeContext
     @Binding var text: String
     let savedNumbers: [String]
     let onSubmit: () -> Void
@@ -17,10 +18,9 @@ struct ProfilePhoneNumberComboBox: NSViewRepresentable {
         comboBox.completes = false
         comboBox.hasVerticalScroller = true
         comboBox.numberOfVisibleItems = 6
-        comboBox.placeholderString = "Type or choose a saved number"
+        comboBox.placeholderString = ""
         comboBox.stringValue = text
-        comboBox.font = NSFont(name: "Inter-Regular", size: 15)
-            ?? NSFont.systemFont(ofSize: 15)
+        comboBox.font = NSFont.systemFont(ofSize: 13)
         comboBox.isBordered = false
         comboBox.isButtonBordered = false
         comboBox.drawsBackground = false
@@ -41,7 +41,7 @@ struct ProfilePhoneNumberComboBox: NSViewRepresentable {
             context.coordinator.resetSearch(in: comboBox)
         }
 
-        comboBox.textColor = NSColor(CodexTheme.dataValueText)
+        comboBox.textColor = NSColor(CodexTheme.palette(for: themeContext.preset).dataValueText.color)
     }
 
     @MainActor

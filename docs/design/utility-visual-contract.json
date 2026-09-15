@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "phase": "final",
+  "surface_mode": "desktop",
+  "surface_kind": "compact_utility",
+  "default_window_or_view_size": {"width": 900, "height": 620},
+  "one_main_job": "Generate Gmail variants and track which addresses have been used.",
+  "primary_action": {"label": "Generate", "presentation": "intrinsic", "contains_context": false, "reason": "The action stays beside the input, separate from its label and status."},
+  "current_status": {"location": "selected session header and checkboxes", "semantic_role": "usedState"},
+  "reading_order": ["Gmail input and Generate", "saved session", "unused count and Copy unused", "address rows"],
+  "semantic_groups": [{"id": "sessions", "purpose": "Choose a saved address"}, {"id": "variants", "purpose": "Copy an address and mark it used"}],
+  "group_relationship": "primary-support",
+  "group_proportion": "adaptive",
+  "content_sufficiency": "A 224-point session list supports a flexible address list; full address readability takes priority over exact golden-ratio math.",
+  "shared_anchors": [{"name": "address-leading", "edge": "leading", "expected_max_drift_pt": 1}, {"name": "copy-trailing", "edge": "trailing", "expected_max_drift_pt": 1}],
+  "row_heights": [{"name": "control-minimum", "points": 28}, {"name": "variant-rendered", "points": 37}, {"name": "session", "points": 48}],
+  "spacing_roles": [{"name": "tight", "points": 4, "job": "Join title and support"}, {"name": "row", "points": 8, "job": "Join controls and labels"}, {"name": "group", "points": 12, "job": "Separate a header from its list"}, {"name": "margin", "points": 16, "job": "Window edge and major groups"}],
+  "typography_roles": [{"name": "title", "style": "20pt semibold", "purpose": "Window identity"}, {"name": "body", "style": "13pt regular/semibold", "purpose": "Controls and addresses"}, {"name": "support", "style": "12pt regular", "purpose": "Counts"}],
+  "accent_roles": [{"role": "primaryAction", "element": "Generate"}, {"role": "navigationAction", "element": "Search and Copy"}, {"role": "usedState", "element": "Native checkbox plus strikethrough"}],
+  "accent_footprint": {"primary_filled_elements": 1, "largest_primary_plate": "intrinsic_control", "reason": "Only Generate is orange; used addresses remain readable and neutral."},
+  "boundary_jobs": [{"element": "input", "job": "Identify editable text with a meaningful edge"}, {"element": "session selection", "job": "Neutral fill and checkmark"}, {"element": "variant rows", "job": "Quiet matte grouping"}],
+  "compact_fallback": "760 × 520 minimum with independent scrolling; empty state is a shallow input utility. Phone summary uses 36-point account rows and right-aligned expiry in the existing manager.",
+  "required_states": ["idle", "hover", "pressed", "focus", "disabled", "selected", "used", "unused", "empty", "search", "theme-transition"],
+  "platform_metrics": {"default_control_target_pt": 28, "minimum_control_target_pt": 20, "default_text_pt": 13, "minimum_text_pt": 10},
+  "rendered_evidence": {
+    "default_image": "compact-20260915/email-default.png",
+    "compact_image": "compact-20260915/email-dark-hard.png",
+    "alignment_max_drift_pt": 0,
+    "color_audit_passed": true
+  }
+}
