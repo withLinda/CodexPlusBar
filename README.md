@@ -115,7 +115,7 @@ CodexPlusBar reads the signed-in web services used by ChatGPT and Claude. These 
 
 The easiest way to install CodexPlusBar is the signed and notarized GitHub DMG. You do not need Xcode. One download supports both Apple silicon and Intel Macs running macOS 14 or newer.
 
-Version **1.1.0** brings a compact, capacity-first Profile Manager, simpler menu bar and Email Tools controls, and fixes for live Dark/Light theme changes. It also includes account switching and the local OpenChamber/OpenAI integration. The download link below always downloads the latest published DMG; [the 1.1.0 release](https://github.com/withLinda/CodexPlusBar/releases/tag/v1.1.0) has version-specific downloads and release notes.
+Version **1.1.1** fixes profile action icon colors so available, disabled, and selected actions use their intended colors and update when you switch themes. It includes the compact, capacity-first interface, account switching, and local OpenChamber/OpenAI integration introduced in 1.1.0. The download link below always downloads the latest published DMG; [the 1.1.1 release](https://github.com/withLinda/CodexPlusBar/releases/tag/v1.1.1) has version-specific downloads and release notes.
 
 1. [Download `CodexPlusBar.dmg`](https://github.com/withLinda/CodexPlusBar/releases/latest/download/CodexPlusBar.dmg).
 2. Optional: download [`CodexPlusBar.dmg.sha256`](https://github.com/withLinda/CodexPlusBar/releases/latest/download/CodexPlusBar.dmg.sha256) into the same folder. In Terminal, go to that folder (usually `~/Downloads`) and verify the download:
@@ -130,7 +130,7 @@ Version **1.1.0** brings a compact, capacity-first Profile Manager, simpler menu
 
 The published app and DMG are Developer ID signed and notarized by Apple, so macOS can verify them during a normal first launch.
 
-To update later, download the latest DMG and repeat steps 3–4. Replacing the app keeps your saved profiles and Chrome sign-ins in `~/Library/Application Support/CodexPlusBar`.
+To update from 1.1.0 or an earlier release, quit CodexPlusBar, download the latest DMG, and repeat steps 3–4. Replacing the app keeps your saved profiles and Chrome sign-ins in `~/Library/Application Support/CodexPlusBar`; you do not need to import them again.
 
 ## Requirements
 

@@ -42,6 +42,7 @@ enum DesignPreview {
         let controller = PlusProfileController(
             catalogStore: ProfileCatalogStore(fileURL: temporaryDirectory.appendingPathComponent("profiles.json")),
             dataService: PreviewDataService(),
+            accountSwitchService: CodexAccountSwitchService(homeDirectory: temporaryDirectory),
             openCodeAuthService: PreviewOpenCodeService(),
             autoStart: false
         )
@@ -53,6 +54,10 @@ enum DesignPreview {
             controller.selectedProfileID = last.id
         }
         if arguments.contains("--loading") { controller.isRefreshing = true }
+        if arguments.contains("--switching"), let first = controller.profiles.first {
+            controller.switchingProfileIDs.insert(first.id)
+            controller.openCodeSwitchingProfileIDs.insert(first.id)
+        }
         let clock = AppMinuteClock(now: now)
         let isPanel = arguments.contains("--panel")
         let isEmailTools = arguments.contains("--email-tools")
@@ -140,7 +145,8 @@ enum DesignPreview {
             let profile = PlusProfile(
                 id: UUID(), provider: index == 1 ? .claude : .codex,
                 label: label,
-                openCodeOpenAIAccount: index == 0 ? OpenCodeOpenAIIdentity(accountID: "preview", userID: "preview", email: label) : nil,
+                codexAccountKey: index == 0 || index == 2 ? "preview-\(index)" : nil,
+                openCodeOpenAIAccount: index == 0 || index == 3 ? OpenCodeOpenAIIdentity(accountID: "preview-\(index)", userID: "preview", email: label) : nil,
                 emailLink: "https://example.com/inbox", detectedNote: "Plus",
                 password: "preview-only", twoFactorCode: "JBSWY3DPEHPK3PXP",
                 phoneNumber: index < 3 ? "+1 202 555 0123" : index == 3 ? "+1 202 555 0198" : nil,

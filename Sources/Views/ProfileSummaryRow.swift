@@ -595,6 +595,8 @@ struct ProfileProviderBadge: View {
 }
 
 private struct ProfileSummaryInlineIconButton: View {
+    @Environment(\.codexThemeRefreshContext) private var themeContext
+
     enum Tone {
         case quiet
         case accent
@@ -631,10 +633,11 @@ private struct ProfileSummaryInlineIconButton: View {
         Button(action: action) {
             Image(systemName: symbolName)
                 .font(.system(size: size <= 24 ? 10.5 : 11, weight: .semibold))
+                // Keep semantic icon paint inside the label so the shared style cannot replace it.
+                .foregroundStyle(foregroundStyle)
                 .frame(width: size, height: size)
         }
         .buttonStyle(CodexQuietButtonStyle(horizontalPadding: 0, verticalPadding: 0))
-        .foregroundStyle(foregroundStyle)
         .accessibilityLabel(label)
         .accessibilityHint(helpText)
         .help(helpText)
@@ -643,16 +646,16 @@ private struct ProfileSummaryInlineIconButton: View {
 
     private var foregroundStyle: Color {
         if isDisabled, tone != .selected {
-            return CodexTheme.disabledText
+            return CodexTheme.palette(for: themeContext.preset).quietText.color
         }
 
         switch tone {
         case .quiet:
-            return CodexTheme.utilityActionText
+            return CodexTheme.utilityActionTextToken(preset: themeContext.preset).color
         case .accent:
-            return CodexTheme.actionText
+            return CodexTheme.actionTextToken(preset: themeContext.preset).color
         case .selected:
-            return CodexTheme.dataValueText
+            return CodexTheme.palette(for: themeContext.preset).dataValueText.color
         }
     }
 
