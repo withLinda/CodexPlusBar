@@ -4,17 +4,29 @@ import Testing
 
 struct ProfileDisplayOrderPreferenceTests {
     @Test
-    func missingOrUnknownPreferenceUsesNextResetOrder() throws {
+    func missingOrUnknownPreferenceUsesNextFiveHourResetOrder() throws {
         let (defaults, suiteName) = try makeDefaults()
         defer {
             defaults.removePersistentDomain(forName: suiteName)
         }
 
-        #expect(ProfileDisplayOrderPreference.order(defaults: defaults) == .nextReset)
+        #expect(ProfileDisplayOrderPreference.order(defaults: defaults) == .nextFiveHourReset)
 
         defaults.set("unsupported-order", forKey: ProfileDisplayOrderPreference.orderKey)
 
-        #expect(ProfileDisplayOrderPreference.order(defaults: defaults) == .nextReset)
+        #expect(ProfileDisplayOrderPreference.order(defaults: defaults) == .nextFiveHourReset)
+    }
+
+    @Test
+    func legacyNextResetPreferenceResolvesToNextFiveHourReset() throws {
+        let (defaults, suiteName) = try makeDefaults()
+        defer {
+            defaults.removePersistentDomain(forName: suiteName)
+        }
+
+        defaults.set("nextReset", forKey: ProfileDisplayOrderPreference.orderKey)
+
+        #expect(ProfileDisplayOrderPreference.order(defaults: defaults) == .nextFiveHourReset)
     }
 
     @Test(arguments: ProfileDisplayOrder.allCases)

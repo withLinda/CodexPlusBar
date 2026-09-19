@@ -41,7 +41,7 @@ Screenshots show the 1.1.0 interface using sample profiles.
 
 - Search by full or partial email address or phone number.
 - Filter by provider (`Codex` or `Claude`), tag (`Active`, `Need action`, `Pending`), or limit (`Usable`, `>35%`, `Full`).
-- Sort by next reset, account expiry, or saved order; the selected sort is remembered.
+- Sort by **Next 5H reset**, **Next 7D reset**, account expiry, or saved order; the selected sort is remembered across the menu bar and Profile Manager, with the soonest known dates first and unavailable dates last.
 - See counts in the Filter menu and clear all filters with one action.
 - Copy a profile label, open its saved link, open Profile Manager, or pin a profile from its card.
 - Pin one profile so its label and usage appear in the macOS menu bar status.
@@ -115,7 +115,7 @@ CodexPlusBar reads the signed-in web services used by ChatGPT and Claude. These 
 
 The easiest way to install CodexPlusBar is the signed and notarized GitHub DMG. You do not need Xcode. One download supports both Apple silicon and Intel Macs running macOS 14 or newer.
 
-Version **1.1.1** fixes profile action icon colors so available, disabled, and selected actions use their intended colors and update when you switch themes. It includes the compact, capacity-first interface, account switching, and local OpenChamber/OpenAI integration introduced in 1.1.0. The download link below always downloads the latest published DMG; [the 1.1.1 release](https://github.com/withLinda/CodexPlusBar/releases/tag/v1.1.1) has version-specific downloads and release notes.
+Version **1.1.2** adds separate **Next 5H reset** and **Next 7D reset** sorting, while keeping the selected sort synchronized between the menu bar and Profile Manager. The signed and notarized DMG also includes the compact, capacity-first interface, theme-aware action icons, account switching, and local OpenChamber/OpenAI integration from earlier releases. The download link below always downloads the latest published DMG; [the 1.1.2 release](https://github.com/withLinda/CodexPlusBar/releases/tag/v1.1.2) has version-specific downloads and release notes.
 
 1. [Download `CodexPlusBar.dmg`](https://github.com/withLinda/CodexPlusBar/releases/latest/download/CodexPlusBar.dmg).
 2. Optional: download [`CodexPlusBar.dmg.sha256`](https://github.com/withLinda/CodexPlusBar/releases/latest/download/CodexPlusBar.dmg.sha256) into the same folder. In Terminal, go to that folder (usually `~/Downloads`) and verify the download:
@@ -130,7 +130,7 @@ Version **1.1.1** fixes profile action icon colors so available, disabled, and s
 
 The published app and DMG are Developer ID signed and notarized by Apple, so macOS can verify them during a normal first launch.
 
-To update from 1.1.0 or an earlier release, quit CodexPlusBar, download the latest DMG, and repeat steps 3–4. Replacing the app keeps your saved profiles and Chrome sign-ins in `~/Library/Application Support/CodexPlusBar`; you do not need to import them again.
+To update from 1.1.1 or an earlier release, quit CodexPlusBar, download the latest DMG, and repeat steps 3–4. Replacing the app keeps your saved profiles and Chrome sign-ins in `~/Library/Application Support/CodexPlusBar`; you do not need to import them again.
 
 ## Requirements
 

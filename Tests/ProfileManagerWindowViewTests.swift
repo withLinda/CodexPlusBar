@@ -456,6 +456,68 @@ struct ProfileManagerWindowViewTests {
         #expect(readyClaude.showsCancel == false)
     }
 
+    @Test(arguments: ["nextReset", "nextSevenDayReset"])
+    func resetSortPreferenceIsSharedByBothListsWithoutChangingSavedProfiles(_ rawOrder: String) throws {
+        let tempDirectory = makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: tempDirectory) }
+        let store = ProfileCatalogStore(fileURL: tempDirectory.appendingPathComponent("profiles.json"))
+        let fiveHourSoon = sampleProfile(label: "five-hour@example.com", sortOrder: 0)
+        var sevenDaySoon = sampleProfile(label: "seven-day@example.com", sortOrder: 1)
+        sevenDaySoon.provider = .claude
+        let savedProfiles = [fiveHourSoon, sevenDaySoon]
+        try store.saveProfiles(savedProfiles)
+        let controller = PlusProfileController(
+            catalogStore: store,
+            dataService: StubProfileViewDataService(),
+            autoStart: false
+        )
+        let now = Date(timeIntervalSince1970: 1_776_000_000)
+        controller.profiles = savedProfiles.enumerated().map { index, profile in
+            PlusProfileSnapshot(
+                profile: profile,
+                state: .ready,
+                usage: PlusProfileUsage(
+                    accountID: "account-\(index)",
+                    planType: "test",
+                    primaryWindow: WorkspaceLimitWindow(
+                        usedPercent: 50,
+                        resetAt: now.addingTimeInterval(index == 0 ? 3_600 : 7_200)
+                    ),
+                    secondaryWindow: WorkspaceLimitWindow(
+                        usedPercent: 50,
+                        resetAt: now.addingTimeInterval(index == 0 ? 172_800 : 86_400)
+                    ),
+                    fetchedAt: now
+                ),
+                statusMessage: nil,
+                isRefreshing: false
+            )
+        }
+        controller.selectedProfileID = fiveHourSoon.id
+        let originalSnapshots = controller.profiles
+        let suiteName = "ProfileManagerWindowViewTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defaults.set(rawOrder, forKey: ProfileDisplayOrderPreference.orderKey)
+        let clock = AppMinuteClock(now: now)
+        let manager = ProfileManagerWindowView(
+            controller: controller, currentTime: clock, userDefaults: defaults
+        )
+        let panel = MenuBarRootView(
+            controller: controller, currentTime: clock, userDefaults: defaults,
+            openManagerWindow: { _ in }, openEmailToolsWindow: {}
+        )
+        let expectedIDs = rawOrder == "nextReset"
+            ? [fiveHourSoon.id, sevenDaySoon.id]
+            : [sevenDaySoon.id, fiveHourSoon.id]
+
+        #expect(manager.filteredSidebarProfiles.map(\.id) == expectedIDs)
+        #expect(panel.displayProfiles(for: ProfileFilter()).map(\.id) == expectedIDs)
+        #expect(controller.profiles == originalSnapshots)
+        #expect(controller.selectedProfileID == fiveHourSoon.id)
+        #expect(try store.loadProfiles() == savedProfiles)
+    }
+
     @Test
     func sidebarUsesExpiryFirstDisplayOrderWithoutChangingControllerStorageOrder() throws {
         let tempDirectory = makeTemporaryDirectory()

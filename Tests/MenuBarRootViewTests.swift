@@ -250,7 +250,7 @@ struct MenuBarRootViewTests {
     }
 
     @Test
-    func menuBarProfilesDefaultToSoonestNextReset() {
+    func menuBarProfilesDefaultToSoonestFiveHourReset() {
         let controller = PlusProfileController(
             dataService: StubMenuBarRootViewDataService(),
             autoStart: false
@@ -296,9 +296,56 @@ struct MenuBarRootViewTests {
         )
 
         #expect(view.displayProfiles(for: ProfileFilter()).map(\.label) == [
-            "soonest@example.com",
             "later@example.com",
+            "soonest@example.com",
             "unknown@example.com",
+        ])
+    }
+
+    @Test
+    func menuBarProfilesUseSelectedSevenDayResetDisplayOrder() {
+        let controller = PlusProfileController(
+            dataService: StubMenuBarRootViewDataService(),
+            autoStart: false
+        )
+        let (defaults, suiteName) = makeUserDefaults()
+        defer {
+            defaults.removePersistentDomain(forName: suiteName)
+        }
+        ProfileDisplayOrderPreference.setOrder(.nextSevenDayReset, defaults: defaults)
+
+        controller.profiles = [
+            menuBarTestSnapshot(
+                label: "seven-day-later@example.com",
+                state: .ready,
+                fiveHourRemainingPercent: 50,
+                sevenDayRemainingPercent: 50,
+                sortOrder: 0,
+                primaryResetAt: Date(timeIntervalSince1970: 1_776_003_600),
+                secondaryResetAt: Date(timeIntervalSince1970: 1_776_014_400)
+            ),
+            menuBarTestSnapshot(
+                label: "seven-day-soon@example.com",
+                state: .ready,
+                fiveHourRemainingPercent: 50,
+                sevenDayRemainingPercent: 50,
+                sortOrder: 1,
+                primaryResetAt: Date(timeIntervalSince1970: 1_776_007_200),
+                secondaryResetAt: Date(timeIntervalSince1970: 1_776_003_600)
+            ),
+        ]
+
+        let view = MenuBarRootView(
+            controller: controller,
+            currentTime: AppMinuteClock(now: Date(timeIntervalSince1970: 1_776_000_000)),
+            userDefaults: defaults,
+            openManagerWindow: { _ in },
+            openEmailToolsWindow: {}
+        )
+
+        #expect(view.displayProfiles(for: ProfileFilter()).map(\.label) == [
+            "seven-day-soon@example.com",
+            "seven-day-later@example.com",
         ])
     }
 }

@@ -4,7 +4,7 @@ import Testing
 
 struct ProfileDisplayOrderingTests {
     @Test
-    func nextResetOrderingUsesEarliestKnownWindowAndPutsUnknownLast() {
+    func nextFiveHourResetOrderingUsesPrimaryWindowAndPutsUnknownLast() {
         let referenceDate = date("2026-06-01T00:00:00Z")
         let secondaryResetsFirst = makeSnapshot(
             label: "secondary-first@example.com",
@@ -28,34 +28,82 @@ struct ProfileDisplayOrderingTests {
             createdAt: referenceDate
         )
 
-        let ordered = ProfileDisplayOrder.nextReset.apply(
+        let ordered = ProfileDisplayOrder.nextFiveHourReset.apply(
             to: [unknownReset, primaryResetsSecond, secondaryResetsFirst]
         )
 
-        #expect(secondaryResetsFirst.nextResetAt == referenceDate.addingTimeInterval(3_600))
+        #expect(secondaryResetsFirst.nextFiveHourResetAt == referenceDate.addingTimeInterval(14_400))
+        #expect(secondaryResetsFirst.nextSevenDayResetAt == referenceDate.addingTimeInterval(3_600))
         #expect(ordered.map(\.label) == [
-            "secondary-first@example.com",
             "primary-second@example.com",
+            "secondary-first@example.com",
             "unknown@example.com",
         ])
     }
 
     @Test
-    func nextResetOrderingUsesSavedOrderForMatchingAndUnknownDates() {
+    func nextSevenDayResetOrderingUsesSecondaryWindowAndPutsUnknownLast() {
+        let referenceDate = date("2026-06-01T00:00:00Z")
+        let sevenDaySoon = makeSnapshot(
+            label: "seven-day-soon@example.com",
+            expiresAt: nil,
+            sortOrder: 2,
+            createdAt: referenceDate,
+            primaryResetAt: referenceDate.addingTimeInterval(14_400),
+            secondaryResetAt: referenceDate.addingTimeInterval(7_200)
+        )
+        let sevenDayLater = makeSnapshot(
+            label: "seven-day-later@example.com",
+            expiresAt: nil,
+            sortOrder: 1,
+            createdAt: referenceDate,
+            primaryResetAt: referenceDate.addingTimeInterval(7_200),
+            secondaryResetAt: referenceDate.addingTimeInterval(14_400)
+        )
+        let unknownSevenDay = makeSnapshot(
+            label: "unknown-seven-day@example.com",
+            expiresAt: nil,
+            sortOrder: 0,
+            createdAt: referenceDate,
+            primaryResetAt: referenceDate.addingTimeInterval(1_800)
+        )
+        let noUsage = makeSnapshot(
+            label: "no-usage@example.com",
+            expiresAt: nil,
+            sortOrder: 3,
+            createdAt: referenceDate
+        )
+
+        let ordered = ProfileDisplayOrder.nextSevenDayReset.apply(
+            to: [noUsage, unknownSevenDay, sevenDayLater, sevenDaySoon]
+        )
+
+        #expect(ordered.map(\.label) == [
+            "seven-day-soon@example.com",
+            "seven-day-later@example.com",
+            "unknown-seven-day@example.com",
+            "no-usage@example.com",
+        ])
+    }
+
+    @Test(arguments: [ProfileDisplayOrder.nextFiveHourReset, .nextSevenDayReset])
+    func resetOrderingUsesSavedOrderForMatchingAndUnknownDates(_ order: ProfileDisplayOrder) {
         let resetAt = date("2026-06-01T04:00:00Z")
         let firstKnown = makeSnapshot(
             label: "first-known@example.com",
             expiresAt: nil,
             sortOrder: 0,
             createdAt: date("2026-06-01T00:00:00Z"),
-            primaryResetAt: resetAt
+            primaryResetAt: resetAt,
+            secondaryResetAt: resetAt
         )
         let secondKnown = makeSnapshot(
             label: "second-known@example.com",
             expiresAt: nil,
             sortOrder: 1,
             createdAt: date("2026-06-01T00:00:00Z"),
-            primaryResetAt: resetAt
+            primaryResetAt: resetAt,
+            secondaryResetAt: resetAt
         )
         let firstUnknown = makeSnapshot(
             label: "first-unknown@example.com",
@@ -70,7 +118,7 @@ struct ProfileDisplayOrderingTests {
             createdAt: date("2026-06-01T00:00:00Z")
         )
 
-        let ordered = ProfileDisplayOrder.nextReset.apply(
+        let ordered = order.apply(
             to: [secondUnknown, secondKnown, firstUnknown, firstKnown]
         )
 
@@ -80,6 +128,17 @@ struct ProfileDisplayOrderingTests {
             "first-unknown@example.com",
             "second-unknown@example.com",
         ])
+    }
+
+    @Test
+    func sortMenuDistinguishesTheTwoResetWindows() {
+        #expect(ProfileDisplayOrder.allCases.map(\.title) == [
+            "Next 5H reset", "Next 7D reset", "Account expiry", "Saved order",
+        ])
+        #expect(ProfileDisplayOrder.nextFiveHourReset.compactTitle == "5H reset")
+        #expect(ProfileDisplayOrder.nextSevenDayReset.compactTitle == "7D reset")
+        #expect(ProfileDisplayOrder.nextFiveHourReset.accessibilityValue == "Next 5-hour reset, soonest first")
+        #expect(ProfileDisplayOrder.nextSevenDayReset.accessibilityValue == "Next 7-day reset, soonest first")
     }
 
     @Test

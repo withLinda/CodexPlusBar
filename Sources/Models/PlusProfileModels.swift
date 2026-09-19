@@ -739,14 +739,12 @@ struct PlusProfileSnapshot: Identifiable, Equatable, Sendable {
         )
     }
 
-    var nextResetAt: Date? {
-        guard let usage else {
-            return nil
-        }
+    var nextFiveHourResetAt: Date? {
+        usage?.primaryWindow.resetAt
+    }
 
-        return [usage.primaryWindow.resetAt, usage.secondaryWindow?.resetAt]
-            .compactMap { $0 }
-            .min()
+    var nextSevenDayResetAt: Date? {
+        usage?.secondaryWindow?.resetAt
     }
 
     func usageSummary(referenceDate: Date = .now) -> ProfileUsageSummary? {
@@ -782,18 +780,22 @@ struct PlusProfileSnapshot: Identifiable, Equatable, Sendable {
 }
 
 enum ProfileDisplayOrder: String, CaseIterable, Identifiable, Sendable {
-    case nextReset
+    // Keep the stored value so existing AppStorage selections resolve to 5H.
+    case nextFiveHourReset = "nextReset"
+    case nextSevenDayReset
     case accountExpiry
     case saved
 
-    static let defaultOrder = ProfileDisplayOrder.nextReset
+    static let defaultOrder = ProfileDisplayOrder.nextFiveHourReset
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .nextReset:
-            return "Next reset"
+        case .nextFiveHourReset:
+            return "Next 5H reset"
+        case .nextSevenDayReset:
+            return "Next 7D reset"
         case .accountExpiry:
             return "Account expiry"
         case .saved:
@@ -803,8 +805,10 @@ enum ProfileDisplayOrder: String, CaseIterable, Identifiable, Sendable {
 
     var compactTitle: String {
         switch self {
-        case .nextReset:
-            return "Reset"
+        case .nextFiveHourReset:
+            return "5H reset"
+        case .nextSevenDayReset:
+            return "7D reset"
         case .accountExpiry:
             return "Expiry"
         case .saved:
@@ -814,8 +818,10 @@ enum ProfileDisplayOrder: String, CaseIterable, Identifiable, Sendable {
 
     var systemImage: String {
         switch self {
-        case .nextReset:
+        case .nextFiveHourReset:
             return "clock"
+        case .nextSevenDayReset:
+            return "calendar.badge.clock"
         case .accountExpiry:
             return "calendar"
         case .saved:
@@ -825,8 +831,10 @@ enum ProfileDisplayOrder: String, CaseIterable, Identifiable, Sendable {
 
     var accessibilityValue: String {
         switch self {
-        case .nextReset:
-            return "Next 5-hour or 7-day reset, soonest first"
+        case .nextFiveHourReset:
+            return "Next 5-hour reset, soonest first"
+        case .nextSevenDayReset:
+            return "Next 7-day reset, soonest first"
         case .accountExpiry:
             return "Account expiry, soonest first"
         case .saved:
@@ -836,11 +844,20 @@ enum ProfileDisplayOrder: String, CaseIterable, Identifiable, Sendable {
 
     func apply(to snapshots: [PlusProfileSnapshot]) -> [PlusProfileSnapshot] {
         switch self {
-        case .nextReset:
+        case .nextFiveHourReset:
             return snapshots.sorted { lhs, rhs in
                 compareOptionalDates(
-                    lhs.nextResetAt,
-                    rhs.nextResetAt,
+                    lhs.nextFiveHourResetAt,
+                    rhs.nextFiveHourResetAt,
+                    lhs: lhs,
+                    rhs: rhs
+                )
+            }
+        case .nextSevenDayReset:
+            return snapshots.sorted { lhs, rhs in
+                compareOptionalDates(
+                    lhs.nextSevenDayResetAt,
+                    rhs.nextSevenDayResetAt,
                     lhs: lhs,
                     rhs: rhs
                 )
