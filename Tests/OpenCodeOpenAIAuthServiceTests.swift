@@ -22,7 +22,7 @@ struct OpenCodeOpenAIAuthServiceTests {
         var secondProfile = fixture.profile("second")
         secondProfile.openCodeOpenAIAccount = try await fixture.service.saveCurrent(for: secondProfile)
 
-        let rotated = try fixture.auth("second", refresh: "rotated-refresh", expires: 1234)
+        let rotated = try fixture.auth("second", refresh: "rotated-refresh", expires: 2_000_000_001_000)
         try fixture.write(rotated)
         try await fixture.service.switchTo(profile: firstProfile)
         #expect(try fixture.current() == first)
@@ -181,7 +181,8 @@ struct OpenCodeOpenAIAuthServiceTests {
     }
 }
 
-private struct OpenCodeAuthFixture: Sendable {
+struct OpenCodeAuthFixture: Sendable {
+    static let now = Date(timeIntervalSince1970: 1_700_000_000)
     let home: URL
     let authURL: URL
     let service: OpenCodeOpenAIAuthService
@@ -191,7 +192,14 @@ private struct OpenCodeAuthFixture: Sendable {
         authURL = home.appendingPathComponent(".local/share/opencode/auth.json")
         try FileManager.default.createDirectory(at: authURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         let runtime = OpenCodeLocalRuntime(authURL: authURL)
-        service = OpenCodeOpenAIAuthService(homeDirectory: home, resolveRuntime: { runtime })
+        let verifier = OpenCodeOpenAICredentialVerifier(request: { request in
+            #expect(request.url?.path == "/backend-api/wham/usage")
+            let url = try #require(request.url)
+            let response = try #require(HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil))
+            return (Data(#"{"rate_limit":{}}"#.utf8), response)
+        })
+        service = OpenCodeOpenAIAuthService(homeDirectory: home, resolveRuntime: { runtime },
+                                           verifier: verifier, now: { Self.now })
     }
 
     func remove() { try? FileManager.default.removeItem(at: home) }
@@ -201,11 +209,13 @@ private struct OpenCodeAuthFixture: Sendable {
                     webDataStoreID: UUID(), sortOrder: 0, createdAt: .now, lastRefreshAt: nil, lastKnownState: .unknown)
     }
 
-    func auth(_ name: String, refresh: String = "fixture-refresh", expires: Int64 = 0) throws -> OpenCodeOpenAIAuth {
-        let claims: [String: Any] = [
-            "https://api.openai.com/auth": ["chatgpt_account_id": "account-" + name, "chatgpt_user_id": "user-" + name],
+    func auth(_ name: String, refresh: String = "fixture-refresh", expires: Int64 = 2_000_000_000_000,
+              jwtExpiry: Double? = nil, userID: String? = nil) throws -> OpenCodeOpenAIAuth {
+        var claims: [String: Any] = [
+            "https://api.openai.com/auth": ["chatgpt_account_id": "account-" + name, "chatgpt_user_id": userID ?? "user-" + name],
             "https://api.openai.com/profile": ["email": name + "@example.com"]
         ]
+        claims["exp"] = jwtExpiry
         let payload = try JSONSerialization.data(withJSONObject: claims).base64EncodedString()
             .replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "")
         return OpenCodeOpenAIAuth(type: "oauth", refresh: refresh, access: "fixture.\(payload).signature",
@@ -223,6 +233,29 @@ private struct OpenCodeAuthFixture: Sendable {
         let root = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: authURL)) as? [String: Any])
         let openai = try #require(root["openai"])
         return try JSONDecoder().decode(OpenCodeOpenAIAuth.self, from: JSONSerialization.data(withJSONObject: openai))
+    }
+
+    func saved(_ identity: OpenCodeOpenAIIdentity) throws -> OpenCodeOpenAIAuth {
+        let url = home.appendingPathComponent("Library/Application Support/CodexPlusBar/OpenChamberSignIns")
+            .appendingPathComponent(identity.storageKey + ".json")
+        return try JSONDecoder().decode(OpenCodeOpenAIAuth.self, from: Data(contentsOf: url))
+    }
+
+    func prepareTarget(_ target: OpenCodeOpenAIAuth) async throws -> PlusProfile {
+        try write(target)
+        let identity = try target.identity()
+        var profile = profile("target")
+        profile.label = identity.email
+        profile.openCodeOpenAIAccount = try await service.saveCurrent(for: profile)
+        try write(auth("previous", refresh: "latest-outgoing-refresh"))
+        return profile
+    }
+
+    func switchingService(request: @escaping OpenCodeOpenAICredentialVerifier.Request) -> OpenCodeOpenAIAuthService {
+        let runtime = OpenCodeLocalRuntime(authURL: authURL)
+        return OpenCodeOpenAIAuthService(homeDirectory: home, resolveRuntime: { runtime },
+                                        verifier: OpenCodeOpenAICredentialVerifier(request: request, now: { Self.now }),
+                                        now: { Self.now })
     }
 
     func othersUnchanged() throws -> Bool {

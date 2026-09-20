@@ -115,7 +115,7 @@ CodexPlusBar reads the signed-in web services used by ChatGPT and Claude. These 
 
 The easiest way to install CodexPlusBar is the signed and notarized GitHub DMG. You do not need Xcode. One download supports both Apple silicon and Intel Macs running macOS 14 or newer.
 
-Version **1.1.2** adds separate **Next 5H reset** and **Next 7D reset** sorting, while keeping the selected sort synchronized between the menu bar and Profile Manager. The signed and notarized DMG also includes the compact, capacity-first interface, theme-aware action icons, account switching, and local OpenChamber/OpenAI integration from earlier releases. The download link below always downloads the latest published DMG; [the 1.1.2 release](https://github.com/withLinda/CodexPlusBar/releases/tag/v1.1.2) has version-specific downloads and release notes.
+Version **1.1.3** verifies saved OpenChamber/OpenAI sign-ins with OpenAI before reporting a successful switch. It refreshes expired or rejected access tokens when possible, preserves rotated refresh tokens, and restores the previous sign-in if a different-account switch fails verification and the local file has not changed elsewhere. The signed and notarized DMG also includes reset-window sorting, the compact, capacity-first interface, and theme-aware action icons from earlier releases. The download link below always downloads the latest published DMG; [the 1.1.3 release](https://github.com/withLinda/CodexPlusBar/releases/tag/v1.1.3) has version-specific downloads and release notes.
 
 1. [Download `CodexPlusBar.dmg`](https://github.com/withLinda/CodexPlusBar/releases/latest/download/CodexPlusBar.dmg).
 2. Optional: download [`CodexPlusBar.dmg.sha256`](https://github.com/withLinda/CodexPlusBar/releases/latest/download/CodexPlusBar.dmg.sha256) into the same folder. In Terminal, go to that folder (usually `~/Downloads`) and verify the download:
@@ -130,7 +130,9 @@ Version **1.1.2** adds separate **Next 5H reset** and **Next 7D reset** sorting,
 
 The published app and DMG are Developer ID signed and notarized by Apple, so macOS can verify them during a normal first launch.
 
-To update from 1.1.1 or an earlier release, quit CodexPlusBar, download the latest DMG, and repeat steps 3–4. Replacing the app keeps your saved profiles and Chrome sign-ins in `~/Library/Application Support/CodexPlusBar`; you do not need to import them again.
+To update from 1.1.2 or an earlier release, quit CodexPlusBar, download the latest DMG, and repeat steps 3–4. Replacing the app keeps your saved profiles and Chrome sign-ins in `~/Library/Application Support/CodexPlusBar`; you do not need to import them again.
+
+After switching OpenChamber's OpenAI account, wait for **switched and verified**. If OpenChamber's Usage panel still shows an older result, refresh that panel. If the saved sign-in is rejected, sign in to that account again in OpenChamber and use **Save current sign-in** in CodexPlusBar before retrying.
 
 ## Requirements
 

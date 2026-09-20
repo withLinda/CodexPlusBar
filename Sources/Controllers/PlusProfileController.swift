@@ -489,12 +489,12 @@ final class PlusProfileController {
               profiles[index].profile.provider == .codex else { return }
         openCodeSwitchingProfileIDs.insert(profileID)
         let profile = profiles[index].profile
-        openChamberActionStatus = .init(profileID: profileID, message: "Switching OpenChamber OpenAI…", tone: .info)
+        openChamberActionStatus = .init(profileID: profileID, message: "Switching and verifying OpenChamber OpenAI…", tone: .info)
         defer { openCodeSwitchingProfileIDs.remove(profileID) }
         do {
             try await openCodeAuthService.switchTo(profile: profile)
             openChamberActionStatus = .init(profileID: profileID,
-                message: "OpenChamber OpenAI switched. New requests use this account.", tone: .success)
+                message: "OpenChamber OpenAI switched and verified. Refresh OpenChamber’s Usage panel if it still shows an older result.", tone: .success)
         } catch {
             openChamberActionStatus = .init(profileID: profileID, message: error.localizedDescription, tone: .critical)
         }

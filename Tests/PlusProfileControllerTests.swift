@@ -6,6 +6,60 @@ import WebKit
 @MainActor
 struct PlusProfileControllerTests {
     @Test
+    func openChamberSuccessWaitsForVerificationAndBlocksAnotherSwitch() async throws {
+        let directory = makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = ProfileCatalogStore(fileURL: directory.appendingPathComponent("profiles.json"))
+        let first = sampleProfile(label: "first@example.com", sortOrder: 0)
+        let second = sampleProfile(label: "second@example.com", sortOrder: 1)
+        try store.saveProfiles([first, second])
+        let authService = PendingOpenCodeAuthService()
+        let controller = PlusProfileController(catalogStore: store,
+            dataService: StubPlusProfileDataService(refreshResults: [:]), openCodeAuthService: authService, autoStart: false)
+        let task = Task { await controller.switchOpenChamberAuth(profileID: first.id) }
+        await authService.waitUntilStarted()
+        #expect(controller.openChamberActionStatus?.tone == .info)
+        #expect(controller.openChamberActionStatus?.message == "Switching and verifying OpenChamber OpenAI…")
+        #expect(controller.openCodeSwitchingProfileIDs == [first.id])
+        await controller.switchOpenChamberAuth(profileID: second.id)
+        #expect(await authService.calls == 1)
+        #expect(controller.openChamberActionStatus?.profileID == first.id)
+
+        await authService.finish()
+        await task.value
+        #expect(controller.openChamberActionStatus?.tone == .success)
+        #expect(controller.openChamberActionStatus?.message == "OpenChamber OpenAI switched and verified. Refresh OpenChamber’s Usage panel if it still shows an older result.")
+        #expect(controller.openCodeSwitchingProfileIDs.isEmpty)
+    }
+
+    @Test(arguments: [OpenCodeOpenAIVerificationError.reauthenticationRequired, .unavailable, .accessDenied])
+    func failedOpenChamberVerificationReplacesSuccessWithoutChangingBrowserState(cause: OpenCodeOpenAIVerificationError) async throws {
+        let directory = makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = ProfileCatalogStore(fileURL: directory.appendingPathComponent("profiles.json"))
+        var profile = sampleProfile(label: "first@example.com", sortOrder: 0)
+        profile.lastKnownState = .active
+        try store.saveProfiles([profile])
+        let authService = PendingOpenCodeAuthService()
+        let controller = PlusProfileController(catalogStore: store,
+            dataService: StubPlusProfileDataService(refreshResults: [:]), openCodeAuthService: authService, autoStart: false)
+        let browserState = controller.profiles.first?.state
+        controller.openChamberActionStatus = .init(profileID: profile.id, message: "Previous success", tone: .success)
+        let task = Task { await controller.switchOpenChamberAuth(profileID: profile.id) }
+        await authService.waitUntilStarted()
+        #expect(controller.openChamberActionStatus?.tone == .info)
+        let failure = OpenCodeOpenAISwitchError(cause: cause, recovery: .restored)
+        await authService.finish(failure: failure)
+        await task.value
+
+        #expect(controller.openChamberActionStatus?.tone == .critical)
+        #expect(controller.openChamberActionStatus?.message == failure.localizedDescription)
+        #expect(controller.openCodeSwitchingProfileIDs.isEmpty)
+        #expect(controller.profiles.first?.state == browserState)
+        #expect(try store.loadProfiles() == [profile])
+    }
+
+    @Test
     func switchingAnotherProfileIsBlockedUntilCurrentSwitchFinishes() async throws {
         let directory = makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -1006,6 +1060,36 @@ struct PlusProfileControllerTests {
                 referenceDate: Date(timeIntervalSince1970: 1_776_000_000)
             ) == "LongLab 5H 83% 7D —"
         )
+    }
+}
+
+private actor PendingOpenCodeAuthService: OpenCodeOpenAIAuthServing {
+    private var continuation: CheckedContinuation<Void, any Error>?
+    private var startedWaiter: CheckedContinuation<Void, Never>?
+    private(set) var calls = 0
+
+    func saveCurrent(for profile: PlusProfile) async throws -> OpenCodeOpenAIIdentity {
+        throw OpenCodeOpenAIAuthError.providerMissing
+    }
+
+    func switchTo(profile: PlusProfile) async throws {
+        calls += 1
+        try await withCheckedThrowingContinuation { continuation in
+            self.continuation = continuation
+            startedWaiter?.resume()
+            startedWaiter = nil
+        }
+    }
+
+    func waitUntilStarted() async {
+        if continuation != nil { return }
+        await withCheckedContinuation { startedWaiter = $0 }
+    }
+
+    func finish(failure: OpenCodeOpenAISwitchError? = nil) {
+        if let failure { continuation?.resume(throwing: failure) }
+        else { continuation?.resume() }
+        continuation = nil
     }
 }
 

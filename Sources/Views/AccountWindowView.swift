@@ -1491,7 +1491,7 @@ struct OpenChamberProfileActions: View {
             .buttonStyle(CodexSecondaryButtonStyle(foregroundColor: CodexTheme.utilityActionText))
             .disabled(!hasSavedSignIn || isWorking)
             .accessibilityLabel("Switch OpenChamber OpenAI")
-            .help("Switch the local OpenAI connection for new requests. Other providers keep their sign-ins.")
+            .help("Verify and switch the local OpenAI connection for new requests. Other providers keep their sign-ins.")
         Menu {
             Text("Sign in to this account in OpenChamber first.")
             Button("Save current sign-in", systemImage: "square.and.arrow.down", action: save)

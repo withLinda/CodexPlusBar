@@ -27,13 +27,8 @@ struct OpenCodeOpenAIAuth: Codable, Equatable, Sendable {
     func identity() throws -> OpenCodeOpenAIIdentity {
         guard type == "oauth" else { throw OpenCodeOpenAIAuthError.unsupportedCredential }
         guard !refresh.isEmpty, !access.isEmpty, expires >= 0 else { throw OpenCodeOpenAIAuthError.invalidCredential }
-        let parts = access.split(separator: ".", omittingEmptySubsequences: false)
-        guard parts.count == 3 else { throw OpenCodeOpenAIAuthError.invalidCredential }
-        var payload = String(parts[1]).replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
-        payload += String(repeating: "=", count: (4 - payload.count % 4) % 4)
-        guard let data = Data(base64Encoded: payload),
-              let claims = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let auth = claims["https://api.openai.com/auth"] as? [String: Any],
+        let claims = try accessClaims()
+        guard let auth = claims["https://api.openai.com/auth"] as? [String: Any],
               let account = auth["chatgpt_account_id"] as? String, !account.isEmpty,
               account == accountId,
               let user = auth["chatgpt_user_id"] as? String, !user.isEmpty,
@@ -43,6 +38,27 @@ struct OpenCodeOpenAIAuth: Codable, Equatable, Sendable {
         }
         // Local identity consistency check, not cryptographic JWT verification.
         return OpenCodeOpenAIIdentity(accountID: account, userID: user, email: email)
+    }
+
+    func needsRefresh(at date: Date) -> Bool {
+        // OpenCode stores milliseconds; JWT exp is seconds. Neither proves that
+        // the server still accepts the credential, so live verification is required.
+        let cutoff = date.timeIntervalSince1970 + 30
+        if Double(expires) / 1000 <= cutoff { return true }
+        if let expiry = try? accessClaims()["exp"] as? Double { return expiry <= cutoff }
+        return false
+    }
+
+    private func accessClaims() throws -> [String: Any] {
+        let parts = access.split(separator: ".", omittingEmptySubsequences: false)
+        guard parts.count == 3 else { throw OpenCodeOpenAIAuthError.invalidCredential }
+        var payload = String(parts[1]).replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+        payload += String(repeating: "=", count: (4 - payload.count % 4) % 4)
+        guard let data = Data(base64Encoded: payload),
+              let claims = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw OpenCodeOpenAIAuthError.invalidCredential
+        }
+        return claims
     }
 }
 
@@ -70,6 +86,41 @@ enum OpenCodeOpenAIAuthError: LocalizedError, Equatable {
     }
 }
 
+struct OpenCodeOpenAISwitchError: LocalizedError {
+    enum Recovery: Equatable, Sendable {
+        case unchanged, restored, currentSignInRefreshed, changedExternally, rollbackFailed
+
+        var message: String {
+            switch self {
+            case .unchanged: return "The previous local sign-in was kept."
+            case .restored: return "The previous local sign-in was restored."
+            case .currentSignInRefreshed: return "The same account is still selected. Its refreshed sign-in was kept, but verification did not finish."
+            case .changedExternally: return "The local sign-in changed during verification. It was not overwritten; check the active account in OpenChamber."
+            case .rollbackFailed: return "The previous local sign-in could not be restored. Check the active account in OpenChamber before continuing."
+            }
+        }
+    }
+
+    let reason: String
+    let recovery: Recovery
+
+    init(cause: any Error, recovery: Recovery) {
+        // Do not surface arbitrary transport/decoder messages containing credentials.
+        if let error = cause as? OpenCodeOpenAIVerificationError {
+            reason = error.localizedDescription
+        } else if let error = cause as? OpenCodeOpenAIAuthError {
+            reason = error.localizedDescription
+        } else if cause is CancellationError {
+            reason = "Verification was cancelled."
+        } else {
+            reason = "The sign-in could not be verified. Try again."
+        }
+        self.recovery = recovery
+    }
+
+    var errorDescription: String? { "Switch not completed. \(reason) \(recovery.message)" }
+}
+
 protocol OpenCodeOpenAIAuthServing: Sendable {
     func saveCurrent(for profile: PlusProfile) async throws -> OpenCodeOpenAIIdentity
     func switchTo(profile: PlusProfile) async throws
@@ -80,15 +131,21 @@ actor OpenCodeOpenAIAuthService: OpenCodeOpenAIAuthServing {
     private let homeDirectory: URL
     private let storeDirectory: URL
     private let resolveRuntime: @Sendable () async throws -> OpenCodeLocalRuntime
+    private let verifier: any OpenCodeOpenAICredentialVerifying
+    private let now: @Sendable () -> Date
     private var isOperating = false
 
     init(homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
          resolveRuntime: @escaping @Sendable () async throws -> OpenCodeLocalRuntime = {
              try await OpenCodeLocalRuntime.discover()
-         }) {
+         },
+         verifier: any OpenCodeOpenAICredentialVerifying = OpenCodeOpenAICredentialVerifier(),
+         now: @escaping @Sendable () -> Date = { .now }) {
         self.homeDirectory = homeDirectory
         storeDirectory = homeDirectory.appendingPathComponent("Library/Application Support/CodexPlusBar/OpenChamberSignIns")
         self.resolveRuntime = resolveRuntime
+        self.verifier = verifier
+        self.now = now
     }
 
     func saveCurrent(for profile: PlusProfile) async throws -> OpenCodeOpenAIIdentity {
@@ -120,24 +177,96 @@ actor OpenCodeOpenAIAuthService: OpenCodeOpenAIAuthServing {
         // OpenCode rotates refresh tokens. Save the latest outgoing pair before
         // restoring another account; do not resurrect an old snapshot on a no-op.
         try save(outgoing, identity: outgoingIdentity)
-        if selected.matches(outgoingIdentity) { return }
-        let targetURL = storeURL(for: selected)
-        guard FileManager.default.fileExists(atPath: targetURL.path) else {
-            throw OpenCodeOpenAIAuthError.profileCredentialMissing
-        }
+        let isCurrentAccount = selected.matches(outgoingIdentity)
         let target: OpenCodeOpenAIAuth
-        do { target = try JSONDecoder().decode(OpenCodeOpenAIAuth.self, from: Data(contentsOf: targetURL)) }
-        catch { throw OpenCodeOpenAIAuthError.invalidCredential }
-        guard try selected.matches(target.identity()) else { throw OpenCodeOpenAIAuthError.identityMismatch }
-        var updated = original.object
-        updated["openai"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(target))
-        let output = try JSONSerialization.data(withJSONObject: updated, options: [.prettyPrinted, .sortedKeys])
-        try OpenCodePrivateFile.write(output, to: runtime.authURL, expected: original.data)
-        let verified = try readStore(runtime.authURL)
-        guard try selected.matches(credential(in: verified.object).identity()),
-              NSDictionary(dictionary: withoutOpenAI(verified.object)).isEqual(to: withoutOpenAI(original.object)) else {
-            throw OpenCodeOpenAIAuthError.changedWhileReading
+        if isCurrentAccount {
+            target = outgoing
+        } else {
+            let targetURL = storeURL(for: selected)
+            guard FileManager.default.fileExists(atPath: targetURL.path) else {
+                throw OpenCodeOpenAIAuthError.profileCredentialMissing
+            }
+            do { target = try JSONDecoder().decode(OpenCodeOpenAIAuth.self, from: Data(contentsOf: targetURL)) }
+            catch { throw OpenCodeOpenAIAuthError.invalidCredential }
         }
+        guard try selected.matches(target.identity()) else { throw OpenCodeOpenAIAuthError.identityMismatch }
+
+        var expected = original.data
+        var installed: Data?
+        var recovery = OpenCodeOpenAISwitchError.Recovery.unchanged
+        do {
+            let prepared = try await verifiedCredential(target) { refreshed in
+                // A successful OAuth refresh may consume the old refresh token.
+                // Persist immediately, even if the next request is cancelled/fails.
+                try self.save(refreshed, identity: selected)
+                if isCurrentAccount {
+                    // This repairs the same account; rolling it back would restore
+                    // a consumed token. Keep the fresh pair but report any failure.
+                    let repaired = try self.replacingOpenAI(in: original.object, with: refreshed)
+                    try OpenCodePrivateFile.write(repaired, to: runtime.authURL, expected: expected)
+                    expected = repaired
+                    recovery = .currentSignInRefreshed
+                }
+            }
+            try Task.checkCancellation()
+            try requireUnchanged(runtime.authURL, expected: expected)
+            if isCurrentAccount { return }
+
+            let output = try replacingOpenAI(in: original.object, with: prepared)
+            try OpenCodePrivateFile.write(output, to: runtime.authURL, expected: expected)
+            installed = output
+            try requireUnchanged(runtime.authURL, expected: output)
+            // Never rotate again during post-write verification: failure rolls
+            // back only our exact write, without overwriting another process.
+            try await verifier.verify(prepared)
+            try Task.checkCancellation()
+            try requireUnchanged(runtime.authURL, expected: output)
+        } catch {
+            if let installed {
+                do {
+                    try requireUnchanged(runtime.authURL, expected: installed)
+                    try OpenCodePrivateFile.write(original.data, to: runtime.authURL, expected: installed)
+                    try requireUnchanged(runtime.authURL, expected: original.data)
+                    recovery = .restored
+                } catch OpenCodeOpenAIAuthError.changedWhileReading {
+                    recovery = .changedExternally
+                } catch {
+                    recovery = .rollbackFailed
+                }
+            } else if (try? Data(contentsOf: runtime.authURL)) != expected {
+                recovery = .changedExternally
+            }
+            throw OpenCodeOpenAISwitchError(cause: error, recovery: recovery)
+        }
+    }
+
+    private func verifiedCredential(_ auth: OpenCodeOpenAIAuth,
+                                    didRefresh: (OpenCodeOpenAIAuth) throws -> Void) async throws -> OpenCodeOpenAIAuth {
+        if !auth.needsRefresh(at: now()) {
+            do {
+                try await verifier.verify(auth)
+                return auth
+            } catch OpenCodeOpenAIVerificationError.unauthorized {
+                // A non-expired token can still be rejected. Refresh only once.
+            }
+        }
+        try Task.checkCancellation()
+        let refreshed = try await verifier.refresh(auth)
+        guard try auth.identity().matches(refreshed.identity()) else { throw OpenCodeOpenAIAuthError.identityMismatch }
+        try didRefresh(refreshed)
+        try Task.checkCancellation()
+        try await verifier.verify(refreshed)
+        return refreshed
+    }
+
+    private func requireUnchanged(_ url: URL, expected: Data) throws {
+        guard try Data(contentsOf: url) == expected else { throw OpenCodeOpenAIAuthError.changedWhileReading }
+    }
+
+    private func replacingOpenAI(in root: [String: Any], with auth: OpenCodeOpenAIAuth) throws -> Data {
+        var updated = root
+        updated["openai"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(auth))
+        return try JSONSerialization.data(withJSONObject: updated, options: [.prettyPrinted, .sortedKeys])
     }
 
     private func validate(_ identity: OpenCodeOpenAIIdentity, for profile: PlusProfile) throws {
@@ -177,10 +306,6 @@ actor OpenCodeOpenAIAuthService: OpenCodeOpenAIAuthServing {
             _ = try auth.identity()
             return auth
         } catch { throw OpenCodeOpenAIAuthError.invalidCredential }
-    }
-
-    private func withoutOpenAI(_ root: [String: Any]) -> [String: Any] {
-        root.filter { $0.key != "openai" }
     }
 
     private func storeURL(for identity: OpenCodeOpenAIIdentity) -> URL {
