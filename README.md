@@ -115,7 +115,7 @@ CodexPlusBar reads the signed-in web services used by ChatGPT and Claude. These 
 
 The easiest way to install CodexPlusBar is the signed and notarized GitHub DMG. You do not need Xcode. One download supports both Apple silicon and Intel Macs running macOS 14 or newer.
 
-Version **1.1.3** verifies saved OpenChamber/OpenAI sign-ins with OpenAI before reporting a successful switch. It refreshes expired or rejected access tokens when possible, preserves rotated refresh tokens, and restores the previous sign-in if a different-account switch fails verification and the local file has not changed elsewhere. The signed and notarized DMG also includes reset-window sorting, the compact, capacity-first interface, and theme-aware action icons from earlier releases. The download link below always downloads the latest published DMG; [the 1.1.3 release](https://github.com/withLinda/CodexPlusBar/releases/tag/v1.1.3) has version-specific downloads and release notes.
+Version **1.1.4** adds support for OpenChamber 2 and its OpenCode 2 credential store. Saved OpenAI sign-ins are imported through a bundled local bridge, and later switches use OpenCode's native credential activation. It keeps OpenAI verification, token refresh, and recovery from failed switches, plus OpenCode 1 compatibility. The signed and notarized DMG also includes reset-window sorting, the compact, capacity-first interface, and theme-aware action icons from earlier releases. The download link below always downloads the latest published DMG; [the 1.1.4 release](https://github.com/withLinda/CodexPlusBar/releases/tag/v1.1.4) has version-specific downloads and release notes.
 
 1. [Download `CodexPlusBar.dmg`](https://github.com/withLinda/CodexPlusBar/releases/latest/download/CodexPlusBar.dmg).
 2. Optional: download [`CodexPlusBar.dmg.sha256`](https://github.com/withLinda/CodexPlusBar/releases/latest/download/CodexPlusBar.dmg.sha256) into the same folder. In Terminal, go to that folder (usually `~/Downloads`) and verify the download:
@@ -130,9 +130,28 @@ Version **1.1.3** verifies saved OpenChamber/OpenAI sign-ins with OpenAI before 
 
 The published app and DMG are Developer ID signed and notarized by Apple, so macOS can verify them during a normal first launch.
 
-To update from 1.1.2 or an earlier release, quit CodexPlusBar, download the latest DMG, and repeat steps 3–4. Replacing the app keeps your saved profiles and Chrome sign-ins in `~/Library/Application Support/CodexPlusBar`; you do not need to import them again.
+To update from 1.1.3 or an earlier release, quit CodexPlusBar, download the latest DMG, and repeat steps 3–4. Replacing the app keeps your saved profiles and Chrome sign-ins in `~/Library/Application Support/CodexPlusBar`; you do not need to import them again.
 
 After switching OpenChamber's OpenAI account, wait for **switched and verified**. If OpenChamber's Usage panel still shows an older result, refresh that panel. If the saved sign-in is rejected, sign in to that account again in OpenChamber and use **Save current sign-in** in CodexPlusBar before retrying.
+
+### OpenChamber 2 compatibility
+
+The **1.1.4 DMG** supports OpenChamber 2.0.0 with its bundled OpenCode 2.0.15. Keep OpenChamber running locally with an OpenAI account connected, then use **Save current sign-in** or switch an already-saved profile in CodexPlusBar; no separate bridge installation is needed.
+
+OpenCode 2 uses `/api/info` for instance verification and stores credentials in its database; the old `auth.json` is no longer the live sign-in store. CodexPlusBar uses a bundled, dependency-free bridge plugin in its own private location under Application Support. The bridge uses OpenCode's integration APIs to import saved sign-ins and its native credential activation API for subsequent switches, including the normal provider-reload notifications. Existing saved profiles are imported when first selected. OpenCode 1 keeps its existing file-based path.
+
+Compatibility checks:
+
+```bash
+# Real OpenCode 2 server with isolated data and synthetic credentials:
+python3 scripts/test_openchamber_v2_bridge.py
+# Also run the Swift suite and the production Swift client against that server:
+OPENCHAMBER_TEST_SWIFT=1 python3 scripts/test_openchamber_v2_bridge.py
+# Separately check discovery and credential reads against the installed app:
+TEST_RUNNER_OPENCHAMBER_RUNTIME_PROBE=1 TEST_RUNNER_OPENCHAMBER_V2_BRIDGE_PROBE=1 make test
+```
+
+The isolated checks cover importing, switching back, cross-location provider reloads, concurrent changes, and preserving the legacy file and other providers. The installed-app probes read the current connection without switching accounts; OpenCode may refresh an expired credential while resolving it.
 
 ## Requirements
 

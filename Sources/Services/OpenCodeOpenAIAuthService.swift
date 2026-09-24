@@ -66,6 +66,7 @@ enum OpenCodeOpenAIAuthError: LocalizedError, Equatable {
     case authFileMissing, providerMissing, unsupportedCredential, profileCredentialMissing
     case invalidCredential, identityMismatch, changedWhileReading, writeFailed
     case localInstanceRequired, ambiguousInstance, environmentOverride, runtimeUnavailable, busy
+    case bridgeUnavailable
 
     var errorDescription: String? {
         switch self {
@@ -81,6 +82,7 @@ enum OpenCodeOpenAIAuthError: LocalizedError, Equatable {
         case .ambiguousInstance: return "More than one OpenCode process is using this sign-in store. Close the other instance, then switch again."
         case .environmentOverride: return "This OpenChamber instance overrides its sign-in store. Switching this configuration is not supported."
         case .runtimeUnavailable: return "Could not verify the local OpenChamber instance. Reopen it and try again."
+        case .bridgeUnavailable: return "Could not access OpenChamber 2’s sign-in service. Check its local OpenAI connection and try again."
         case .busy: return "Another OpenChamber sign-in action is still running."
         }
     }
@@ -154,6 +156,13 @@ actor OpenCodeOpenAIAuthService: OpenCodeOpenAIAuthServing {
         defer { isOperating = false }
         let runtime = try await resolveRuntime()
         try Task.checkCancellation()
+        if let v2 = runtime.v2 {
+            let current = try await v2.read(id: nil)
+            let identity = try current.auth.identity()
+            try validate(identity, for: profile)
+            try saveV2(current, identity: identity)
+            return identity
+        }
         let auth = try credential(in: readStore(runtime.authURL).object)
         let identity = try auth.identity()
         try validate(identity, for: profile)
@@ -170,6 +179,10 @@ actor OpenCodeOpenAIAuthService: OpenCodeOpenAIAuthServing {
         }
         let runtime = try await resolveRuntime()
         try Task.checkCancellation()
+        if let v2 = runtime.v2 {
+            try await switchV2(v2, selected: selected)
+            return
+        }
         let original = try readStore(runtime.authURL)
         let outgoing = try credential(in: original.object)
         let outgoingIdentity = try outgoing.identity()
@@ -241,7 +254,7 @@ actor OpenCodeOpenAIAuthService: OpenCodeOpenAIAuthServing {
     }
 
     private func verifiedCredential(_ auth: OpenCodeOpenAIAuth,
-                                    didRefresh: (OpenCodeOpenAIAuth) throws -> Void) async throws -> OpenCodeOpenAIAuth {
+                                    didRefresh: (OpenCodeOpenAIAuth) async throws -> Void) async throws -> OpenCodeOpenAIAuth {
         if !auth.needsRefresh(at: now()) {
             do {
                 try await verifier.verify(auth)
@@ -253,7 +266,7 @@ actor OpenCodeOpenAIAuthService: OpenCodeOpenAIAuthServing {
         try Task.checkCancellation()
         let refreshed = try await verifier.refresh(auth)
         guard try auth.identity().matches(refreshed.identity()) else { throw OpenCodeOpenAIAuthError.identityMismatch }
-        try didRefresh(refreshed)
+        try await didRefresh(refreshed)
         try Task.checkCancellation()
         try await verifier.verify(refreshed)
         return refreshed
@@ -319,6 +332,95 @@ actor OpenCodeOpenAIAuthService: OpenCodeOpenAIAuthServing {
             try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: storeDirectory.path)
             try OpenCodePrivateFile.write(JSONEncoder().encode(auth), to: storeURL(for: identity))
         } catch { throw OpenCodeOpenAIAuthError.writeFailed }
+    }
+
+    private func v2BindingURL(_ identity: OpenCodeOpenAIIdentity) -> URL {
+        storeDirectory.appendingPathComponent(identity.storageKey + ".v2.json")
+    }
+
+    private func saveV2(_ credential: OpenCodeV2Credential, identity: OpenCodeOpenAIIdentity) throws {
+        try save(credential.auth, identity: identity)
+        try OpenCodePrivateFile.write(JSONEncoder().encode(credential.id), to: v2BindingURL(identity))
+    }
+
+    private func switchV2(_ client: any OpenCodeV2Serving, selected: OpenCodeOpenAIIdentity) async throws {
+        let original = try await client.read(id: nil)
+        let outgoingIdentity = try original.auth.identity()
+        try saveV2(original, identity: outgoingIdentity)
+        let sameAccount = selected.matches(outgoingIdentity)
+        let existing: OpenCodeV2Credential?
+        let target: OpenCodeOpenAIAuth
+        if sameAccount {
+            existing = original
+            target = original.auth
+        } else if FileManager.default.fileExists(atPath: v2BindingURL(selected).path) {
+            let id = try JSONDecoder().decode(String.self, from: Data(contentsOf: v2BindingURL(selected)))
+            let credential = try await client.read(id: id)
+            existing = credential
+            target = credential.auth
+        } else {
+            existing = nil
+            guard FileManager.default.fileExists(atPath: storeURL(for: selected).path) else {
+                throw OpenCodeOpenAIAuthError.profileCredentialMissing
+            }
+            target = try JSONDecoder().decode(OpenCodeOpenAIAuth.self, from: Data(contentsOf: storeURL(for: selected)))
+        }
+        guard try selected.matches(target.identity()) else { throw OpenCodeOpenAIAuthError.identityMismatch }
+        var expected = original
+        var installed: OpenCodeV2Credential?
+        var attemptedAuth: OpenCodeOpenAIAuth?
+        var recovery = OpenCodeOpenAISwitchError.Recovery.unchanged
+        do {
+            let prepared = try await verifiedCredential(target) { refreshed in
+                try self.save(refreshed, identity: selected)
+                if sameAccount || existing != nil {
+                    attemptedAuth = refreshed
+                    let repaired = try await client.install(refreshed, expected: expected)
+                    expected = repaired
+                    if sameAccount { recovery = .currentSignInRefreshed }
+                    else { installed = repaired }
+                    try self.saveV2(repaired, identity: selected)
+                }
+            }
+            try Task.checkCancellation()
+            guard try await client.read(id: nil) == expected else { throw OpenCodeOpenAIAuthError.changedWhileReading }
+            if sameAccount { return }
+            attemptedAuth = prepared
+            let result: OpenCodeV2Credential
+            if let installed, installed.auth == prepared {
+                result = installed
+            } else if let existing, existing.auth == prepared {
+                result = try await client.activate(existing, expected: expected)
+            } else {
+                result = try await client.install(prepared, expected: expected)
+            }
+            installed = result
+            guard result.auth == prepared else { throw OpenCodeOpenAIAuthError.changedWhileReading }
+            try saveV2(result, identity: selected)
+            try await verifier.verify(result.auth)
+            try Task.checkCancellation()
+            guard try await client.read(id: nil) == result else { throw OpenCodeOpenAIAuthError.changedWhileReading }
+        } catch {
+            // A cancelled/failed HTTP response may follow a committed import.
+            // Reconcile in an uncancelled task before deciding what to restore.
+            let current = try? await Task.detached { try await client.read(id: nil) }.value
+            if let current, sameAccount, let attemptedAuth, current.auth == attemptedAuth {
+                try? saveV2(current, identity: selected)
+                recovery = .currentSignInRefreshed
+            } else if let current, !sameAccount,
+                      current == installed || (installed == nil && attemptedAuth != nil && current.auth == attemptedAuth) {
+                do {
+                    let restored = try await Task.detached { try await client.activate(original, expected: current) }.value
+                    guard restored.id == original.id else { throw OpenCodeOpenAIAuthError.changedWhileReading }
+                    recovery = .restored
+                } catch OpenCodeOpenAIAuthError.changedWhileReading {
+                    recovery = .changedExternally
+                } catch { recovery = .rollbackFailed }
+            } else if current != expected {
+                recovery = current == nil ? .rollbackFailed : .changedExternally
+            }
+            throw OpenCodeOpenAISwitchError(cause: error, recovery: recovery)
+        }
     }
 }
 

@@ -4,6 +4,12 @@ import Foundation
 /// A verified local desktop backend, not the website or a selected remote server.
 struct OpenCodeLocalRuntime: Sendable {
     let authURL: URL
+    let v2: (any OpenCodeV2Serving)?
+
+    init(authURL: URL, v2: (any OpenCodeV2Serving)? = nil) {
+        self.authURL = authURL
+        self.v2 = v2
+    }
 
     static func discover() async throws -> Self {
         // ps/sysctl are blocking system calls; keep them off the main actor and
@@ -17,9 +23,17 @@ struct OpenCodeLocalRuntime: Sendable {
         configuration.timeoutIntervalForRequest = 5
         let session = URLSession(configuration: configuration, delegate: OpenCodeNoRedirect(), delegateQueue: nil)
         defer { session.invalidateAndCancel() }
-        var request = URLRequest(url: discovered.healthURL)
+        var request = URLRequest(url: discovered.baseURL.appendingPathComponent("api/info"))
         request.setValue(discovered.authorization, forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
         do {
+            let (infoData, infoResponse) = try await session.data(for: request)
+            if try isV2Info(infoData, response: infoResponse, processID: discovered.pid) {
+                return Self(authURL: discovered.authURL, v2: OpenCodeV2Client(
+                    baseURL: discovered.baseURL, authorization: discovered.authorization
+                ))
+            }
+            request.url = discovered.baseURL.appendingPathComponent("global/health")
             let (data, response) = try await session.data(for: request)
             guard (response as? HTTPURLResponse)?.statusCode == 200,
                   let health = try JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -28,8 +42,25 @@ struct OpenCodeLocalRuntime: Sendable {
         return Self(authURL: discovered.authURL)
     }
 
+    /// V1 serves HTML for unknown routes; a 200 alone is never evidence of V2.
+    static func isV2Info(_ data: Data, response: URLResponse, processID: Int32) throws -> Bool {
+        guard let http = response as? HTTPURLResponse else { throw OpenCodeOpenAIAuthError.runtimeUnavailable }
+        if http.statusCode == 404 { return false }
+        guard http.statusCode == 200 else { throw OpenCodeOpenAIAuthError.runtimeUnavailable }
+        guard let info = try? JSONDecoder().decode(ServerInfo.self, from: data) else { return false }
+        guard info.version.split(separator: ".").first == "2", info.pid == processID else {
+            throw OpenCodeOpenAIAuthError.runtimeUnavailable
+        }
+        return true
+    }
+
+    private struct ServerInfo: Decodable {
+        let version: String
+        let pid: Int32
+    }
+
     static func authURL(environment: [String: String]) throws -> URL {
-        for key in ["OPENCODE_AUTH_CONTENT", "OPENCODE_DATA_DIR"] where !(environment[key] ?? "").isEmpty {
+        for key in ["OPENCODE_AUTH_CONTENT", "OPENCODE_DATA_DIR", "OPENCODE_DB"] where !(environment[key] ?? "").isEmpty {
             throw OpenCodeOpenAIAuthError.environmentOverride
         }
         guard let home = environment["HOME"], home.hasPrefix("/") else {
@@ -41,8 +72,9 @@ struct OpenCodeLocalRuntime: Sendable {
     }
 
     private struct ProcessLocation: Sendable {
+        let pid: Int32
         let authURL: URL
-        let healthURL: URL
+        let baseURL: URL
         let authorization: String?
     }
 
@@ -84,14 +116,14 @@ struct OpenCodeLocalRuntime: Sendable {
         }
         var components = URLComponents()
         components.scheme = "http"
-        components.host = argument("--hostname")
+        let host = argument("--hostname")
+        components.host = host == "::1" ? "[::1]" : host
         components.port = port
-        components.path = "/global/health"
-        guard let healthURL = components.url else { throw OpenCodeOpenAIAuthError.runtimeUnavailable }
+        guard let baseURL = components.url else { throw OpenCodeOpenAIAuthError.runtimeUnavailable }
         let authorization = environment["OPENCODE_SERVER_PASSWORD"].map {
             "Basic " + Data("\(environment["OPENCODE_SERVER_USERNAME"] ?? "opencode"):\($0)".utf8).base64EncodedString()
         }
-        return ProcessLocation(authURL: auth, healthURL: healthURL, authorization: authorization)
+        return ProcessLocation(pid: managed[0].0, authURL: auth, baseURL: baseURL, authorization: authorization)
     }
 
     /// KERN_PROCARGS2 preserves argument boundaries and paths with spaces, unlike ps eww.
@@ -117,7 +149,7 @@ struct OpenCodeLocalRuntime: Sendable {
         _ = nextString() // executable path, followed by padding
         while cursor < size && bytes[cursor] == 0 { cursor += 1 }
         let arguments = (0..<count).map { _ in nextString() }
-        let keys: Set<String> = ["HOME", "XDG_DATA_HOME", "OPENCODE_DATA_DIR", "OPENCODE_AUTH_CONTENT",
+        let keys: Set<String> = ["HOME", "XDG_DATA_HOME", "OPENCODE_DATA_DIR", "OPENCODE_DB", "OPENCODE_AUTH_CONTENT",
                                  "OPENCODE_SERVER_PASSWORD", "OPENCODE_SERVER_USERNAME"]
         var environment: [String: String] = [:]
         while cursor < size {
@@ -130,7 +162,7 @@ struct OpenCodeLocalRuntime: Sendable {
     }
 }
 
-private final class OpenCodeNoRedirect: NSObject, URLSessionTaskDelegate {
+final class OpenCodeNoRedirect: NSObject, URLSessionTaskDelegate {
     func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
                     newRequest request: URLRequest, completionHandler: @escaping @Sendable (URLRequest?) -> Void) {
         completionHandler(nil)
