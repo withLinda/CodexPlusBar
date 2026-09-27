@@ -66,7 +66,7 @@ enum OpenCodeOpenAIAuthError: LocalizedError, Equatable {
     case authFileMissing, providerMissing, unsupportedCredential, profileCredentialMissing
     case invalidCredential, identityMismatch, changedWhileReading, writeFailed
     case localInstanceRequired, ambiguousInstance, environmentOverride, runtimeUnavailable, busy
-    case bridgeUnavailable
+    case bridgeUnavailable, credentialNotFound
 
     var errorDescription: String? {
         switch self {
@@ -83,6 +83,7 @@ enum OpenCodeOpenAIAuthError: LocalizedError, Equatable {
         case .environmentOverride: return "This OpenChamber instance overrides its sign-in store. Switching this configuration is not supported."
         case .runtimeUnavailable: return "Could not verify the local OpenChamber instance. Reopen it and try again."
         case .bridgeUnavailable: return "Could not access OpenChamber 2’s sign-in service. Check its local OpenAI connection and try again."
+        case .credentialNotFound: return "This saved OpenChamber connection no longer exists. Save the account’s current sign-in again."
         case .busy: return "Another OpenChamber sign-in action is still running."
         }
     }
@@ -348,22 +349,28 @@ actor OpenCodeOpenAIAuthService: OpenCodeOpenAIAuthServing {
         let outgoingIdentity = try original.auth.identity()
         try saveV2(original, identity: outgoingIdentity)
         let sameAccount = selected.matches(outgoingIdentity)
-        let existing: OpenCodeV2Credential?
-        let target: OpenCodeOpenAIAuth
+        var existing: OpenCodeV2Credential?
         if sameAccount {
             existing = original
-            target = original.auth
         } else if FileManager.default.fileExists(atPath: v2BindingURL(selected).path) {
             let id = try JSONDecoder().decode(String.self, from: Data(contentsOf: v2BindingURL(selected)))
-            let credential = try await client.read(id: id)
-            existing = credential
-            target = credential.auth
+            do { existing = try await client.read(id: id) }
+            catch OpenCodeOpenAIAuthError.credentialNotFound {
+                // Native connection IDs can disappear after reconnecting or
+                // removing an account. The saved OAuth snapshot remains usable
+                // only after the normal identity, refresh, and live checks below.
+                existing = nil
+            }
+        }
+        let target: OpenCodeOpenAIAuth
+        if let existing {
+            target = existing.auth
         } else {
-            existing = nil
             guard FileManager.default.fileExists(atPath: storeURL(for: selected).path) else {
                 throw OpenCodeOpenAIAuthError.profileCredentialMissing
             }
-            target = try JSONDecoder().decode(OpenCodeOpenAIAuth.self, from: Data(contentsOf: storeURL(for: selected)))
+            do { target = try JSONDecoder().decode(OpenCodeOpenAIAuth.self, from: Data(contentsOf: storeURL(for: selected))) }
+            catch { throw OpenCodeOpenAIAuthError.invalidCredential }
         }
         guard try selected.matches(target.identity()) else { throw OpenCodeOpenAIAuthError.identityMismatch }
         var expected = original

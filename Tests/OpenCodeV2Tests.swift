@@ -28,6 +28,31 @@ struct OpenCodeV2Tests {
         try await service.switchTo(profile: originalProfile)
         #expect(try await client.read().id == original.id)
         #expect(try Data(contentsOf: fixture.authURL) == legacy)
+
+        // Reproduce a saved binding whose native connection has been removed.
+        // Only the isolated server receives this DELETE; never the installed app.
+        let binding = fixture.home.appendingPathComponent(
+            "Library/Application Support/CodexPlusBar/OpenChamberSignIns/\(try target.identity().storageKey).v2.json"
+        )
+        let removedID = try JSONDecoder().decode(String.self, from: Data(contentsOf: binding))
+        var removal = URLRequest(url: url.appendingPathComponent("api/credential/\(removedID)"))
+        removal.httpMethod = "DELETE"
+        removal.setValue("Basic " + Data("opencode:fixture-password".utf8).base64EncodedString(),
+                         forHTTPHeaderField: "Authorization")
+        removal.setValue(fixture.home.path, forHTTPHeaderField: "x-opencode-directory")
+        let (_, response) = try await URLSession.shared.data(for: removal)
+        #expect((response as? HTTPURLResponse)?.statusCode == 204)
+
+        try await service.switchTo(profile: profile)
+        let recovered = try await client.read()
+        #expect(recovered.auth == target)
+        #expect(recovered.id != removedID)
+        #expect(try JSONDecoder().decode(String.self, from: Data(contentsOf: binding)) == recovered.id)
+        try await service.switchTo(profile: originalProfile)
+        try await service.switchTo(profile: profile)
+        #expect(try await client.read().id == recovered.id)
+        try await service.switchTo(profile: originalProfile)
+        #expect(try Data(contentsOf: fixture.authURL) == legacy)
     }
 
     @Test(.enabled(if: ProcessInfo.processInfo.environment["OPENCHAMBER_V2_BRIDGE_PROBE"] == "1"))
@@ -73,6 +98,106 @@ struct OpenCodeV2Tests {
         #expect(try identity == live.identity())
         #expect(try fixture.saved(identity) == live)
         #expect(try Data(contentsOf: fixture.authURL) == before)
+    }
+
+    @Test func connectionLookupDistinguishesMissingIDsFromUnreadableResponses() throws {
+        let body = Data(#"{"data":{"id":"openai","connections":[{"type":"credential","id":"cred_present","method":"oauth","label":"Account"},{"type":"env","name":"OPENAI_API_KEY"}]}}"#.utf8)
+        try OpenCodeV2Client.requireConnection("cred_present", in: body)
+        #expect(throws: OpenCodeOpenAIAuthError.credentialNotFound) {
+            try OpenCodeV2Client.requireConnection("cred_removed", in: body)
+        }
+        for invalid in ["<html>Sign in</html>", "{}", #"{"data":{"id":"openai"}}"#,
+                        #"{"data":{"id":"anthropic","connections":[]}}"#,
+                        #"{"data":{"id":"openai","connections":[{"type":"credential"}]}}"#,
+                        #"{"data":{"id":"openai","connections":[{"type":"credential","id":null}]}}"#,
+                        #"{"data":{"id":"openai","connections":[{"type":"credential","id":""}]}}"#] {
+            #expect(throws: OpenCodeOpenAIAuthError.bridgeUnavailable) {
+                try OpenCodeV2Client.requireConnection("cred_removed", in: Data(invalid.utf8))
+            }
+        }
+    }
+
+    @Test func removedBindingRetainsRotatedSnapshotAfterFailedVerificationForRetry() async throws {
+        let fixture = try OpenCodeAuthFixture()
+        defer { fixture.remove() }
+        let expired = try fixture.auth("target", expires: 0)
+        let profile = try await fixture.prepareTarget(expired)
+        let binding = try staleBinding(fixture, identity: expired.identity())
+        let original = try fixture.auth("original")
+        let client = V2TestClient(original)
+        let rotated = try fixture.auth("target", refresh: "rotated")
+        let verifier = V2TestVerifier(failAt: 1, refreshed: rotated)
+        let service = service(fixture, client: client, verifier: verifier)
+        let error = await #expect(throws: OpenCodeOpenAISwitchError.self) {
+            try await service.switchTo(profile: profile)
+        }
+        #expect(error?.recovery == .unchanged)
+        #expect(try await client.read(id: nil).auth == original)
+        #expect(try fixture.saved(expired.identity()) == rotated)
+        #expect(try JSONDecoder().decode(String.self, from: Data(contentsOf: binding)) == "cred_removed")
+        try await service.switchTo(profile: profile)
+        let recovered = try await client.read(id: nil)
+        #expect(recovered.auth == rotated)
+        #expect(try JSONDecoder().decode(String.self, from: Data(contentsOf: binding)) == recovered.id)
+    }
+
+    @Test(arguments: [OpenCodeOpenAIAuthError.bridgeUnavailable, .unsupportedCredential, .invalidCredential])
+    func failedBoundReadCannotFallBackToSavedTokens(failure: OpenCodeOpenAIAuthError) async throws {
+        let fixture = try OpenCodeAuthFixture()
+        defer { fixture.remove() }
+        let target = try fixture.auth("target")
+        let profile = try await fixture.prepareTarget(target)
+        let binding = try staleBinding(fixture, identity: target.identity())
+        let before = try Data(contentsOf: binding)
+        let original = try fixture.auth("original")
+        let client = V2TestClient(original, boundReadFailure: failure)
+        let verifier = V2TestVerifier()
+        await #expect(throws: failure) {
+            try await service(fixture, client: client, verifier: verifier).switchTo(profile: profile)
+        }
+        #expect(try await client.read(id: nil).auth == original)
+        #expect(try Data(contentsOf: binding) == before)
+        #expect(await verifier.count == 0)
+        #expect(await client.imports == 0)
+    }
+
+    @Test(arguments: ["missing", "malformed", "wrong-account"])
+    func removedBindingRequiresValidMatchingSnapshot(fault: String) async throws {
+        let fixture = try OpenCodeAuthFixture()
+        defer { fixture.remove() }
+        let target = try fixture.auth("target")
+        let profile = try await fixture.prepareTarget(target)
+        _ = try staleBinding(fixture, identity: target.identity())
+        let snapshot = fixture.home.appendingPathComponent(
+            "Library/Application Support/CodexPlusBar/OpenChamberSignIns/\(try target.identity().storageKey).json"
+        )
+        let expected: OpenCodeOpenAIAuthError
+        switch fault {
+        case "missing":
+            try FileManager.default.removeItem(at: snapshot)
+            expected = .profileCredentialMissing
+        case "malformed":
+            try Data("invalid".utf8).write(to: snapshot)
+            expected = .invalidCredential
+        default:
+            try JSONEncoder().encode(fixture.auth("wrong")).write(to: snapshot)
+            expected = .identityMismatch
+        }
+        let original = try fixture.auth("original")
+        let client = V2TestClient(original)
+        await #expect(throws: expected) {
+            try await service(fixture, client: client).switchTo(profile: profile)
+        }
+        #expect(try await client.read(id: nil).auth == original)
+        #expect(await client.imports == 0)
+    }
+
+    private func staleBinding(_ fixture: OpenCodeAuthFixture, identity: OpenCodeOpenAIIdentity) throws -> URL {
+        let url = fixture.home.appendingPathComponent(
+            "Library/Application Support/CodexPlusBar/OpenChamberSignIns/\(identity.storageKey).v2.json"
+        )
+        try JSONEncoder().encode("cred_removed").write(to: url)
+        return url
     }
 
     @Test func legacySnapshotsImportOnceThenUseNativeActivation() async throws {
@@ -205,17 +330,21 @@ private actor V2TestClient: OpenCodeV2Serving {
     private var current: OpenCodeV2Credential
     private var credentials: [String: OpenCodeV2Credential]
     private let loseImportResponse: Bool
+    private let boundReadFailure: OpenCodeOpenAIAuthError?
     private(set) var imports = 0
     private(set) var activations = 0
 
-    init(_ auth: OpenCodeOpenAIAuth, loseImportResponse: Bool = false) {
+    init(_ auth: OpenCodeOpenAIAuth, loseImportResponse: Bool = false,
+         boundReadFailure: OpenCodeOpenAIAuthError? = nil) {
         current = OpenCodeV2Credential(id: "cred_original", auth: auth)
         credentials = [current.id: current]
         self.loseImportResponse = loseImportResponse
+        self.boundReadFailure = boundReadFailure
     }
 
     func read(id: String?) throws -> OpenCodeV2Credential {
-        guard let value = id == nil ? current : credentials[id!] else { throw OpenCodeOpenAIAuthError.providerMissing }
+        if id != nil, let boundReadFailure { throw boundReadFailure }
+        guard let value = id == nil ? current : credentials[id!] else { throw OpenCodeOpenAIAuthError.credentialNotFound }
         return value
     }
 

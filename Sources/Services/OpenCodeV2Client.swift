@@ -37,7 +37,30 @@ actor OpenCodeV2Client: OpenCodeV2Serving {
 
     func read(id: String? = nil) async throws -> OpenCodeV2Credential {
         try installBridge()
+        if let id {
+            // The bridge deliberately hides internal errors. Confirm absence
+            // through the public API instead of treating every RPC 500 as a
+            // deleted connection (or every deleted connection as an outage).
+            let data = try await send(path: "api/integration/openai", body: nil, status: 200)
+            try Self.requireConnection(id, in: data)
+        }
         return try await rpc("read", input: ReadInput(id: id))
+    }
+
+    static func requireConnection(_ id: String, in data: Data) throws {
+        guard let integration = try? JSONDecoder().decode(IntegrationOutput.self, from: data).data,
+              integration.id == "openai",
+              integration.connections.allSatisfy({ $0.type != "credential" || isCredentialID($0.id) }) else {
+            throw OpenCodeOpenAIAuthError.bridgeUnavailable
+        }
+        guard integration.connections.contains(where: { $0.type == "credential" && $0.id == id }) else {
+            throw OpenCodeOpenAIAuthError.credentialNotFound
+        }
+    }
+
+    private static func isCredentialID(_ id: String?) -> Bool {
+        guard let id, id.hasPrefix("cred_"), id.count > 5 else { return false }
+        return id.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "_") }
     }
 
     func install(_ auth: OpenCodeOpenAIAuth, expected: OpenCodeV2Credential) async throws -> OpenCodeV2Credential {
@@ -63,21 +86,32 @@ actor OpenCodeV2Client: OpenCodeV2Serving {
     private struct ImportInput: Encodable { let auth: OpenCodeOpenAIAuth; let expected: OpenCodeV2Credential }
     private struct Input<Value: Encodable>: Encodable { let input: Value }
     private struct Output: Decodable { let output: OpenCodeV2Credential }
+    private struct IntegrationOutput: Decodable {
+        let data: Integration
+        struct Integration: Decodable {
+            let id: String
+            let connections: [Connection]
+        }
+        struct Connection: Decodable {
+            let type: String
+            let id: String?
+        }
+    }
 
     private func rpc<Value: Encodable>(_ method: String, input: Value) async throws -> OpenCodeV2Credential {
         let data = try await send(path: "api/rpc/codexplusbar.openai/\(method)",
                                   body: JSONEncoder().encode(Input(input: input)), status: 200)
         guard let value = try? JSONDecoder().decode(Output.self, from: data).output,
-              value.id.hasPrefix("cred_"), value.id.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "_") }) else {
+              Self.isCredentialID(value.id) else {
             throw OpenCodeOpenAIAuthError.bridgeUnavailable
         }
         _ = try value.auth.identity()
         return value
     }
 
-    private func send(path: String, body: Data, status: Int) async throws -> Data {
+    private func send(path: String, body: Data?, status: Int) async throws -> Data {
         var request = URLRequest(url: baseURL.appendingPathComponent(path))
-        request.httpMethod = "POST"
+        request.httpMethod = body == nil ? "GET" : "POST"
         request.httpBody = body
         request.setValue(authorization, forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
