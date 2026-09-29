@@ -1,253 +1,218 @@
-import AppKit
 import Foundation
 
-struct CodexSavedAccount: Decodable, Sendable {
-    let accountKey: String
-    let chatgptAccountID: String
-    let chatgptUserID: String
-    let email: String
-    let alias: String?
-    let authMode: String?
-
-    enum CodingKeys: String, CodingKey {
-        case accountKey = "account_key"
-        case chatgptAccountID = "chatgpt_account_id"
-        case chatgptUserID = "chatgpt_user_id"
-        case email, alias
-        case authMode = "auth_mode"
-    }
+protocol CodexAccountSwitchServing: Sendable {
+    func saveCurrent(for profile: PlusProfile) async throws -> CodexSignInIdentity
+    func switchAndOpen(profile: PlusProfile) async throws
+    func migrate(_ profiles: [PlusProfile]) -> ([PlusProfile], changed: Bool)
 }
 
-struct CodexSavedAccountRegistry: Decodable, Sendable {
-    let activeAccountKey: String?
-    let accounts: [CodexSavedAccount]
-
-    enum CodingKeys: String, CodingKey {
-        case activeAccountKey = "active_account_key"
-        case accounts
-    }
+extension CodexAccountSwitchServing {
+    func migrate(_ profiles: [PlusProfile]) -> ([PlusProfile], changed: Bool) { (profiles, false) }
 }
 
-enum CodexSwitchError: LocalizedError, Equatable {
-    case missingRegistry
-    case accountNotLinked
-    case authFileMissing
-    case identityMismatch
-    case codexAuthMissing
-    case chatGPTCouldNotClose
-    case commandFailed(String)
-    case reopenFailed(switched: Bool)
+struct CodexSignInSwitchError: LocalizedError {
+    enum Recovery: Equatable {
+        case unchanged, restored, refreshedCurrent, changedExternally, restoreFailed, selected
+        var message: String {
+            switch self {
+            case .unchanged: "The previous desktop sign-in was kept."
+            case .restored: "The previous desktop sign-in was restored."
+            case .refreshedCurrent: "The current account’s refreshed sign-in was kept."
+            case .changedExternally: "Another app’s sign-in changes were kept."
+            case .restoreFailed: "Check the active account in the desktop app."
+            case .selected: "The selected sign-in was installed and verified."
+            }
+        }
+    }
+    let reason: String
+    let recovery: Recovery
+    let reopenFailed: Bool
+
+    init(cause: (any Error)?, recovery: Recovery, reopenFailed: Bool) {
+        if let error = cause as? CodexSignInError { reason = error.localizedDescription }
+        else if cause is CancellationError { reason = "The account switch was cancelled." }
+        else if cause != nil { reason = "The desktop sign-in could not be switched." }
+        else { reason = "" }
+        self.recovery = recovery
+        self.reopenFailed = reopenFailed
+    }
 
     var errorDescription: String? {
-        switch self {
-        case .missingRegistry: return "No saved Codex accounts were found. Open the account manager and sign in first."
-        case .accountNotLinked: return "This profile is not linked to a saved Codex login."
-        case .authFileMissing: return "The saved login file is missing. Sign in again in the account manager."
-        case .identityMismatch: return "The saved login belongs to a different account. No account was switched."
-        case .codexAuthMissing: return "codex-auth is not installed. Install it from Codex Auth Helper, then try again."
-        case .chatGPTCouldNotClose: return "ChatGPT could not be closed, so the account was not switched."
-        case .reopenFailed(let switched):
-            return switched
-                ? "Account switched, but ChatGPT could not open. Open ChatGPT manually."
-                : "The account switch failed and ChatGPT could not reopen. Open ChatGPT manually."
-        case .commandFailed(let message): return "Account switch failed: \(message)"
-        }
+        [reason, recovery.message, reopenFailed ? CodexSignInError.reopenFailed.localizedDescription : ""]
+            .filter { !$0.isEmpty }.joined(separator: " ")
     }
 }
 
-struct CodexAccountSwitchService: @unchecked Sendable {
-    let homeDirectory: URL
-    let fileManager: FileManager
-    let commandPath: String?
+/// Serializes desktop actions across actor reentrancy. AppKit is isolated in the lifecycle adapter.
+actor CodexAccountSwitchService: CodexAccountSwitchServing {
+    nonisolated let homeDirectory: URL
+    private let vault: CodexSignInVault
+    private let app: any CodexDesktopAppManaging
+    private let verifier: any CodexSignInVerifying
+    private let resolveStore: @Sendable () throws -> CodexLiveAuthStore
+    private let now: @Sendable () -> Date
+    private var isWorking = false
 
     init(homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
-         fileManager: FileManager = .default,
-         commandPath: String? = nil) {
+         app: any CodexDesktopAppManaging = CodexDesktopApp(),
+         verifier: any CodexSignInVerifying = CodexSignInVerifier(),
+         resolveStore: (@Sendable () throws -> CodexLiveAuthStore)? = nil,
+         now: @escaping @Sendable () -> Date = { .now }) {
         self.homeDirectory = homeDirectory
-        self.fileManager = fileManager
-        self.commandPath = commandPath
+        vault = CodexSignInVault(homeDirectory: homeDirectory)
+        self.app = app
+        self.verifier = verifier
+        self.now = now
+        self.resolveStore = resolveStore ?? {
+            let environment = ProcessInfo.processInfo.environment
+            // A GUI switch must target the desktop's standard store, not this process's overrides.
+            let unsupported = ["CODEX_HOME", "CODEX_AUTH_JSON", "CODEX_ACCESS_TOKEN", "CODEX_API_KEY",
+                               "CODEX_REFRESH_TOKEN_URL_OVERRIDE", "CODEX_APP_SERVER_LOGIN_CLIENT_ID"]
+            guard !unsupported.contains(where: { environment[$0]?.isEmpty == false }) else {
+                throw CodexSignInError.unsupportedConfiguration
+            }
+            return try CodexLiveAuthStore(codexHome: homeDirectory.appendingPathComponent(".codex"))
+        }
     }
 
-    var codexDirectory: URL { homeDirectory.appendingPathComponent(".codex") }
-    var registryURL: URL { codexDirectory.appendingPathComponent("accounts/registry.json") }
-
-    func migrate(_ profiles: [PlusProfile]) -> ([PlusProfile], changed: Bool) {
-        guard let data = try? Data(contentsOf: registryURL),
-              let registry = try? JSONDecoder().decode(CodexSavedAccountRegistry.self, from: data) else { return (profiles, false) }
-        var changed = false
-        let migrated = profiles.map { profile -> PlusProfile in
-            guard profile.provider == .codex, profile.codexAccountKey == nil else { return profile }
-            let email = profile.label.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            guard let match = registry.accounts.first(where: { $0.email.lowercased() == email }) else { return profile }
-            var updated = profile; updated.codexAccountKey = match.accountKey; changed = true; return updated
-        }
-        return (migrated, changed)
+    nonisolated func migrate(_ profiles: [PlusProfile]) -> ([PlusProfile], changed: Bool) {
+        CodexLegacySignInImporter(homeDirectory: homeDirectory).migrate(profiles)
     }
 
-    func linkedAccount(for profile: PlusProfile) throws -> CodexSavedAccount {
-        guard let data = try? Data(contentsOf: registryURL),
-              let registry = try? JSONDecoder().decode(CodexSavedAccountRegistry.self, from: data) else {
-            throw CodexSwitchError.missingRegistry
-        }
-        if let key = profile.codexAccountKey, let account = registry.accounts.first(where: { $0.accountKey == key }) {
-            return account
-        }
-        let normalized = profile.label.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard let account = registry.accounts.first(where: { $0.email.lowercased() == normalized }) else {
-            throw CodexSwitchError.accountNotLinked
-        }
-        return account
+    func saveCurrent(for profile: PlusProfile) async throws -> CodexSignInIdentity {
+        guard !isWorking else { throw CodexSignInError.busy }
+        isWorking = true
+        defer { isWorking = false }
+        try Task.checkCancellation()
+        try await app.validateConfiguration()
+        let store = try resolveStore()
+        guard let data = try store.read() else { throw CodexSignInError.missingCredential }
+        let signIn = try vault.latestGeneration(of: CodexSignIn(data: data))
+        try signIn.validate(for: profileWithLegacyIdentity(profile))
+        try store.validate(signIn)
+        guard try store.read() == data else { throw CodexSignInError.concurrentChange }
+        try vault.save(signIn)
+        return signIn.identity
     }
 
     func switchAndOpen(profile: PlusProfile) async throws {
-        let account = try linkedAccount(for: profile)
-        let fileName = safeFileName(for: account.accountKey)
-        let authURL = codexDirectory.appendingPathComponent("accounts/\(fileName).auth.json")
-        guard fileManager.fileExists(atPath: authURL.path) else { throw CodexSwitchError.authFileMissing }
-        guard let auth = try? Data(contentsOf: authURL),
-              let object = try? JSONSerialization.jsonObject(with: auth) as? [String: Any],
-              let tokens = object["tokens"] as? [String: Any],
-              let idToken = tokens["id_token"] as? String,
-              tokenMatches(idToken: idToken, account: account) else {
-            throw CodexSwitchError.identityMismatch
-        }
-        guard let executable = commandPath ?? resolveCommand() else { throw CodexSwitchError.codexAuthMissing }
-        let appPath = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.openai.codex")?.path
-            ?? "/Applications/ChatGPT.app"
-        // codex-auth accepts email/alias/name selectors, while the stable key is
-        // used above to choose the exact saved file and validate its identity.
-        try await CodexSwitchWorkflow.perform(
-            close: {
-                let exitCode = try await CodexSwitchProcess.run(
-                    executable: "/bin/zsh",
-                    arguments: ["-f", "-c", Self.closeScript(appPath: appPath)]
-                )
-                guard exitCode == 0 else { throw CodexSwitchError.chatGPTCouldNotClose }
-            },
-            switchAccount: {
-                try await CodexSwitchProcess.run(executable: executable, arguments: ["switch", account.email])
-            },
-            verifyAccount: {
-                (try? self.activeAccountKey()) == account.accountKey && self.activeAuthMatches(account)
-            },
-            reopen: {
-                try await CodexSwitchProcess.run(executable: "/usr/bin/open", arguments: ["-b", "com.openai.codex"])
-            }
-        )
-    }
-
-    // Only process termination uses a shell. Switching and opening are separate
-    // awaited processes, so a shell error cannot skip the reopen operation.
-    static func closeScript(appPath: String) -> String {
-        let quoted = "'" + appPath.replacingOccurrences(of: "'", with: "'\\''") + "'"
-        return """
-        app=\(quoted); marker="$app/Contents/"
-        pids() { /bin/ps -axo pid=,command= | /usr/bin/awk -v m="$marker" '{ p=$1; sub(/^[[:space:]]*[0-9]+[[:space:]]+/, "", $0); if (index($0,m)==1) print p; }'; }
-        signalApp() {
-          local app_pids="$(pids)"
-          if [[ -n "$app_pids" ]]; then /bin/kill "-$1" ${(f)app_pids} 2>/dev/null || true; fi
-        }
-        signalApp TERM
-        for i in {1..100}; do [[ -z "$(pids)" ]] && break; /bin/sleep 0.1; done
-        signalApp KILL
-        for i in {1..100}; do [[ -z "$(pids)" ]] && break; /bin/sleep 0.1; done
-        [[ -z "$(pids)" ]]
-        """
-    }
-
-    private func activeAuthMatches(_ account: CodexSavedAccount) -> Bool {
-        guard let data = try? Data(contentsOf: codexDirectory.appendingPathComponent("auth.json")),
-              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let tokens = object["tokens"] as? [String: Any],
-              let idToken = tokens["id_token"] as? String else { return false }
-        return tokenMatches(idToken: idToken, account: account)
-    }
-
-    private func activeAccountKey() throws -> String? {
-        let data = try Data(contentsOf: registryURL)
-        return try JSONDecoder().decode(CodexSavedAccountRegistry.self, from: data).activeAccountKey
-    }
-
-    private func resolveCommand() -> String? {
-        let candidates = [
-            homeDirectory.appendingPathComponent("Library/Application Support/CodexAuthHelper/codex-auth-tool/lib/node_modules/@loongphy/codex-auth/bin/codex-auth.js").path,
-            "/opt/homebrew/bin/codex-auth", "/usr/local/bin/codex-auth"
-        ]
-        return candidates.first { fileManager.isExecutableFile(atPath: $0) }
-    }
-
-    private func safeFileName(for key: String) -> String {
-        let valid = key.unicodeScalars.allSatisfy { CharacterSet.alphanumerics.contains($0) || $0 == "." || $0 == "-" || $0 == "_" }
-        guard valid, key.isEmpty == false, key != ".", key != ".." else {
-            return Data(key.utf8).base64EncodedString().replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "")
-        }
-        return key
-    }
-
-    private func tokenMatches(idToken: String, account: CodexSavedAccount) -> Bool {
-        let pieces = idToken.split(separator: ".")
-        guard pieces.count > 1 else { return false }
-        var encoded = String(pieces[1]); encoded += String(repeating: "=", count: (4 - encoded.count % 4) % 4)
-        guard let data = Data(base64Encoded: encoded.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")),
-              let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let auth = payload["https://api.openai.com/auth"] as? [String: Any] else { return false }
-        return (auth["chatgpt_account_id"] as? String) == account.chatgptAccountID && (auth["chatgpt_user_id"] as? String) == account.chatgptUserID
-    }
-}
-
-/// Owns ordering and result handling independently of shell exit codes.
-/// Once the app has closed, reopening is always attempted, including on errors.
-enum CodexSwitchWorkflow {
-    static func perform(
-        close: () async throws -> Void,
-        switchAccount: () async throws -> Int32,
-        verifyAccount: () -> Bool,
-        reopen: () async throws -> Int32
-    ) async throws {
+        guard !isWorking else { throw CodexSignInError.busy }
+        isWorking = true
+        defer { isWorking = false }
         try Task.checkCancellation()
-        try await close()
-        var switchFailure: Error?
-        do {
-            let exitCode = try await switchAccount()
-            if exitCode != 0 {
-                switchFailure = CodexSwitchError.commandFailed("codex-auth returned exit code \(exitCode)")
-            }
-        } catch {
-            switchFailure = error
+        guard let identity = profile.codexSignIn else { throw CodexSignInError.missingSavedSignIn }
+        let saved = try vault.load(identity)
+        try saved.validate(for: profile)
+        let store = try resolveStore()
+        try store.validate(saved)
+        _ = try store.read() // Resolve access/configuration errors before closing the desktop app.
+        do { try await app.close() }
+        catch CodexDesktopCloseError.terminationStarted {
+            let reopened = await reopen()
+            throw CodexSignInSwitchError(cause: CodexSignInError.appCouldNotClose, recovery: .unchanged, reopenFailed: !reopened)
         }
-        let switched = verifyAccount()
-        let openExitCode = try? await reopen()
-        guard openExitCode == 0 else { throw CodexSwitchError.reopenFailed(switched: switched) }
-        guard switched else {
-            throw switchFailure ?? CodexSwitchError.commandFailed("the selected login was not activated")
+
+        var original: Data?
+        var expected: Data?
+        var installed: Data?
+        var recovery: CodexSignInSwitchError.Recovery = .unchanged
+        var failure: (any Error)?
+        do {
+            try Task.checkCancellation()
+            original = try store.read()
+            expected = original
+            let parsedOutgoing = original.flatMap { try? CodexSignIn(data: $0) }
+            let outgoing = try parsedOutgoing.map { try vault.latestGeneration(of: $0) }
+            if let outgoing { try vault.save(outgoing) }
+            let sameAccount = outgoing.map { identity.matches($0.identity) } ?? false
+            let target = sameAccount ? outgoing! : saved
+            // A prior failed installation can leave a known-consumed token in the live store.
+            // Repair it before verification; never roll back to that consumed generation.
+            if let outgoing, outgoing.data != original {
+                try store.replace(with: outgoing.data, expected: expected)
+                original = outgoing.data
+                expected = outgoing.data
+                recovery = .refreshedCurrent
+            }
+            let prepared = try await prepare(target) { refreshed in
+                // Refresh consumes the previous token. Save before cancellation or further network work.
+                try self.vault.saveRefreshed(refreshed, replacing: target)
+                if sameAccount {
+                    try store.replace(with: refreshed.data, expected: expected)
+                    expected = refreshed.data
+                    recovery = .refreshedCurrent
+                }
+            }
+            try Task.checkCancellation()
+            guard try store.read() == expected else { throw CodexSignInError.concurrentChange }
+            if !sameAccount {
+                // Record the attempted write before calling replace: readback can fail after commit.
+                installed = prepared.data
+                try store.replace(with: prepared.data, expected: expected)
+                try await verifier.verify(prepared)
+                try Task.checkCancellation()
+                guard try store.read() == prepared.data else { throw CodexSignInError.concurrentChange }
+            }
+            recovery = .selected
+        } catch {
+            failure = error
+            if let installed {
+                do {
+                    let current = try store.read()
+                    if current == installed {
+                        if let original {
+                            try store.replace(with: original, expected: installed)
+                        } else {
+                            try store.remove(expected: installed)
+                        }
+                        recovery = .restored
+                    } else if current != original {
+                        recovery = .changedExternally
+                    }
+                } catch { recovery = .restoreFailed }
+            } else if expected != nil, (try? store.read()) != expected {
+                recovery = .changedExternally
+            }
+        }
+
+        // Reopening must survive cancellation of the original task after the app has closed.
+        let reopened = await reopen()
+        if failure != nil || !reopened {
+            throw CodexSignInSwitchError(cause: failure, recovery: recovery, reopenFailed: !reopened)
         }
     }
-}
 
-enum CodexSwitchProcess {
-    static func run(executable: String, arguments: [String]) async throws -> Int32 {
-        try await withCheckedThrowingContinuation { continuation in
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: executable)
-            process.arguments = arguments
-            // GUI apps do not inherit an interactive shell's Homebrew PATH.
-            var environment = ProcessInfo.processInfo.environment
-            environment["PATH"] = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:"
-                + (environment["PATH"] ?? "")
-            process.environment = environment
-            process.standardInput = FileHandle.nullDevice
-            process.standardOutput = FileHandle.nullDevice
-            process.standardError = FileHandle.nullDevice
-            // Install before starting: even an immediately exiting child must
-            // complete the continuation exactly once.
-            process.terminationHandler = { child in
-                continuation.resume(returning: child.terminationStatus)
-            }
-            do { try process.run() }
-            catch {
-                process.terminationHandler = nil
-                continuation.resume(throwing: error)
-            }
+    private func reopen() async -> Bool {
+        let app = self.app
+        return await Task.detached { () -> Bool in
+            do { try await app.open(); return true } catch { return false }
+        }.value
+    }
+
+    private func profileWithLegacyIdentity(_ profile: PlusProfile) throws -> PlusProfile {
+        guard profile.codexSignIn == nil, profile.codexAccountKey != nil else { return profile }
+        let account = try CodexLegacySignInImporter(homeDirectory: homeDirectory).linkedAccount(for: profile)
+        if let existing = profile.openCodeOpenAIAccount,
+           existing.accountID != account.chatgptAccountID || existing.userID != account.chatgptUserID {
+            throw CodexSignInError.identityMismatch
         }
+        var linked = profile
+        linked.codexSignIn = .init(accountID: account.chatgptAccountID, userID: account.chatgptUserID, email: account.email)
+        return linked
+    }
+
+    private func prepare(_ signIn: CodexSignIn,
+                         didRefresh: (CodexSignIn) throws -> Void) async throws -> CodexSignIn {
+        if !signIn.needsRefresh(at: now()) {
+            do { try await verifier.verify(signIn); return signIn }
+            catch CodexSignInError.unauthorized { /* Refresh exactly once. */ }
+        }
+        try Task.checkCancellation()
+        let refreshed = try await verifier.refresh(signIn)
+        guard signIn.identity.matches(refreshed.identity) else { throw CodexSignInError.identityMismatch }
+        try didRefresh(refreshed)
+        try Task.checkCancellation()
+        try await verifier.verify(refreshed)
+        return refreshed
     }
 }

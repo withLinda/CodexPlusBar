@@ -5,6 +5,109 @@ import WebKit
 
 @MainActor
 struct PlusProfileControllerTests {
+    @Test func desktopSaveRetainsUnrelatedMetadataEditedDuringAwait() async throws {
+        let directory = makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = ProfileCatalogStore(fileURL: directory.appendingPathComponent("profiles.json"))
+        let profile = sampleProfile(label: "studio@example.com", sortOrder: 0)
+        try store.saveProfiles([profile])
+        let service = PendingDesktopSaveService()
+        let controller = PlusProfileController(catalogStore: store,
+            dataService: StubPlusProfileDataService(refreshResults: [:]), accountSwitchService: service, autoStart: false)
+        let task = Task { await controller.saveDesktopSignIn(profileID: profile.id) }
+        await service.waitForStart()
+        var changed = profile
+        changed.detectedNote = "Plus"
+        controller.profiles[0] = controller.profiles[0].updating(profile: changed)
+        await service.finish()
+        await task.value
+        #expect(controller.profiles[0].profile.codexSignIn != nil)
+        #expect(controller.profiles[0].profile.detectedNote == "Plus")
+        #expect(controller.desktopSignInStatus?.tone == .success)
+    }
+
+    @Test func backgroundRefreshRetainsDesktopSignInSavedWhileItWasLoading() async throws {
+        let directory = makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = ProfileCatalogStore(fileURL: directory.appendingPathComponent("profiles.json"))
+        let profile = sampleProfile(label: "studio@example.com", sortOrder: 0)
+        try store.saveProfiles([profile])
+        let identity = CodexSignInIdentity(accountID: "workspace", userID: "user", email: profile.label)
+        let usage = makeUsage(accountID: "workspace", primaryUsedPercent: 10, secondaryUsedPercent: 20)
+        let data = StubPlusProfileDataService(refreshResults: [profile.id: .success(.init(usage: usage, detectedNote: "Plus", expiryRefresh: .unchanged))])
+        let gate = PendingDesktopSaveService()
+        data.beforeRefresh = { _ = try? await gate.saveCurrent(for: profile) }
+        let controller = PlusProfileController(catalogStore: store, dataService: data,
+            accountSwitchService: DesktopControllerStub(identity: identity), autoStart: false)
+        let refresh = Task { await controller.refreshProfile(id: profile.id) }
+        await gate.waitForStart()
+        await controller.saveDesktopSignIn(profileID: profile.id)
+        #expect(controller.profiles[0].profile.codexSignIn == identity)
+        await gate.finish()
+        await refresh.value
+        #expect(controller.profiles[0].profile.codexSignIn == identity)
+        #expect(try store.loadProfiles().first?.codexSignIn == identity)
+        #expect(controller.profiles[0].usage == usage)
+    }
+
+    @Test func desktopSaveDoesNotAttachIdentityAfterProfileChangesDuringAwait() async throws {
+        let directory = makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = ProfileCatalogStore(fileURL: directory.appendingPathComponent("profiles.json"))
+        let profile = sampleProfile(label: "studio@example.com", sortOrder: 0)
+        try store.saveProfiles([profile])
+        let service = PendingDesktopSaveService()
+        let controller = PlusProfileController(catalogStore: store,
+            dataService: StubPlusProfileDataService(refreshResults: [:]), accountSwitchService: service, autoStart: false)
+        let task = Task { await controller.saveDesktopSignIn(profileID: profile.id) }
+        await service.waitForStart()
+        #expect(controller.switchingProfileIDs == [profile.id])
+        var changed = profile
+        changed.label = "another@example.com"
+        controller.profiles[0] = controller.profiles[0].updating(profile: changed)
+        await service.finish()
+        await task.value
+        #expect(controller.profiles[0].profile.codexSignIn == nil)
+        #expect(controller.profiles[0].profile.label == changed.label)
+        #expect(controller.desktopSignInStatus?.tone == .critical)
+        #expect(controller.switchingProfileIDs.isEmpty)
+    }
+
+    @Test func savingDesktopSignInPersistsOnlyIdentityAndKeepsBrowserState() async throws {
+        let directory = makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = ProfileCatalogStore(fileURL: directory.appendingPathComponent("profiles.json"))
+        let profile = sampleProfile(label: "studio@example.com", sortOrder: 0)
+        try store.saveProfiles([profile])
+        let identity = CodexSignInIdentity(accountID: "workspace", userID: "user", email: profile.label)
+        let controller = PlusProfileController(catalogStore: store,
+            dataService: StubPlusProfileDataService(refreshResults: [:]),
+            accountSwitchService: DesktopControllerStub(identity: identity), autoStart: false)
+        let before = controller.profiles.first?.state
+        await controller.saveDesktopSignIn(profileID: profile.id)
+        #expect(controller.profiles.first?.profile.codexSignIn == identity)
+        #expect(try store.loadProfiles().first?.codexSignIn == identity)
+        #expect(controller.desktopSignInStatus?.tone == .success)
+        #expect(controller.desktopSignInStatus?.profileID == profile.id)
+        #expect(controller.profiles.first?.state == before)
+        #expect(controller.switchingProfileIDs.isEmpty)
+    }
+
+    @Test func failedDesktopSaveDoesNotClaimSavedOrOverwriteProfile() async throws {
+        let directory = makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = ProfileCatalogStore(fileURL: directory.appendingPathComponent("profiles.json"))
+        let profile = sampleProfile(label: "studio@example.com", sortOrder: 0)
+        try store.saveProfiles([profile])
+        let controller = PlusProfileController(catalogStore: store,
+            dataService: StubPlusProfileDataService(refreshResults: [:]),
+            accountSwitchService: DesktopControllerStub(identity: nil), autoStart: false)
+        await controller.saveDesktopSignIn(profileID: profile.id)
+        #expect(controller.desktopSignInStatus?.tone == .critical)
+        #expect(try store.loadProfiles() == [profile])
+        #expect(controller.profiles.first?.profile.codexSignIn == nil)
+    }
+
     @Test
     func openChamberSuccessWaitsForVerificationAndBlocksAnotherSwitch() async throws {
         let directory = makeTemporaryDirectory()
@@ -1095,6 +1198,7 @@ private actor PendingOpenCodeAuthService: OpenCodeOpenAIAuthServing {
 
 @MainActor
 private final class StubPlusProfileDataService: PlusProfileDataServing {
+    var beforeRefresh: (() async -> Void)?
     private let refreshResults: [UUID: Result<PlusProfileRefreshResult, ChatGPTAPIError>]
     private let syncResults: [UUID: Result<ChatGPTAuthContext, ChatGPTAPIError>]
     private let chromeSignInFinishResults: [UUID: Bool]
@@ -1118,6 +1222,7 @@ private final class StubPlusProfileDataService: PlusProfileDataServing {
     }
 
     func refreshProfile(_ profile: PlusProfile) async throws -> PlusProfileRefreshResult {
+        await beforeRefresh?()
         let result = try #require(refreshResults[profile.id])
         return try result.get()
     }

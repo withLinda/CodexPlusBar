@@ -76,10 +76,11 @@ final class PlusProfileController {
     var switchingProfileIDs: Set<UUID> = []
     var openCodeSwitchingProfileIDs: Set<UUID> = []
     var openChamberActionStatus: OpenChamberActionStatus?
+    var desktopSignInStatus: OpenChamberActionStatus?
 
     @ObservationIgnored private let catalogStore: ProfileCatalogStore
     @ObservationIgnored private let dataService: PlusProfileDataServing
-    @ObservationIgnored private let accountSwitchService: CodexAccountSwitchService
+    @ObservationIgnored private let accountSwitchService: any CodexAccountSwitchServing
     @ObservationIgnored private let openCodeAuthService: any OpenCodeOpenAIAuthServing
     @ObservationIgnored private let autoRefreshIntervalNanoseconds: UInt64
     @ObservationIgnored private let maxConcurrentProfileRefreshes: Int
@@ -90,7 +91,7 @@ final class PlusProfileController {
     init(
         catalogStore: ProfileCatalogStore = ProfileCatalogStore(),
         dataService: PlusProfileDataServing = PlusProfileDataService(),
-        accountSwitchService: CodexAccountSwitchService = CodexAccountSwitchService(),
+        accountSwitchService: any CodexAccountSwitchServing = CodexAccountSwitchService(),
         openCodeAuthService: any OpenCodeOpenAIAuthServing = OpenCodeOpenAIAuthService(),
         autoRefreshInterval: TimeInterval = 300,
         maxConcurrentProfileRefreshes: Int = 3,
@@ -444,17 +445,61 @@ final class PlusProfileController {
     }
 
     func switchAndOpen(profileID: UUID) async {
-        guard switchingProfileIDs.isEmpty, let index = indexOfProfile(profileID) else { return }
+        guard switchingProfileIDs.isEmpty, let index = indexOfProfile(profileID),
+              profiles[index].profile.provider == .codex else { return }
         let profile = profiles[index].profile
         switchingProfileIDs.insert(profileID)
+        desktopSignInStatus = .init(profileID: profileID, message: "Switching and reopening ChatGPT / Codex…", tone: .info)
         defer { switchingProfileIDs.remove(profileID) }
         do {
             try await accountSwitchService.switchAndOpen(profile: profile)
-            await refreshProfile(id: profileID)
-            statusMessage = "Switched to \(profile.displayLabel) and reopened ChatGPT."
+            desktopSignInStatus = .init(profileID: profileID, message: "Sign-in verified. Desktop app reopened.", tone: .success)
+            statusMessage = "Switched to \(profile.displayLabel) and reopened ChatGPT / Codex."
         } catch {
-            statusMessage = error.localizedDescription
+            let message = desktopSignInMessage(error)
+            desktopSignInStatus = .init(profileID: profileID, message: message, tone: .critical)
+            statusMessage = message
         }
+    }
+
+    func saveDesktopSignIn(profileID: UUID) async {
+        guard switchingProfileIDs.isEmpty, let index = indexOfProfile(profileID),
+              profiles[index].profile.provider == .codex else { return }
+        let profile = profiles[index].profile
+        switchingProfileIDs.insert(profileID)
+        desktopSignInStatus = .init(profileID: profileID, message: "Saving the current desktop sign-in…", tone: .info)
+        defer { switchingProfileIDs.remove(profileID) }
+        do {
+            let identity = try await accountSwitchService.saveCurrent(for: profile)
+            guard let currentIndex = indexOfProfile(profileID) else {
+                throw CodexSignInError.concurrentChange
+            }
+            let previous = profiles[currentIndex]
+            guard previous.profile.provider == profile.provider,
+                  previous.profile.label == profile.label,
+                  previous.profile.codexAccountKey == profile.codexAccountKey,
+                  previous.profile.codexSignIn == profile.codexSignIn,
+                  previous.profile.openCodeOpenAIAccount == profile.openCodeOpenAIAccount else {
+                throw CodexSignInError.concurrentChange
+            }
+            var updated = previous.profile
+            updated.codexSignIn = identity
+            profiles[currentIndex] = previous.updating(profile: updated)
+            guard persistProfiles() else {
+                profiles[currentIndex] = previous
+                throw CodexSignInError.storageFailed
+            }
+            desktopSignInStatus = .init(profileID: profileID, message: "Desktop sign-in saved.", tone: .success)
+        } catch {
+            desktopSignInStatus = .init(profileID: profileID, message: desktopSignInMessage(error), tone: .critical)
+        }
+    }
+
+    private func desktopSignInMessage(_ error: any Error) -> String {
+        if let error = error as? CodexSignInError { return error.localizedDescription }
+        if let error = error as? CodexSignInSwitchError { return error.localizedDescription }
+        if error is CancellationError { return "The desktop sign-in action was cancelled." }
+        return "The desktop sign-in could not be saved or switched. Try again."
     }
 
     func saveOpenChamberAuth(profileID: UUID) async {
@@ -680,7 +725,9 @@ final class PlusProfileController {
 
         do {
             let result = try await dataService.refreshProfile(snapshot.profile)
-            var updatedProfile = snapshot.profile
+            guard let currentIndex = indexOfProfile(profileID) else { return }
+            let current = profiles[currentIndex]
+            var updatedProfile = current.profile
             updatedProfile.detectedNote = result.detectedNote
             if case let .value(expiresAt) = result.expiryRefresh {
                 updatedProfile.expiresAt = expiresAt
@@ -688,7 +735,7 @@ final class PlusProfileController {
             updatedProfile.lastRefreshAt = result.usage.fetchedAt
             updatedProfile.lastKnownState = .active
 
-            profiles[index] = snapshot.updating(
+            profiles[currentIndex] = current.updating(
                 profile: updatedProfile,
                 state: .ready,
                 usage: .some(result.usage),
@@ -717,8 +764,12 @@ final class PlusProfileController {
             let migration = accountSwitchService.migrate(loadResult.profiles)
             storedProfiles = migration.0
             if migration.changed {
-                try? catalogStore.saveProfiles(storedProfiles)
-                repairMessage = "Linked saved Codex logins to the current profiles."
+                do {
+                    try catalogStore.saveProfiles(storedProfiles)
+                    repairMessage = "Imported saved desktop sign-ins."
+                } catch {
+                    repairMessage = "Desktop sign-ins were imported, but the profile links could not be saved."
+                }
             }
 
             if loadResult.removedDuplicateCount > 0 {

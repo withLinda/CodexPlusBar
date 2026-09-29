@@ -68,6 +68,20 @@ Private fields stay covered until you choose **Show**. A saved 2FA secret can ge
 
 The app does not type passwords into provider pages for you.
 
+### Save and switch desktop sign-ins
+
+Select a Codex profile in Profile Manager. The **ChatGPT / Codex** and **OpenChamber** rows each have a visible **Save current sign-in** action.
+
+1. Sign in to the matching account in the desktop app.
+2. Select **Save current sign-in** in its ChatGPT / Codex row.
+3. Later, select **Switch and open** to gracefully close the desktop app, verify and install the saved sign-in, and reopen it.
+
+Desktop switching uses native Swift, Security, URLSession, and AppKit; `codex-auth` and CodexAuthHelper are no longer required. Existing unambiguous helper snapshots are imported read-only. Browser usage and OpenChamber sign-ins stay independent of desktop switching.
+
+Supported desktop storage is the standard `~/.codex/auth.json`, direct macOS Keychain, or `auto` selection. Custom runtime authentication overrides, administrator-managed configuration, encrypted secret storage, and ephemeral credentials report an unsupported-configuration message. Keychain may ask for access. A failed switch reports credential recovery and app-reopening results separately.
+
+Native desktop sign-in switching is included in the **1.2.0 DMG**.
+
 ### Import many profiles at once
 
 Bulk import accepts one profile per line in this format:
@@ -115,7 +129,7 @@ CodexPlusBar reads the signed-in web services used by ChatGPT and Claude. These 
 
 The easiest way to install CodexPlusBar is the signed and notarized GitHub DMG. You do not need Xcode. One download supports both Apple silicon and Intel Macs running macOS 14 or newer.
 
-Version **1.1.5** fixes switching saved OpenAI accounts in OpenChamber 2 when a previously saved connection has been removed or replaced. CodexPlusBar checks that the connection is missing, verifies the saved sign-in, and imports it again with a new connection ID. It keeps OpenAI verification, token refresh, recovery from failed switches, and OpenCode 1 compatibility. The signed and notarized DMG also includes reset-window sorting, the compact, capacity-first interface, and theme-aware action icons from earlier releases. The download link below always downloads the latest published DMG; [the 1.1.5 release](https://github.com/withLinda/CodexPlusBar/releases/tag/v1.1.5) has version-specific downloads and release notes.
+Version **1.2.0** adds native **ChatGPT / Codex** desktop sign-in saving and switching, with visible **Save current sign-in** and **Switch and open** actions in Profile Manager. It verifies the saved account before switching, supports standard file and macOS Keychain storage, and preserves refreshed credentials for recovery. You no longer need `codex-auth` or CodexAuthHelper. This release also keeps OpenChamber 2 missing-connection recovery, reset-window sorting, and the compact, capacity-first interface. The download link below always downloads the latest published DMG; [the 1.2.0 release](https://github.com/withLinda/CodexPlusBar/releases/tag/v1.2.0) has version-specific downloads and release notes.
 
 1. [Download `CodexPlusBar.dmg`](https://github.com/withLinda/CodexPlusBar/releases/latest/download/CodexPlusBar.dmg).
 2. Optional: download [`CodexPlusBar.dmg.sha256`](https://github.com/withLinda/CodexPlusBar/releases/latest/download/CodexPlusBar.dmg.sha256) into the same folder. In Terminal, go to that folder (usually `~/Downloads`) and verify the download:
@@ -130,13 +144,13 @@ Version **1.1.5** fixes switching saved OpenAI accounts in OpenChamber 2 when a 
 
 The published app and DMG are Developer ID signed and notarized by Apple, so macOS can verify them during a normal first launch.
 
-To update from 1.1.4 or an earlier release, quit CodexPlusBar, download the latest DMG, and repeat steps 3–4. Replacing the app keeps your saved profiles, saved OpenChamber sign-ins, and Chrome sign-ins in `~/Library/Application Support/CodexPlusBar`; you do not need to import them again.
+To update from 1.1.5 or an earlier release, quit CodexPlusBar, download the latest DMG, and repeat steps 3–4. Replacing the app keeps your saved profiles, saved desktop and OpenChamber sign-ins, and Chrome sign-ins in `~/Library/Application Support/CodexPlusBar`; you do not need to import them again. Existing unambiguous CodexAuthHelper snapshots are imported automatically when needed; if no saved desktop sign-in is available, sign in to Codex and choose **Save current sign-in**.
 
 After switching OpenChamber's OpenAI account, wait for **switched and verified**. If OpenChamber's Usage panel still shows an older result, refresh that panel. If the saved sign-in is rejected, sign in to that account again in OpenChamber and use **Save current sign-in** in CodexPlusBar before retrying.
 
 ### OpenChamber 2 compatibility
 
-The **1.1.5 DMG** includes recovery for missing connections observed with OpenChamber 2.0.2 and its bundled OpenCode 2.0.16, building on the OpenChamber 2 support introduced in 1.1.4. Keep OpenChamber running locally with an OpenAI account connected, then use **Save current sign-in** or switch an already-saved profile in CodexPlusBar; no separate bridge installation is needed.
+The **1.2.0 DMG** retains recovery for missing connections observed with OpenChamber 2.0.2 and its bundled OpenCode 2.0.16, introduced in 1.1.5. Keep OpenChamber running locally with an OpenAI account connected, then use **Save current sign-in** or switch an already-saved profile in CodexPlusBar; no separate bridge installation is needed.
 
 If a saved connection was removed, CodexPlusBar can restore it from its saved sign-in after checking the account identity and verifying access with OpenAI. An unavailable bridge or unreadable response still reports an error. If the saved sign-in is missing, damaged, or no longer accepted, sign in again in OpenChamber and choose **Save current sign-in** before retrying.
 
@@ -208,6 +222,7 @@ The preview uses a separate bundle ID, sample profiles, and stub services. Scree
 CodexPlusBar has no profile-sync server of its own. It connects directly to ChatGPT or Claude through the browser sessions created on your Mac.
 
 - Profile data is stored at `~/Library/Application Support/CodexPlusBar/profiles.json`.
+- Saved desktop OAuth credentials and token-rotation recovery snapshots are stored in `~/Library/Application Support/CodexPlusBar/DesktopSignIns` (owner-only directory and files); the profile catalog contains only their account identity. These snapshots are not encrypted by CodexPlusBar.
 - Email Tools sessions are stored at `~/Library/Application Support/CodexPlusBar/dot-trick-sessions.json`.
 - Named Chrome profiles are stored at `~/Library/Application Support/CodexPlusBar/ChromeProfiles`.
 - Profile labels, links, passwords, 2FA keys, phone numbers, notes, and tags stay on your Mac.

@@ -289,8 +289,12 @@ actor OpenCodeOpenAIAuthService: OpenCodeOpenAIAuthServing {
             guard saved.matches(identity) else { throw OpenCodeOpenAIAuthError.identityMismatch }
             return
         }
-        if profile.codexAccountKey != nil {
-            let account = try CodexAccountSwitchService(homeDirectory: homeDirectory).linkedAccount(for: profile)
+        if let account = profile.codexSignIn {
+            guard account.accountID == identity.accountID, account.userID == identity.userID else {
+                throw OpenCodeOpenAIAuthError.identityMismatch
+            }
+        } else if profile.codexAccountKey != nil {
+            let account = try CodexLegacySignInImporter(homeDirectory: homeDirectory).linkedAccount(for: profile)
             guard account.chatgptAccountID == identity.accountID, account.chatgptUserID == identity.userID else {
                 throw OpenCodeOpenAIAuthError.identityMismatch
             }
@@ -435,7 +439,7 @@ enum OpenCodePrivateFile {
     /// Create private from the first byte, then atomically rename on the same volume.
     /// OpenCode does not participate in our lock: the optimistic check detects
     /// competing writes, but is not a cross-process compare-and-swap guarantee.
-    static func write(_ data: Data, to url: URL, expected: Data? = nil) throws {
+    static func write(_ data: Data, to url: URL, expected: Data? = nil, requireAbsent: Bool = false) throws {
         let temporary = url.deletingLastPathComponent().appendingPathComponent(".auth-\(UUID()).tmp")
         let descriptor = open(temporary.path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, 0o600)
         guard descriptor >= 0 else { throw OpenCodeOpenAIAuthError.writeFailed }
@@ -445,7 +449,15 @@ enum OpenCodePrivateFile {
             try handle.write(contentsOf: data)
             try handle.synchronize()
             if let expected, try Data(contentsOf: url) != expected { throw OpenCodeOpenAIAuthError.changedWhileReading }
-            guard rename(temporary.path, url.path) == 0 else { throw OpenCodeOpenAIAuthError.writeFailed }
+            if requireAbsent {
+                // An atomic no-clobber commit: another writer may have created the file after read().
+                guard link(temporary.path, url.path) == 0 else {
+                    if errno == EEXIST { throw OpenCodeOpenAIAuthError.changedWhileReading }
+                    throw OpenCodeOpenAIAuthError.writeFailed
+                }
+            } else {
+                guard rename(temporary.path, url.path) == 0 else { throw OpenCodeOpenAIAuthError.writeFailed }
+            }
         } catch let error as OpenCodeOpenAIAuthError { throw error }
         catch { throw OpenCodeOpenAIAuthError.writeFailed }
     }

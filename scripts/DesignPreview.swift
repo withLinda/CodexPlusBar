@@ -42,13 +42,23 @@ enum DesignPreview {
         let controller = PlusProfileController(
             catalogStore: ProfileCatalogStore(fileURL: temporaryDirectory.appendingPathComponent("profiles.json")),
             dataService: PreviewDataService(),
-            accountSwitchService: CodexAccountSwitchService(homeDirectory: temporaryDirectory),
+            accountSwitchService: PreviewDesktopService(),
             openCodeAuthService: PreviewOpenCodeService(),
             autoStart: false
         )
         let now = Date(timeIntervalSince1970: 1_789_473_600)
         controller.profiles = arguments.contains("--empty") ? [] : fixtures(now: now, missingExpiry: arguments.contains("--missing-expiry"))
         controller.selectedProfileID = controller.profiles.first?.id
+        if arguments.contains("--unsaved"), !controller.profiles.isEmpty {
+            var profile = controller.profiles[0].profile
+            profile.codexSignIn = nil
+            profile.openCodeOpenAIAccount = nil
+            controller.profiles[0] = controller.profiles[0].updating(profile: profile)
+        }
+        if arguments.contains("--sign-in-error"), let first = controller.profiles.first {
+            controller.desktopSignInStatus = .init(profileID: first.id,
+                message: CodexSignInError.unauthorized.localizedDescription, tone: .critical)
+        }
         controller.dashboardStatus = controller.profiles.isEmpty ? .empty : .ready
         if arguments.contains("--error"), let last = controller.profiles.last {
             controller.selectedProfileID = last.id
@@ -57,6 +67,7 @@ enum DesignPreview {
         if arguments.contains("--switching"), let first = controller.profiles.first {
             controller.switchingProfileIDs.insert(first.id)
             controller.openCodeSwitchingProfileIDs.insert(first.id)
+            controller.desktopSignInStatus = .init(profileID: first.id, message: "Switching and reopening ChatGPT / Codex…", tone: .info)
         }
         let clock = AppMinuteClock(now: now)
         let isPanel = arguments.contains("--panel")
@@ -145,7 +156,7 @@ enum DesignPreview {
             let profile = PlusProfile(
                 id: UUID(), provider: index == 1 ? .claude : .codex,
                 label: label,
-                codexAccountKey: index == 0 || index == 2 ? "preview-\(index)" : nil,
+                codexSignIn: index == 0 || index == 2 ? CodexSignInIdentity(accountID: "preview-\(index)", userID: "preview", email: label) : nil,
                 openCodeOpenAIAccount: index == 0 || index == 3 ? OpenCodeOpenAIIdentity(accountID: "preview-\(index)", userID: "preview", email: label) : nil,
                 emailLink: "https://example.com/inbox", detectedNote: "Plus",
                 password: "preview-only", twoFactorCode: "JBSWY3DPEHPK3PXP",
@@ -216,6 +227,13 @@ private struct PreviewOpenCodeService: OpenCodeOpenAIAuthServing {
         OpenCodeOpenAIIdentity(accountID: "preview", userID: "preview", email: profile.label)
     }
     func switchTo(profile: PlusProfile) async throws {}
+}
+
+private struct PreviewDesktopService: CodexAccountSwitchServing {
+    func saveCurrent(for profile: PlusProfile) async throws -> CodexSignInIdentity {
+        CodexSignInIdentity(accountID: "preview", userID: "preview", email: profile.label)
+    }
+    func switchAndOpen(profile: PlusProfile) async throws {}
 }
 
 @MainActor

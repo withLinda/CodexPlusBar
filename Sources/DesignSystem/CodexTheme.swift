@@ -939,23 +939,23 @@ enum CodexTheme {
         }
     }
 
-    static func statusAccentToken(for tone: CodexStatusTone) -> CodexColorToken {
+    static func statusAccentToken(for tone: CodexStatusTone, preset: CodexThemePreset = activePreset) -> CodexColorToken {
         switch tone {
         case .neutral:
-            activePalette.gray1
+            palette(for: preset).gray1
         case .info:
-            activePalette.accBlue
+            palette(for: preset).accBlue
         case .success:
-            activePalette.accAqua
+            palette(for: preset).accAqua
         case .warning:
-            activePalette.accYellow
+            palette(for: preset).accYellow
         case .critical:
-            activePalette.accRed
+            palette(for: preset).accRed
         }
     }
 
-    static func statusForegroundToken(for tone: CodexStatusTone) -> CodexColorToken {
-        tone == .neutral ? primaryTextToken : readableAccentToken(statusAccentToken(for: tone))
+    static func statusForegroundToken(for tone: CodexStatusTone, preset: CodexThemePreset = activePreset) -> CodexColorToken {
+        tone == .neutral ? palette(for: preset).primaryText : readableAccentToken(statusAccentToken(for: tone, preset: preset), preset: preset)
     }
 
     static func profileTagAccentToken(

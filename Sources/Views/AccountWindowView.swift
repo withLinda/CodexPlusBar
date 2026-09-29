@@ -639,12 +639,17 @@ struct ProfileManagerWindowView: View {
                     }
 
                     if snapshot.profile.provider == .codex {
-                        OpenChamberProfileActions(
-                            hasSavedSignIn: snapshot.profile.openCodeOpenAIAccount != nil,
-                            isWorking: !controller.openCodeSwitchingProfileIDs.isEmpty,
-                            status: controller.openChamberActionStatus.flatMap { $0.profileID == snapshot.id ? $0 : nil },
-                            save: { Task { await controller.saveOpenChamberAuth(profileID: snapshot.id) } },
-                            switchAccount: { Task { await controller.switchOpenChamberAuth(profileID: snapshot.id) } }
+                        ProfileSignInSection(
+                            desktopSaved: snapshot.profile.codexSignIn != nil,
+                            openChamberSaved: snapshot.profile.openCodeOpenAIAccount != nil,
+                            desktopWorking: !controller.switchingProfileIDs.isEmpty,
+                            openChamberWorking: !controller.openCodeSwitchingProfileIDs.isEmpty,
+                            desktopStatus: controller.desktopSignInStatus.flatMap { $0.profileID == snapshot.id ? $0 : nil },
+                            openChamberStatus: controller.openChamberActionStatus.flatMap { $0.profileID == snapshot.id ? $0 : nil },
+                            saveDesktop: { Task { await controller.saveDesktopSignIn(profileID: snapshot.id) } },
+                            switchDesktop: { Task { await controller.switchAndOpen(profileID: snapshot.id) } },
+                            saveOpenChamber: { Task { await controller.saveOpenChamberAuth(profileID: snapshot.id) } },
+                            switchOpenChamber: { Task { await controller.switchOpenChamberAuth(profileID: snapshot.id) } }
                         )
                     }
 
@@ -1446,64 +1451,6 @@ struct ProfileManagerWindowView: View {
         Task {
             await controller.closeChromeSignIn(for: profileID)
         }
-    }
-}
-
-struct OpenChamberProfileActions: View {
-    @Environment(\.codexThemeRefreshContext) private var themeContext
-    let hasSavedSignIn: Bool
-    let isWorking: Bool
-    let status: OpenChamberActionStatus?
-    let save: () -> Void
-    let switchAccount: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("OpenChamber")
-                        .font(ProfileManagerTypography.smallStrong)
-                        .foregroundStyle(CodexTheme.headingText)
-                    Text(hasSavedSignIn ? "OpenAI sign-in saved" : "OpenAI sign-in not saved")
-                        .font(ProfileManagerTypography.caption)
-                        .foregroundStyle(CodexTheme.supportText)
-                }
-                Spacer(minLength: 8)
-                actions
-            }
-
-            if let status {
-                Text(status.message)
-                    .font(ProfileManagerTypography.small)
-                    .foregroundStyle(status.tone.foregroundColor)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .padding(12)
-        .background(CodexTheme.surfaceToken(for: .subtle, preset: themeContext.preset).color, in: RoundedRectangle(cornerRadius: 8))
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("OpenChamber OpenAI sign-in")
-    }
-
-    @ViewBuilder private var actions: some View {
-        Button("Switch", systemImage: "arrow.triangle.2.circlepath", action: switchAccount)
-            .buttonStyle(CodexSecondaryButtonStyle(foregroundColor: CodexTheme.utilityActionText))
-            .disabled(!hasSavedSignIn || isWorking)
-            .accessibilityLabel("Switch OpenChamber OpenAI")
-            .help("Verify and switch the local OpenAI connection for new requests. Other providers keep their sign-ins.")
-        Menu {
-            Text("Sign in to this account in OpenChamber first.")
-            Button("Save current sign-in", systemImage: "square.and.arrow.down", action: save)
-                .disabled(isWorking)
-        } label: {
-            Image(systemName: "ellipsis").frame(width: 28, height: 28)
-        }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .fixedSize()
-        .accessibilityLabel("OpenChamber sign-in setup")
-        .help("Save the current local OpenChamber sign-in")
     }
 }
 

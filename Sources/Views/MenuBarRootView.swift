@@ -211,7 +211,7 @@ struct MenuBarRootView: View {
                     openManagerWindow: {
                         openManagerWindow(snapshot.id)
                     },
-                    switchAndOpen: snapshot.profile.codexAccountKey == nil || !controller.switchingProfileIDs.isEmpty ? nil : {
+                        switchAndOpen: snapshot.profile.codexSignIn == nil || !controller.switchingProfileIDs.isEmpty ? nil : {
                         Task<Void, Never> { @MainActor in await controller.switchAndOpen(profileID: snapshot.id) }
                     },
                     switchOpenChamber: snapshot.profile.openCodeOpenAIAccount == nil || !controller.openCodeSwitchingProfileIDs.isEmpty ? nil : {

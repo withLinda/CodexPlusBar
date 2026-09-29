@@ -3,6 +3,35 @@ import Testing
 @testable import CodexPlusBar
 
 struct CodexThemeTests {
+    @Test func appSignInTextAndControlStatesMeetWCAGAndDeltaLStar() {
+        for preset in CodexThemePreset.allCases {
+            let palette = CodexTheme.palette(for: preset)
+            let surface = CodexTheme.surfaceToken(for: .subtle, preset: preset)
+            let tones: [CodexStatusTone] = [.neutral, .info, .success, .warning, .critical]
+            let text = [palette.strongText, palette.supportText] + tones.map {
+                CodexTheme.statusForegroundToken(for: $0, preset: preset)
+            }
+            for token in text {
+                #expect(contrastRatio(token, surface) >= 4.5, "\(preset.id) sign-in feedback WCAG")
+                #expect(deltaLStar(token, surface) >= 40, "\(preset.id) sign-in feedback delta L*")
+            }
+            for enabled in [true, false] {
+                for hovered in [true, false] {
+                    for pressed in [true, false] {
+                        let fill = CodexTheme.controlFillToken(isPrimary: false, isHovered: hovered,
+                            isPressed: pressed, isEnabled: enabled, preset: preset)
+                        let labels = enabled ? [palette.mutedText, CodexTheme.utilityActionTextToken(preset: preset)] : [palette.quietText]
+                        for label in labels {
+                            #expect(contrastRatio(label, fill) >= 4.5, "\(preset.id) sign-in button WCAG")
+                            #expect(deltaLStar(label, fill) >= 40, "\(preset.id) sign-in button delta L*")
+                        }
+                        #expect(contrastRatio(CodexTheme.searchFocusBorderToken(preset: preset), fill) >= 3)
+                    }
+                }
+            }
+        }
+    }
+
     private let darkHardPreset = CodexThemePreset(variant: .dark, contrast: .hard)
     private let lightHardPreset = CodexThemePreset(variant: .light, contrast: .hard)
 

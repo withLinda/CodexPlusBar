@@ -3,128 +3,68 @@ import Testing
 @testable import CodexPlusBar
 
 struct CodexAccountSwitchServiceTests {
-    @Test(arguments: [Int32(0), Int32(1)])
-    func confirmedSwitchAlwaysReopens(exitCode: Int32) async throws {
-        var events: [String] = []
-        try await CodexSwitchWorkflow.perform(
-            close: { events.append("close") },
-            switchAccount: { events.append("switch"); return exitCode },
-            verifyAccount: { events.append("verify"); return true },
-            reopen: { events.append("open"); return 0 }
-        )
-        #expect(events == ["close", "switch", "verify", "open"])
-    }
-
-    @Test
-    func failedSwitchReopensBeforeReportingFailure() async throws {
-        var reopened = false
-        await #expect(throws: CodexSwitchError.commandFailed("codex-auth returned exit code 7")) {
-            try await CodexSwitchWorkflow.perform(
-                close: {}, switchAccount: { 7 }, verifyAccount: { false },
-                reopen: { reopened = true; return 0 }
-            )
-        }
-        #expect(reopened)
-    }
-
-    @Test
-    func switchSpawnFailureStillReopens() async throws {
-        var reopened = false
-        await #expect(throws: CodexSwitchError.codexAuthMissing) {
-            try await CodexSwitchWorkflow.perform(
-                close: {}, switchAccount: { throw CodexSwitchError.codexAuthMissing },
-                verifyAccount: { false }, reopen: { reopened = true; return 0 }
-            )
-        }
-        #expect(reopened)
-    }
-
-    @Test(arguments: [true, false])
-    func reopenFailureCannotBeHiddenByRegistry(switched: Bool) async throws {
-        await #expect(throws: CodexSwitchError.reopenFailed(switched: switched)) {
-            try await CodexSwitchWorkflow.perform(
-                close: {}, switchAccount: { 0 }, verifyAccount: { switched }, reopen: { 1 }
-            )
-        }
-    }
-
-    @Test
-    func reopenSpawnFailureIsReportedAsLaunchFailure() async throws {
-        await #expect(throws: CodexSwitchError.reopenFailed(switched: true)) {
-            try await CodexSwitchWorkflow.perform(
-                close: {}, switchAccount: { 0 }, verifyAccount: { true },
-                reopen: { throw CocoaError(.fileNoSuchFile) }
-            )
-        }
-    }
-
-    @Test
-    func closeFailureDoesNotSwitchOrOpen() async throws {
-        var reachedSwitch = false
-        var reachedOpen = false
-        await #expect(throws: CodexSwitchError.chatGPTCouldNotClose) {
-            try await CodexSwitchWorkflow.perform(
-                close: { throw CodexSwitchError.chatGPTCouldNotClose },
-                switchAccount: { reachedSwitch = true; return 0 }, verifyAccount: { true },
-                reopen: { reachedOpen = true; return 0 }
-            )
-        }
-        #expect(!reachedSwitch && !reachedOpen)
-    }
-
-    @Test
-    func zeroExitWithoutSelectedAccountIsNotSuccess() async throws {
-        var reopened = false
-        await #expect(throws: CodexSwitchError.commandFailed("the selected login was not activated")) {
-            try await CodexSwitchWorkflow.perform(
-                close: {}, switchAccount: { 0 }, verifyAccount: { false },
-                reopen: { reopened = true; return 0 }
-            )
-        }
-        #expect(reopened)
-    }
-
-    // Execute the production process runner and close script, not just compare
-    // script text. All paths are unique test fixtures; no real app is closed.
-    @Test(arguments: [Int32(0), Int32(7)])
-    func realProcessesReachReopenAfterSwitch(switchExit: Int32) async throws {
-        let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("switch-test-\(UUID()) ' spaced")
+    @Test func importsLegacySnapshotWithoutHelperAndPreservesNewerNativeTokens() throws {
+        let home = try CodexSignInFixture.directory()
+        defer { try? FileManager.default.removeItem(at: home) }
+        let directory = home.appendingPathComponent(".codex/accounts")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let log = directory.appendingPathComponent("events")
-        let selected = "account'with spaces@example.com"
-        var verified = false
-        try await CodexSwitchWorkflow.perform(
-            close: {
-                let result = try await CodexSwitchProcess.run(
-                    executable: "/bin/zsh", arguments: ["-f", "-c",
-                        CodexAccountSwitchService.closeScript(appPath: directory.appendingPathComponent("Fake.app").path)]
-                )
-                #expect(result == 0)
-            },
-            switchAccount: {
-                try await CodexSwitchProcess.run(executable: "/bin/sh", arguments: [
-                    "-c", "printf 'switch:%s\\n' \"$2\" >> \"$1\"; exit \"$3\"", "fixture",
-                    log.path, selected, String(switchExit)
-                ])
-            },
-            verifyAccount: { verified = true; return true },
-            reopen: {
-                #expect(verified)
-                return try await CodexSwitchProcess.run(executable: "/bin/sh", arguments: [
-                    "-c", "printf 'open\\n' >> \"$1\"", "fixture", log.path
-                ])
-            }
-        )
-        #expect(try String(contentsOf: log, encoding: .utf8) == "switch:\(selected)\nopen\n")
+        let signIn = try CodexSignIn(data: CodexSignInFixture.data())
+        let registry: [String: Any] = ["accounts": [["account_key": "saved", "chatgpt_account_id": "workspace",
+                                                    "chatgpt_user_id": "user", "email": "studio@example.com"]]]
+        try JSONSerialization.data(withJSONObject: registry).write(to: directory.appendingPathComponent("registry.json"))
+        try signIn.data.write(to: directory.appendingPathComponent("saved.auth.json"))
+        var profile = CodexSignInFixture.profile()
+        profile.codexAccountKey = "saved"
+        profile.label = "My studio" // Explicit stable keys survive user-facing renames.
+        let vault = CodexSignInVault(homeDirectory: home)
+        let newer = try CodexSignIn(data: CodexSignInFixture.data(refresh: "newer-native"))
+        try vault.save(newer)
+        let result = CodexLegacySignInImporter(homeDirectory: home).migrate([profile])
+        #expect(result.changed)
+        #expect(result.0.first?.codexSignIn == signIn.identity)
+        #expect(try vault.load(signIn.identity).refreshToken == "newer-native")
+        #expect(try Data(contentsOf: directory.appendingPathComponent("saved.auth.json")) == signIn.data)
     }
 
-    @Test
-    func fastExitingChildrenCompleteReliably() async throws {
-        for _ in 0..<20 {
-            let result = try await CodexSwitchProcess.run(executable: "/usr/bin/true", arguments: [])
-            #expect(result == 0)
+    @Test func legacyEmailAmbiguityDoesNotChooseAnArbitraryWorkspace() throws {
+        let home = try CodexSignInFixture.directory()
+        defer { try? FileManager.default.removeItem(at: home) }
+        let directory = home.appendingPathComponent(".codex/accounts")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let accounts = ["first", "second"].map { ["account_key": $0, "chatgpt_account_id": $0,
+                                                  "chatgpt_user_id": "user", "email": "studio@example.com"] }
+        try JSONSerialization.data(withJSONObject: ["accounts": accounts]).write(to: directory.appendingPathComponent("registry.json"))
+        #expect(throws: CodexSignInError.identityMismatch) {
+            try CodexLegacySignInImporter(homeDirectory: home).linkedAccount(for: CodexSignInFixture.profile())
         }
+    }
+
+    @Test func verifiesAccountScopedUsageAndRejectsUnrelatedSuccessResponses() async throws {
+        let signIn = try CodexSignIn(data: CodexSignInFixture.data())
+        let verifier = CodexSignInVerifier(request: { request in
+            #expect(request.url?.absoluteString == "https://chatgpt.com/backend-api/wham/usage")
+            #expect(request.value(forHTTPHeaderField: "ChatGPT-Account-Id") == signIn.identity.accountID)
+            #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer \(signIn.accessToken)")
+            #expect(!request.httpShouldHandleCookies)
+            return (Data("<html>Sign in</html>".utf8), HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!)
+        })
+        await #expect(throws: CodexSignInError.invalidResponse) { try await verifier.verify(signIn) }
+    }
+
+    @Test func refreshPreservesUnknownFieldsAndReplacesAllReturnedTokens() async throws {
+        let original = try CodexSignIn(data: CodexSignInFixture.data(expired: true))
+        let next = try CodexSignIn(data: CodexSignInFixture.data(refresh: "rotated"))
+        let verifier = CodexSignInVerifier(request: { request in
+            #expect(request.httpMethod == "POST")
+            #expect(request.url?.host == "auth.openai.com")
+            #expect(String(decoding: request.httpBody ?? Data(), as: UTF8.self).contains("grant_type=refresh_token"))
+            let body = try JSONSerialization.data(withJSONObject: ["access_token": next.accessToken, "refresh_token": next.refreshToken])
+            return (body, HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!)
+        })
+        let updated = try await verifier.refresh(original)
+        #expect(updated.refreshToken == "rotated")
+        #expect(updated.accessToken == next.accessToken)
+        let object = try #require(JSONSerialization.jsonObject(with: updated.data) as? [String: Any])
+        #expect((object["future_field"] as? [String: Bool])?["preserve"] == true)
     }
 }
