@@ -48,6 +48,11 @@ enum DesignPreview {
         )
         let now = Date(timeIntervalSince1970: 1_789_473_600)
         controller.profiles = arguments.contains("--empty") ? [] : fixtures(now: now, missingExpiry: arguments.contains("--missing-expiry"))
+        if arguments.contains("--empty-notes"), let first = controller.profiles.first {
+            var profile = first.profile
+            profile.notes = nil
+            controller.profiles[0] = first.updating(profile: profile)
+        }
         controller.selectedProfileID = controller.profiles.first?.id
         if arguments.contains("--unsaved"), !controller.profiles.isEmpty {
             var profile = controller.profiles[0].profile

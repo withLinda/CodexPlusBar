@@ -60,7 +60,7 @@ struct CodexThemeTests {
             "light-medium",
             "light-soft",
         ]))
-        #expect(CodexTheme.palette(for: darkHardPreset).bgDim.hex == "#1E2326")
+        #expect(CodexTheme.palette(for: darkHardPreset).bgDim.hex == "#13191B")
         #expect(CodexTheme.palette(for: CodexThemePreset(variant: .dark, contrast: .medium)).bgDim.hex == "#232A2E")
         #expect(CodexTheme.palette(for: CodexThemePreset(variant: .dark, contrast: .soft)).bgDim.hex == "#293136")
         #expect(CodexTheme.palette(for: lightHardPreset).bg0.hex == "#FFFBEF")
@@ -71,7 +71,7 @@ struct CodexThemeTests {
         #expect(CodexTheme.palette(for: darkHardPreset).accBlue.hex == "#7FBBB3")
         #expect(CodexTheme.palette(for: darkHardPreset).accPurple.hex == "#D699B6")
         #expect(CodexTheme.palette(for: darkHardPreset).bgPurple.hex == "#463F48")
-        #expect(CodexTheme.palette(for: darkHardPreset).codexProviderSurfaceTint.hex == "#1E2D2B")
+        #expect(CodexTheme.palette(for: darkHardPreset).codexProviderSurfaceTint.hex == "#10221F")
         #expect(CodexTheme.palette(for: lightHardPreset).accGreen.hex == "#8DA101")
         #expect(CodexTheme.palette(for: lightHardPreset).accAqua.hex == "#35A77C")
         #expect(CodexTheme.palette(for: lightHardPreset).accBlue.hex == "#3A94C5")
@@ -100,12 +100,12 @@ struct CodexThemeTests {
 
     @Test
     func themeUsesHardEverforestSurfaceHierarchy() {
-        #expect(CodexTheme.canvasFillToken(for: darkHardPreset).hex == "#1E2326")
-        #expect(CodexTheme.shellFillToken(for: darkHardPreset).hex == "#272E33")
-        #expect(CodexTheme.surfaceToken(for: .regular, preset: darkHardPreset).hex == "#2E383C")
-        #expect(CodexTheme.surfaceToken(for: .nested, preset: darkHardPreset).hex == "#374145")
-        #expect(CodexTheme.surfaceToken(for: .strong, preset: darkHardPreset).hex == "#374145")
-        #expect(CodexTheme.surfaceToken(for: .subtle, preset: darkHardPreset).hex != "#272E33")
+        #expect(CodexTheme.canvasFillToken(for: darkHardPreset).hex == "#13191B")
+        #expect(CodexTheme.shellFillToken(for: darkHardPreset).hex == "#1B2225")
+        #expect(CodexTheme.surfaceToken(for: .regular, preset: darkHardPreset).hex == "#222D30")
+        #expect(CodexTheme.surfaceToken(for: .nested, preset: darkHardPreset).hex == "#2D383B")
+        #expect(CodexTheme.surfaceToken(for: .strong, preset: darkHardPreset).hex == "#2D383B")
+        #expect(CodexTheme.surfaceToken(for: .subtle, preset: darkHardPreset).hex != "#1B2225")
     }
 
     @Test
@@ -164,27 +164,27 @@ struct CodexThemeTests {
             CodexTheme.profileCardFillToken(
                 for: .codex,
                 preset: darkHardPreset
-            ).hex == "#232E2F"
+            ).hex == "#162222"
         )
         #expect(
             CodexTheme.profileCardFillToken(
                 for: .codex,
                 isSelected: true,
                 preset: darkHardPreset
-            ).hex == "#2C383A"
+            ).hex == "#202E2F"
         )
         #expect(
             CodexTheme.profileCardFillToken(
                 for: .claude,
                 preset: darkHardPreset
-            ).hex == "#2E3B42"
+            ).hex == "#222E34"
         )
         #expect(
             CodexTheme.profileCardFillToken(
                 for: .claude,
                 isSelected: true,
                 preset: darkHardPreset
-            ).hex == "#37454C"
+            ).hex == "#2C3A40"
         )
     }
 

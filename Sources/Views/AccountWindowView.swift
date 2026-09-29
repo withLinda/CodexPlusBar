@@ -369,6 +369,8 @@ struct ProfileManagerWindowView: View {
     @State private var page = ProfileManagerPage.profile
     @State private var isDetailsExpanded: Bool
     @State private var isConnectionSetupExpanded = false
+    @State private var isNotesExpanded = false
+    @State private var shouldFocusNotesOnReveal = false
     @FocusState private var isNotesFocused: Bool
     @State private var notesRevealTask: Task<Void, Never>?
 
@@ -795,7 +797,12 @@ struct ProfileManagerWindowView: View {
         .padding(12)
         .background(CodexTheme.surfaceFill(for: .subtle), in: RoundedRectangle(cornerRadius: 8))
         .onChange(of: isDetailsExpanded) { _, expanded in
-            if !expanded { hideOneTimePassword() }
+            if !expanded {
+                hideOneTimePassword()
+                isNotesFocused = false
+                shouldFocusNotesOnReveal = false
+                isNotesExpanded = !detailsDraft.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            }
         }
     }
 
@@ -915,12 +922,31 @@ struct ProfileManagerWindowView: View {
                 )
             }
 
-            ProfileManagerNotesDetailsField(
-                title: "Notes",
-                text: $detailsDraft.notes,
-                focus: $isNotesFocused
-            )
-            .id("profile-notes")
+            if isNotesExpanded {
+                ProfileManagerNotesDetailsField(
+                    title: "Notes",
+                    text: $detailsDraft.notes,
+                    focus: $isNotesFocused
+                )
+                .id("profile-notes")
+                .task {
+                    guard shouldFocusNotesOnReveal else { return }
+                    await Task.yield()
+                    guard !Task.isCancelled, shouldFocusNotesOnReveal else { return }
+                    isNotesFocused = true
+                    shouldFocusNotesOnReveal = false
+                }
+            } else {
+                Button {
+                    shouldFocusNotesOnReveal = true
+                    isNotesExpanded = true
+                } label: {
+                    Label("Add notes", systemImage: "plus")
+                }
+                .buttonStyle(CodexQuietButtonStyle(font: ProfileManagerTypography.small))
+                .padding(.leading, ProfileManagerLayout.fieldLabelWidth + 12)
+                .accessibilityIdentifier("add-profile-notes")
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -1180,7 +1206,11 @@ struct ProfileManagerWindowView: View {
     }
 
     private func syncDrafts(with snapshot: PlusProfileSnapshot?) {
+        isNotesFocused = false
+        shouldFocusNotesOnReveal = false
+        notesRevealTask?.cancel()
         detailsDraft = snapshot.map { PlusProfileDetailsDraft(profile: $0.profile) } ?? .init()
+        isNotesExpanded = !detailsDraft.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private func isDetailsSaveEnabled(for snapshot: PlusProfileSnapshot) -> Bool {
@@ -1690,6 +1720,7 @@ private struct ProfileManagerPhoneNumberField<TrailingContent: View>: View {
 
 private struct ProfileManagerDetailsTextField<TrailingContent: View>: View {
     @Environment(\.codexThemeRefreshContext) private var themeContext
+    @FocusState private var isFocused: Bool
     let title: String
     @Binding var text: String
     let onSubmit: () -> Void
@@ -1716,12 +1747,13 @@ private struct ProfileManagerDetailsTextField<TrailingContent: View>: View {
 
             HStack(alignment: .center, spacing: 10) {
                 TextField("", text: $text)
+                    .focused($isFocused)
                     .font(ProfileManagerTypography.body)
                     .textFieldStyle(.plain)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                     .frame(maxWidth: .infinity)
-                    .background(ProfileManagerFieldBackground())
+                    .background(ProfileManagerFieldBackground(isFocused: isFocused))
                     .foregroundStyle(CodexTheme.palette(for: themeContext.preset).dataValueText.color)
                     .submitLabel(.done)
                     .onSubmit(onSubmit)
@@ -1736,6 +1768,7 @@ private struct ProfileManagerDetailsTextField<TrailingContent: View>: View {
 
 private struct ProfileManagerPrivateDetailsField: View {
     @Environment(\.codexThemeRefreshContext) private var themeContext
+    @FocusState private var isFocused: Bool
     let title: String
     @Binding var text: String
     let presentation: ProfileManagerPrivateFieldPresentation
@@ -1758,12 +1791,13 @@ private struct ProfileManagerPrivateDetailsField: View {
                         SecureField("", text: $text)
                     }
                 }
+                .focused($isFocused)
                 .font(ProfileManagerTypography.body)
                 .textFieldStyle(.plain)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
                 .frame(maxWidth: .infinity)
-                .background(ProfileManagerFieldBackground())
+                .background(ProfileManagerFieldBackground(isFocused: isFocused))
                 .foregroundStyle(CodexTheme.palette(for: themeContext.preset).dataValueText.color)
                 .submitLabel(.done)
                 .onSubmit(onSubmit)
@@ -1807,10 +1841,6 @@ private struct ProfileManagerOneTimePasswordPanel: View {
                 ZStack {
                     RoundedRectangle(cornerRadius: CodexTheme.Radius.badge, style: .continuous)
                         .fill(CodexTheme.surfaceFill(for: .subtle))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: CodexTheme.Radius.badge, style: .continuous)
-                                .stroke(presentation.tone.borderColor, lineWidth: 1)
-                        )
 
                     Image(systemName: presentation.symbolName)
                         .font(.system(size: 13, weight: .semibold))
@@ -1888,10 +1918,6 @@ private struct ProfileManagerOneTimePasswordPanel: View {
                         .fill(CodexTheme.surfaceSheen(for: .subtle))
                 )
         )
-        .overlay(
-            RoundedRectangle(cornerRadius: CodexTheme.cornerRadius(for: .nested), style: .continuous)
-                .stroke(CodexTheme.surfaceBorder(for: .subtle), lineWidth: 1)
-        )
         .accessibilityElement(children: .contain)
     }
 
@@ -1959,7 +1985,7 @@ private struct ProfileManagerNotesDetailsField: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 8)
                 .frame(minHeight: 72, maxHeight: 108)
-                .background(ProfileManagerFieldBackground())
+                .background(ProfileManagerFieldBackground(isFocused: focus.wrappedValue))
                 .foregroundStyle(CodexTheme.palette(for: themeContext.preset).dataValueText.color)
                 .accessibilityLabel(title)
         }
@@ -1969,6 +1995,9 @@ private struct ProfileManagerNotesDetailsField: View {
 
 private struct ProfileManagerFieldBackground: View {
     @Environment(\.codexThemeRefreshContext) private var themeContext
+    @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.displayScale) private var displayScale
+    var isFocused = false
 
     var body: some View {
         RoundedRectangle(
@@ -1981,7 +2010,14 @@ private struct ProfileManagerFieldBackground: View {
                 cornerRadius: CodexTheme.fieldCornerRadius,
                 style: .continuous
             )
-            .strokeBorder(CodexTheme.controlBoundaryToken(preset: themeContext.preset).color, lineWidth: 1)
+            .strokeBorder(
+                isFocused
+                    ? CodexTheme.searchFocusBorderToken(preset: themeContext.preset).color
+                    : (contrast == .increased
+                        ? CodexTheme.controlBoundaryToken(preset: themeContext.preset).color
+                        : CodexTheme.fieldIdleBoundaryToken(preset: themeContext.preset).color),
+                lineWidth: isFocused ? 2 : contrast == .increased ? 1 : 1 / max(displayScale, 1)
+            )
         }
     }
 }

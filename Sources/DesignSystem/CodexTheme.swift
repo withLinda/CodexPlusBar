@@ -323,7 +323,7 @@ struct CodexEverforestPalette: Sendable, Equatable {
     var codexProviderSurfaceTint: CodexColorToken {
         switch (variant, contrast) {
         case (.dark, .hard):
-            CodexColorToken(hex: "#1E2D2B")
+            CodexColorToken(hex: "#10221F")
         case (.dark, .medium):
             CodexColorToken(hex: "#253432")
         case (.dark, .soft):
@@ -362,18 +362,19 @@ enum CodexTheme {
     private static func makePalette(for preset: CodexThemePreset) -> CodexEverforestPalette {
         switch (preset.variant, preset.contrast) {
         case (.dark, .hard):
+            // A deeper charcoal-green adaptation of Everforest Hard for this app.
             return CodexEverforestPalette(
                 variant: .dark,
                 contrast: .hard,
-                bgDim: CodexColorToken(hex: "#1E2326"),
-                bg0: CodexColorToken(hex: "#272E33"),
-                bg1: CodexColorToken(hex: "#2E383C"),
-                bg2: CodexColorToken(hex: "#374145"),
-                bg3: CodexColorToken(hex: "#414B50"),
+                bgDim: CodexColorToken(hex: "#13191B"),
+                bg0: CodexColorToken(hex: "#1B2225"),
+                bg1: CodexColorToken(hex: "#222D30"),
+                bg2: CodexColorToken(hex: "#2D383B"),
+                bg3: CodexColorToken(hex: "#364246"),
                 bgRed: CodexColorToken(hex: "#493B40"),
                 bgYellow: CodexColorToken(hex: "#45443C"),
                 bgGreen: CodexColorToken(hex: "#3C4841"),
-                bgBlue: CodexColorToken(hex: "#384B55"),
+                bgBlue: CodexColorToken(hex: "#2A3D47"),
                 bgPurple: CodexColorToken(hex: "#463F48"),
                 fg: CodexColorToken(hex: "#D3C6AA"),
                 strongText: CodexColorToken(hex: "#F2EFDF"),
@@ -617,6 +618,13 @@ enum CodexTheme {
             if contrastRatio(candidate, background) >= 3 { return candidate }
         }
         return palette.strongText
+    }
+
+    static func fieldIdleBoundaryToken(preset: CodexThemePreset) -> CodexColorToken {
+        // The matte fill identifies the idle field; stronger edges belong to focus
+        // and the system's Increase Contrast appearance.
+        surfaceToken(for: .nested, preset: preset)
+            .mixed(with: controlBoundaryToken(preset: preset), fraction: 0.3)
     }
 
     static func controlFillToken(

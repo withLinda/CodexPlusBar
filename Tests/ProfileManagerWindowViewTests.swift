@@ -135,16 +135,17 @@ struct ProfileManagerWindowViewTests {
     }
 
     @Test
-    func selectedProfileBuildsSixEditableProfileFields() throws {
+    func selectedProfileBuildsEditableFieldsWithSavedNotes() throws {
         let tempDirectory = makeTemporaryDirectory()
         let store = ProfileCatalogStore(
             fileURL: tempDirectory.appendingPathComponent("profiles.json", isDirectory: false)
         )
-        let profile = sampleProfile(
+        var profile = sampleProfile(
             label: "alpha@example.com",
             emailLink: "mail.google.com/mail/u/0/#inbox",
             sortOrder: 0
         )
+        profile.notes = "Saved account note"
         try store.saveProfiles([profile])
 
         let controller = PlusProfileController(
@@ -170,6 +171,70 @@ struct ProfileManagerWindowViewTests {
         let bodyType = String(reflecting: type(of: rootView.body))
         #expect(bodyType.contains("ProfileSearchField"))
         #expect(bodyType.contains("ProfileManagerPhoneNumberField"))
+    }
+
+    @Test(arguments: [nil, "", " \n\t"] as [String?])
+    func emptyNotesDoNotMountAnEditor(notes: String?) throws {
+        let store = ProfileCatalogStore(fileURL: makeTemporaryDirectory().appendingPathComponent("profiles.json"))
+        var profile = sampleProfile(label: "studio@example.com", sortOrder: 0)
+        profile.notes = notes
+        try store.saveProfiles([profile])
+        let controller = PlusProfileController(catalogStore: store, dataService: StubProfileViewDataService(), autoStart: false)
+        let hostingView = makeHostingView(controller: controller, initiallyShowsDetails: true)
+        let window = hostInWindow(hostingView)
+        defer { window.orderOut(nil) }
+        flushViewHierarchy(for: hostingView)
+
+        #expect(editableTextFieldCount(in: hostingView) >= 5)
+        #expect(textEditorCount(in: hostingView) == 0)
+    }
+
+    @Test
+    func clearingSavedNotesKeepsTheSameEditorMounted() throws {
+        let store = ProfileCatalogStore(fileURL: makeTemporaryDirectory().appendingPathComponent("profiles.json"))
+        var profile = sampleProfile(label: "studio@example.com", sortOrder: 0)
+        profile.notes = "Replace this note"
+        try store.saveProfiles([profile])
+        let controller = PlusProfileController(catalogStore: store, dataService: StubProfileViewDataService(), autoStart: false)
+        let hostingView = makeHostingView(controller: controller, initiallyShowsDetails: true)
+        let window = hostInWindow(hostingView)
+        defer { window.orderOut(nil) }
+        flushViewHierarchy(for: hostingView)
+        let mountedEditor = hostingView.allSubviews().compactMap { $0 as? NSTextView }.first(where: \.isEditable)
+        let editor = try #require(mountedEditor)
+        window.makeFirstResponder(editor)
+        editor.insertText("", replacementRange: NSRange(location: 0, length: (editor.string as NSString).length))
+        flushViewHierarchy(for: hostingView)
+
+        #expect(editor.string.isEmpty)
+        #expect(hostingView.allSubviews().contains(where: { $0 === editor }))
+        editor.insertText("Replacement note", replacementRange: editor.selectedRange())
+        flushViewHierarchy(for: hostingView)
+        #expect(editor.string == "Replacement note")
+    }
+
+    @Test
+    func selectingAnotherProfileResetsNotesDisclosureAndContent() throws {
+        let store = ProfileCatalogStore(fileURL: makeTemporaryDirectory().appendingPathComponent("profiles.json"))
+        var populated = sampleProfile(label: "notes@example.com", sortOrder: 0)
+        populated.notes = "Notes belong to this profile"
+        let empty = sampleProfile(label: "empty@example.com", sortOrder: 1)
+        try store.saveProfiles([populated, empty])
+        let controller = PlusProfileController(catalogStore: store, dataService: StubProfileViewDataService(), autoStart: false)
+        controller.selectedProfileID = populated.id
+        let hostingView = makeHostingView(controller: controller, initiallyShowsDetails: true)
+        let window = hostInWindow(hostingView)
+        defer { window.orderOut(nil) }
+        flushViewHierarchy(for: hostingView)
+        #expect(textEditorCount(in: hostingView) == 1)
+
+        controller.selectedProfileID = empty.id
+        flushViewHierarchy(for: hostingView)
+        #expect(textEditorCount(in: hostingView) == 0)
+        controller.selectedProfileID = populated.id
+        flushViewHierarchy(for: hostingView)
+        let editors = hostingView.allSubviews().compactMap { $0 as? NSTextView }.filter(\.isEditable)
+        #expect(editors.map(\.string) == ["Notes belong to this profile"])
     }
 
     @Test
