@@ -131,7 +131,8 @@ struct CodexDesktopApp: CodexDesktopAppManaging {
         }
 
         // A successful termination request is not proof of exit. Give background auth writers
-        // a separate drain budget and fail closed if any bundled process remains (or is unknown).
+        // a separate drain budget and fail closed if any credential-capable process remains
+        // (or discovery fails). Known crash-reporting/hotkey utilities can outlive the desktop.
         // Only the original desktop instances can be forced; never signal arbitrary backend PIDs.
         let drainDeadline = now().advanced(by: .seconds(12))
         while apps.contains(where: { !$0.isTerminated }) || hasBundledProcesses() {
@@ -165,11 +166,11 @@ struct CodexDesktopApp: CodexDesktopAppManaging {
         return configuration
     }
 
-    private static func hasBundledProcesses(_ appURL: URL) -> Bool {
-        bundledProcesses(appURL)?.isEmpty != true
+    static func hasBundledProcesses(_ appURL: URL) -> Bool {
+        bundledProcesses(appURL, excludingBackgroundUtilities: true)?.isEmpty != true
     }
 
-    private static func bundledProcesses(_ appURL: URL) -> [pid_t]? {
+    private static func bundledProcesses(_ appURL: URL, excludingBackgroundUtilities: Bool = false) -> [pid_t]? {
         let count = proc_listallpids(nil, 0)
         guard count > 0 else { return nil }
         var pids = [pid_t](repeating: 0, count: Int(count) + 64)
@@ -183,9 +184,26 @@ struct CodexDesktopApp: CodexDesktopAppManaging {
             var path = [CChar](repeating: 0, count: 4 * Int(MAXPATHLEN))
             if proc_pidpath(pid, &path, UInt32(path.count)) > 0 {
                 let bytes = path.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }
-                if String(decoding: bytes, as: UTF8.self).hasPrefix(prefix) { matching.append(pid) }
+                let executable = String(decoding: bytes, as: UTF8.self)
+                guard executable.hasPrefix(prefix) else { continue }
+                let relativePath = executable.dropFirst(prefix.count)
+                if excludingBackgroundUtilities, isSignInIndependentUtility(relativePath) { continue }
+                matching.append(pid)
             }
         }
         return matching
+    }
+
+    private static func isSignInIndependentUtility(_ relativePath: Substring) -> Bool {
+        // Match confirmed bundle locations, not process basenames: unknown helpers and every
+        // Codex app-server still block credential writes, including orphaned backends.
+        if relativePath == "Resources/native/bare-modifier-monitor" { return true }
+        let components = relativePath.split(separator: "/")
+        return components.count == 6
+            && components[0] == "Frameworks"
+            && components[1] == "Codex Framework.framework"
+            && components[2] == "Versions"
+            && components[4] == "Helpers"
+            && components[5] == "browser_crashpad_handler"
     }
 }

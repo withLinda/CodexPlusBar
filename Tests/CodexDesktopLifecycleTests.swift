@@ -4,6 +4,63 @@ import Testing
 
 @MainActor
 struct CodexDesktopLifecycleTests {
+    @Test(arguments: [
+        "Frameworks/Codex Framework.framework/Versions/154.0.8037.57/Helpers/browser_crashpad_handler",
+        "Resources/native/bare-modifier-monitor"
+    ])
+    func survivingUtilityAllowsVerifiedSwitch(relativePath: String) async throws {
+        let utility = try BundledDesktopProcessFixture(relativePath: relativePath)
+        defer { utility.cleanUp() }
+        let fixture = try NativeSwitchFixture()
+        defer { fixture.cleanUp() }
+        let profile = try fixture.installTarget()
+        let original = try Data(contentsOf: fixture.authURL)
+        let app = DesktopTerminationStub()
+        let clock = DesktopShutdownClock()
+        clock.onSleep = {
+            #expect((try? Data(contentsOf: fixture.authURL)) == original)
+            app.isTerminated = true
+        }
+        let adapter = DesktopLifecycleAdapter(app: app, clock: clock, hasBundledProcesses: {
+            CodexDesktopApp.hasBundledProcesses(utility.appURL)
+        })
+        let codexHome = fixture.home.appendingPathComponent(".codex")
+        let service = CodexAccountSwitchService(
+            homeDirectory: fixture.home, app: adapter, verifier: NativeVerifierStub(),
+            resolveStore: { try CodexLiveAuthStore(codexHome: codexHome, keychain: MemoryCodexKeychain()) }
+        )
+
+        try await service.switchAndOpen(profile: profile)
+
+        #expect(try CodexSignIn(data: Data(contentsOf: fixture.authURL)).identity == profile.codexSignIn)
+        #expect(clock.elapsed == .seconds(1))
+        #expect(app.requests == ["quit"])
+        #expect(adapter.openCount == 1)
+        #expect(utility.process.isRunning)
+    }
+
+    @Test(arguments: [
+        "MacOS/ChatGPT",
+        "Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex",
+        "Frameworks/Codex (Renderer).app/Contents/MacOS/Codex (Renderer)",
+        "Resources/native/unknown-helper",
+        "Resources/native/browser_crashpad_handler",
+        "Frameworks/Unknown.framework/Versions/1/Helpers/browser_crashpad_handler",
+        "Resources/other/bare-modifier-monitor"
+    ])
+    func realRemainingBackendOrUnknownHelperPreventsClose(relativePath: String) async throws {
+        let backend = try BundledDesktopProcessFixture(relativePath: relativePath)
+        defer { backend.cleanUp() }
+        let clock = DesktopShutdownClock()
+        await #expect(throws: CodexSignInError.appCouldNotClose) {
+            try await close([], clock: clock, hasBundledProcesses: {
+                CodexDesktopApp.hasBundledProcesses(backend.appURL)
+            })
+        }
+        #expect(clock.elapsed == .seconds(12))
+        #expect(backend.process.isRunning)
+    }
+
     @Test func launchesWithPromptFreeNormalQuitEnabled() {
         let configuration = CodexDesktopApp.openConfiguration()
         #expect(configuration.environment["CODEX_ELECTRON_DISABLE_QUIT_CONFIRMATION"] == "1")
@@ -240,5 +297,50 @@ private final class DesktopShutdownClock {
         elapsed += .seconds(1)
         onSleep()
         await Task.yield()
+    }
+}
+
+private final class BundledDesktopProcessFixture {
+    // Keep libproc's physical executable path and Foundation's bundle path identical;
+    // Foundation abbreviates /private/var temporary URLs to /var on this macOS version.
+    let appURL = Bundle.main.bundleURL.deletingLastPathComponent()
+        .appendingPathComponent("DesktopProcess-\(UUID().uuidString).app")
+    let process = Process()
+
+    init(relativePath: String) throws {
+        let executable = appURL.appendingPathComponent("Contents/\(relativePath)")
+        do {
+            try FileManager.default.createDirectory(at: executable.deletingLastPathComponent(),
+                                                    withIntermediateDirectories: true)
+            try FileManager.default.copyItem(at: URL(fileURLWithPath: "/bin/sleep"), to: executable)
+            // Apple's platform signature hides relocated system binaries from proc_pidpath.
+            // Ad-hoc signing makes this an ordinary inspectable process like the desktop helpers.
+            let signer = Process()
+            signer.executableURL = URL(fileURLWithPath: "/usr/bin/codesign")
+            signer.arguments = ["--force", "--sign", "-", executable.path]
+            signer.standardOutput = FileHandle.nullDevice
+            signer.standardError = FileHandle.nullDevice
+            try signer.run()
+            signer.waitUntilExit()
+            try #require(signer.terminationStatus == 0)
+            process.executableURL = executable
+            process.arguments = ["60"]
+            try process.run()
+            var path = [CChar](repeating: 0, count: 4 * Int(MAXPATHLEN))
+            try #require(proc_pidpath(process.processIdentifier, &path, UInt32(path.count)) > 0)
+            let actualPath = String(decoding: path.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)
+            try #require(actualPath == executable.path)
+        } catch {
+            cleanUp()
+            throw error
+        }
+    }
+
+    func cleanUp() {
+        if process.isRunning {
+            process.terminate()
+            process.waitUntilExit()
+        }
+        try? FileManager.default.removeItem(at: appURL)
     }
 }
