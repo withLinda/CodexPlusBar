@@ -13,6 +13,15 @@ extension CodexDesktopAppManaging {
 
 enum CodexDesktopCloseError: Error { case terminationStarted }
 
+@MainActor
+protocol CodexDesktopRunningApplication {
+    var isTerminated: Bool { get }
+    func terminate() -> Bool
+    func forceTerminate() -> Bool
+}
+
+extension NSRunningApplication: CodexDesktopRunningApplication {}
+
 struct CodexDesktopApp: CodexDesktopAppManaging {
     static let bundleIdentifier = "com.openai.codex"
 
@@ -89,23 +98,48 @@ struct CodexDesktopApp: CodexDesktopAppManaging {
         }
         try Task.checkCancellation()
         let apps = NSRunningApplication.runningApplications(withBundleIdentifier: Self.bundleIdentifier)
+        try await Self.close(apps: apps, hasBundledProcesses: { Self.hasBundledProcesses(url) })
+    }
+
+    @MainActor static func close(
+        apps: [any CodexDesktopRunningApplication],
+        hasBundledProcesses: () -> Bool,
+        now: () -> ContinuousClock.Instant = { .now },
+        pause: () async -> Void = {
+            // A requested quit must settle even if the switch task is cancelled.
+            await Task.detached { try? await Task.sleep(for: .milliseconds(100)) }.value
+        }
+    ) async throws {
+        try Task.checkCancellation()
         var terminationStarted = false
         for app in apps where !app.isTerminated {
-            guard app.terminate() else {
-                if terminationStarted { throw CodexDesktopCloseError.terminationStarted }
-                throw CodexSignInError.appCouldNotClose
-            }
-            terminationStarted = true
+            if app.terminate() { terminationStarted = true }
         }
-        // Wait for bundled backend processes too; an exiting backend can still save refreshed auth.
-        // Once termination is requested, finish this bounded wait even if our caller is cancelled.
-        let deadline = ContinuousClock.now.advanced(by: .seconds(12))
-        while apps.contains(where: { !$0.isTerminated }) || Self.hasBundledProcesses(url) {
-            guard ContinuousClock.now < deadline else {
+
+        // Normal quit first, including instances launched without our prompt-free environment.
+        let gracefulDeadline = now().advanced(by: .seconds(12))
+        while apps.contains(where: { !$0.isTerminated }), now() < gracefulDeadline {
+            await pause()
+        }
+        for app in apps where !app.isTerminated {
+            // Cancellation may settle an already-requested quit, but must never escalate it.
+            guard !Task.isCancelled else {
+                if terminationStarted { throw CodexDesktopCloseError.terminationStarted }
+                throw CancellationError()
+            }
+            if app.forceTerminate() { terminationStarted = true }
+        }
+
+        // A successful termination request is not proof of exit. Give background auth writers
+        // a separate drain budget and fail closed if any bundled process remains (or is unknown).
+        // Only the original desktop instances can be forced; never signal arbitrary backend PIDs.
+        let drainDeadline = now().advanced(by: .seconds(12))
+        while apps.contains(where: { !$0.isTerminated }) || hasBundledProcesses() {
+            guard now() < drainDeadline else {
                 if terminationStarted { throw CodexDesktopCloseError.terminationStarted }
                 throw CodexSignInError.appCouldNotClose
             }
-            await Task.detached { try? await Task.sleep(for: .milliseconds(100)) }.value
+            await pause()
         }
     }
 
@@ -113,14 +147,22 @@ struct CodexDesktopApp: CodexDesktopAppManaging {
         guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: Self.bundleIdentifier) else {
             throw CodexSignInError.appMissing
         }
-        let configuration = NSWorkspace.OpenConfiguration()
-        configuration.activates = true
+        let configuration = Self.openConfiguration()
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
             NSWorkspace.shared.openApplication(at: url, configuration: configuration) { app, error in
                 if error == nil, app != nil { continuation.resume() }
                 else { continuation.resume(throwing: CodexSignInError.reopenFailed) }
             }
         }
+    }
+
+    @MainActor static func openConfiguration() -> NSWorkspace.OpenConfiguration {
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        // ChatGPT's current Electron quit handler supports this opt-out. It affects only the
+        // new instance; the bounded force fallback also covers versions that ignore the flag.
+        configuration.environment = ["CODEX_ELECTRON_DISABLE_QUIT_CONFIRMATION": "1"]
+        return configuration
     }
 
     private static func hasBundledProcesses(_ appURL: URL) -> Bool {
