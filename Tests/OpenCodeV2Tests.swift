@@ -5,6 +5,10 @@ import Testing
 struct OpenCodeV2Tests {
     @Test(.enabled(if: ProcessInfo.processInfo.environment["OPENCHAMBER_V2_TEST_URL"] != nil))
     func isolatedServerSwitchesThroughProductionClient() async throws {
+        try await IsolatedOpenChamberTestGate.shared.run { try await exerciseIsolatedBridge() }
+    }
+
+    private func exerciseIsolatedBridge() async throws {
         let rawURL = try #require(ProcessInfo.processInfo.environment["OPENCHAMBER_V2_TEST_URL"])
         let url = try #require(URL(string: rawURL))
         #expect(url.host == "127.0.0.1")

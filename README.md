@@ -70,6 +70,16 @@ Empty notes stay behind **Add notes**. Select it to start typing; saved notes op
 
 The app does not type passwords into provider pages for you.
 
+### OpenChamber account sync
+
+**Automatically sync OpenChamber** is on by default in Settings. Your saved Codex profiles determine the local OpenChamber OpenAI OAuth login list, including labels and removals. Sync runs at startup, one second after saved account changes, and every 60 seconds; Profile Manager also has **Sync now** and a compact result.
+
+To add a login, use OpenChamber's device login code, select the matching CodexPlusBar profile, then choose **Save current sign-in**. Newly observed logins get 15 minutes to complete this step, even across restarts. Existing surplus logins on first enablement are eligible for removal immediately.
+
+The visible **Remove** button beside **Refresh** removes the selected profile directly and schedules login synchronization. A retained active account stays selected. Removal of a surplus active account waits until OpenChamber reports no running sessions; unavailable idle status also defers removal.
+
+Missing logins can be restored from previously saved OAuth sign-ins. A profile with only a browser session shows **OpenChamber sign-in needed** until you sign in and save it. Other providers and API keys are preserved. Automatic sync needs OpenCode's native credential API (verified with OpenChamber 2.5.2 / OpenCode 2.1.4); legacy manual switching remains available on supported older runtimes.
+
 ### Save and switch desktop sign-ins
 
 Select a Codex profile in Profile Manager. The **ChatGPT / Codex** and **OpenChamber** rows each have a visible **Save current sign-in** action.

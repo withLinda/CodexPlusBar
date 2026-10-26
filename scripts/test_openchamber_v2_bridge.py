@@ -52,10 +52,10 @@ def main():
         base = f"http://127.0.0.1:{port}"
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
-        def request(path, body=None, directory=location):
+        def request(path, body=None, directory=location, method=None):
             headers = {"Authorization": "Basic " + base64.b64encode(b"opencode:fixture-password").decode(),
                        "Content-Type": "application/json", "x-opencode-directory": str(directory)}
-            req = urllib.request.Request(base + path, headers=headers,
+            req = urllib.request.Request(base + path, headers=headers, method=method,
                                          data=None if body is None else json.dumps(body).encode())
             with opener.open(req, timeout=60) as response:
                 raw = response.read()
@@ -79,18 +79,17 @@ def main():
                 else:
                     raise RuntimeError("Isolated server did not start")
                 assert info["pid"] == process.pid
-                # A fresh V2 DB does not run the legacy upgrade import. Seed
-                # synthetic test rows only; production uses OpenCode's APIs.
-                with sqlite3.connect(data / "opencode.db") as database:
-                    value = dict(type="oauth", methodID="chatgpt-browser", access=original["access"],
-                                 refresh=original["refresh"], expires=original["expires"],
-                                 metadata={"accountID": original["accountId"]})
-                    database.execute("INSERT INTO credential (id,integration_id,label,value,active,time_created,time_updated) VALUES (?,?,?,?,1,1,1)",
-                                     ("cred_fixture_original", "openai", "Original", json.dumps(value)))
-                    database.execute("INSERT INTO credential (id,integration_id,label,value,active,time_created,time_updated) VALUES (?,?,?,?,1,1,1)",
-                                     ("cred_fixture_other", "other-provider", "Other", json.dumps({"type": "key", "key": "keep"})))
-                    database.execute("INSERT INTO credential (id,integration_id,label,value,active,time_created,time_updated) VALUES (?,?,?,?,1,2,2)",
-                                     ("cred_fixture_placeholder", "openai", "Placeholder", json.dumps(value)))
+                value = dict(type="oauth", methodID="chatgpt-browser", access=original["access"],
+                             refresh=original["refresh"], expires=original["expires"],
+                             metadata={"accountID": original["accountId"]})
+                for id, integration, label, credential_value in [
+                    ("cred_fixture_original", "openai", "Original", value),
+                    ("cred_fixture_other", "other-provider", "Other", {"type": "key", "key": "keep"}),
+                    ("cred_fixture_placeholder", "openai", "Placeholder", value),
+                    ("cred_fixture_apikey", "openai", "API key", {"type": "key", "key": "keep-openai-key"}),
+                ]:
+                    request("/api/credential", {"id": id, "integrationID": integration, "label": label,
+                                                "value": credential_value, "activate": False}, method="POST")
                 request("/api/credential/cred_fixture_original/activate", {})
                 before = rpc("read", {})
                 assert before["auth"] == original
@@ -128,13 +127,14 @@ def main():
                     # Discovery intentionally rejects two bundled backends;
                     # run the installed-app probes separately from this server.
                     test_env = dict(os.environ, TEST_RUNNER_OPENCHAMBER_V2_TEST_URL=base,
+                                    TEST_RUNNER_OPENCHAMBER_NATIVE_TEST_DIRECTORY=str(root),
                                     TEST_RUNNER_OPENCHAMBER_RUNTIME_PROBE="0",
                                     TEST_RUNNER_OPENCHAMBER_V2_BRIDGE_PROBE="0")
                     # xcodebuild can hang during test-host shutdown on this Mac;
                     # preserve the complete log for its Swift Testing summary.
                     project = Path(__file__).resolve().parents[1]
                     with (root / "swift-tests.log").open("wb") as test_log:
-                        tests = subprocess.Popen(["make", "test", "AGENT_NAME=openchamber-v2"], env=test_env,
+                        tests = subprocess.Popen(["make", "test", "AGENT_NAME=openchamber-sync"], env=test_env,
                                                  cwd=project, stdout=test_log, stderr=test_log, start_new_session=True)
                         try:
                             result = tests.wait(timeout=120)
@@ -144,13 +144,15 @@ def main():
                             result = None
                     output = (root / "swift-tests.log").read_text(errors="replace")
                     native_passed = "Test isolatedServerSwitchesThroughProductionClient() passed" in output
+                    sync_passed = "Test isolatedNativeReconciliationThroughProductionClient() passed" in output
                     summary = [line for line in output.splitlines() if "Test run with" in line]
-                    if not native_passed or not summary or "passed" not in summary[-1] or result not in (0, None):
+                    if not native_passed or not sync_passed or not summary or "passed" not in summary[-1] or result not in (0, None):
                         print(output[-12000:])
                         raise AssertionError("Swift integration suite did not pass")
                     print(summary[-1])
+                    print("PASS: production native client/service restoration, pruning, capture grace, metadata, idempotence, cross-location inventory, empty OAuth list and API-key/provider preservation")
                     if result is None:
-                        print("Swift Testing passed; xcodebuild shutdown timed out (see build/logs/openchamber-v2/test.log).")
+                        print("Swift Testing passed; xcodebuild shutdown timed out (see build/logs/openchamber-sync/test.log).")
             except Exception as error:
                 if isinstance(error, urllib.error.HTTPError):
                     print(error.read().decode())
