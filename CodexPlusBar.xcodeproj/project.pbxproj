@@ -55,6 +55,7 @@
 		6E5FDEE47EFD3F385F90F3EA /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDB2F727B33B769B1AD9836D /* SettingsView.swift */; };
 		73BB12CD8E133AA0E131CC9F /* PhoneSummaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A872BFC23B2CCCBF513E45E1 /* PhoneSummaryView.swift */; };
 		75DFB4C19F6056DBAE57A1F3 /* MenuBarProfilePreference.swift in Sources */ = {isa = PBXBuildFile; fileRef = 400D81A1F70064BA2F950787 /* MenuBarProfilePreference.swift */; };
+		7836C2439EBAE653FD60F644 /* OpenChamberSyncPreference.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9913EFDBB3E4A5DE5537F51 /* OpenChamberSyncPreference.swift */; };
 		7ABB06A77AA7DF87C790A849 /* ProfileTagViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2D8B357AE9E8E39D52E54D8 /* ProfileTagViews.swift */; };
 		7B7FAA38CCFD43257B91E417 /* AuthSessionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05FB861FD211C30C13F441A6 /* AuthSessionService.swift */; };
 		8491E254498B90904C946B1F /* ProfilePhoneNumberComboBox.swift in Sources */ = {isa = PBXBuildFile; fileRef = F369067FAFB972FD6B6E3E08 /* ProfilePhoneNumberComboBox.swift */; };
@@ -83,6 +84,7 @@
 		D25BB72CFD7CE4B812F2E58B /* OpenChamberSyncStateStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B39904930FBF14684F139DA3 /* OpenChamberSyncStateStore.swift */; };
 		D3227D21FF71D190188827EA /* PlusProfileModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5ADC9A58E39E55458BD610F6 /* PlusProfileModels.swift */; };
 		D5550C919F5E95543ACF794D /* Inter-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 33360E8618EAD73760FD014F /* Inter-Medium.ttf */; };
+		D6CA6FF0C21311398F56C566 /* OpenChamberSyncScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C26E6A53E3766353307F15A /* OpenChamberSyncScheduler.swift */; };
 		D74C0C215FE67426FF797835 /* ProfileSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = A86489B28B4EEE86C87A88E9 /* ProfileSearch.swift */; };
 		DD341BBA564490520ECFB6CA /* WorkspaceLimitService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38D97AFB21D00935D66A3DE2 /* WorkspaceLimitService.swift */; };
 		DEF34F589596A99C9895724F /* CodexLegacySignInImporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8416D8C433CC85EDA06BDC61 /* CodexLegacySignInImporter.swift */; };
@@ -142,6 +144,7 @@
 		4A0441E818BD8B568CBC6AE1 /* MacSystemActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacSystemActions.swift; sourceTree = "<group>"; };
 		4B7391381874E52F3048629C /* AccountCatalogModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountCatalogModels.swift; sourceTree = "<group>"; };
 		4B83C451759354D40D65FAC2 /* CodexTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexTheme.swift; sourceTree = "<group>"; };
+		4C26E6A53E3766353307F15A /* OpenChamberSyncScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenChamberSyncScheduler.swift; sourceTree = "<group>"; };
 		534B523C2B9C7E021F4C3316 /* ProfilePhoneNumberCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfilePhoneNumberCatalog.swift; sourceTree = "<group>"; };
 		53E8040E2C459A442745D324 /* HTTPTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTTPTransport.swift; sourceTree = "<group>"; };
 		58AE54A19ADBA050F96F0AF6 /* AppMinuteClock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppMinuteClock.swift; sourceTree = "<group>"; };
@@ -194,6 +197,7 @@
 		D2CCF039048CB5F92D4BDF6C /* OneTimePasswordGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OneTimePasswordGenerator.swift; sourceTree = "<group>"; };
 		D2D8B357AE9E8E39D52E54D8 /* ProfileTagViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileTagViews.swift; sourceTree = "<group>"; };
 		D6EC5BF584B2DCC0B7B9E2B9 /* SingleInstanceCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SingleInstanceCoordinator.swift; sourceTree = "<group>"; };
+		D9913EFDBB3E4A5DE5537F51 /* OpenChamberSyncPreference.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenChamberSyncPreference.swift; sourceTree = "<group>"; };
 		DF562E09FAC0315C1413120C /* CodexAccountSwitchService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexAccountSwitchService.swift; sourceTree = "<group>"; };
 		DFD291B6EF8F8223AD2C9F09 /* OpenCodeCredentialClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodeCredentialClient.swift; sourceTree = "<group>"; };
 		E61CD774A9F9F92C7F47948A /* OpenChamberSyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenChamberSyncService.swift; sourceTree = "<group>"; };
@@ -319,6 +323,8 @@
 				7D6E8D24A2C7E16B085B2581 /* MenuBarPanelTextScalePreference.swift */,
 				400D81A1F70064BA2F950787 /* MenuBarProfilePreference.swift */,
 				CEEC302F552BC386137C7A03 /* MenuBarStatusItemController.swift */,
+				D9913EFDBB3E4A5DE5537F51 /* OpenChamberSyncPreference.swift */,
+				4C26E6A53E3766353307F15A /* OpenChamberSyncScheduler.swift */,
 				7FBDDA2EC7DC9B304A1496C4 /* ProfileDisplayOrderPreference.swift */,
 				D6EC5BF584B2DCC0B7B9E2B9 /* SingleInstanceCoordinator.swift */,
 			);
@@ -555,6 +561,8 @@
 				EF220468E18F70E23DBE1256 /* MenuBarStatusItemController.swift in Sources */,
 				28E0C29A3990704FA9270764 /* OneTimePasswordGenerator.swift in Sources */,
 				34FAB5E3DDE1E8310BE8FFFA /* OpenChamberSyncPlanner.swift in Sources */,
+				7836C2439EBAE653FD60F644 /* OpenChamberSyncPreference.swift in Sources */,
+				D6CA6FF0C21311398F56C566 /* OpenChamberSyncScheduler.swift in Sources */,
 				4030C99FC89E2EAD67D978ED /* OpenChamberSyncService.swift in Sources */,
 				D25BB72CFD7CE4B812F2E58B /* OpenChamberSyncStateStore.swift in Sources */,
 				2FB32741EA54814C2747455C /* OpenCodeCredentialClient.swift in Sources */,

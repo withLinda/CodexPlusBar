@@ -77,6 +77,11 @@ final class PlusProfileController {
     var openCodeSwitchingProfileIDs: Set<UUID> = []
     var openChamberActionStatus: OpenChamberActionStatus?
     var desktopSignInStatus: OpenChamberActionStatus?
+    var openChamberSyncResult: OpenChamberSyncResult? { syncScheduler.result }
+    var openChamberSyncMessage: String? { syncScheduler.message }
+    var isOpenChamberSyncing: Bool { syncScheduler.isSyncing }
+    @ObservationIgnored private let syncScheduler: OpenChamberSyncScheduler
+    @ObservationIgnored private var removingProfileIDs: Set<UUID> = []
 
     @ObservationIgnored private let catalogStore: ProfileCatalogStore
     @ObservationIgnored private let dataService: PlusProfileDataServing
@@ -93,6 +98,8 @@ final class PlusProfileController {
         dataService: PlusProfileDataServing = PlusProfileDataService(),
         accountSwitchService: any CodexAccountSwitchServing = CodexAccountSwitchService(),
         openCodeAuthService: any OpenCodeOpenAIAuthServing = OpenCodeOpenAIAuthService(),
+        syncService: any OpenChamberSyncServing = OpenChamberSyncService(),
+        syncDefaults: UserDefaults = .standard,
         autoRefreshInterval: TimeInterval = 300,
         maxConcurrentProfileRefreshes: Int = 3,
         autoRefreshSleep: @escaping @Sendable (UInt64) async throws -> Void = {
@@ -104,6 +111,7 @@ final class PlusProfileController {
         self.dataService = dataService
         self.accountSwitchService = accountSwitchService
         self.openCodeAuthService = openCodeAuthService
+        self.syncScheduler = OpenChamberSyncScheduler(service: syncService, defaults: syncDefaults)
         self.autoRefreshIntervalNanoseconds = UInt64(autoRefreshInterval * 1_000_000_000)
         self.maxConcurrentProfileRefreshes = max(1, maxConcurrentProfileRefreshes)
         self.autoRefreshSleep = autoRefreshSleep
@@ -126,8 +134,14 @@ final class PlusProfileController {
             await self?.refreshAll()
         }
         autoRefreshTask = Task { [weak self] in
-            await self?.runAutoRefreshLoop()
+            while !Task.isCancelled {
+                guard let sleep = self?.autoRefreshSleep, let interval = self?.autoRefreshIntervalNanoseconds else { return }
+                do { try await sleep(interval) } catch { return }
+                guard !Task.isCancelled else { return }
+                await self?.refreshAll()
+            }
         }
+        syncScheduler.start()
     }
 
     deinit {
@@ -508,11 +522,17 @@ final class PlusProfileController {
         let profile = profiles[index].profile
         openCodeSwitchingProfileIDs.insert(profileID)
         openChamberActionStatus = .init(profileID: profileID, message: "Checking the local OpenChamber sign-in…", tone: .info)
-        defer { openCodeSwitchingProfileIDs.remove(profileID) }
+        defer { openCodeSwitchingProfileIDs.remove(profileID); syncScheduler.resumeAfterManualOperation() }
+        await syncScheduler.pauseForManualOperation()
         do {
             let identity = try await openCodeAuthService.saveCurrent(for: profile)
             // Profile edits/removal can happen while the local backend is checked.
-            guard let currentIndex = indexOfProfile(profileID), profiles[currentIndex].profile == profile else {
+            guard let currentIndex = indexOfProfile(profileID),
+                  profiles[currentIndex].profile.provider == profile.provider,
+                  profiles[currentIndex].profile.label == profile.label,
+                  profiles[currentIndex].profile.codexSignIn == profile.codexSignIn,
+                  profiles[currentIndex].profile.codexAccountKey == profile.codexAccountKey,
+                  profiles[currentIndex].profile.openCodeOpenAIAccount == profile.openCodeOpenAIAccount else {
                 throw OpenCodeOpenAIAuthError.changedWhileReading
             }
             let previous = profiles[currentIndex]
@@ -535,7 +555,8 @@ final class PlusProfileController {
         openCodeSwitchingProfileIDs.insert(profileID)
         let profile = profiles[index].profile
         openChamberActionStatus = .init(profileID: profileID, message: "Switching and verifying OpenChamber OpenAI…", tone: .info)
-        defer { openCodeSwitchingProfileIDs.remove(profileID) }
+        defer { openCodeSwitchingProfileIDs.remove(profileID); syncScheduler.resumeAfterManualOperation() }
+        await syncScheduler.pauseForManualOperation()
         do {
             try await openCodeAuthService.switchTo(profile: profile)
             openChamberActionStatus = .init(profileID: profileID,
@@ -575,21 +596,34 @@ final class PlusProfileController {
     }
 
     func removeProfile(id profileID: UUID) async {
-        guard let index = indexOfProfile(profileID) else { return }
+        guard !removingProfileIDs.contains(profileID), let index = indexOfProfile(profileID) else { return }
+        removingProfileIDs.insert(profileID)
+        defer { removingProfileIDs.remove(profileID) }
         let snapshot = profiles[index]
 
         do {
             try await dataService.removeProfileData(for: snapshot.profile)
-            profiles.remove(at: index)
+            guard let currentIndex = indexOfProfile(profileID) else { return }
+            let candidate = profiles.filter { $0.id != profileID }.enumerated().map { offset, snapshot in
+                var profile = snapshot.profile; profile.sortOrder = offset
+                return snapshot.updating(profile: profile)
+            }
+            do { try catalogStore.saveProfiles(candidate.map(\.profile)) }
+            catch {
+                syncScheduler.update(profiles: profiles.map(\.profile), trusted: false)
+                statusMessage = "The profile list could not be saved locally."
+                return
+            }
+            profiles = candidate
+            syncScheduler.update(profiles: candidate.map(\.profile), trusted: true)
             chromeSignInProfileIDs.remove(profileID)
 
             if selectedProfileID == profileID {
-                selectedProfileID = profiles.indices.contains(index)
-                    ? profiles[index].id
+                selectedProfileID = profiles.indices.contains(currentIndex)
+                    ? profiles[currentIndex].id
                     : profiles.last?.id
             }
 
-            persistProfiles()
             statusMessage = profiles.isEmpty ? "All profiles were removed." : nil
             updateDashboardStatus()
         } catch {
@@ -758,9 +792,11 @@ final class PlusProfileController {
     private func loadStoredProfiles() {
         let storedProfiles: [PlusProfile]
         var repairMessage: String?
+        var trusted = false
 
         do {
             let loadResult = try catalogStore.loadProfilesWithReport()
+            trusted = loadResult.sourceExists
             let migration = accountSwitchService.migrate(loadResult.profiles)
             storedProfiles = migration.0
             if migration.changed {
@@ -768,6 +804,7 @@ final class PlusProfileController {
                     try catalogStore.saveProfiles(storedProfiles)
                     repairMessage = "Imported saved desktop sign-ins."
                 } catch {
+                    trusted = false
                     repairMessage = "Desktop sign-ins were imported, but the profile links could not be saved."
                 }
             }
@@ -779,6 +816,7 @@ final class PlusProfileController {
                         ? "Fixed 1 duplicate saved profile."
                         : "Fixed \(loadResult.removedDuplicateCount) duplicate saved profiles."
                 } catch {
+                    trusted = false
                     repairMessage = "A duplicate profile was hidden, but the saved list could not be repaired."
                 }
             }
@@ -797,25 +835,12 @@ final class PlusProfileController {
             )
         }
         selectedProfileID = profiles.first?.id
+        syncScheduler.update(profiles: storedProfiles, trusted: trusted)
         statusMessage = repairMessage ?? statusMessage
         updateDashboardStatus()
     }
 
-    private func runAutoRefreshLoop() async {
-        while Task.isCancelled == false {
-            do {
-                try await autoRefreshSleep(autoRefreshIntervalNanoseconds)
-            } catch {
-                return
-            }
-
-            if Task.isCancelled {
-                return
-            }
-
-            await refreshAll()
-        }
-    }
+    func syncOpenChamberNow() async { await syncScheduler.syncNow() }
 
     private func initialState(for profile: PlusProfile) -> PlusProfileState {
         switch profile.lastKnownState {
@@ -1024,8 +1049,10 @@ final class PlusProfileController {
 
         do {
             try catalogStore.saveProfiles(profiles.map(\.profile))
+            syncScheduler.update(profiles: profiles.map(\.profile), trusted: true)
             return true
         } catch {
+            syncScheduler.update(profiles: profiles.map(\.profile), trusted: false)
             statusMessage = "The profile list could not be saved locally."
             return false
         }

@@ -3,6 +3,7 @@ import Foundation
 struct ProfileCatalogLoadResult {
     let profiles: [PlusProfile]
     let removedDuplicateCount: Int
+    let sourceExists: Bool
 }
 
 struct ProfileCatalogStore {
@@ -21,12 +22,13 @@ struct ProfileCatalogStore {
 
     func loadProfilesWithReport() throws -> ProfileCatalogLoadResult {
         guard let profiles = try storage.load([PlusProfile].self) else {
-            return ProfileCatalogLoadResult(profiles: [], removedDuplicateCount: 0)
+            return ProfileCatalogLoadResult(profiles: [], removedDuplicateCount: 0, sourceExists: false)
         }
         let normalizedProfiles = Self.normalizedProfiles(profiles)
         return ProfileCatalogLoadResult(
             profiles: normalizedProfiles,
-            removedDuplicateCount: profiles.count - normalizedProfiles.count
+            removedDuplicateCount: profiles.count - normalizedProfiles.count,
+            sourceExists: true
         )
     }
 
