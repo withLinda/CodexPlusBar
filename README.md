@@ -4,7 +4,7 @@
 
 CodexPlusBar is a native macOS menu bar app for people who use more than one ChatGPT/Codex or Claude browser account. It keeps every account in its own local Chrome profile and puts live remaining usage, reset times, and sign-in status in one place.
 
-[Download CodexPlusBar.dmg](https://github.com/withLinda/CodexPlusBar/releases/latest/download/CodexPlusBar.dmg) · [Release notes and checksum](https://github.com/withLinda/CodexPlusBar/releases/latest) · [View the source](https://github.com/withLinda/CodexPlusBar)
+[Download CodexPlusBar.dmg](https://github.com/withLinda/CodexPlusBar/releases/latest/download/CodexPlusBar.dmg) · [Installation guide](#install-from-the-dmg) · [Release notes and checksum](https://github.com/withLinda/CodexPlusBar/releases/latest) · [View the source](https://github.com/withLinda/CodexPlusBar)
 
 ## Why use it?
 
@@ -82,9 +82,9 @@ Desktop switching uses native Swift, Security, URLSession, and AppKit; `codex-au
 
 Supported desktop storage is the standard `~/.codex/auth.json`, direct macOS Keychain, or `auto` selection. Custom runtime authentication overrides, administrator-managed configuration, encrypted secret storage, and ephemeral credentials report an unsupported-configuration message. Keychain may ask for access. A failed switch reports credential recovery and app-reopening results separately.
 
-Native desktop sign-in switching is included in the **1.2.3 DMG** (introduced in 1.2.0).
+Native desktop sign-in switching is included in the **1.2.4 DMG** (introduced in 1.2.0).
 
-**New in 1.2.3:** Leftover ChatGPT crash-reporting and keyboard-monitor utilities no longer cause a false “could not close” error when switching accounts. CodexPlusBar recognizes only their specific bundle locations; the desktop, Codex app-server, renderers, and unknown helpers still need to exit before the saved sign-in can change.
+**Since 1.2.3:** Leftover ChatGPT crash-reporting and keyboard-monitor utilities no longer cause a false “could not close” error when switching accounts. CodexPlusBar recognizes only their specific bundle locations; the desktop, Codex app-server, renderers, and unknown helpers still need to exit before the saved sign-in can change.
 
 **Since 1.2.2:** ChatGPT is reopened with quit confirmation disabled, so subsequent switches can quit normally without the scheduled-task dialog. A desktop instance launched elsewhere may still show the dialog on the first switch. If normal quit has not finished after 12 seconds, CodexPlusBar force quits that instance, then waits up to another 12 seconds for processes that could use the sign-in to exit. Force quitting can interrupt active chats and lose unsaved work; if those processes remain, the switch stops with the previous sign-in intact.
 
@@ -137,28 +137,36 @@ CodexPlusBar reads the signed-in web services used by ChatGPT and Claude. These 
 
 The easiest way to install CodexPlusBar is the signed and notarized GitHub DMG. You do not need Xcode. One download supports both Apple silicon and Intel Macs running macOS 14 or newer.
 
-Version **1.2.3** fixes desktop sign-in switches blocked by leftover crash-reporting and keyboard-monitor utilities. It retains prompt-free normal quit, the bounded force-quit fallback, and checks that credential-capable background processes have exited before changing sign-ins. It also includes native **ChatGPT / Codex** desktop sign-ins, OpenChamber 2 missing-connection recovery, and reset-window sorting. You do not need `codex-auth` or CodexAuthHelper. The download link below always downloads the latest published DMG; [the 1.2.3 release](https://github.com/withLinda/CodexPlusBar/releases/tag/v1.2.3) has version-specific downloads and release notes.
+Version **1.2.4 (build 12)** is a refreshed, signed and notarized installer of the current app, with updated installation instructions. It includes the desktop-switch recovery from 1.2.3, native **ChatGPT / Codex** desktop sign-ins, OpenChamber 2 missing-connection recovery, and reset-window sorting. You do not need `codex-auth` or CodexAuthHelper. The download link below always downloads the latest published DMG; [the 1.2.4 release](https://github.com/withLinda/CodexPlusBar/releases/tag/v1.2.4) has version-specific downloads and release notes.
 
 1. [Download `CodexPlusBar.dmg`](https://github.com/withLinda/CodexPlusBar/releases/latest/download/CodexPlusBar.dmg).
-2. Optional: download [`CodexPlusBar.dmg.sha256`](https://github.com/withLinda/CodexPlusBar/releases/latest/download/CodexPlusBar.dmg.sha256) into the same folder. In Terminal, go to that folder (usually `~/Downloads`) and verify the download:
-
-   ```bash
-   cd ~/Downloads
-   shasum -a 256 -c CodexPlusBar.dmg.sha256
-   ```
-
-3. Open the DMG and drag `CodexPlusBar.app` to **Applications**. If an older copy is there, replace it after quitting the running app.
-4. Eject the DMG, then open CodexPlusBar from **Applications**. Its status appears in the menu bar; it does not add a normal Dock icon.
+2. If CodexPlusBar is already running, quit it from its menu bar panel.
+3. Open the DMG and drag `CodexPlusBar.app` onto the **Applications** shortcut. Choose **Replace** if an older copy is already installed.
+4. Eject the DMG, then open CodexPlusBar from **Applications**. Confirm the normal macOS first-open prompt if shown. Its status appears in the menu bar; it does not add a normal Dock icon.
+5. Install [Google Chrome](https://www.google.com/chrome/) if needed, then follow [Quick start](#quick-start) to add profiles and sign in.
 
 The published app and DMG are Developer ID signed and notarized by Apple, so macOS can verify them during a normal first launch.
 
-To update from 1.2.2 or an earlier release, quit CodexPlusBar, download the latest DMG, and repeat steps 3–4. Replacing the app keeps your saved profiles, saved desktop and OpenChamber sign-ins, and Chrome sign-ins in `~/Library/Application Support/CodexPlusBar`; you do not need to import them again. Existing unambiguous CodexAuthHelper snapshots are imported automatically when needed; if no saved desktop sign-in is available, sign in to Codex and choose **Save current sign-in**.
+### Verify the download (optional)
+
+Before opening the DMG, download [`CodexPlusBar.dmg.sha256`](https://github.com/withLinda/CodexPlusBar/releases/latest/download/CodexPlusBar.dmg.sha256) into the same folder. In Terminal, go to that folder (usually `~/Downloads`) and run:
+
+```bash
+cd ~/Downloads
+shasum -a 256 -c CodexPlusBar.dmg.sha256
+```
+
+The expected result is `CodexPlusBar.dmg: OK`. If verification fails, download both files again from the [same release](https://github.com/withLinda/CodexPlusBar/releases/tag/v1.2.4) before installing.
+
+### Update an existing installation
+
+To update from 1.2.3 or an earlier release, download the latest DMG and follow steps 2–4 above. Replacing the app keeps your saved profiles, saved desktop and OpenChamber sign-ins, and Chrome sign-ins in `~/Library/Application Support/CodexPlusBar`; you do not need to import them again. Existing unambiguous CodexAuthHelper snapshots are imported automatically when needed; if no saved desktop sign-in is available, sign in to Codex and choose **Save current sign-in**.
 
 After switching OpenChamber's OpenAI account, wait for **switched and verified**. If OpenChamber's Usage panel still shows an older result, refresh that panel. If the saved sign-in is rejected, sign in to that account again in OpenChamber and use **Save current sign-in** in CodexPlusBar before retrying.
 
 ### OpenChamber 2 compatibility
 
-The **1.2.3 DMG** retains recovery for missing connections observed with OpenChamber 2.0.2 and its bundled OpenCode 2.0.16, introduced in 1.1.5. Keep OpenChamber running locally with an OpenAI account connected, then use **Save current sign-in** or switch an already-saved profile in CodexPlusBar; no separate bridge installation is needed.
+The **1.2.4 DMG** retains recovery for missing connections observed with OpenChamber 2.0.2 and its bundled OpenCode 2.0.16, introduced in 1.1.5. Keep OpenChamber running locally with an OpenAI account connected, then use **Save current sign-in** or switch an already-saved profile in CodexPlusBar; no separate bridge installation is needed.
 
 If a saved connection was removed, CodexPlusBar can restore it from its saved sign-in after checking the account identity and verifying access with OpenAI. An unavailable bridge or unreadable response still reports an error. If the saved sign-in is missing, damaged, or no longer accepted, sign in again in OpenChamber and choose **Save current sign-in** before retrying.
 
