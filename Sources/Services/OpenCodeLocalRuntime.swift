@@ -5,10 +5,12 @@ import Foundation
 struct OpenCodeLocalRuntime: Sendable {
     let authURL: URL
     let v2: (any OpenCodeV2Serving)?
+    let credentials: (any OpenCodeCredentialServing)?
 
-    init(authURL: URL, v2: (any OpenCodeV2Serving)? = nil) {
+    init(authURL: URL, v2: (any OpenCodeV2Serving)? = nil, credentials: (any OpenCodeCredentialServing)? = nil) {
         self.authURL = authURL
         self.v2 = v2
+        self.credentials = credentials
     }
 
     static func discover() async throws -> Self {
@@ -31,7 +33,7 @@ struct OpenCodeLocalRuntime: Sendable {
             if try isV2Info(infoData, response: infoResponse, processID: discovered.pid) {
                 return Self(authURL: discovered.authURL, v2: OpenCodeV2Client(
                     baseURL: discovered.baseURL, authorization: discovered.authorization
-                ))
+                ), credentials: OpenCodeCredentialClient(baseURL: discovered.baseURL, authorization: discovered.authorization))
             }
             request.url = discovered.baseURL.appendingPathComponent("global/health")
             let (data, response) = try await session.data(for: request)

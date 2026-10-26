@@ -21,6 +21,7 @@
 		27CDE503346F4D51A31A9AE3 /* CodexAppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25E2086F686897E104CED98A /* CodexAppDelegate.swift */; };
 		28E0C29A3990704FA9270764 /* OneTimePasswordGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2CCF039048CB5F92D4BDF6C /* OneTimePasswordGenerator.swift */; };
 		2ECE03F2044A2EB02194E7B5 /* ChromeSessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BAB88AED342C0D907A72DB5 /* ChromeSessionManager.swift */; };
+		2FB32741EA54814C2747455C /* OpenCodeCredentialClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFD291B6EF8F8223AD2C9F09 /* OpenCodeCredentialClient.swift */; };
 		30A42609C8309CD976874B31 /* OpenCodeLocalRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A7364EC8C0544A1929A0EEA /* OpenCodeLocalRuntime.swift */; };
 		3368A1D640D1806C17637EED /* DotTrickSessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EF3F7392900410162228D43 /* DotTrickSessionStore.swift */; };
 		337BA6DF10CDCC0A8E90CA90 /* WindowChromeSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4111BF7FB72F714EF7A7D42A /* WindowChromeSupport.swift */; };
@@ -185,6 +186,7 @@
 		D2D8B357AE9E8E39D52E54D8 /* ProfileTagViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileTagViews.swift; sourceTree = "<group>"; };
 		D6EC5BF584B2DCC0B7B9E2B9 /* SingleInstanceCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SingleInstanceCoordinator.swift; sourceTree = "<group>"; };
 		DF562E09FAC0315C1413120C /* CodexAccountSwitchService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexAccountSwitchService.swift; sourceTree = "<group>"; };
+		DFD291B6EF8F8223AD2C9F09 /* OpenCodeCredentialClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodeCredentialClient.swift; sourceTree = "<group>"; };
 		E654F84109D3509039ADB773 /* WebSessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSessionStore.swift; sourceTree = "<group>"; };
 		E7491AD60A2C37B5BE8C9C1B /* CormorantGaramond-Italic.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "CormorantGaramond-Italic.ttf"; sourceTree = "<group>"; };
 		F369067FAFB972FD6B6E3E08 /* ProfilePhoneNumberComboBox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfilePhoneNumberComboBox.swift; sourceTree = "<group>"; };
@@ -245,6 +247,7 @@
 				80F5D0C3B1F4F079A0CF0221 /* JSONDecoder+ChatGPT.swift */,
 				252004FBE714815D978A9765 /* JSONFileStorage.swift */,
 				D2CCF039048CB5F92D4BDF6C /* OneTimePasswordGenerator.swift */,
+				DFD291B6EF8F8223AD2C9F09 /* OpenCodeCredentialClient.swift */,
 				3A7364EC8C0544A1929A0EEA /* OpenCodeLocalRuntime.swift */,
 				7591CAFBBC23ED052EDF1ACC /* OpenCodeOpenAIAuthService.swift */,
 				47524A60EFC92CD85F147545 /* OpenCodeOpenAICredentialVerifier.swift */,
@@ -536,6 +539,7 @@
 				177E39EDA3111E142BC4F794 /* MenuBarRootView.swift in Sources */,
 				EF220468E18F70E23DBE1256 /* MenuBarStatusItemController.swift in Sources */,
 				28E0C29A3990704FA9270764 /* OneTimePasswordGenerator.swift in Sources */,
+				2FB32741EA54814C2747455C /* OpenCodeCredentialClient.swift in Sources */,
 				30A42609C8309CD976874B31 /* OpenCodeLocalRuntime.swift in Sources */,
 				6078DE1363303B5FF332063B /* OpenCodeOpenAIAuthService.swift in Sources */,
 				BD15AB63D5FA10031B148DA5 /* OpenCodeOpenAICredentialVerifier.swift in Sources */,
