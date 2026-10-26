@@ -137,26 +137,47 @@ actor OpenCodeOpenAIAuthService: OpenCodeOpenAIAuthServing {
     private let verifier: any OpenCodeOpenAICredentialVerifying
     private let now: @Sendable () -> Date
     private var isOperating = false
+    private let operationGate: OpenCodeOperationGate
+    private let snapshots: OpenCodeSignInSnapshotStore
 
     init(homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
          resolveRuntime: @escaping @Sendable () async throws -> OpenCodeLocalRuntime = {
              try await OpenCodeLocalRuntime.discover()
          },
          verifier: any OpenCodeOpenAICredentialVerifying = OpenCodeOpenAICredentialVerifier(),
-         now: @escaping @Sendable () -> Date = { .now }) {
+         now: @escaping @Sendable () -> Date = { .now },
+         operationGate: OpenCodeOperationGate = .shared) {
         self.homeDirectory = homeDirectory
         storeDirectory = homeDirectory.appendingPathComponent("Library/Application Support/CodexPlusBar/OpenChamberSignIns")
         self.resolveRuntime = resolveRuntime
         self.verifier = verifier
         self.now = now
+        self.operationGate = operationGate
+        self.snapshots = OpenCodeSignInSnapshotStore(homeDirectory: homeDirectory)
     }
 
     func saveCurrent(for profile: PlusProfile) async throws -> OpenCodeOpenAIIdentity {
+        try await operationGate.withOperation { try await self.saveCurrentUnlocked(for: profile) }
+    }
+
+    private func saveCurrentUnlocked(for profile: PlusProfile) async throws -> OpenCodeOpenAIIdentity {
         guard !isOperating else { throw OpenCodeOpenAIAuthError.busy }
         isOperating = true
         defer { isOperating = false }
         let runtime = try await resolveRuntime()
         try Task.checkCancellation()
+        if let client = runtime.credentials {
+            let inventory: OpenCodeCredentialInventory?
+            do { inventory = try await client.inventory() }
+            catch OpenCodeCredentialError.unavailable { inventory = nil }
+            if let inventory {
+                guard let current = inventory.openAI.first(where: \.active) else { throw OpenCodeOpenAIAuthError.providerMissing }
+                let identity = try current.openAIIdentity()
+                try validate(identity, for: profile)
+                try snapshots.saveNative(current, identity: identity)
+                return identity
+            }
+        }
         if let v2 = runtime.v2 {
             let current = try await v2.read(id: nil)
             let identity = try current.auth.identity()
@@ -172,6 +193,10 @@ actor OpenCodeOpenAIAuthService: OpenCodeOpenAIAuthServing {
     }
 
     func switchTo(profile: PlusProfile) async throws {
+        try await operationGate.withOperation { try await self.switchToUnlocked(profile: profile) }
+    }
+
+    private func switchToUnlocked(profile: PlusProfile) async throws {
         guard !isOperating else { throw OpenCodeOpenAIAuthError.busy }
         isOperating = true
         defer { isOperating = false }
@@ -346,6 +371,9 @@ actor OpenCodeOpenAIAuthService: OpenCodeOpenAIAuthServing {
     private func saveV2(_ credential: OpenCodeV2Credential, identity: OpenCodeOpenAIIdentity) throws {
         try save(credential.auth, identity: identity)
         try OpenCodePrivateFile.write(JSONEncoder().encode(credential.id), to: v2BindingURL(identity))
+        if let native = try snapshots.loadNativeValue(identity: identity) {
+            try snapshots.saveValue(native.replacingTokens(credential.auth), identity: identity)
+        }
     }
 
     private func switchV2(_ client: any OpenCodeV2Serving, selected: OpenCodeOpenAIIdentity) async throws {
