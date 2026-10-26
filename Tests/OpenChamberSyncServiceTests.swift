@@ -3,6 +3,44 @@ import Testing
 @testable import CodexPlusBar
 
 struct OpenChamberSyncServiceTests {
+    @Test func selectionChangeDuringIdleCheckStopsActivation() async throws {
+        let fixture = try SyncServiceFixture(); defer { fixture.remove() }
+        let a = try nativeCredential("alpha"), b = try nativeCredential("beta"), old = try nativeCredential("old", active: true)
+        let client = SyncTestClient([a, b, old])
+        await client.changeSelectionDuringIdle(to: b.id)
+        await #expect(throws: OpenChamberSyncError.changed) {
+            try await fixture.service(client).reconcile(catalog: fixture.catalog([a, b]), isCurrent: { _ in true })
+        }
+        #expect(await client.operations.isEmpty)
+        #expect(await client.entries.first(where: \.active)?.id == b.id)
+    }
+
+    @Test func newlyActiveDuplicateAfterRenameIsNotDeletedFromStalePlan() async throws {
+        let fixture = try SyncServiceFixture(); defer { fixture.remove() }
+        let a = try nativeCredential("alpha", active: true)
+        let duplicate = OpenCodeStoredCredential(id: "cred_duplicate", integrationID: "openai", label: a.label, active: false, value: a.value)
+        let client = SyncTestClient([a, duplicate])
+        await client.changeSelectionAfterRename(to: duplicate.id)
+        var profile = try syncProfile(a); profile.label = "Renamed"
+        await #expect(throws: OpenChamberSyncError.changed) {
+            try await fixture.service(client).reconcile(catalog: .init(generation: 1, profiles: [profile], isTrusted: true), isCurrent: { _ in true })
+        }
+        #expect(await client.entries.count == 2)
+        #expect(await client.entries.first(where: \.active)?.id == duplicate.id)
+        #expect(await client.operations == ["rename:cred_alpha"])
+    }
+
+    @Test func unboundSameEmailDifferentWorkspacesRequireIdentity() async throws {
+        let fixture = try SyncServiceFixture(); defer { fixture.remove() }
+        let a = try nativeCredential("alpha", email: "shared@example.com", active: true)
+        let b = try nativeCredential("beta", email: "shared@example.com")
+        let client = SyncTestClient([a, b])
+        var profile = try syncProfile(a); profile.openCodeOpenAIAccount = nil
+        let runtime = OpenCodeLocalRuntime(authURL: fixture.home.appendingPathComponent("auth.json"), credentials: client)
+        let service = OpenCodeOpenAIAuthService(homeDirectory: fixture.home, resolveRuntime: { runtime }, operationGate: .init())
+        await #expect(throws: OpenCodeOpenAIAuthError.identityMismatch) { try await service.saveCurrent(for: profile) }
+    }
+
     @Test func restoreDoesNotActivateRetainedAccount() async throws {
         let fixture = try SyncServiceFixture(); defer { fixture.remove() }
         let a = try nativeCredential("alpha", active: true), b = try nativeCredential("beta")
@@ -151,6 +189,10 @@ actor SyncTestClient: OpenCodeCredentialServing {
     var loseCreateResponse: Bool
     var loseDeleteResponse: Bool
     let removalBarrier: SyncBarrier?
+    var idleSelection: String?
+    var renameSelection: String?
+    func changeSelectionDuringIdle(to id: String) { idleSelection = id }
+    func changeSelectionAfterRename(to id: String) { renameSelection = id }
     init(_ entries: [OpenCodeStoredCredential], running: Bool = false, loseCreateResponse: Bool = false, loseDeleteResponse: Bool = false, removalBarrier: SyncBarrier? = nil) {
         self.entries = entries; self.running = running; self.loseCreateResponse = loseCreateResponse; self.loseDeleteResponse = loseDeleteResponse; self.removalBarrier = removalBarrier
     }
@@ -162,14 +204,21 @@ actor SyncTestClient: OpenCodeCredentialServing {
         if loseCreateResponse { loseCreateResponse = false; throw URLError(.timedOut) }
         return entry
     }
-    func rename(id: String, label: String) { if let i = entries.firstIndex(where: { $0.id == id }) { entries[i].label = label }; operations.append("rename:" + id) }
+    func rename(id: String, label: String) {
+        if let i = entries.firstIndex(where: { $0.id == id }) { entries[i].label = label }
+        operations.append("rename:" + id)
+        if let renameSelection { for i in entries.indices { entries[i].active = entries[i].id == renameSelection } }
+    }
     func activate(id: String) { for i in entries.indices { entries[i].active = entries[i].id == id }; operations.append("activate:" + id) }
     func remove(id: String) async throws {
         entries.removeAll { $0.id == id }; operations.append("remove:" + id)
         if let removalBarrier { await removalBarrier.wait() }
         if loseDeleteResponse { loseDeleteResponse = false; throw URLError(.timedOut) }
     }
-    func hasRunningSessions() -> Bool { running }
+    func hasRunningSessions() -> Bool {
+        if let idleSelection { for i in entries.indices { entries[i].active = entries[i].id == idleSelection } }
+        return running
+    }
 }
 
 actor SyncBarrier {

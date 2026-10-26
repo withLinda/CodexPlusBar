@@ -3,6 +3,28 @@ import Testing
 @testable import CodexPlusBar
 
 struct OpenCodeV2Tests {
+    @Test func nativeSnapshotSurvivesFailedRefreshInstallAndBackgroundReadback() async throws {
+        let fixture = try OpenCodeAuthFixture(); defer { fixture.remove() }
+        let expired = try fixture.auth("target", expires: 0)
+        let refreshed = try fixture.auth("target", refresh: "rotated")
+        let profile = try await fixture.prepareTarget(expired)
+        let store = OpenCodeSignInSnapshotStore(homeDirectory: fixture.home)
+        let native = OpenCodeStoredCredential(id: "cred_original", integrationID: "openai", label: profile.label, active: true, value: .legacy(expired))
+        try store.saveNative(native, identity: expired.identity())
+        let client = V2TestClient(expired, rejectedImports: 1)
+        let verifier = V2TestVerifier(refreshed: refreshed)
+        await #expect(throws: OpenCodeOpenAISwitchError.self) {
+            try await service(fixture, client: client, verifier: verifier).switchTo(profile: profile)
+        }
+        #expect(try store.loadNativeValue(identity: expired.identity())?.auth() == refreshed)
+        // Sync sees the still-old live pair after the rejected installation.
+        try store.saveNative(native, identity: expired.identity())
+        #expect(try store.loadNativeValue(identity: expired.identity())?.auth() == refreshed)
+        try await service(fixture, client: client, verifier: verifier).switchTo(profile: profile)
+        #expect(try await client.read(id: nil).auth == refreshed)
+        #expect(await verifier.refreshCount == 1)
+    }
+
     @Test(.enabled(if: ProcessInfo.processInfo.environment["OPENCHAMBER_V2_TEST_URL"] != nil))
     func isolatedServerSwitchesThroughProductionClient() async throws {
         try await IsolatedOpenChamberTestGate.shared.run { try await exerciseIsolatedBridge() }
@@ -337,13 +359,15 @@ private actor V2TestClient: OpenCodeV2Serving {
     private let boundReadFailure: OpenCodeOpenAIAuthError?
     private(set) var imports = 0
     private(set) var activations = 0
+    private var rejectedImports: Int
 
     init(_ auth: OpenCodeOpenAIAuth, loseImportResponse: Bool = false,
-         boundReadFailure: OpenCodeOpenAIAuthError? = nil) {
+          boundReadFailure: OpenCodeOpenAIAuthError? = nil, rejectedImports: Int = 0) {
         current = OpenCodeV2Credential(id: "cred_original", auth: auth)
         credentials = [current.id: current]
         self.loseImportResponse = loseImportResponse
         self.boundReadFailure = boundReadFailure
+        self.rejectedImports = rejectedImports
     }
 
     func read(id: String?) throws -> OpenCodeV2Credential {
@@ -353,6 +377,7 @@ private actor V2TestClient: OpenCodeV2Serving {
     }
 
     func install(_ auth: OpenCodeOpenAIAuth, expected: OpenCodeV2Credential) throws -> OpenCodeV2Credential {
+        if rejectedImports > 0 { rejectedImports -= 1; throw URLError(.cannotConnectToHost) }
         guard current == expected else { throw OpenCodeOpenAIAuthError.changedWhileReading }
         imports += 1
         current = OpenCodeV2Credential(id: "cred_import_\(imports)", auth: auth)
@@ -379,6 +404,7 @@ private actor V2TestVerifier: OpenCodeOpenAICredentialVerifying {
     let refreshed: OpenCodeOpenAIAuth?
     let onVerify: @Sendable (Int) async -> Void
     var count = 0
+    var refreshCount = 0
 
     init(failAt: Int? = nil, refreshed: OpenCodeOpenAIAuth? = nil,
          onVerify: @escaping @Sendable (Int) async -> Void = { _ in }) {
@@ -394,6 +420,7 @@ private actor V2TestVerifier: OpenCodeOpenAICredentialVerifying {
     }
 
     func refresh(_ auth: OpenCodeOpenAIAuth) throws -> OpenCodeOpenAIAuth {
-        try #require(refreshed, "Unexpected token refresh")
+        refreshCount += 1
+        return try #require(refreshed, "Unexpected token refresh")
     }
 }

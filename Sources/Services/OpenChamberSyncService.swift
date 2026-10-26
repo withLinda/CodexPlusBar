@@ -65,7 +65,8 @@ actor OpenChamberSyncService: OpenChamberSyncServing {
                     guard try rotated.identity().matches(identity) else { throw OpenCodeOpenAIAuthError.identityMismatch }
                     value = value.replacingTokens(rotated)
                     // Refresh may consume the old token: persist before cancellation or the next network request.
-                    try snapshots.saveValue(value, identity: identity)
+                    try snapshots.saveRefreshed(rotated, replacing: auth)
+                    try await check(catalog, isCurrent)
                     try await verifier.verify(rotated)
                 }
             } catch is CancellationError { throw CancellationError() }
@@ -99,7 +100,12 @@ actor OpenChamberSyncService: OpenChamberSyncServing {
             guard try summaries(latest) == summaries(inventory) else { throw OpenChamberSyncError.changed }
             try await check(catalog, isCurrent)
             try await client.rename(id: id, label: intended.renames[id]!)
-            inventory = try await client.inventory()
+            let expected = inventory.entries.map { entry in
+                var entry = entry
+                if entry.id == id { entry.label = intended.renames[id]! }
+                return entry
+            }
+            inventory = try await verifiedInventory(client, expected: expected)
         }
 
         var deferred = false
@@ -118,11 +124,17 @@ actor OpenChamberSyncService: OpenChamberSyncServing {
             if target.active {
                 guard (try? await client.hasRunningSessions()) == false else { deferred = true; continue }
                 try await check(catalog, isCurrent)
+                // Idle lookup is an await too: do not override a selection made during it.
+                inventory = try await verifiedInventory(client, expected: inventory.entries)
+                try await check(catalog, isCurrent)
                 if let replacement = intended.replacementActiveID {
                     try await client.activate(id: replacement)
-                    let activated = try await client.inventory()
-                    guard activated.openAI.first(where: \.active)?.id == replacement else { throw OpenChamberSyncError.changed }
-                    inventory = activated
+                    let expected = inventory.entries.map { entry in
+                        var entry = entry
+                        if entry.integrationID == "openai" { entry.active = entry.id == replacement }
+                        return entry
+                    }
+                    inventory = try await verifiedInventory(client, expected: expected)
                 }
             }
             try await check(catalog, isCurrent)
@@ -130,7 +142,8 @@ actor OpenChamberSyncService: OpenChamberSyncServing {
             guard try summaries(beforeDelete) == summaries(inventory) else { throw OpenChamberSyncError.changed }
             try await check(catalog, isCurrent)
             try await client.remove(id: id)
-            inventory = try await client.inventory()
+            inventory = try await verifiedInventory(client, expected: inventory.entries.filter { $0.id != id },
+                                                    allowSelectionAfterActiveDeletion: target.active && intended.replacementActiveID == nil)
         }
         try await check(catalog, isCurrent)
         let finalInventory = try await client.inventory()
@@ -156,5 +169,22 @@ actor OpenChamberSyncService: OpenChamberSyncServing {
             let identity = entry.value.type == "oauth" ? try entry.openAIIdentity().storageKey : entry.value.type ?? "unknown"
             return "\(entry.id)|\(identity)|\(entry.active)|\(entry.label)"
         }.sorted()
+    }
+
+    private func verifiedInventory(_ client: any OpenCodeCredentialServing, expected: [OpenCodeStoredCredential],
+                                   allowSelectionAfterActiveDeletion: Bool = false) async throws -> OpenCodeCredentialInventory {
+        let actual = try await client.inventory()
+        // Deleting the selected credential can make OpenCode select a remaining
+        // API key itself. Membership, identity and labels still must be unchanged.
+        let expected = expected.map { entry in
+            var entry = entry
+            if allowSelectionAfterActiveDeletion, entry.integrationID == "openai" {
+                entry.active = actual.openAI.first(where: { $0.id == entry.id })?.active ?? entry.active
+            }
+            return entry
+        }
+        let expectedInventory = OpenCodeCredentialInventory(entries: expected, connectionIDs: Set(expected.filter { $0.integrationID == "openai" }.map(\.id)))
+        guard try summaries(actual) == summaries(expectedInventory) else { throw OpenChamberSyncError.changed }
+        return actual
     }
 }

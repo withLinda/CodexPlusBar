@@ -3,6 +3,22 @@ import Testing
 @testable import CodexPlusBar
 
 struct OpenCodeCredentialClientTests {
+    @Test func malformedOpenAICredentialKindBlocksInventory() async throws {
+        var entry = try nativeCredential("alpha")
+        entry.value.fields.removeValue(forKey: "type")
+        let malformed = entry
+        let client = OpenCodeCredentialClient(baseURL: URL(string: "http://127.0.0.1:1234")!, authorization: nil, request: { request in
+            let data: Data
+            switch request.url?.path {
+            case "/openapi.json": data = nativeCapabilityFixture()
+            case "/api/integration/openai": data = Data("{\"data\":{\"id\":\"openai\",\"connections\":[{\"type\":\"credential\",\"id\":\"cred_alpha\"}]}}".utf8)
+            default: data = try JSONEncoder().encode(NativeEnvelope(data: [malformed]))
+            }
+            return (data, nativeResponse(request, 200))
+        })
+        await #expect(throws: OpenCodeCredentialError.invalidResponse) { try await client.inventory() }
+    }
+
     @Test func nativeCreatePreservesMethodAndMetadata() async throws {
         let entry = try nativeCredential("alpha")
         let client = OpenCodeCredentialClient(baseURL: URL(string: "http://127.0.0.1:1234")!, authorization: "Basic fixture", request: { request in

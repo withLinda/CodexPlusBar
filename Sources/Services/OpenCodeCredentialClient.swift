@@ -145,6 +145,9 @@ actor OpenCodeCredentialClient: OpenCodeCredentialServing {
             throw OpenCodeCredentialError.invalidResponse
         }
         for entry in entries { try Self.validate(entry.id) }
+        guard entries.filter({ $0.integrationID == "openai" }).allSatisfy({ ["oauth", "key"].contains($0.value.type) }) else {
+            throw OpenCodeCredentialError.invalidResponse
+        }
         return OpenCodeCredentialInventory(entries: entries, connectionIDs: Set(ids))
     }
 

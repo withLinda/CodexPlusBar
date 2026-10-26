@@ -173,6 +173,12 @@ actor OpenCodeOpenAIAuthService: OpenCodeOpenAIAuthServing {
             if let inventory {
                 guard let current = inventory.openAI.first(where: \.active) else { throw OpenCodeOpenAIAuthError.providerMissing }
                 let identity = try current.openAIIdentity()
+                if profile.openCodeOpenAIAccount == nil, profile.codexSignIn == nil, profile.codexAccountKey == nil {
+                    let sameEmail = try inventory.oauth.map { try $0.openAIIdentity() }.filter {
+                        $0.email.caseInsensitiveCompare(identity.email) == .orderedSame
+                    }
+                    guard Set(sameEmail.map(\.storageKey)).count == 1 else { throw OpenCodeOpenAIAuthError.identityMismatch }
+                }
                 try validate(identity, for: profile)
                 try snapshots.saveNative(current, identity: identity)
                 return identity
@@ -281,6 +287,9 @@ actor OpenCodeOpenAIAuthService: OpenCodeOpenAIAuthServing {
 
     private func verifiedCredential(_ auth: OpenCodeOpenAIAuth,
                                     didRefresh: (OpenCodeOpenAIAuth) async throws -> Void) async throws -> OpenCodeOpenAIAuth {
+        let recovered = try snapshots.resolved(auth)
+        if recovered != auth { try await didRefresh(recovered) }
+        let auth = recovered
         if !auth.needsRefresh(at: now()) {
             do {
                 try await verifier.verify(auth)
@@ -292,6 +301,7 @@ actor OpenCodeOpenAIAuthService: OpenCodeOpenAIAuthServing {
         try Task.checkCancellation()
         let refreshed = try await verifier.refresh(auth)
         guard try auth.identity().matches(refreshed.identity()) else { throw OpenCodeOpenAIAuthError.identityMismatch }
+        try snapshots.saveRefreshed(refreshed, replacing: auth)
         try await didRefresh(refreshed)
         try Task.checkCancellation()
         try await verifier.verify(refreshed)
@@ -357,10 +367,14 @@ actor OpenCodeOpenAIAuthService: OpenCodeOpenAIAuthServing {
 
     private func save(_ auth: OpenCodeOpenAIAuth, identity: OpenCodeOpenAIIdentity) throws {
         do {
-            try FileManager.default.createDirectory(at: storeDirectory, withIntermediateDirectories: true,
-                                                    attributes: [.posixPermissions: 0o700])
-            try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: storeDirectory.path)
-            try OpenCodePrivateFile.write(JSONEncoder().encode(auth), to: storeURL(for: identity))
+            let nativeURL = storeDirectory.appendingPathComponent(identity.storageKey + ".native.json")
+            if FileManager.default.fileExists(atPath: nativeURL.path), let value = try snapshots.loadNativeValue(identity: identity) {
+                try snapshots.saveValue(value.replacingTokens(auth), identity: identity)
+            } else {
+                try FileManager.default.createDirectory(at: storeDirectory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+                try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: storeDirectory.path)
+                try OpenCodePrivateFile.write(JSONEncoder().encode(snapshots.resolved(auth)), to: storeURL(for: identity))
+            }
         } catch { throw OpenCodeOpenAIAuthError.writeFailed }
     }
 
@@ -371,9 +385,6 @@ actor OpenCodeOpenAIAuthService: OpenCodeOpenAIAuthServing {
     private func saveV2(_ credential: OpenCodeV2Credential, identity: OpenCodeOpenAIIdentity) throws {
         try save(credential.auth, identity: identity)
         try OpenCodePrivateFile.write(JSONEncoder().encode(credential.id), to: v2BindingURL(identity))
-        if let native = try snapshots.loadNativeValue(identity: identity) {
-            try snapshots.saveValue(native.replacingTokens(credential.auth), identity: identity)
-        }
     }
 
     private func switchV2(_ client: any OpenCodeV2Serving, selected: OpenCodeOpenAIIdentity) async throws {
