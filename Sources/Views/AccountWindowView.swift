@@ -409,6 +409,12 @@ struct ProfileManagerWindowView: View {
                 }
 
                 bodyContent
+
+                OpenChamberSyncStatusView(
+                    message: controller.openChamberSyncMessage ?? "OpenChamber sync pending…",
+                    isSyncing: controller.isOpenChamberSyncing,
+                    syncNow: { Task { await controller.syncOpenChamberNow() } }
+                )
             }
             .padding(.top, CodexTheme.chromePadding)
             .padding(.horizontal, CodexTheme.chromePadding)
@@ -647,7 +653,10 @@ struct ProfileManagerWindowView: View {
                             desktopWorking: !controller.switchingProfileIDs.isEmpty,
                             openChamberWorking: !controller.openCodeSwitchingProfileIDs.isEmpty,
                             desktopStatus: controller.desktopSignInStatus.flatMap { $0.profileID == snapshot.id ? $0 : nil },
-                            openChamberStatus: controller.openChamberActionStatus.flatMap { $0.profileID == snapshot.id ? $0 : nil },
+                            openChamberStatus: controller.openChamberActionStatus.flatMap { $0.profileID == snapshot.id ? $0 : nil }
+                                ?? (controller.openChamberSyncResult?.needsSignInProfileIDs.contains(snapshot.id) == true
+                                    ? .init(profileID: snapshot.id, message: "OpenChamber sign-in needed. Sign in there, then Save current sign-in.", tone: .warning)
+                                    : nil),
                             saveDesktop: { Task { await controller.saveDesktopSignIn(profileID: snapshot.id) } },
                             switchDesktop: { Task { await controller.switchAndOpen(profileID: snapshot.id) } },
                             saveOpenChamber: { Task { await controller.saveOpenChamberAuth(profileID: snapshot.id) } },
@@ -1043,6 +1052,12 @@ struct ProfileManagerWindowView: View {
             .disabled(snapshot.isRefreshing)
             .keyboardShortcut("r")
 
+            Button("Remove", systemImage: "trash", role: .destructive) {
+                removeProfile(snapshot.id)
+            }
+            .buttonStyle(CodexSecondaryButtonStyle(foregroundColor: CodexStatusTone.critical.foregroundColor))
+            .accessibilityLabel("Remove profile")
+
             Menu {
                 Button("Copy profile label", systemImage: "doc.on.doc") { MacSystemActions.copyToPasteboard(snapshot.label) }
                 Button("Open email link", systemImage: "arrow.up.forward.square") { openEmailLink(for: snapshot.profile) }
@@ -1054,7 +1069,6 @@ struct ProfileManagerWindowView: View {
                     .disabled(isMoveDownDisabled(for: snapshot))
                 Divider()
                 Button("Clear session", systemImage: "xmark.circle", role: .destructive) { clearSession(snapshot.id) }
-                Button("Remove profile", systemImage: "trash", role: .destructive) { removeProfile(snapshot.id) }
             } label: {
                 Label("More", systemImage: "ellipsis")
                     .font(ProfileManagerTypography.small)

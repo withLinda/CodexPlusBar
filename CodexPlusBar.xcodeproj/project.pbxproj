@@ -33,6 +33,7 @@
 		466FDB783C536BDA6B79301D /* ArrayChunking.swift in Sources */ = {isa = PBXBuildFile; fileRef = 163E83213FAB46565EBD1730 /* ArrayChunking.swift */; };
 		492905C0F183829A8DD4F40D /* ClaudeBootstrapService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EB2884883172C543A1D3822 /* ClaudeBootstrapService.swift */; };
 		4AB9875E4932721CAAE0D3A0 /* DotTrickGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 709228E93767951B3499A1C3 /* DotTrickGenerator.swift */; };
+		4E153C5FA8823885AFBCCB1D /* OpenChamberSyncStatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2820DACD0C61C524A4ECD46 /* OpenChamberSyncStatusView.swift */; };
 		5067C0F581700DB9B8B54730 /* CormorantGaramond.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0B6BFE65AA07E2512FA5D398 /* CormorantGaramond.ttf */; };
 		50A80A4FF1A2A1EEC8C3911B /* LabeledValueText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13932526AB2B41F5203FBF68 /* LabeledValueText.swift */; };
 		514B704F987AF3C6993ED4BC /* AccountCatalogService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59FFC3B05EDF309E09E3DD01 /* AccountCatalogService.swift */; };
@@ -194,6 +195,7 @@
 		CEEC302F552BC386137C7A03 /* MenuBarStatusItemController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarStatusItemController.swift; sourceTree = "<group>"; };
 		CF773DBE36527C1FEC0FDBB3 /* App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App.swift; sourceTree = "<group>"; };
 		D05645796D76886DD5BA1FE3 /* ChatGPTRequestSigner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatGPTRequestSigner.swift; sourceTree = "<group>"; };
+		D2820DACD0C61C524A4ECD46 /* OpenChamberSyncStatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenChamberSyncStatusView.swift; sourceTree = "<group>"; };
 		D2CCF039048CB5F92D4BDF6C /* OneTimePasswordGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OneTimePasswordGenerator.swift; sourceTree = "<group>"; };
 		D2D8B357AE9E8E39D52E54D8 /* ProfileTagViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileTagViews.swift; sourceTree = "<group>"; };
 		D6EC5BF584B2DCC0B7B9E2B9 /* SingleInstanceCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SingleInstanceCoordinator.swift; sourceTree = "<group>"; };
@@ -301,6 +303,7 @@
 				864277862C546E5920AB3163 /* EmailToolsWindowView.swift */,
 				13932526AB2B41F5203FBF68 /* LabeledValueText.swift */,
 				2865CCBFF7FF69A9A1449352 /* MenuBarRootView.swift */,
+				D2820DACD0C61C524A4ECD46 /* OpenChamberSyncStatusView.swift */,
 				A872BFC23B2CCCBF513E45E1 /* PhoneSummaryView.swift */,
 				F369067FAFB972FD6B6E3E08 /* ProfilePhoneNumberComboBox.swift */,
 				BC22ABE1C29F922515DAC181 /* ProfileSearchField.swift */,
@@ -565,6 +568,7 @@
 				D6CA6FF0C21311398F56C566 /* OpenChamberSyncScheduler.swift in Sources */,
 				4030C99FC89E2EAD67D978ED /* OpenChamberSyncService.swift in Sources */,
 				D25BB72CFD7CE4B812F2E58B /* OpenChamberSyncStateStore.swift in Sources */,
+				4E153C5FA8823885AFBCCB1D /* OpenChamberSyncStatusView.swift in Sources */,
 				2FB32741EA54814C2747455C /* OpenCodeCredentialClient.swift in Sources */,
 				30A42609C8309CD976874B31 /* OpenCodeLocalRuntime.swift in Sources */,
 				6078DE1363303B5FF332063B /* OpenCodeOpenAIAuthService.swift in Sources */,

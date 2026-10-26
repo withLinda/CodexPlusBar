@@ -44,6 +44,7 @@ enum DesignPreview {
             dataService: PreviewDataService(),
             accountSwitchService: PreviewDesktopService(),
             openCodeAuthService: PreviewOpenCodeService(),
+            syncService: PreviewSyncService(),
             autoStart: false
         )
         let now = Date(timeIntervalSince1970: 1_789_473_600)
@@ -232,6 +233,15 @@ private struct PreviewOpenCodeService: OpenCodeOpenAIAuthServing {
         OpenCodeOpenAIIdentity(accountID: "preview", userID: "preview", email: profile.label)
     }
     func switchTo(profile: PlusProfile) async throws {}
+}
+
+private struct PreviewSyncService: OpenChamberSyncServing {
+    func reconcile(catalog: OpenChamberSyncCatalog, isCurrent: @escaping @Sendable (UInt64) async -> Bool) async throws -> OpenChamberSyncResult {
+        let profiles = catalog.profiles.filter { $0.provider == .codex }
+        let missing = Set(profiles.filter { $0.openCodeOpenAIAccount == nil }.map(\.id))
+        return .init(matchedCount: profiles.count - missing.count, totalCount: profiles.count,
+                     needsSignInProfileIDs: missing, pendingCredentialCount: 0, deferredActiveRemoval: false)
+    }
 }
 
 private struct PreviewDesktopService: CodexAccountSwitchServing {

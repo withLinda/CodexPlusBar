@@ -3,6 +3,7 @@ import SwiftUI
 struct CodexSettingsView: View {
     @AppStorage(CodexThemeSettings.Keys.appearanceMode) private var appearanceMode = CodexThemeSettings.defaultAppearanceMode
     @AppStorage(CodexThemeSettings.Keys.contrast) private var contrast = CodexThemeSettings.defaultContrast
+    @AppStorage(OpenChamberSyncPreference.enabledKey) private var automaticSync = OpenChamberSyncPreference.defaultEnabled
 
     var body: some View {
         VStack(alignment: .leading, spacing: CodexTheme.sectionSpacing) {
@@ -37,6 +38,18 @@ struct CodexSettingsView: View {
                         .labelsHidden()
                         .pickerStyle(.segmented)
                     }
+                }
+            }
+
+            CodexCard(tier: .regular, shadow: false) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Toggle("Automatically sync OpenChamber", isOn: $automaticSync)
+                        .toggleStyle(CodexCheckboxStyle())
+                        .font(ProfileManagerTypography.bodyStrong)
+                    Text("Keep OpenChamber's OpenAI logins matched to your saved Codex profiles, including removals.")
+                        .font(ProfileManagerTypography.small)
+                        .foregroundStyle(CodexTheme.mutedText)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
