@@ -1582,7 +1582,7 @@ private struct ProfileManagerBulkImportSheet: View {
                     .accessibilityIdentifier("profile-import.rows")
 
                 if rawText.isEmpty {
-                    Text("email|password|2FA")
+                    Text("1. email@example.com\npassword\n2FA\n\nOr: email|password|2FA")
                         .font(.system(size: 13, weight: .regular, design: .monospaced))
                         .foregroundStyle(CodexTheme.quietText)
                         .padding(.horizontal, 15)

@@ -220,6 +220,144 @@ struct PlusProfileModelsTests {
         ])
     }
 
+    @Test(arguments: ["\n", "\r\n", "\r"])
+    func bulkProfileImportParsesNumberedThreeLineBlocks(lineEnding: String) {
+        let text = """
+
+        1. alpha@example.com
+        first-password
+        FIRSTSECRET
+
+          2. 67_beta@example.com
+        second-password
+        SECONDSECRET
+
+
+        3. 4.gamma@example.com
+        third-password
+        THIRDSECRET
+
+        """.replacingOccurrences(of: "\n", with: lineEnding)
+
+        let preview = BulkProfileImporter.preview(from: text)
+
+        #expect(preview.issues.isEmpty)
+        #expect(preview.canSubmit)
+        #expect(preview.entries == [
+            BulkProfileImportEntry(email: "alpha@example.com", password: "first-password", twoFactorCode: "FIRSTSECRET"),
+            BulkProfileImportEntry(email: "67_beta@example.com", password: "second-password", twoFactorCode: "SECONDSECRET"),
+            BulkProfileImportEntry(email: "4.gamma@example.com", password: "third-password", twoFactorCode: "THIRDSECRET"),
+        ])
+    }
+
+    @Test
+    func bulkProfileImportKeepsMultilineCredentialsLiteralAlongsidePipeRows() {
+        let preview = BulkProfileImporter.preview(
+            from: """
+            pipe@example.com|pipe-password|PIPESECRET
+            4.name@example.com
+            12. password|with|pipes
+            SECRETONE
+
+            2. other@example.com
+            password@example.com
+            SECRETTWO
+            last@example.com|last-password|LASTSECRET
+            """
+        )
+
+        #expect(preview.issues.isEmpty)
+        #expect(preview.canSubmit)
+        #expect(preview.entries == [
+            BulkProfileImportEntry(email: "pipe@example.com", password: "pipe-password", twoFactorCode: "PIPESECRET"),
+            BulkProfileImportEntry(email: "4.name@example.com", password: "12. password|with|pipes", twoFactorCode: "SECRETONE"),
+            BulkProfileImportEntry(email: "other@example.com", password: "password@example.com", twoFactorCode: "SECRETTWO"),
+            BulkProfileImportEntry(email: "last@example.com", password: "last-password", twoFactorCode: "LASTSECRET"),
+        ])
+    }
+
+    @Test(arguments: [
+        "1. first@example.com\nnext@example.com|next-password|NEXTSECRET",
+        "1. first@example.com\nfirst-password\nnext@example.com|next-password|NEXTSECRET",
+    ])
+    func bulkProfileImportDoesNotConsumeFollowingPipeRowWhenBlockIsIncomplete(text: String) {
+        let preview = BulkProfileImporter.preview(from: text)
+
+        #expect(preview.canSubmit == false)
+        #expect(preview.issues.map(\.lineNumber) == [1])
+        #expect(preview.entries == [
+            BulkProfileImportEntry(email: "next@example.com", password: "next-password", twoFactorCode: "NEXTSECRET"),
+        ])
+    }
+
+    @Test
+    func bulkProfileImportRejectsAmbiguousNumberedEmailCredentials() {
+        let preview = BulkProfileImporter.preview(
+            from: """
+            1. owner@example.com
+            2. user@example.com
+            2FASECRET
+            """
+        )
+
+        #expect(preview.canSubmit == false)
+        #expect(preview.entries.isEmpty)
+        #expect(preview.issues.map(\.lineNumber) == [1, 2])
+    }
+
+    @Test
+    func bulkProfileImportPreservesWhitespaceInMultilineCredentials() {
+        let preview = BulkProfileImporter.preview(
+            from: "1. owner@example.com\n password with spaces \n 2FASECRET "
+        )
+
+        #expect(preview.canSubmit)
+        #expect(preview.entries == [
+            BulkProfileImportEntry(
+                email: "owner@example.com",
+                password: " password with spaces ",
+                twoFactorCode: " 2FASECRET "
+            ),
+        ])
+    }
+
+    @Test(arguments: [
+        "1. incomplete@example.com",
+        "1. incomplete@example.com\npassword",
+        "1. incomplete@example.com\n\nSECRET",
+        "1. incomplete@example.com\npassword\n\n2. next@example.com\nnext-password\nNEXTSECRET",
+        "1. incomplete@example.com\npassword\n2. next@example.com\nnext-password\nNEXTSECRET",
+    ])
+    func bulkProfileImportRejectsIncompleteBlocks(text: String) {
+        let preview = BulkProfileImporter.preview(from: text)
+
+        #expect(preview.canSubmit == false)
+        #expect(preview.issues.first?.lineNumber == 1)
+        #expect(preview.entries.contains { $0.email == "incomplete@example.com" } == false)
+    }
+
+    @Test(arguments: ["\n", "\r\n"])
+    func bulkProfileImportReportsOriginalLineNumbersForInvalidBlocks(lineEnding: String) {
+        let text = """
+        1. valid@example.com
+        password
+        SECRET
+
+        2. not-an-email
+        password
+        SECRET
+
+        3. incomplete@example.com
+        password
+        """.replacingOccurrences(of: "\n", with: lineEnding)
+
+        let preview = BulkProfileImporter.preview(from: text)
+
+        #expect(preview.canSubmit == false)
+        #expect(preview.entries.map(\.email) == ["valid@example.com"])
+        #expect(preview.issues.map(\.lineNumber) == [5, 9])
+    }
+
     @Test
     func bulkProfileImportReportsLineIssuesBeforeImport() {
         let preview = BulkProfileImporter.preview(
@@ -236,7 +374,7 @@ struct PlusProfileModelsTests {
         #expect(preview.countText == "1 profile ready")
         #expect(preview.issues.map(\.lineNumber) == [2, 3, 4])
         #expect(preview.issues.map(\.message) == [
-            "Use email|password|2FA",
+            "Use email|password|2FA or three lines: email, password, 2FA",
             "Email is empty",
             "2FA code is empty",
         ])

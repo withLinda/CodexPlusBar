@@ -735,8 +735,11 @@ struct PlusProfileControllerTests {
         #expect(persisted.last?.emailLink == nil)
     }
 
-    @Test
-    func importProfilesCreatesSavedRowsWithTwoFactorLiveLinkAndPrivateFields() throws {
+    @Test(arguments: [
+        "alpha+one@icloud.com|first-password|FIRST2FASECRET\nbeta-two@icloud.com|second-password|SECOND2FASECRET",
+        "1. alpha+one@icloud.com\nfirst-password\nFIRST2FASECRET\n\n2. beta-two@icloud.com\nsecond-password\nSECOND2FASECRET",
+    ])
+    func importProfilesCreatesSavedRowsWithTwoFactorLiveLinkAndPrivateFields(text: String) throws {
         let tempDirectory = makeTemporaryDirectory()
         let store = ProfileCatalogStore(
             fileURL: tempDirectory.appendingPathComponent("profiles.json", isDirectory: false)
@@ -749,17 +752,14 @@ struct PlusProfileControllerTests {
             autoStart: false
         )
 
-        let preview = controller.importProfiles(
-            from: """
-            alpha+one@icloud.com|first-password|FIRST2FASECRET
-            beta-two@icloud.com|second-password|SECOND2FASECRET
-            """
-        )
+        let preview = controller.importProfiles(from: text)
 
         let rows = controller.profiles
         let persisted = try store.loadProfiles()
         #expect(preview.canSubmit)
         #expect(preview.entries.count == 2)
+        try #require(rows.count == 3)
+        try #require(persisted.count == 3)
         #expect(rows.map(\.label) == [
             "existing@example.com",
             "alpha+one@icloud.com",
@@ -778,8 +778,12 @@ struct PlusProfileControllerTests {
         #expect(persisted[2].twoFactorCode == "SECOND2FASECRET")
     }
 
-    @Test
-    func importProfilesDoesNotPersistWhenAnyLineNeedsFixing() throws {
+    @Test(arguments: [
+        "alpha+one@icloud.com|first-password|FIRST2FASECRET\nbeta-two@icloud.com|second-password",
+        "alpha+one@icloud.com|first-password|FIRST2FASECRET\n2. beta-two@icloud.com\nsecond-password",
+        "alpha+one@icloud.com|first-password|FIRST2FASECRET\n2. beta-two@icloud.com\nsecond-password\nnext@example.com|next-password|NEXTSECRET",
+    ])
+    func importProfilesDoesNotPersistWhenAnyLineNeedsFixing(text: String) throws {
         let tempDirectory = makeTemporaryDirectory()
         let store = ProfileCatalogStore(
             fileURL: tempDirectory.appendingPathComponent("profiles.json", isDirectory: false)
@@ -792,12 +796,7 @@ struct PlusProfileControllerTests {
             autoStart: false
         )
 
-        let preview = controller.importProfiles(
-            from: """
-            alpha+one@icloud.com|first-password|FIRST2FASECRET
-            beta-two@icloud.com|second-password
-            """
-        )
+        let preview = controller.importProfiles(from: text)
 
         #expect(preview.canSubmit == false)
         #expect(preview.issueSummary == "Fix line 2")

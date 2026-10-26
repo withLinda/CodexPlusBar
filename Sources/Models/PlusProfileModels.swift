@@ -354,22 +354,48 @@ enum BulkProfileImporter {
     static func preview(from rawText: String) -> BulkProfileImportPreview {
         var entries: [BulkProfileImportEntry] = []
         var issues: [BulkProfileImportIssue] = []
-        let lines = rawText.components(separatedBy: .newlines)
+        let lines = rawText
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+            .components(separatedBy: .newlines)
+        var offset = 0
 
-        for (offset, line) in lines.enumerated() {
+        while offset < lines.count {
             let lineNumber = offset + 1
+            let line = lines[offset].trimmingCharacters(in: .whitespacesAndNewlines)
             let contentLine = removingLeadingOrderedListMarker(from: line)
-            let trimmedLine = contentLine.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard trimmedLine.isEmpty == false else {
+            offset += 1
+            guard contentLine.isEmpty == false else {
                 continue
             }
 
-            let fields = contentLine
-                .split(separator: "|", omittingEmptySubsequences: false)
-                .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            var fields: [String]
+            if contentLine.contains("|") {
+                fields = contentLine
+                    .split(separator: "|", omittingEmptySubsequences: false)
+                    .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            } else {
+                fields = [contentLine]
+                if isPlausibleEmail(contentLine) || contentLine != line {
+                    while fields.count < 3, offset < lines.count {
+                        let nextLine = lines[offset]
+                        let trimmedNextLine = nextLine.trimmingCharacters(in: .whitespacesAndNewlines)
+                        guard trimmedNextLine.isEmpty == false,
+                              startsProfile(trimmedNextLine) == false else {
+                            break
+                        }
+                        // Preserve credential text; ambiguous profile headers require a fix before import.
+                        fields.append(nextLine)
+                        offset += 1
+                    }
+                }
+            }
 
             guard fields.count == 3 else {
-                issues.append(BulkProfileImportIssue(lineNumber: lineNumber, message: "Use email|password|2FA"))
+                issues.append(BulkProfileImportIssue(
+                    lineNumber: lineNumber,
+                    message: "Use email|password|2FA or three lines: email, password, 2FA"
+                ))
                 continue
             }
 
@@ -403,6 +429,16 @@ enum BulkProfileImporter {
         }
 
         return BulkProfileImportPreview(entries: entries, issues: issues)
+    }
+
+    private static func startsProfile(_ line: String) -> Bool {
+        let contentLine = removingLeadingOrderedListMarker(from: line)
+        guard contentLine != line || contentLine.contains("|") else {
+            return false
+        }
+        let email = contentLine.components(separatedBy: "|")[0]
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return isPlausibleEmail(email)
     }
 
     private static func removingLeadingOrderedListMarker(from line: String) -> String {

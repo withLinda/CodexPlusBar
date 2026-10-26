@@ -358,18 +358,16 @@ struct ProfileManagerWindowViewTests {
         #expect(saved.saveSymbolName == "checkmark")
     }
 
-    @Test
-    func bulkImportSheetPresentationKeepsSubmitStateObvious() {
+    @Test(arguments: [
+        "1. alpha@example.com|password-a|SECRETONE\n2. beta@example.com|password-b|SECRETTWO",
+        "1. alpha@example.com\npassword-a\nSECRETONE\n\n2. beta@example.com\npassword-b\nSECRETTWO",
+    ])
+    func bulkImportSheetPresentationKeepsSubmitStateObvious(text: String) {
         let empty = ProfileManagerBulkImportSheetPresentation(
             preview: BulkProfileImporter.preview(from: "")
         )
         let valid = ProfileManagerBulkImportSheetPresentation(
-            preview: BulkProfileImporter.preview(
-                from: """
-                1. alpha@example.com|password-a|SECRETONE
-                2. beta@example.com|password-b|SECRETTWO
-                """
-            )
+            preview: BulkProfileImporter.preview(from: text)
         )
         let invalid = ProfileManagerBulkImportSheetPresentation(
             preview: BulkProfileImporter.preview(
