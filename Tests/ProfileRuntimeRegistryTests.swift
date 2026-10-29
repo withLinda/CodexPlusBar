@@ -5,6 +5,30 @@ import WebKit
 
 @MainActor
 struct ProfileRuntimeRegistryTests {
+    @Test func restoringSameProfileUsesItsNewCookieStore() async throws {
+        let original = sampleProfile(label: "restore@example.com", sortOrder: 0)
+        var json = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(original)) as? [String: Any])
+        json["webDataStoreID"] = UUID().uuidString
+        let restored = try JSONDecoder().decode(PlusProfile.self, from: JSONSerialization.data(withJSONObject: json))
+        let registry = ProfileRuntimeRegistry()
+        let oldRuntime = registry.runtime(for: original)
+        await oldRuntime.sessionStore.storeCookies([try #require(testCookie(name: "session", value: "old"))])
+        try await BackupSessionBridge.restoreCookies([restored.id.uuidString: [
+            BackupCookie(name: "session", value: "restored", domain: "chatgpt.com", path: "/", secure: true,
+                         httpOnly: true, expires: nil, sameSite: nil)
+        ]], profiles: [restored])
+
+        let restoredRuntime = registry.runtime(for: restored)
+        #expect(restoredRuntime !== oldRuntime)
+        #expect(await restoredRuntime.sessionStore.cookieValue(named: "session") == "restored")
+        #expect(registry.runtime(for: restored) === restoredRuntime)
+        await oldRuntime.sessionStore.clear()
+        await restoredRuntime.sessionStore.clear()
+        _ = BackupSessionBridge.takeRestoredStore(for: restored.webDataStoreID)
+        try? await registry.removeProfileData(for: original)
+        try? await registry.removeProfileData(for: restored)
+    }
+
     @Test
     func separateProfilesUseDifferentCookieStores() async throws {
         let profileA = sampleProfile(label: "alpha@example.com", sortOrder: 0)

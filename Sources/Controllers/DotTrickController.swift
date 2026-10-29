@@ -6,6 +6,7 @@ import Observation
 final class DotTrickController {
     private(set) var sessions: [DotTrickSession] = []
     var selectedSessionID: UUID?
+    var isTransferring = false
 
     private let store: DotTrickSessionStore
 
@@ -23,6 +24,7 @@ final class DotTrickController {
     }
 
     func addSession(localPart: String) {
+        guard !isTransferring else { return }
         let canonical = DotTrickGenerator.canonicalize(localPart)
         guard canonical.count >= 2 else {
             return
@@ -45,6 +47,7 @@ final class DotTrickController {
     }
 
     func removeSession(id: UUID) {
+        guard !isTransferring else { return }
         sessions.removeAll(where: { $0.id == id })
 
         if selectedSessionID == id {
@@ -55,6 +58,7 @@ final class DotTrickController {
     }
 
     func toggleUsed(variation: String, inSession sessionID: UUID) {
+        guard !isTransferring else { return }
         guard let index = sessions.firstIndex(where: { $0.id == sessionID }) else {
             return
         }
@@ -78,7 +82,7 @@ final class DotTrickController {
 
     // MARK: - Persistence
 
-    private func loadFromDisk() {
+    func loadFromDisk() {
         do {
             sessions = try store.loadSessions()
             if selectedSessionID == nil {

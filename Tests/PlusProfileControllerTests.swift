@@ -5,6 +5,34 @@ import WebKit
 
 @MainActor
 struct PlusProfileControllerTests {
+    @Test func backupWaitsForSignInWriteAndBlocksNewMutationsUntilResumed() async throws {
+        let directory = makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = ProfileCatalogStore(fileURL: directory.appendingPathComponent("profiles.json"))
+        let profile = sampleProfile(label: "studio@example.com", sortOrder: 0)
+        try store.saveProfiles([profile])
+        let service = PendingDesktopSaveService()
+        let controller = PlusProfileController(catalogStore: store, dataService: StubPlusProfileDataService(refreshResults: [:]), accountSwitchService: service, autoStart: false)
+        let saving = Task { await controller.saveDesktopSignIn(profileID: profile.id) }
+        await service.waitForStart()
+        var prepared = false
+        let backup = Task { try await controller.pauseForBackup(); prepared = true }
+        while !controller.isTransferring { await Task.yield() }
+        controller.addProfile()
+        controller.setTags([.pending], for: profile.id)
+        #expect(controller.profiles.count == 1)
+        #expect(controller.profiles[0].profile.tags.isEmpty)
+        #expect(!prepared)
+        await service.finish()
+        await saving.value
+        try await backup.value
+        #expect(prepared)
+        #expect(try store.loadProfiles().first?.codexSignIn != nil)
+        controller.resumeAfterBackup(reload: false, startTasks: false)
+        controller.addProfile()
+        #expect(controller.profiles.count == 2)
+    }
+
     @Test func desktopSaveRetainsUnrelatedMetadataEditedDuringAwait() async throws {
         let directory = makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }

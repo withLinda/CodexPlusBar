@@ -353,6 +353,7 @@ struct ProfileManagerWindowView: View {
     @AppStorage(CodexThemeSettings.Keys.contrast) private var themeContrast = CodexThemeSettings.defaultContrast
     @Bindable var controller: PlusProfileController
     let currentTime: AppMinuteClock
+    var openBackup: (BackupTransferMode) -> Void
     @AppStorage(ProfileDisplayOrderPreference.orderKey) private var profileDisplayOrder = ProfileDisplayOrderPreference.defaultOrder
     @State private var detailsDraft = PlusProfileDetailsDraft()
     @State private var sidebarFilter = ProfileFilter()
@@ -379,10 +380,12 @@ struct ProfileManagerWindowView: View {
         currentTime: AppMinuteClock,
         userDefaults: UserDefaults = .standard,
         initiallyShowsDetails: Bool = false,
-        initialPage: ProfileManagerPage = .profile
+        initialPage: ProfileManagerPage = .profile,
+        openBackup: @escaping (BackupTransferMode) -> Void = { _ in }
     ) {
         self.controller = controller
         self.currentTime = currentTime
+        self.openBackup = openBackup
         _isDetailsExpanded = State(initialValue: initiallyShowsDetails)
         _page = State(initialValue: initialPage)
         _profileDisplayOrder = AppStorage(
@@ -431,10 +434,17 @@ struct ProfileManagerWindowView: View {
             )
             .codexThemeRefreshScope()
         }
+        .disabled(controller.isTransferring)
         .onAppear {
             syncDrafts(with: controller.selectedProfile)
         }
         .onChange(of: controller.selectedProfileID) { _, _ in
+            resetDetailsFeedback()
+            syncDrafts(with: controller.selectedProfile)
+        }
+        .onChange(of: controller.selectedProfile?.profile.webDataStoreID) { _, _ in
+            // Restore preserves profile IDs but installs a fresh store. Discard the old
+            // edit buffer before a later Save can overwrite the restored details.
             resetDetailsFeedback()
             syncDrafts(with: controller.selectedProfile)
         }
@@ -498,7 +508,14 @@ struct ProfileManagerWindowView: View {
               }
 
                 Menu {
-                    Button("Import profiles…", systemImage: "tray.and.arrow.down", action: showBulkImport)
+                    Button("Import from Text…", systemImage: "text.badge.plus", action: showBulkImport)
+                    Divider()
+                    Button("Export Backup…", systemImage: "square.and.arrow.up") {
+                        if let snapshot = controller.selectedProfile { saveDetailsDraftIfNeeded(for: snapshot) }
+                        openBackup(.export)
+                    }
+                    Button("Restore Backup…", systemImage: "arrow.down.doc") { openBackup(.restore) }
+                    Divider()
                     Button("Phone summary", systemImage: "person.2") { page = .phoneSummary }
                     SettingsLink { Label("Settings…", systemImage: "gearshape") }
                 } label: {
@@ -523,7 +540,7 @@ struct ProfileManagerWindowView: View {
                     Button("Add profile", systemImage: "plus", action: addProfile)
                         .buttonStyle(CodexPrimaryButtonStyle())
                         .keyboardShortcut("n")
-                    Button("Import profiles…", systemImage: "tray.and.arrow.down", action: showBulkImport)
+                    Button("Restore Backup…", systemImage: "arrow.down.doc") { openBackup(.restore) }
                         .buttonStyle(CodexSecondaryButtonStyle())
                 }
             }

@@ -497,7 +497,7 @@ struct ChromeProfileStore {
         return childPath == parentPath || childPath.hasPrefix(parentPath + "/")
     }
 
-    private static func profileDirectoryName(for identifier: UUID) -> String {
+    static func profileDirectoryName(for identifier: UUID) -> String {
         "Profile-\(identifier.uuidString)"
     }
 

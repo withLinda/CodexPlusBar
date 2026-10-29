@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct CodexSettingsView: View {
+    var openBackup: (BackupTransferMode) -> Void = { _ in }
+    var isTransferring = false
     @AppStorage(CodexThemeSettings.Keys.appearanceMode) private var appearanceMode = CodexThemeSettings.defaultAppearanceMode
     @AppStorage(CodexThemeSettings.Keys.contrast) private var contrast = CodexThemeSettings.defaultContrast
     @AppStorage(OpenChamberSyncPreference.enabledKey) private var automaticSync = OpenChamberSyncPreference.defaultEnabled
@@ -52,11 +54,25 @@ struct CodexSettingsView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
+
+            CodexCard(tier: .regular, shadow: false) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Backup & Transfer").font(ProfileManagerTypography.bodyStrong)
+                    HStack(spacing: 10) {
+                        Button("Export Backup…") { openBackup(.export) }
+                            .buttonStyle(CodexSecondaryButtonStyle())
+                        Button("Restore Backup…") { openBackup(.restore) }
+                            .buttonStyle(CodexSecondaryButtonStyle())
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
         .padding(20)
         .frame(width: 460, alignment: .topLeading)
         .background(CodexBackdrop())
         .codexThemeRefreshScope()
+        .disabled(isTransferring)
     }
 }
 

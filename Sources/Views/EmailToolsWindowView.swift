@@ -36,6 +36,7 @@ struct EmailToolsWindowView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .tint(CodexTheme.utilityActionTextToken(preset: themeContext.preset).color)
+        .disabled(controller.isTransferring)
         .alert(sessionRemovalTitle, isPresented: Binding(
             get: { confirmingDeleteID != nil },
             set: { if !$0 { confirmingDeleteID = nil } }

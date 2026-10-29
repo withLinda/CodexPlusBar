@@ -10,7 +10,7 @@ protocol ProfileDataStoreManaging: AnyObject {
 @MainActor
 final class DefaultProfileDataStoreManager: ProfileDataStoreManaging {
     func dataStore(for identifier: UUID) -> WKWebsiteDataStore {
-        WKWebsiteDataStore(forIdentifier: identifier)
+        BackupSessionBridge.takeRestoredStore(for: identifier) ?? WKWebsiteDataStore(forIdentifier: identifier)
     }
 
     func removeDataStore(for identifier: UUID) async throws {
@@ -28,7 +28,7 @@ final class DefaultProfileDataStoreManager: ProfileDataStoreManaging {
 
 @MainActor
 final class ProfileRuntimeRegistry {
-    private var runtimesByProfileID: [UUID: PlusProfileRuntime] = [:]
+    private var runtimesByProfileID: [UUID: (storeID: UUID, runtime: PlusProfileRuntime)] = [:]
     private let dataStoreManager: ProfileDataStoreManaging
 
     init(dataStoreManager: ProfileDataStoreManaging = DefaultProfileDataStoreManager()) {
@@ -36,14 +36,14 @@ final class ProfileRuntimeRegistry {
     }
 
     func runtime(for profile: PlusProfile) -> PlusProfileRuntime {
-        if let existing = runtimesByProfileID[profile.id] {
-            return existing
+        if let existing = runtimesByProfileID[profile.id], existing.storeID == profile.webDataStoreID {
+            return existing.runtime
         }
 
         let runtime = PlusProfileRuntime(
             dataStore: dataStoreManager.dataStore(for: profile.webDataStoreID)
         )
-        runtimesByProfileID[profile.id] = runtime
+        runtimesByProfileID[profile.id] = (profile.webDataStoreID, runtime)
         return runtime
     }
 

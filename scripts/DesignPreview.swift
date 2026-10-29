@@ -19,6 +19,8 @@ enum DesignPreview {
         let appMenu = NSMenu()
         let appearanceItem = appMenu.addItem(withTitle: "Toggle appearance", action: #selector(PreviewCommands.toggleAppearance), keyEquivalent: "t")
         appearanceItem.target = commands
+        let restoreFixtureItem = appMenu.addItem(withTitle: "Restore same profile fixture", action: #selector(PreviewCommands.restoreFixture), keyEquivalent: "r")
+        restoreFixtureItem.target = commands
         let preserveClipboard = appMenu.addItem(withTitle: "Preserve clipboard for checks", action: #selector(PreviewCommands.preserveClipboard), keyEquivalent: "b")
         preserveClipboard.keyEquivalentModifierMask = [.command, .shift]
         preserveClipboard.target = commands
@@ -55,6 +57,17 @@ enum DesignPreview {
             controller.profiles[0] = first.updating(profile: profile)
         }
         controller.selectedProfileID = controller.profiles.first?.id
+        commands.restoreAction = {
+            guard let original = controller.selectedProfile?.profile else { return }
+            do {
+                var json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(original)) as! [String: Any]
+                json["webDataStoreID"] = UUID().uuidString
+                json["notes"] = "Restored notes must survive"
+                let restored = try JSONDecoder().decode(PlusProfile.self, from: JSONSerialization.data(withJSONObject: json))
+                try ProfileCatalogStore(fileURL: temporaryDirectory.appendingPathComponent("profiles.json")).saveProfiles([restored])
+                controller.resumeAfterBackup(reload: true, startTasks: false)
+            } catch { print("Fixture restore failed: \(error)") }
+        }
         if arguments.contains("--unsaved"), !controller.profiles.isEmpty {
             var profile = controller.profiles[0].profile
             profile.codexSignIn = nil
@@ -78,18 +91,45 @@ enum DesignPreview {
         let clock = AppMinuteClock(now: now)
         let isPanel = arguments.contains("--panel")
         let isEmailTools = arguments.contains("--email-tools")
+        let isBackup = arguments.contains(where: { $0.hasPrefix("--backup-") })
         let size = isPanel
             ? CGSize(width: MenuBarPanelMetrics.width, height: MenuBarPanelMetrics.height)
+            : isBackup ? CGSize(width: 480, height: 360)
             : isEmailTools ? (arguments.contains("--empty") ? EmailToolsLayout.emptySize : arguments.contains("--compact") ? EmailToolsLayout.minimumSize : EmailToolsLayout.defaultSize)
             : arguments.contains("--empty") ? ProfileManagerLayout.emptySize
             : arguments.contains("--compact") ? ProfileManagerLayout.minimumSize : ProfileManagerLayout.defaultSize
         let window = NSWindow(
             contentRect: NSRect(origin: .zero, size: size),
-            styleMask: isPanel ? [.borderless] : [.titled, .closable, .resizable, .fullSizeContentView],
+            styleMask: isPanel ? [.borderless] : isBackup ? [.titled, .closable] : [.titled, .closable, .resizable, .fullSizeContentView],
             backing: .buffered, defer: false
         )
         let root: AnyView
-        if isPanel {
+        if isBackup {
+            try ProfileCatalogStore(fileURL: temporaryDirectory.appendingPathComponent("profiles.json")).saveProfiles(controller.profiles.map(\.profile))
+            let transfer = BackupTransferController(profiles: controller,
+                email: DotTrickController(store: DotTrickSessionStore(fileURL: temporaryDirectory.appendingPathComponent("dot-trick-sessions.json"))),
+                root: temporaryDirectory)
+            transfer.window = window
+            if arguments.contains("--backup-restore") {
+                transfer.mode = .restore
+                transfer.sourceURL = temporaryDirectory.appendingPathComponent("CodexPlusBar-2026-10-29.codexplusbarbackup")
+                if let index = arguments.firstIndex(of: "--backup-file"), arguments.indices.contains(index + 1) {
+                    transfer.sourceURL = URL(fileURLWithPath: arguments[index + 1])
+                }
+            }
+            if arguments.contains("--backup-ready") {
+                transfer.mode = .restore
+                transfer.prepared = PreparedBackup(id: UUID(), directory: temporaryDirectory,
+                    manifest: BackupManifest(profileCount: 35, preferences: .init(), cookies: [:]))
+                transfer.phase = .preview
+            }
+            if arguments.contains("--backup-success") {
+                transfer.phase = .exported(temporaryDirectory.appendingPathComponent("CodexPlusBar-2026-10-29.codexplusbarbackup"))
+            }
+            if arguments.contains("--backup-error") { transfer.errorMessage = BackupError.unlockFailed.localizedDescription }
+            if arguments.contains("--backup-working") { transfer.phase = .working("Compressing and encrypting…"); transfer.isBusy = true }
+            root = AnyView(BackupTransferView(controller: transfer))
+        } else if isPanel {
             root = AnyView(MenuBarRootView(controller: controller, currentTime: clock, openManagerWindow: { _ in }, openEmailToolsWindow: {}))
         } else if isEmailTools {
             let emailController = DotTrickController(store: DotTrickSessionStore(fileURL: temporaryDirectory.appendingPathComponent("email-sessions.json")))
@@ -202,6 +242,8 @@ private struct PreviewAccessibilityProbe: View {
 @MainActor
 private final class PreviewCommands: NSObject {
     private var clipboardSnapshot: [NSPasteboardItem]?
+    var restoreAction: () -> Void = {}
+    @objc func restoreFixture() { restoreAction() }
 
     @objc func preserveClipboard() {
         guard clipboardSnapshot == nil else { return }

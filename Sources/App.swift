@@ -16,7 +16,7 @@ struct CodexPlusBar: App {
 
     var body: some Scene {
         Settings {
-            CodexSettingsView()
+            CodexSettingsView(openBackup: appRuntime.showBackup, isTransferring: appRuntime.controller.isTransferring)
         }
     }
 }

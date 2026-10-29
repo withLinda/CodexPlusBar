@@ -71,6 +71,8 @@ final class PlusProfileController {
     var selectedProfileID: UUID?
     var statusMessage: String?
     var isRefreshing = false
+    private(set) var isTransferring = false
+    @ObservationIgnored private var activeDataOperations = 0
     var dashboardStatus: PlusDashboardStatus = .empty
     var chromeSignInProfileIDs: Set<UUID> = []
     var switchingProfileIDs: Set<UUID> = []
@@ -126,6 +128,7 @@ final class PlusProfileController {
     /// storage migration) has completed.  Keeping this separate from `init`
     /// prevents a first-run migration from racing a Claude cookie restore.
     func startBackgroundTasks() {
+        guard !isTransferring else { return }
         guard bootstrapTask == nil, autoRefreshTask == nil else {
             return
         }
@@ -142,6 +145,39 @@ final class PlusProfileController {
             }
         }
         syncScheduler.start()
+    }
+
+    func pauseForBackup() async throws {
+        guard !isTransferring else { throw BackupError.busy }
+        isTransferring = true
+        bootstrapTask?.cancel(); autoRefreshTask?.cancel()
+        await syncScheduler.pauseForManualOperation()
+        // Closing the app-owned sign-in session releases its return-to-app waiter.
+        // Existing writes drain; new mutations are refused by the transfer gate.
+        while activeDataOperations > 0 || isRefreshing {
+            for profile in profiles { await dataService.closeChromeSignIn(for: profile.profile) }
+            try Task.checkCancellation()
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        for profile in profiles { await dataService.closeChromeSignIn(for: profile.profile) }
+        chromeSignInProfileIDs.removeAll()
+        await bootstrapTask?.value
+        await autoRefreshTask?.value
+        bootstrapTask = nil; autoRefreshTask = nil
+        // An already-running manual sign-in may have resumed sync in its defer.
+        await syncScheduler.pauseForManualOperation()
+        try Task.checkCancellation()
+    }
+
+    func resumeAfterBackup(reload: Bool, startTasks: Bool = true) {
+        if reload {
+            statusMessage = nil
+            loadStoredProfiles()
+        }
+        isTransferring = false
+        bootstrapTask = nil; autoRefreshTask = nil
+        syncScheduler.resumeAfterManualOperation()
+        if startTasks { startBackgroundTasks() }
     }
 
     deinit {
@@ -235,6 +271,7 @@ final class PlusProfileController {
         label: String? = nil,
         provider: ProfileProvider = .codex
     ) {
+        guard !isTransferring else { return }
         let nextIndex = profiles.count + 1
         let newProfile = PlusProfile(
             id: UUID(),
@@ -266,6 +303,7 @@ final class PlusProfileController {
     @discardableResult
     func importProfiles(from rawText: String) -> BulkProfileImportPreview {
         let preview = BulkProfileImporter.preview(from: rawText)
+        guard !isTransferring else { return preview }
         guard preview.canSubmit else {
             statusMessage = preview.issueSummary ?? "Paste at least one profile row."
             updateDashboardStatus()
@@ -326,6 +364,9 @@ final class PlusProfileController {
         _ provider: ProfileProvider,
         for profileID: UUID
     ) async -> Bool {
+        guard !isTransferring else { return false }
+        activeDataOperations += 1
+        defer { activeDataOperations -= 1 }
         guard let index = indexOfProfile(profileID) else {
             return false
         }
@@ -365,6 +406,7 @@ final class PlusProfileController {
 
     @discardableResult
     func updateDetails(for profileID: UUID, draft: PlusProfileDetailsDraft) -> Bool {
+        guard !isTransferring else { return false }
         guard let index = indexOfProfile(profileID) else {
             return false
         }
@@ -382,6 +424,7 @@ final class PlusProfileController {
     }
 
     func setTags(_ tags: [PlusProfileTag], for profileID: UUID) {
+        guard !isTransferring else { return }
         guard let index = indexOfProfile(profileID) else { return }
         var updatedProfile = profiles[index].profile
         updatedProfile.tags = PlusProfile.normalizedTags(tags)
@@ -390,6 +433,7 @@ final class PlusProfileController {
     }
 
     func toggleTag(_ tag: PlusProfileTag, for profileID: UUID) {
+        guard !isTransferring else { return }
         guard let index = indexOfProfile(profileID) else { return }
         var updatedTags = profiles[index].profile.normalizedTags
 
@@ -403,6 +447,7 @@ final class PlusProfileController {
     }
 
     func moveSelectedProfileUp() {
+        guard !isTransferring else { return }
         guard let selectedProfileID,
               let index = indexOfProfile(selectedProfileID),
               index > 0 else { return }
@@ -412,6 +457,7 @@ final class PlusProfileController {
     }
 
     func moveSelectedProfileDown() {
+        guard !isTransferring else { return }
         guard let selectedProfileID,
               let index = indexOfProfile(selectedProfileID),
               index < profiles.count - 1 else { return }
@@ -421,6 +467,7 @@ final class PlusProfileController {
     }
 
     func refreshAll() async {
+        guard !isTransferring else { return }
         guard isRefreshing == false else { return }
         guard profiles.isEmpty == false else {
             statusMessage = "Add a profile, then sign in one by one."
@@ -459,6 +506,9 @@ final class PlusProfileController {
     }
 
     func switchAndOpen(profileID: UUID) async {
+        guard !isTransferring else { return }
+        activeDataOperations += 1
+        defer { activeDataOperations -= 1 }
         guard switchingProfileIDs.isEmpty, let index = indexOfProfile(profileID),
               profiles[index].profile.provider == .codex else { return }
         let profile = profiles[index].profile
@@ -477,6 +527,9 @@ final class PlusProfileController {
     }
 
     func saveDesktopSignIn(profileID: UUID) async {
+        guard !isTransferring else { return }
+        activeDataOperations += 1
+        defer { activeDataOperations -= 1 }
         guard switchingProfileIDs.isEmpty, let index = indexOfProfile(profileID),
               profiles[index].profile.provider == .codex else { return }
         let profile = profiles[index].profile
@@ -517,6 +570,9 @@ final class PlusProfileController {
     }
 
     func saveOpenChamberAuth(profileID: UUID) async {
+        guard !isTransferring else { return }
+        activeDataOperations += 1
+        defer { activeDataOperations -= 1 }
         guard openCodeSwitchingProfileIDs.isEmpty, let index = indexOfProfile(profileID),
               profiles[index].profile.provider == .codex else { return }
         let profile = profiles[index].profile
@@ -550,6 +606,9 @@ final class PlusProfileController {
     }
 
     func switchOpenChamberAuth(profileID: UUID) async {
+        guard !isTransferring else { return }
+        activeDataOperations += 1
+        defer { activeDataOperations -= 1 }
         guard openCodeSwitchingProfileIDs.isEmpty, let index = indexOfProfile(profileID),
               profiles[index].profile.provider == .codex else { return }
         openCodeSwitchingProfileIDs.insert(profileID)
@@ -567,6 +626,9 @@ final class PlusProfileController {
     }
 
     func clearSession(for profileID: UUID) async {
+        guard !isTransferring else { return }
+        activeDataOperations += 1
+        defer { activeDataOperations -= 1 }
         guard let index = indexOfProfile(profileID) else { return }
         let snapshot = profiles[index]
 
@@ -596,6 +658,9 @@ final class PlusProfileController {
     }
 
     func removeProfile(id profileID: UUID) async {
+        guard !isTransferring else { return }
+        activeDataOperations += 1
+        defer { activeDataOperations -= 1 }
         guard !removingProfileIDs.contains(profileID), let index = indexOfProfile(profileID) else { return }
         removingProfileIDs.insert(profileID)
         defer { removingProfileIDs.remove(profileID) }
@@ -640,6 +705,9 @@ final class PlusProfileController {
     }
 
     func openChrome(for profileID: UUID) async {
+        guard !isTransferring else { return }
+        activeDataOperations += 1
+        defer { activeDataOperations -= 1 }
         guard var index = indexOfProfile(profileID) else { return }
         var snapshot = profiles[index]
 
@@ -695,6 +763,9 @@ final class PlusProfileController {
     }
 
     func openChromePasskeySetup(for profileID: UUID) async {
+        guard !isTransferring else { return }
+        activeDataOperations += 1
+        defer { activeDataOperations -= 1 }
         guard let index = indexOfProfile(profileID) else { return }
         let snapshot = profiles[index]
 
@@ -718,6 +789,9 @@ final class PlusProfileController {
     }
 
     func syncChromeSession(for profileID: UUID) async {
+        guard !isTransferring else { return }
+        activeDataOperations += 1
+        defer { activeDataOperations -= 1 }
         guard let index = indexOfProfile(profileID) else { return }
         let snapshot = profiles[index]
         setRefreshingState(for: profileID, isRefreshing: true)
@@ -738,6 +812,9 @@ final class PlusProfileController {
     }
 
     func closeChromeSignIn(for profileID: UUID) async {
+        guard !isTransferring else { return }
+        activeDataOperations += 1
+        defer { activeDataOperations -= 1 }
         guard let index = indexOfProfile(profileID) else { return }
         let snapshot = profiles[index]
         await dataService.closeChromeSignIn(for: snapshot.profile)
@@ -753,6 +830,9 @@ final class PlusProfileController {
     }
 
     private func refreshProfile(id profileID: UUID, isBackgroundBatch: Bool) async {
+        guard !isTransferring else { return }
+        activeDataOperations += 1
+        defer { activeDataOperations -= 1 }
         guard let index = indexOfProfile(profileID) else { return }
         let snapshot = profiles[index]
         setRefreshingState(for: profileID, isRefreshing: true)
@@ -797,7 +877,8 @@ final class PlusProfileController {
         do {
             let loadResult = try catalogStore.loadProfilesWithReport()
             trusted = loadResult.sourceExists
-            let migration = accountSwitchService.migrate(loadResult.profiles)
+            let pendingRestore = FileManager.default.fileExists(atPath: catalogStore.directory.appendingPathComponent(BackupService.receiptName).path)
+            let migration = pendingRestore ? (loadResult.profiles, changed: false) : accountSwitchService.migrate(loadResult.profiles)
             storedProfiles = migration.0
             if migration.changed {
                 do {
@@ -840,7 +921,10 @@ final class PlusProfileController {
         updateDashboardStatus()
     }
 
-    func syncOpenChamberNow() async { await syncScheduler.syncNow() }
+    func syncOpenChamberNow() async {
+        guard !isTransferring else { return }
+        await syncScheduler.syncNow()
+    }
 
     private func initialState(for profile: PlusProfile) -> PlusProfileState {
         switch profile.lastKnownState {

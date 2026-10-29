@@ -8,6 +8,7 @@ struct ProfileCatalogLoadResult {
 
 struct ProfileCatalogStore {
     private let storage: JSONFileStorage
+    var directory: URL { storage.fileURL.deletingLastPathComponent() }
 
     init(
         fileURL: URL = Self.defaultFileURL(),

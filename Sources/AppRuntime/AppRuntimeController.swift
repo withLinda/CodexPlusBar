@@ -15,6 +15,8 @@ final class AppRuntimeController {
     private let chromeProfileStore: ChromeProfileStore
     private let profileManagerWindowPresenter: ProfileManagerWindowPresenter
     private let emailToolsWindowPresenter: EmailToolsWindowPresenter
+    private let emailController: DotTrickController
+    private let backupPresenter: BackupTransferPresenter
     private let singleInstanceCoordinator: SingleInstanceCoordinator
     private lazy var menuBarStatusItemController = MenuBarStatusItemController(
         controller: controller,
@@ -47,6 +49,9 @@ final class AppRuntimeController {
         let clock = AppMinuteClock()
         self.controller = controller
         self.clock = clock
+        self.emailController = dotTrickController
+        let transfer = BackupTransferController(profiles: controller, email: dotTrickController)
+        self.backupPresenter = BackupTransferPresenter(controller: transfer)
         self.chromeProfileStore = chromeProfileStore
         self.profileManagerWindowPresenter = ProfileManagerWindowPresenter(
             controller: controller,
@@ -56,6 +61,8 @@ final class AppRuntimeController {
             controller: dotTrickController
         )
         self.singleInstanceCoordinator = singleInstanceCoordinator
+        self.profileManagerWindowPresenter.openBackup = { [weak self] mode in self?.showBackup(mode) }
+        transfer.showProfiles = { [weak self] in self?.showManagerWindow() }
     }
 
     func start() {
@@ -81,6 +88,26 @@ final class AppRuntimeController {
             return
         }
 
+        Task { @MainActor in await finishStartup() }
+    }
+
+    private func finishStartup() async {
+        let root = ProfileCatalogStore.defaultFileURL().deletingLastPathComponent()
+        if FileManager.default.fileExists(atPath: root.appendingPathComponent(BackupService.receiptName).path) {
+            do {
+                emailController.isTransferring = true
+                try await controller.pauseForBackup()
+                try await BackupSessionBridge.finishRestore(root: root)
+                emailController.loadFromDisk()
+                emailController.isTransferring = false
+                controller.resumeAfterBackup(reload: true, startTasks: false)
+            } catch {
+                controller.statusMessage = "Restore needs to finish before profiles can be used. Reopen CodexPlusBar to retry."
+                menuBarStatusItemController.start()
+                showManagerWindow()
+                return
+            }
+        }
         do {
             let report = try chromeProfileStore.migrateAndPrune(
                 profiles: controller.profiles.map(\.profile)
@@ -106,5 +133,9 @@ final class AppRuntimeController {
 
     func showEmailToolsWindow() {
         emailToolsWindowPresenter.show()
+    }
+
+    func showBackup(_ mode: BackupTransferMode) {
+        backupPresenter.show(mode)
     }
 }
