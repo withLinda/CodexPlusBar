@@ -3,6 +3,46 @@ import Testing
 @testable import CodexPlusBar
 
 struct OpenChamberSyncServiceTests {
+    @Test func malformedRefreshResponseDefersRestoreInsteadOfRequestingNewSignIn() async throws {
+        let fixture = try SyncServiceFixture(); defer { fixture.remove() }
+        let entry = try nativeCredential("alpha")
+        try fixture.snapshots.saveNative(entry, identity: entry.openAIIdentity())
+        let client = SyncTestClient([])
+        let catalog = try fixture.catalog([entry])
+        let verifier = OpenCodeOpenAICredentialVerifier(request: { request in
+            let url = try #require(request.url)
+            let refreshing = url.path == "/oauth/token"
+            let response = try #require(HTTPURLResponse(url: url, statusCode: refreshing ? 200 : 401, httpVersion: nil, headerFields: nil))
+            return (Data(#"{"access_token":"","refresh_token":"synthetic-new","expires_in":3600}"#.utf8), response)
+        })
+        let service = OpenChamberSyncService(resolveClient: { client }, gate: .init(), snapshots: fixture.snapshots,
+            stateStore: fixture.state, verifier: verifier)
+        let result = try await service.reconcile(catalog: catalog, isCurrent: { _ in true })
+        #expect(result.needsSignInProfileIDs.isEmpty)
+        #expect(result.deferredRestoreProfileIDs == Set(catalog.profiles.map(\.id)))
+    }
+
+    @Test(arguments: [OpenCodeOpenAIVerificationError.unavailable, .invalidResponse, .httpStatus(500), .reauthenticationRequired])
+    func restoreDistinguishesTemporaryFailureFromRejectedCredential(failure: OpenCodeOpenAIVerificationError) async throws {
+        let fixture = try SyncServiceFixture(); defer { fixture.remove() }
+        let entry = try nativeCredential("alpha")
+        try fixture.snapshots.saveNative(entry, identity: entry.openAIIdentity())
+        let client = SyncTestClient([])
+        let catalog = try fixture.catalog([entry])
+        let service = OpenChamberSyncService(resolveClient: { client }, gate: .init(), snapshots: fixture.snapshots,
+            stateStore: fixture.state, verifier: FailedRestoreVerifier(failure: failure))
+        let result = try await service.reconcile(catalog: catalog, isCurrent: { _ in true })
+        let id = try #require(catalog.profiles.first?.id)
+        if failure == .reauthenticationRequired {
+            #expect(result.needsSignInProfileIDs == [id])
+            #expect(result.deferredRestoreProfileIDs.isEmpty)
+        } else {
+            #expect(result.needsSignInProfileIDs.isEmpty)
+            #expect(result.deferredRestoreProfileIDs == [id])
+        }
+        #expect(await client.operations.isEmpty)
+    }
+
     @Test func selectionChangeDuringIdleCheckStopsActivation() async throws {
         let fixture = try SyncServiceFixture(); defer { fixture.remove() }
         let a = try nativeCredential("alpha"), b = try nativeCredential("beta"), old = try nativeCredential("old", active: true)
@@ -157,6 +197,12 @@ struct OpenChamberSyncServiceTests {
         #expect(saved.matchedCount == 1)
         #expect(await client.entries.count == 1)
     }
+}
+
+private struct FailedRestoreVerifier: OpenCodeOpenAICredentialVerifying {
+    let failure: OpenCodeOpenAIVerificationError
+    func verify(_ auth: OpenCodeOpenAIAuth) async throws { throw failure }
+    func refresh(_ auth: OpenCodeOpenAIAuth) async throws -> OpenCodeOpenAIAuth { throw failure }
 }
 
 struct SyncServiceFixture {

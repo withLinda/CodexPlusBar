@@ -1,8 +1,95 @@
+import AppKit
 import Foundation
 import Testing
 @testable import CodexPlusBar
 
 struct CodexNativeSwitchTests {
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["CODEX_DESKTOP_RUNTIME_PROBE"] == "1"))
+    @MainActor
+    func installedDesktopSignInCanBeSavedToAnIsolatedVault() async throws {
+        // Opt-in: read the real desktop configuration and sign-in, but only write a temporary
+        // private vault. Never close the desktop, refresh tokens, or change its live storage.
+        let running = NSRunningApplication.runningApplications(withBundleIdentifier: CodexDesktopApp.bundleIdentifier)
+        let appURL = try #require(running.first?.bundleURL, "Launch ChatGPT / Codex before enabling this runtime probe")
+        #expect(CodexDesktopApp.hasBundledProcesses(appURL))
+        let home = try CodexSignInFixture.directory()
+        defer { try? FileManager.default.removeItem(at: home) }
+        let codexHome = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".codex")
+        let store = try CodexLiveAuthStore(codexHome: codexHome)
+        let current = try store.read()
+        let original = try #require(current)
+        let signIn = try CodexSignIn(data: original)
+        var profile = CodexSignInFixture.profile()
+        profile.label = signIn.identity.email
+        let service = CodexAccountSwitchService(homeDirectory: home, resolveStore: { store })
+
+        let saved = try await service.saveCurrent(for: profile)
+
+        // Compare Booleans so a failed assertion cannot print credentials or account identity.
+        let identityMatches = saved == signIn.identity
+        let snapshotMatches = try CodexSignInVault(homeDirectory: home).load(saved).data == original
+        let liveUnchanged = try store.read() == original
+        #expect(identityMatches)
+        #expect(snapshotMatches)
+        #expect(liveUnchanged)
+    }
+
+    @Test(arguments: [
+        ["-c", "forced_login_method=\"chatgpt\""],
+        ["--config", "forced_login_method = 'chatgpt'"],
+        ["--config=forced_login_method=\"chatgpt\""],
+        ["-cforced_login_method=chatgpt"]
+    ])
+    func desktopChatGPTLoginRestrictionAllowsSavingCurrentSignIn(overrides: [String]) async throws {
+        let fixture = try NativeSwitchFixture()
+        defer { fixture.cleanUp() }
+        let original = try CodexSignInFixture.data()
+        try original.write(to: fixture.authURL)
+        let home = fixture.home.appendingPathComponent(".codex")
+        let app = ConfiguredNativeApp(arguments: ["codex"] + overrides + ["exec-server", "--remote", "https://example.com", "--environment-id", "synthetic"])
+        let service = CodexAccountSwitchService(
+            homeDirectory: fixture.home, app: app,
+            resolveStore: { try CodexLiveAuthStore(codexHome: home, keychain: MemoryCodexKeychain()) }
+        )
+
+        let identity = try await service.saveCurrent(for: fixture.profile)
+
+        #expect(try fixture.vault.load(identity).data == original)
+        #expect(try Data(contentsOf: fixture.authURL) == original)
+    }
+
+    @Test(arguments: [
+        ["-c", "forced_login_method='api'"],
+        ["-c", "forced_login_method='unknown'"],
+        ["-c", "forced_login_method=\"chatgpt\" extra"],
+        ["-c", "nested.forced_login_method='chatgpt'"],
+        ["--enable", "forced_login_method=chatgpt"],
+        ["forced_login_method=chatgpt"],
+        ["-c", "forced_login_method='chatgpt'", "-c", "forced_login_method='api'"],
+        ["-c", "forced_login_method='api'", "-c", "forced_login_method='chatgpt'"],
+        ["-c", "forced_login_method='chatgpt'", "-c", "cli_auth_credentials_store='keyring'"],
+        ["-c", "forced_login_method='chatgpt'", "-c", "forced_chatgpt_workspace_id='other'"],
+        ["-c", "forced_login_method='chatgpt'", "--enable", "secret_auth_storage"],
+        ["-c", "forced_login_method='chatgpt'", "-c", "chatgpt_base_url='https://example.com'"]
+    ])
+    func compatibleLoginFlagDoesNotBypassUnsupportedOverrides(overrides: [String]) throws {
+        #expect(throws: CodexSignInError.unsupportedConfiguration) {
+            try CodexDesktopApp.validateProcess(arguments: ["codex"] + overrides, environment: [:],
+                                               standardHome: URL(fileURLWithPath: "/Users/sample/.codex"))
+        }
+    }
+
+    @Test func compatibleLoginFlagDoesNotBypassEnvironmentOverrides() throws {
+        let home = URL(fileURLWithPath: "/Users/sample/.codex")
+        for key in ["CODEX_HOME", "CODEX_AUTH_JSON", "CODEX_ACCESS_TOKEN", "CODEX_API_KEY",
+                    "CODEX_REFRESH_TOKEN_URL_OVERRIDE", "CODEX_APP_SERVER_LOGIN_CLIENT_ID"] {
+            #expect(throws: CodexSignInError.unsupportedConfiguration) {
+                try CodexDesktopApp.validateProcess(arguments: ["codex", "-c", "forced_login_method=\"chatgpt\""],
+                                                   environment: [key: "/other"], standardHome: home)
+            }
+        }
+    }
+
     @Test func runtimeAuthOverridesAreRejectedBeforeUsingStandardStorage() throws {
         let home = URL(fileURLWithPath: "/Users/sample/.codex")
         #expect(throws: CodexSignInError.unsupportedConfiguration) {
@@ -228,6 +315,18 @@ struct CodexNativeSwitchTests {
         #expect(try fixture.vault.load(fresh.identity).refreshToken == "rotated")
         #expect(await fixture.app.events == ["close", "open"])
     }
+}
+
+private struct ConfiguredNativeApp: CodexDesktopAppManaging {
+    let arguments: [String]
+
+    func validateConfiguration() async throws {
+        try CodexDesktopApp.validateProcess(arguments: arguments, environment: [:],
+                                           standardHome: URL(fileURLWithPath: "/Users/sample/.codex"))
+    }
+
+    func close() async throws { Issue.record("Saving a sign-in must not close the desktop app") }
+    func open() async throws { Issue.record("Saving a sign-in must not reopen the desktop app") }
 }
 
 struct NativeSwitchFixture {

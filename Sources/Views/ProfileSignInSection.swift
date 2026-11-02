@@ -1,10 +1,27 @@
 import SwiftUI
 
+struct ProfileSignInPresentation {
+    let hasSavedSignIn: Bool
+    let needsRepair: Bool
+
+    var showsSave: Bool { !hasSavedSignIn || needsRepair }
+    var statusText: String {
+        if !hasSavedSignIn { return "No saved sign-in" }
+        return needsRepair ? "Sign-in needs updating" : "Sign-in saved"
+    }
+    var statusSymbol: String {
+        if !hasSavedSignIn { return "circle.dashed" }
+        return needsRepair ? "exclamationmark.circle" : "checkmark.circle"
+    }
+}
+
 /// Both app sign-ins share one quiet surface and the same action anchors.
 struct ProfileSignInSection: View {
     @Environment(\.codexThemeRefreshContext) private var themeContext
     let desktopSaved: Bool
     let openChamberSaved: Bool
+    let desktopNeedsRepair: Bool
+    let openChamberNeedsRepair: Bool
     let desktopWorking: Bool
     let openChamberWorking: Bool
     let desktopStatus: OpenChamberActionStatus?
@@ -18,12 +35,14 @@ struct ProfileSignInSection: View {
         VStack(alignment: .leading, spacing: 16) {
             ProfileAppSignInRow(title: "ChatGPT / Codex", switchTitle: "Switch and open",
                                 hasSavedSignIn: desktopSaved, isWorking: desktopWorking,
+                                needsRepair: desktopNeedsRepair,
                                 status: desktopStatus,
                                 saveHelp: "Sign in to this account in the desktop app first, then save its current sign-in.",
                                 switchHelp: "Verify this saved sign-in, close the desktop app, and reopen it with this account.",
                                 save: saveDesktop, switchAccount: switchDesktop)
             ProfileAppSignInRow(title: "OpenChamber", switchTitle: "Switch",
                                 hasSavedSignIn: openChamberSaved, isWorking: openChamberWorking,
+                                needsRepair: openChamberNeedsRepair,
                                 status: openChamberStatus,
                                 saveHelp: "Sign in to this account in OpenChamber first, then save its current OpenAI sign-in.",
                                 switchHelp: "Verify and switch the local OpenAI connection for new requests.",
@@ -44,11 +63,16 @@ private struct ProfileAppSignInRow: View {
     let switchTitle: String
     let hasSavedSignIn: Bool
     let isWorking: Bool
+    let needsRepair: Bool
     let status: OpenChamberActionStatus?
     let saveHelp: String
     let switchHelp: String
     let save: () -> Void
     let switchAccount: () -> Void
+
+    private var presentation: ProfileSignInPresentation {
+        .init(hasSavedSignIn: hasSavedSignIn, needsRepair: needsRepair)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -81,20 +105,24 @@ private struct ProfileAppSignInRow: View {
             Text(title)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(CodexTheme.palette(for: themeContext.preset).strongText.color)
-            Label(hasSavedSignIn ? "Sign-in saved" : "No saved sign-in",
-                  systemImage: hasSavedSignIn ? "checkmark.circle" : "circle.dashed")
+            Label(presentation.statusText, systemImage: presentation.statusSymbol)
                 .font(.system(size: 13))
-                .foregroundStyle(CodexTheme.palette(for: themeContext.preset).supportText.color)
+                .foregroundStyle(needsRepair
+                    ? CodexTheme.statusForegroundToken(for: .warning, preset: themeContext.preset).color
+                    : CodexTheme.palette(for: themeContext.preset).supportText.color)
         }
     }
 
-    private var actions: some View {
-        HStack(spacing: 8) {
-            Button("Save current sign-in", action: save)
-                .buttonStyle(CodexQuietButtonStyle(font: .system(size: 13), horizontalPadding: 10))
-                .disabled(isWorking)
-                .accessibilityLabel("Save current \(title) sign-in")
-                .help(saveHelp)
+    @ViewBuilder private var actions: some View {
+        if presentation.showsSave {
+            Button(action: save) {
+                Text("Save current sign-in").frame(minWidth: 128)
+            }
+            .buttonStyle(CodexQuietButtonStyle(font: .system(size: 13), horizontalPadding: 10))
+            .disabled(isWorking)
+            .accessibilityLabel("Save current \(title) sign-in")
+            .help(saveHelp)
+        } else {
             Button(action: switchAccount) {
                 Label(switchTitle, systemImage: "arrow.triangle.2.circlepath")
                     .frame(minWidth: 128)
@@ -102,7 +130,7 @@ private struct ProfileAppSignInRow: View {
             .buttonStyle(CodexSecondaryButtonStyle(font: .system(size: 13, weight: .semibold),
                                                   foregroundColor: CodexTheme.utilityActionTextToken(preset: themeContext.preset).color,
                                                   horizontalPadding: 10))
-            .disabled(!hasSavedSignIn || isWorking)
+            .disabled(isWorking)
             .accessibilityLabel("\(switchTitle) \(title)")
             .help(switchHelp)
         }

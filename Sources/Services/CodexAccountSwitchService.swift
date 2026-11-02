@@ -27,6 +27,7 @@ struct CodexSignInSwitchError: LocalizedError {
     let reason: String
     let recovery: Recovery
     let reopenFailed: Bool
+    let requiresNewSignIn: Bool
 
     init(cause: (any Error)?, recovery: Recovery, reopenFailed: Bool) {
         if let error = cause as? CodexSignInError { reason = error.localizedDescription }
@@ -35,6 +36,7 @@ struct CodexSignInSwitchError: LocalizedError {
         else { reason = "" }
         self.recovery = recovery
         self.reopenFailed = reopenFailed
+        requiresNewSignIn = (cause as? CodexSignInError)?.requiresNewSignIn == true
     }
 
     var errorDescription: String? {

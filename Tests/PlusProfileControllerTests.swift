@@ -5,6 +5,85 @@ import WebKit
 
 @MainActor
 struct PlusProfileControllerTests {
+    @Test(arguments: ["{invalid", #"{"openai":{"type":"api","key":"synthetic"}}"#])
+    func brokenOutgoingOpenChamberLoginDoesNotMarkSelectedSnapshotBroken(outgoing: String) async throws {
+        let fixture = try OpenCodeAuthFixture()
+        defer { fixture.remove() }
+        let target = try fixture.auth("target")
+        let profile = try await fixture.prepareTarget(target)
+        let store = ProfileCatalogStore(fileURL: fixture.home.appendingPathComponent("profiles.json"))
+        try store.saveProfiles([profile])
+        try Data(outgoing.utf8).write(to: fixture.authURL)
+        let controller = PlusProfileController(catalogStore: store,
+            dataService: StubPlusProfileDataService(refreshResults: [:]),
+            openCodeAuthService: fixture.service, autoStart: false)
+        await controller.switchOpenChamberAuth(profileID: profile.id)
+        #expect(controller.openChamberActionStatus?.tone == .critical)
+        #expect(!controller.openChamberSignInNeedsRepair(for: profile.id))
+        #expect(try fixture.saved(target.identity()) == target)
+    }
+
+    @Test func signInRepairStaysWithItsProfileUntilSaveSucceeds() async throws {
+        let directory = makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = ProfileCatalogStore(fileURL: directory.appendingPathComponent("profiles.json"))
+        var first = sampleProfile(label: "studio@example.com", sortOrder: 0)
+        first.codexSignIn = .init(accountID: "workspace", userID: "user", email: first.label)
+        first.openCodeOpenAIAccount = .init(accountID: "workspace", userID: "user", email: first.label)
+        let second = sampleProfile(label: "other@example.com", sortOrder: 1)
+        try store.saveProfiles([first, second])
+        let service = RepairableSignInService()
+        let controller = PlusProfileController(catalogStore: store,
+            dataService: StubPlusProfileDataService(refreshResults: [:]),
+            accountSwitchService: service, openCodeAuthService: service, autoStart: false)
+
+        await controller.switchAndOpen(profileID: first.id)
+        #expect(controller.desktopSignInNeedsRepair(for: first.id))
+        #expect(!controller.openChamberSignInNeedsRepair(for: first.id))
+        await controller.switchOpenChamberAuth(profileID: first.id)
+        #expect(controller.openChamberSignInNeedsRepair(for: first.id))
+
+        await service.setFailure(.network)
+        await controller.switchAndOpen(profileID: second.id)
+        await controller.switchOpenChamberAuth(profileID: second.id)
+        #expect(controller.desktopSignInNeedsRepair(for: first.id))
+        #expect(controller.openChamberSignInNeedsRepair(for: first.id))
+        #expect(!controller.desktopSignInNeedsRepair(for: second.id))
+        #expect(!controller.openChamberSignInNeedsRepair(for: second.id))
+
+        // A failed repair or retry must not hide the only recovery action.
+        await controller.saveDesktopSignIn(profileID: first.id)
+        await controller.saveOpenChamberAuth(profileID: first.id)
+        #expect(controller.desktopSignInNeedsRepair(for: first.id))
+        #expect(controller.openChamberSignInNeedsRepair(for: first.id))
+
+        await service.setFailure(nil)
+        await controller.saveDesktopSignIn(profileID: first.id)
+        #expect(!controller.desktopSignInNeedsRepair(for: first.id))
+        #expect(controller.openChamberSignInNeedsRepair(for: first.id))
+        await controller.saveOpenChamberAuth(profileID: first.id)
+        #expect(!controller.openChamberSignInNeedsRepair(for: first.id))
+    }
+
+    @Test func successfulRetryClearsSignInRepairState() async throws {
+        let directory = makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = ProfileCatalogStore(fileURL: directory.appendingPathComponent("profiles.json"))
+        let profile = sampleProfile(label: "studio@example.com", sortOrder: 0)
+        try store.saveProfiles([profile])
+        let service = RepairableSignInService()
+        let controller = PlusProfileController(catalogStore: store,
+            dataService: StubPlusProfileDataService(refreshResults: [:]),
+            accountSwitchService: service, openCodeAuthService: service, autoStart: false)
+        await controller.switchAndOpen(profileID: profile.id)
+        await controller.switchOpenChamberAuth(profileID: profile.id)
+        await service.setFailure(nil)
+        await controller.switchAndOpen(profileID: profile.id)
+        await controller.switchOpenChamberAuth(profileID: profile.id)
+        #expect(!controller.desktopSignInNeedsRepair(for: profile.id))
+        #expect(!controller.openChamberSignInNeedsRepair(for: profile.id))
+    }
+
     @Test func backupWaitsForSignInWriteAndBlocksNewMutationsUntilResumed() async throws {
         let directory = makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }

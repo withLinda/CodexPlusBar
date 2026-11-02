@@ -68,6 +68,13 @@ enum OpenCodeOpenAIAuthError: LocalizedError, Equatable {
     case localInstanceRequired, ambiguousInstance, environmentOverride, runtimeUnavailable, busy
     case bridgeUnavailable, credentialNotFound
 
+    var requiresNewSignIn: Bool {
+        switch self {
+        case .profileCredentialMissing, .credentialNotFound, .invalidCredential, .unsupportedCredential: true
+        default: false
+        }
+    }
+
     var errorDescription: String? {
         switch self {
         case .authFileMissing: return "Sign in to OpenAI in the local OpenChamber instance first."
@@ -106,10 +113,13 @@ struct OpenCodeOpenAISwitchError: LocalizedError {
 
     let reason: String
     let recovery: Recovery
+    let requiresNewSignIn: Bool
 
-    init(cause: any Error, recovery: Recovery) {
+    init(cause: any Error, recovery: Recovery, requiresNewSignIn: Bool? = nil) {
         // Do not surface arbitrary transport/decoder messages containing credentials.
-        if let error = cause as? OpenCodeOpenAIVerificationError {
+        if let error = cause as? OpenCodeOpenAISwitchError {
+            reason = error.reason
+        } else if let error = cause as? OpenCodeOpenAIVerificationError {
             reason = error.localizedDescription
         } else if let error = cause as? OpenCodeOpenAIAuthError {
             reason = error.localizedDescription
@@ -119,6 +129,10 @@ struct OpenCodeOpenAISwitchError: LocalizedError {
             reason = "The sign-in could not be verified. Try again."
         }
         self.recovery = recovery
+        self.requiresNewSignIn = requiresNewSignIn ?? ((cause as? OpenCodeOpenAISwitchError)?.requiresNewSignIn == true
+            || (cause as? OpenCodeOpenAIAuthError) == .profileCredentialMissing
+            || (cause as? OpenCodeOpenAIVerificationError) == .unauthorized
+            || (cause as? OpenCodeOpenAIVerificationError) == .reauthenticationRequired)
     }
 
     var errorDescription: String? { "Switch not completed. \(reason) \(recovery.message)" }
@@ -224,17 +238,24 @@ actor OpenCodeOpenAIAuthService: OpenCodeOpenAIAuthServing {
         try save(outgoing, identity: outgoingIdentity)
         let isCurrentAccount = selected.matches(outgoingIdentity)
         let target: OpenCodeOpenAIAuth
-        if isCurrentAccount {
-            target = outgoing
-        } else {
-            let targetURL = storeURL(for: selected)
-            guard FileManager.default.fileExists(atPath: targetURL.path) else {
-                throw OpenCodeOpenAIAuthError.profileCredentialMissing
+        do {
+            if isCurrentAccount {
+                target = outgoing
+            } else {
+                let targetURL = storeURL(for: selected)
+                guard FileManager.default.fileExists(atPath: targetURL.path) else {
+                    throw OpenCodeOpenAIAuthError.profileCredentialMissing
+                }
+                do { target = try JSONDecoder().decode(OpenCodeOpenAIAuth.self, from: Data(contentsOf: targetURL)) }
+                catch { throw OpenCodeOpenAIAuthError.invalidCredential }
             }
-            do { target = try JSONDecoder().decode(OpenCodeOpenAIAuth.self, from: Data(contentsOf: targetURL)) }
-            catch { throw OpenCodeOpenAIAuthError.invalidCredential }
+            guard try selected.matches(target.identity()) else { throw OpenCodeOpenAIAuthError.identityMismatch }
+        } catch {
+            // Only errors from the selected snapshot imply that this profile needs repair.
+            guard let authError = error as? OpenCodeOpenAIAuthError,
+                  [.invalidCredential, .unsupportedCredential].contains(authError) else { throw error }
+            throw OpenCodeOpenAISwitchError(cause: error, recovery: .unchanged, requiresNewSignIn: true)
         }
-        guard try selected.matches(target.identity()) else { throw OpenCodeOpenAIAuthError.identityMismatch }
 
         var expected = original.data
         var installed: Data?
@@ -287,7 +308,12 @@ actor OpenCodeOpenAIAuthService: OpenCodeOpenAIAuthServing {
 
     private func verifiedCredential(_ auth: OpenCodeOpenAIAuth,
                                     didRefresh: (OpenCodeOpenAIAuth) async throws -> Void) async throws -> OpenCodeOpenAIAuth {
-        let recovered = try snapshots.resolved(auth)
+        let recovered: OpenCodeOpenAIAuth
+        do { recovered = try snapshots.resolved(auth) }
+        catch {
+            throw OpenCodeOpenAISwitchError(cause: error, recovery: .unchanged,
+                                           requiresNewSignIn: (error as? OpenCodeOpenAIAuthError)?.requiresNewSignIn == true)
+        }
         if recovered != auth { try await didRefresh(recovered) }
         let auth = recovered
         if !auth.needsRefresh(at: now()) {
@@ -393,6 +419,8 @@ actor OpenCodeOpenAIAuthService: OpenCodeOpenAIAuthServing {
         try saveV2(original, identity: outgoingIdentity)
         let sameAccount = selected.matches(outgoingIdentity)
         var existing: OpenCodeV2Credential?
+        let target: OpenCodeOpenAIAuth
+        do {
         if sameAccount {
             existing = original
         } else if FileManager.default.fileExists(atPath: v2BindingURL(selected).path) {
@@ -405,7 +433,6 @@ actor OpenCodeOpenAIAuthService: OpenCodeOpenAIAuthServing {
                 existing = nil
             }
         }
-        let target: OpenCodeOpenAIAuth
         if let existing {
             target = existing.auth
         } else {
@@ -416,6 +443,11 @@ actor OpenCodeOpenAIAuthService: OpenCodeOpenAIAuthServing {
             catch { throw OpenCodeOpenAIAuthError.invalidCredential }
         }
         guard try selected.matches(target.identity()) else { throw OpenCodeOpenAIAuthError.identityMismatch }
+        } catch {
+            guard let authError = error as? OpenCodeOpenAIAuthError,
+                  [.invalidCredential, .unsupportedCredential].contains(authError) else { throw error }
+            throw OpenCodeOpenAISwitchError(cause: error, recovery: .unchanged, requiresNewSignIn: true)
+        }
         var expected = original
         var installed: OpenCodeV2Credential?
         var attemptedAuth: OpenCodeOpenAIAuth?

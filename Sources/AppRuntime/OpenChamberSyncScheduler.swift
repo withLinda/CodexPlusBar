@@ -6,6 +6,7 @@ final class OpenChamberSyncScheduler {
     private(set) var result: OpenChamberSyncResult?
     private(set) var message: String?
     private(set) var isSyncing = false
+    private(set) var signInRepairProfileIDs: Set<UUID> = []
     @ObservationIgnored private let service: any OpenChamberSyncServing
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let sleep: @Sendable (TimeInterval) async throws -> Void
@@ -28,9 +29,12 @@ final class OpenChamberSyncScheduler {
     }
     deinit { operation?.cancel(); debounce?.cancel(); retry?.cancel() }
 
+    func resetSignInRepairState() { signInRepairProfileIDs.removeAll() }
+
     func update(profiles: [PlusProfile], trusted: Bool) {
         let changed = catalog.isTrusted != trusted || keys(catalog.profiles) != keys(profiles)
         catalog = .init(generation: catalog.generation &+ (changed ? 1 : 0), profiles: profiles, isTrusted: trusted)
+        signInRepairProfileIDs.formIntersection(profiles.map(\.id))
         if changed {
             operation?.cancel(); result = nil
             message = trusted ? "OpenChamber sync pending…" : OpenChamberSyncError.catalogUnavailable.localizedDescription
@@ -73,7 +77,21 @@ final class OpenChamberSyncScheduler {
         debounce?.cancel(); operation?.cancel()
         await operation?.value
     }
-    func resumeAfterManualOperation() { manual = false; schedule() }
+    func resumeAfterManualOperation(repairedProfileID: UUID? = nil) {
+        if let repairedProfileID { signInRepairProfileIDs.remove(repairedProfileID) }
+        // Manual repair supersedes this profile's old report, not another profile's warning.
+        if let repairedProfileID, let previous = result,
+           previous.needsSignInProfileIDs.contains(repairedProfileID) {
+            result = .init(matchedCount: previous.matchedCount, totalCount: previous.totalCount,
+                           needsSignInProfileIDs: previous.needsSignInProfileIDs.subtracting([repairedProfileID]),
+                           pendingCredentialCount: previous.pendingCredentialCount,
+                           deferredActiveRemoval: previous.deferredActiveRemoval,
+                           deferredRestoreProfileIDs: previous.deferredRestoreProfileIDs.subtracting([repairedProfileID]))
+            message = "OpenChamber sync pending…"
+        }
+        manual = false
+        schedule()
+    }
 
     func syncNow() async {
         preferenceChanged()
@@ -93,6 +111,9 @@ final class OpenChamberSyncScheduler {
                 })
                 if self?.isCurrent(input.generation) == true, !Task.isCancelled {
                     self?.result = result; self?.message = result.message
+                    // Sync presence is not token verification. Retain confirmed repair evidence
+                    // until a manual save or verified switch repairs that exact profile.
+                    self?.signInRepairProfileIDs.formUnion(result.needsSignInProfileIDs)
                 }
             } catch {
                 if self?.isCurrent(input.generation) == true, !Task.isCancelled {

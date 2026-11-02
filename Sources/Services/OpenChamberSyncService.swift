@@ -45,6 +45,7 @@ actor OpenChamberSyncService: OpenChamberSyncServing {
         }
         var intended = try plan(accounts, state)
         var failedRestore: Set<UUID> = []
+        var needsNewSignIn: Set<UUID> = []
         for id in intended.restoreProfileIDs {
             try await check(catalog, isCurrent)
             guard let profile = catalog.profiles.first(where: { $0.id == id }), let identity = profile.openCodeOpenAIAccount else { continue }
@@ -52,9 +53,13 @@ actor OpenChamberSyncService: OpenChamberSyncServing {
             inventory = try await client.inventory()
             accounts = try inventory.oauth.map(OpenChamberSyncAccount.init)
             if accounts.contains(where: { $0.identity.matches(identity) }) { continue }
-            guard var value = try snapshots.loadNativeValue(identity: identity) else { failedRestore.insert(id); continue }
-            let auth = try value.auth()
+            var value: OpenCodeCredentialValue
             do {
+                guard let saved = try snapshots.loadNativeValue(identity: identity) else {
+                    needsNewSignIn.insert(id); continue
+                }
+                value = saved
+                let auth = try value.auth()
                 var refresh = auth.needsRefresh(at: now())
                 if !refresh {
                     do { try await verifier.verify(auth) }
@@ -70,7 +75,14 @@ actor OpenChamberSyncService: OpenChamberSyncServing {
                     try await verifier.verify(rotated)
                 }
             } catch is CancellationError { throw CancellationError() }
-            catch { failedRestore.insert(id); continue }
+            catch {
+                if (error as? OpenCodeOpenAIAuthError)?.requiresNewSignIn == true
+                    || (error as? OpenCodeOpenAIVerificationError) == .unauthorized
+                    || (error as? OpenCodeOpenAIVerificationError) == .reauthenticationRequired {
+                    needsNewSignIn.insert(id)
+                } else { failedRestore.insert(id) }
+                continue
+            }
             try await check(catalog, isCurrent)
             let latest = try await client.inventory()
             guard try summaries(latest) == summaries(inventory) else { throw OpenChamberSyncError.changed }
@@ -153,9 +165,12 @@ actor OpenChamberSyncService: OpenChamberSyncServing {
         try stateStore.save(state)
         guard finalPlan.removeIDs.allSatisfy({ id in deferred && finalInventory.oauth.contains { $0.id == id && $0.active } }),
               finalPlan.renames.isEmpty else { throw OpenChamberSyncError.changed }
-        let missing = finalPlan.needsSignInProfileIDs.union(finalPlan.restoreProfileIDs).union(failedRestore.subtracting(finalPlan.bindings.keys))
+        let missing = finalPlan.needsSignInProfileIDs.union(needsNewSignIn.subtracting(finalPlan.bindings.keys))
+        let deferredRestore = Set(finalPlan.restoreProfileIDs).union(failedRestore)
+            .subtracting(finalPlan.bindings.keys).subtracting(missing)
         return OpenChamberSyncResult(matchedCount: finalPlan.bindings.count, totalCount: catalog.profiles.filter { $0.provider == .codex }.count,
-                                    needsSignInProfileIDs: missing, pendingCredentialCount: finalPlan.pendingCredentialIDs.count, deferredActiveRemoval: deferred)
+                                    needsSignInProfileIDs: missing, pendingCredentialCount: finalPlan.pendingCredentialIDs.count,
+                                    deferredActiveRemoval: deferred, deferredRestoreProfileIDs: deferredRestore)
     }
 
     private func check(_ catalog: OpenChamberSyncCatalog, _ isCurrent: @Sendable (UInt64) async -> Bool) async throws {

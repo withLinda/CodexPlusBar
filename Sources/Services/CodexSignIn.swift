@@ -20,6 +20,13 @@ enum CodexSignInError: LocalizedError, Equatable {
     case busy, appMissing, appCouldNotClose, reopenFailed
     case unauthorized, unavailable, invalidResponse, httpStatus(Int), rollbackFailed
 
+    var requiresNewSignIn: Bool {
+        switch self {
+        case .missingSavedSignIn, .invalidCredential, .unsupportedCredential, .unauthorized: true
+        default: false
+        }
+    }
+
     var errorDescription: String? {
         switch self {
         case .missingCredential: "Sign in to ChatGPT / Codex on this Mac, then save its current sign-in here."

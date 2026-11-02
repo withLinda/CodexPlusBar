@@ -4,6 +4,44 @@ import Testing
 
 @MainActor
 struct OpenChamberSyncControllerTests {
+    @Test func confirmedRepairSurvivesCatalogChangeAndFailedSync() async throws {
+        let f = ControllerSyncFixture(); defer { f.remove() }
+        let a = try syncProfile(nativeCredential("alpha")), b = try syncProfile(nativeCredential("beta"))
+        try f.store.saveProfiles([a, b])
+        let auth = RepairableSignInService(), sync = MissingSignInsSyncService()
+        let controller = PlusProfileController(catalogStore: f.store, dataService: SyncControllerDataService(),
+            openCodeAuthService: auth, syncService: sync, syncDefaults: f.defaults, autoStart: false)
+        await controller.syncOpenChamberNow()
+        await auth.setFailure(nil)
+        await controller.saveOpenChamberAuth(profileID: a.id)
+        #expect(!controller.openChamberSignInNeedsRepair(for: a.id))
+        #expect(controller.openChamberSignInNeedsRepair(for: b.id))
+        var draft = PlusProfileDetailsDraft(profile: b); draft.notes = "Unrelated edit"
+        #expect(controller.updateDetails(for: b.id, draft: draft))
+        await sync.fail()
+        await controller.syncOpenChamberNow()
+        #expect(controller.openChamberSignInNeedsRepair(for: b.id))
+        #expect(!controller.openChamberSignInNeedsRepair(for: a.id))
+    }
+
+    @Test func manualRepairClearsOnlyItsOwnStaleSyncWarning() async throws {
+        let f = ControllerSyncFixture(); defer { f.remove() }
+        let a = try syncProfile(nativeCredential("alpha")), b = try syncProfile(nativeCredential("beta"))
+        try f.store.saveProfiles([a, b])
+        let auth = RepairableSignInService()
+        let controller = PlusProfileController(catalogStore: f.store, dataService: SyncControllerDataService(),
+            openCodeAuthService: auth, syncService: MissingSignInsSyncService(), syncDefaults: f.defaults, autoStart: false)
+        await controller.syncOpenChamberNow()
+        #expect(controller.openChamberSignInNeedsRepair(for: a.id))
+        #expect(controller.openChamberSignInNeedsRepair(for: b.id))
+        await auth.setFailure(nil)
+        // A verified switch preserves the catalog identities, exercising a stale sync result
+        // rather than relying on a changed catalog to clear it as a side effect.
+        await controller.switchOpenChamberAuth(profileID: a.id)
+        #expect(!controller.openChamberSignInNeedsRepair(for: a.id))
+        #expect(controller.openChamberSignInNeedsRepair(for: b.id))
+    }
+
     @Test func missingCatalogIsNotIntentionalEmpty() throws {
         let f = ControllerSyncFixture(); defer { f.remove() }
         #expect(try f.store.loadProfilesWithReport().sourceExists == false)
@@ -148,6 +186,16 @@ struct OpenChamberSyncControllerTests {
         await clock.advance(interval: 60)
         await service.waitFor(count: before + 2)
         scheduler.stop()
+    }
+}
+
+private actor MissingSignInsSyncService: OpenChamberSyncServing {
+    var shouldFail = false
+    func fail() { shouldFail = true }
+    func reconcile(catalog: OpenChamberSyncCatalog, isCurrent: @escaping @Sendable (UInt64) async -> Bool) async throws -> OpenChamberSyncResult {
+        if shouldFail { throw OpenCodeCredentialError.unavailable }
+        return .init(matchedCount: 0, totalCount: catalog.profiles.count,
+              needsSignInProfileIDs: Set(catalog.profiles.map(\.id)), pendingCredentialCount: 0, deferredActiveRemoval: false)
     }
 }
 

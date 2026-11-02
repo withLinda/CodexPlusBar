@@ -48,9 +48,29 @@ struct CodexDesktopApp: CodexDesktopAppManaging {
         }
         let overrides = ["CODEX_AUTH_JSON", "CODEX_ACCESS_TOKEN", "CODEX_API_KEY", "CODEX_REFRESH_TOKEN_URL_OVERRIDE", "CODEX_APP_SERVER_LOGIN_CLIENT_ID"]
         let selectors = ["cli_auth_credentials_store", "forced_login_method", "forced_chatgpt_workspace_id", "chatgpt_base_url", "secret_auth_storage"]
-        guard !overrides.contains(where: { environment[$0]?.isEmpty == false }),
-              !arguments.contains(where: { argument in selectors.contains(where: argument.contains) }) else {
+        guard !overrides.contains(where: { environment[$0]?.isEmpty == false }) else {
             throw CodexSignInError.unsupportedConfiguration
+        }
+        for (index, argument) in arguments.enumerated() where selectors.contains(where: argument.contains) {
+            // Current desktop exec-server helpers require ChatGPT login explicitly. This
+            // restricts the credential type we already support; it does not select storage.
+            // Allow only this exact assignment in a config option, not arbitrary substrings
+            // or other overrides alongside it (including a later conflicting login method).
+            var assignment: String?
+            if index > 0, ["-c", "--config"].contains(arguments[index - 1]) {
+                assignment = argument
+            } else if argument.hasPrefix("--config=") {
+                assignment = String(argument.dropFirst("--config=".count))
+            } else if argument.hasPrefix("-c") {
+                assignment = String(argument.dropFirst(2))
+            }
+            guard let assignment, let equal = assignment.firstIndex(of: "="),
+                  assignment[..<equal].trimmingCharacters(in: .whitespaces) == "forced_login_method",
+                  ["chatgpt", "\"chatgpt\"", "'chatgpt'"].contains(
+                    assignment[assignment.index(after: equal)...].trimmingCharacters(in: .whitespaces)
+                  ) else {
+                throw CodexSignInError.unsupportedConfiguration
+            }
         }
     }
 

@@ -38,7 +38,15 @@ struct CodexSignInVerifier: CodexSignInVerifying {
         request.httpBody = Data(fields.map { "\($0.0)=\($0.1.addingPercentEncoding(withAllowedCharacters: allowed)!)" }.joined(separator: "&").utf8)
         let (data, response) = try await perform(request)
         guard response.statusCode == 200 else {
-            if [400, 401].contains(response.statusCode) { throw CodexSignInError.unauthorized }
+            if response.statusCode == 401 { throw CodexSignInError.unauthorized }
+            if response.statusCode == 400 {
+                let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+                let code = payload?["error"] as? String
+                    ?? (payload?["error"] as? [String: Any])?["code"] as? String
+                if ["invalid_grant", "refresh_token_expired", "refresh_token_reused", "refresh_token_invalidated"].contains(code ?? "") {
+                    throw CodexSignInError.unauthorized
+                }
+            }
             throw CodexSignInError.httpStatus(response.statusCode)
         }
         struct Tokens: Decodable {
@@ -48,7 +56,11 @@ struct CodexSignInVerifier: CodexSignInVerifying {
         }
         guard let tokens = try? JSONDecoder().decode(Tokens.self, from: data) else { throw CodexSignInError.invalidResponse }
         // No cancellation check after receiving rotated tokens; the transaction must persist them first.
-        return try signIn.replacingTokens(access: tokens.access_token, refresh: tokens.refresh_token, idToken: tokens.id_token, at: now())
+        do {
+            return try signIn.replacingTokens(access: tokens.access_token, refresh: tokens.refresh_token, idToken: tokens.id_token, at: now())
+        } catch CodexSignInError.invalidCredential {
+            throw CodexSignInError.invalidResponse
+        }
     }
 
     private func perform(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {

@@ -82,10 +82,12 @@ struct OpenChamberSyncResult: Equatable, Sendable {
     let needsSignInProfileIDs: Set<UUID>
     let pendingCredentialCount: Int
     let deferredActiveRemoval: Bool
+    var deferredRestoreProfileIDs: Set<UUID> = []
     var message: String {
         if deferredActiveRemoval { return "Waiting for OpenChamber’s running sessions before removing its active login." }
         if pendingCredentialCount > 0 { return "Waiting for Save current sign-in (\(pendingCredentialCount) new login\(pendingCredentialCount == 1 ? "" : "s"))." }
         if !needsSignInProfileIDs.isEmpty { return "\(matchedCount) of \(totalCount) profiles linked; \(needsSignInProfileIDs.count) need sign-in." }
+        if !deferredRestoreProfileIDs.isEmpty { return "OpenChamber connection restore will retry (\(deferredRestoreProfileIDs.count) pending)." }
         return "OpenChamber synced · \(matchedCount) profile\(matchedCount == 1 ? "" : "s")"
     }
 }

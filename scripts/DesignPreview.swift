@@ -44,8 +44,8 @@ enum DesignPreview {
         let controller = PlusProfileController(
             catalogStore: ProfileCatalogStore(fileURL: temporaryDirectory.appendingPathComponent("profiles.json")),
             dataService: PreviewDataService(),
-            accountSwitchService: PreviewDesktopService(),
-            openCodeAuthService: PreviewOpenCodeService(),
+            accountSwitchService: PreviewDesktopService(failure: arguments.contains("--sign-in-error") ? .unauthorized : arguments.contains("--sign-in-network-error") ? .unavailable : nil),
+            openCodeAuthService: PreviewOpenCodeService(failure: arguments.contains("--sign-in-error") ? .reauthenticationRequired : arguments.contains("--sign-in-network-error") ? .unavailable : nil),
             syncService: PreviewSyncService(),
             autoStart: false
         )
@@ -74,9 +74,11 @@ enum DesignPreview {
             profile.openCodeOpenAIAccount = nil
             controller.profiles[0] = controller.profiles[0].updating(profile: profile)
         }
-        if arguments.contains("--sign-in-error"), let first = controller.profiles.first {
-            controller.desktopSignInStatus = .init(profileID: first.id,
-                message: CodexSignInError.unauthorized.localizedDescription, tone: .critical)
+        if arguments.contains("--sign-in-error") || arguments.contains("--sign-in-network-error"), let first = controller.profiles.first {
+            Task { @MainActor in
+                await controller.switchAndOpen(profileID: first.id)
+                await controller.switchOpenChamberAuth(profileID: first.id)
+            }
         }
         controller.dashboardStatus = controller.profiles.isEmpty ? .empty : .ready
         if arguments.contains("--error"), let last = controller.profiles.last {
@@ -271,10 +273,13 @@ private final class PreviewCommands: NSObject {
 }
 
 private struct PreviewOpenCodeService: OpenCodeOpenAIAuthServing {
+    let failure: OpenCodeOpenAIVerificationError?
     func saveCurrent(for profile: PlusProfile) async throws -> OpenCodeOpenAIIdentity {
         OpenCodeOpenAIIdentity(accountID: "preview", userID: "preview", email: profile.label)
     }
-    func switchTo(profile: PlusProfile) async throws {}
+    func switchTo(profile: PlusProfile) async throws {
+        if let failure { throw OpenCodeOpenAISwitchError(cause: failure, recovery: .restored) }
+    }
 }
 
 private struct PreviewSyncService: OpenChamberSyncServing {
@@ -287,10 +292,13 @@ private struct PreviewSyncService: OpenChamberSyncServing {
 }
 
 private struct PreviewDesktopService: CodexAccountSwitchServing {
+    let failure: CodexSignInError?
     func saveCurrent(for profile: PlusProfile) async throws -> CodexSignInIdentity {
         CodexSignInIdentity(accountID: "preview", userID: "preview", email: profile.label)
     }
-    func switchAndOpen(profile: PlusProfile) async throws {}
+    func switchAndOpen(profile: PlusProfile) async throws {
+        if let failure { throw CodexSignInSwitchError(cause: failure, recovery: .restored, reopenFailed: false) }
+    }
 }
 
 @MainActor

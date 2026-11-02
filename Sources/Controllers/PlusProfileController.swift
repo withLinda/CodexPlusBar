@@ -79,6 +79,8 @@ final class PlusProfileController {
     var openCodeSwitchingProfileIDs: Set<UUID> = []
     var openChamberActionStatus: OpenChamberActionStatus?
     var desktopSignInStatus: OpenChamberActionStatus?
+    private var desktopSignInRepairProfileIDs: Set<UUID> = []
+    private var openChamberSignInRepairProfileIDs: Set<UUID> = []
     var openChamberSyncResult: OpenChamberSyncResult? { syncScheduler.result }
     var openChamberSyncMessage: String? { syncScheduler.message }
     var isOpenChamberSyncing: Bool { syncScheduler.isSyncing }
@@ -517,10 +519,15 @@ final class PlusProfileController {
         defer { switchingProfileIDs.remove(profileID) }
         do {
             try await accountSwitchService.switchAndOpen(profile: profile)
+            desktopSignInRepairProfileIDs.remove(profileID)
             desktopSignInStatus = .init(profileID: profileID, message: "Sign-in verified. Desktop app reopened.", tone: .success)
             statusMessage = "Switched to \(profile.displayLabel) and reopened ChatGPT / Codex."
         } catch {
             let message = desktopSignInMessage(error)
+            if (error as? CodexSignInError)?.requiresNewSignIn == true
+                || (error as? CodexSignInSwitchError)?.requiresNewSignIn == true {
+                desktopSignInRepairProfileIDs.insert(profileID)
+            }
             desktopSignInStatus = .init(profileID: profileID, message: message, tone: .critical)
             statusMessage = message
         }
@@ -557,6 +564,7 @@ final class PlusProfileController {
                 throw CodexSignInError.storageFailed
             }
             desktopSignInStatus = .init(profileID: profileID, message: "Desktop sign-in saved.", tone: .success)
+            desktopSignInRepairProfileIDs.remove(profileID)
         } catch {
             desktopSignInStatus = .init(profileID: profileID, message: desktopSignInMessage(error), tone: .critical)
         }
@@ -569,6 +577,15 @@ final class PlusProfileController {
         return "The desktop sign-in could not be saved or switched. Try again."
     }
 
+    func desktopSignInNeedsRepair(for profileID: UUID) -> Bool {
+        desktopSignInRepairProfileIDs.contains(profileID)
+    }
+
+    func openChamberSignInNeedsRepair(for profileID: UUID) -> Bool {
+        openChamberSignInRepairProfileIDs.contains(profileID)
+            || syncScheduler.signInRepairProfileIDs.contains(profileID)
+    }
+
     func saveOpenChamberAuth(profileID: UUID) async {
         guard !isTransferring else { return }
         activeDataOperations += 1
@@ -577,8 +594,10 @@ final class PlusProfileController {
               profiles[index].profile.provider == .codex else { return }
         let profile = profiles[index].profile
         openCodeSwitchingProfileIDs.insert(profileID)
+        if openChamberSignInNeedsRepair(for: profileID) { openChamberSignInRepairProfileIDs.insert(profileID) }
+        var saved = false
         openChamberActionStatus = .init(profileID: profileID, message: "Checking the local OpenChamber sign-in…", tone: .info)
-        defer { openCodeSwitchingProfileIDs.remove(profileID); syncScheduler.resumeAfterManualOperation() }
+        defer { openCodeSwitchingProfileIDs.remove(profileID); syncScheduler.resumeAfterManualOperation(repairedProfileID: saved ? profileID : nil) }
         await syncScheduler.pauseForManualOperation()
         do {
             let identity = try await openCodeAuthService.saveCurrent(for: profile)
@@ -600,6 +619,8 @@ final class PlusProfileController {
                 throw OpenCodeOpenAIAuthError.writeFailed
             }
             openChamberActionStatus = .init(profileID: profileID, message: "OpenChamber sign-in saved.", tone: .success)
+            openChamberSignInRepairProfileIDs.remove(profileID)
+            saved = true
         } catch {
             openChamberActionStatus = .init(profileID: profileID, message: error.localizedDescription, tone: .critical)
         }
@@ -613,14 +634,24 @@ final class PlusProfileController {
               profiles[index].profile.provider == .codex else { return }
         openCodeSwitchingProfileIDs.insert(profileID)
         let profile = profiles[index].profile
+        if openChamberSignInNeedsRepair(for: profileID) { openChamberSignInRepairProfileIDs.insert(profileID) }
+        var switched = false
         openChamberActionStatus = .init(profileID: profileID, message: "Switching and verifying OpenChamber OpenAI…", tone: .info)
-        defer { openCodeSwitchingProfileIDs.remove(profileID); syncScheduler.resumeAfterManualOperation() }
+        defer { openCodeSwitchingProfileIDs.remove(profileID); syncScheduler.resumeAfterManualOperation(repairedProfileID: switched ? profileID : nil) }
         await syncScheduler.pauseForManualOperation()
         do {
             try await openCodeAuthService.switchTo(profile: profile)
+            openChamberSignInRepairProfileIDs.remove(profileID)
+            switched = true
             openChamberActionStatus = .init(profileID: profileID,
                 message: "OpenChamber OpenAI switched and verified. Refresh OpenChamber’s Usage panel if it still shows an older result.", tone: .success)
         } catch {
+            if (error as? OpenCodeOpenAIAuthError) == .profileCredentialMissing
+                || (error as? OpenCodeOpenAISwitchError)?.requiresNewSignIn == true
+                || (error as? OpenCodeOpenAIVerificationError) == .unauthorized
+                || (error as? OpenCodeOpenAIVerificationError) == .reauthenticationRequired {
+                openChamberSignInRepairProfileIDs.insert(profileID)
+            }
             openChamberActionStatus = .init(profileID: profileID, message: error.localizedDescription, tone: .critical)
         }
     }
@@ -680,6 +711,8 @@ final class PlusProfileController {
                 return
             }
             profiles = candidate
+            desktopSignInRepairProfileIDs.remove(profileID)
+            openChamberSignInRepairProfileIDs.remove(profileID)
             syncScheduler.update(profiles: candidate.map(\.profile), trusted: true)
             chromeSignInProfileIDs.remove(profileID)
 
@@ -870,6 +903,11 @@ final class PlusProfileController {
     }
 
     private func loadStoredProfiles() {
+        desktopSignInRepairProfileIDs.removeAll()
+        openChamberSignInRepairProfileIDs.removeAll()
+        syncScheduler.resetSignInRepairState()
+        desktopSignInStatus = nil
+        openChamberActionStatus = nil
         let storedProfiles: [PlusProfile]
         var repairMessage: String?
         var trusted = false

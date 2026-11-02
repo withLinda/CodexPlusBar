@@ -96,7 +96,10 @@ struct OpenCodeOpenAICredentialVerifier: OpenCodeOpenAICredentialVerifying {
         }
         let refreshed = OpenCodeOpenAIAuth(type: "oauth", refresh: tokens.refresh_token ?? auth.refresh,
                                           access: tokens.access_token, expires: Int64(expiry), accountId: auth.accountId)
-        guard try identity.matches(refreshed.identity()) else { throw OpenCodeOpenAIAuthError.identityMismatch }
+        guard let refreshedIdentity = try? refreshed.identity() else {
+            throw OpenCodeOpenAIVerificationError.invalidResponse
+        }
+        guard identity.matches(refreshedIdentity) else { throw OpenCodeOpenAIAuthError.identityMismatch }
         return refreshed
     }
 

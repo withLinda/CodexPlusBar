@@ -667,6 +667,8 @@ struct ProfileManagerWindowView: View {
                         ProfileSignInSection(
                             desktopSaved: snapshot.profile.codexSignIn != nil,
                             openChamberSaved: snapshot.profile.openCodeOpenAIAccount != nil,
+                            desktopNeedsRepair: controller.desktopSignInNeedsRepair(for: snapshot.id),
+                            openChamberNeedsRepair: controller.openChamberSignInNeedsRepair(for: snapshot.id),
                             desktopWorking: !controller.switchingProfileIDs.isEmpty,
                             openChamberWorking: !controller.openCodeSwitchingProfileIDs.isEmpty,
                             desktopStatus: controller.desktopSignInStatus.flatMap { $0.profileID == snapshot.id ? $0 : nil },

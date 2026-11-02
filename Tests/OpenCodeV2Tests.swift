@@ -178,8 +178,15 @@ struct OpenCodeV2Tests {
         let original = try fixture.auth("original")
         let client = V2TestClient(original, boundReadFailure: failure)
         let verifier = V2TestVerifier()
-        await #expect(throws: failure) {
+        do {
             try await service(fixture, client: client, verifier: verifier).switchTo(profile: profile)
+            Issue.record("Expected the target read failure")
+        } catch let error as OpenCodeOpenAISwitchError {
+            #expect(error.requiresNewSignIn)
+            #expect(error.reason == failure.localizedDescription)
+        } catch {
+            #expect(failure == .bridgeUnavailable)
+            #expect(error as? OpenCodeOpenAIAuthError == failure)
         }
         #expect(try await client.read(id: nil).auth == original)
         #expect(try Data(contentsOf: binding) == before)
@@ -211,8 +218,15 @@ struct OpenCodeV2Tests {
         }
         let original = try fixture.auth("original")
         let client = V2TestClient(original)
-        await #expect(throws: expected) {
+        do {
             try await service(fixture, client: client).switchTo(profile: profile)
+            Issue.record("Expected invalid target snapshot to prevent switching")
+        } catch let error as OpenCodeOpenAISwitchError {
+            #expect(error.requiresNewSignIn)
+            #expect(error.reason == expected.localizedDescription)
+        } catch {
+            #expect(expected != .invalidCredential)
+            #expect(error as? OpenCodeOpenAIAuthError == expected)
         }
         #expect(try await client.read(id: nil).auth == original)
         #expect(await client.imports == 0)
@@ -350,6 +364,21 @@ struct OpenCodeV2Tests {
                                  resolveRuntime: { OpenCodeLocalRuntime(authURL: fixture.authURL, v2: client) },
                                  verifier: verifier, now: { OpenCodeAuthFixture.now })
     }
+
+    @Test func outgoingCredentialFailureAfterVerificationDoesNotMarkTargetBroken() async throws {
+        let fixture = try OpenCodeAuthFixture()
+        defer { fixture.remove() }
+        let target = try fixture.auth("target")
+        let profile = try await fixture.prepareTarget(target)
+        let client = V2TestClient(try fixture.auth("original"))
+        let verifier = V2TestVerifier(onVerify: { _ in await client.failCurrentReads() })
+        let error = await #expect(throws: OpenCodeOpenAISwitchError.self) {
+            try await service(fixture, client: client, verifier: verifier).switchTo(profile: profile)
+        }
+        #expect(error?.requiresNewSignIn == false)
+        #expect(await client.imports == 0)
+        #expect(try fixture.saved(target.identity()) == target)
+    }
 }
 
 private actor V2TestClient: OpenCodeV2Serving {
@@ -360,6 +389,8 @@ private actor V2TestClient: OpenCodeV2Serving {
     private(set) var imports = 0
     private(set) var activations = 0
     private var rejectedImports: Int
+    private var currentReadFailure = false
+    func failCurrentReads() { currentReadFailure = true }
 
     init(_ auth: OpenCodeOpenAIAuth, loseImportResponse: Bool = false,
           boundReadFailure: OpenCodeOpenAIAuthError? = nil, rejectedImports: Int = 0) {
@@ -371,6 +402,7 @@ private actor V2TestClient: OpenCodeV2Serving {
     }
 
     func read(id: String?) throws -> OpenCodeV2Credential {
+        if id == nil, currentReadFailure { throw OpenCodeOpenAIAuthError.invalidCredential }
         if id != nil, let boundReadFailure { throw boundReadFailure }
         guard let value = id == nil ? current : credentials[id!] else { throw OpenCodeOpenAIAuthError.credentialNotFound }
         return value
