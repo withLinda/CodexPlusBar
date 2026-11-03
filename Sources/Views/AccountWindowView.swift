@@ -355,7 +355,9 @@ struct ProfileManagerWindowView: View {
     let currentTime: AppMinuteClock
     var openBackup: (BackupTransferMode) -> Void
     @AppStorage(ProfileDisplayOrderPreference.orderKey) private var profileDisplayOrder = ProfileDisplayOrderPreference.defaultOrder
+    @AppStorage(MenuBarPanelTextScalePreference.textScaleKey) private var textScaleStorage = MenuBarPanelTextScalePreference.defaultScale
     @State private var detailsDraft = PlusProfileDetailsDraft()
+    @State private var detailsDraftProfileID: UUID?
     @State private var sidebarFilter = ProfileFilter()
     @State private var profileSearchQuery = ""
     @State private var isProfileSearchPresented = false
@@ -386,6 +388,11 @@ struct ProfileManagerWindowView: View {
         self.controller = controller
         self.currentTime = currentTime
         self.openBackup = openBackup
+        _textScaleStorage = AppStorage(
+            wrappedValue: MenuBarPanelTextScalePreference.defaultScale,
+            MenuBarPanelTextScalePreference.textScaleKey,
+            store: userDefaults
+        )
         _isDetailsExpanded = State(initialValue: initiallyShowsDetails)
         _page = State(initialValue: initialPage)
         _profileDisplayOrder = AppStorage(
@@ -397,6 +404,7 @@ struct ProfileManagerWindowView: View {
 
     var body: some View {
         CodexWindowChromeContainer(minimumSize: controller.profiles.isEmpty ? ProfileManagerLayout.emptyMinimumSize : ProfileManagerLayout.minimumSize) {
+          ProfileContentZoom(scale: textScale, minimumWidth: controller.profiles.isEmpty ? 600 : ProfileManagerLayout.minimumSize.width) {
             VStack(alignment: .leading, spacing: CodexTheme.sectionSpacing) {
                 header
 
@@ -423,6 +431,11 @@ struct ProfileManagerWindowView: View {
             .padding(.horizontal, CodexTheme.chromePadding)
             .padding(.bottom, CodexTheme.chromePadding)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+          }
+        }
+        .background {
+            ProfileKeyboardShortcuts(isEnabled: !controller.isTransferring && !showsBulkImportSheet, handle: handleKeyboardAction)
+                .frame(width: 0, height: 0)
         }
         .sheet(isPresented: $showsBulkImportSheet) {
             ProfileManagerBulkImportSheet(
@@ -517,6 +530,16 @@ struct ProfileManagerWindowView: View {
                     Button("Restore Backup…", systemImage: "arrow.down.doc") { openBackup(.restore) }
                     Divider()
                     Button("Phone summary", systemImage: "person.2") { page = .phoneSummary }
+                    Divider()
+                    Button("Zoom In") { _ = handleKeyboardAction(.zoomIn) }
+                        .keyboardShortcut("+")
+                        .disabled(textScale >= MenuBarPanelTextScalePreference.maximumScale)
+                    Button("Zoom Out") { _ = handleKeyboardAction(.zoomOut) }
+                        .keyboardShortcut("-")
+                        .disabled(textScale <= MenuBarPanelTextScalePreference.minimumScale)
+                    Button("Actual Size") { _ = handleKeyboardAction(.resetZoom) }
+                        .keyboardShortcut("0")
+                    Divider()
                     SettingsLink { Label("Settings…", systemImage: "gearshape") }
                 } label: {
                     Image(systemName: "ellipsis").frame(width: 28, height: 28)
@@ -608,9 +631,11 @@ struct ProfileManagerWindowView: View {
                     } else if listPresentation.displayedProfiles.isEmpty {
                         ProfileFilterEmptyState(clearFilter: clearSidebarFilter)
                     } else {
+                      ScrollViewReader { proxy in
                         ScrollView(.vertical) {
                             LazyVStack(alignment: .leading, spacing: 6) {
-                                ForEach(listPresentation.displayedProfiles) { snapshot in
+                                ForEach(listPresentation.numberedProfiles) { item in
+                                    let snapshot = item.snapshot
                                     Button {
                                         openProfile(snapshot.id)
                                     } label: {
@@ -621,6 +646,7 @@ struct ProfileManagerWindowView: View {
                                                 isSelected: page == .profile
                                                     && snapshot.id == controller.selectedProfileID
                                             ),
+                                            displayOrdinal: item.ordinal,
                                             searchPhoneNumber: ProfileSearch.matchingPhoneNumber(
                                                 in: snapshot,
                                                 query: profileSearchQuery
@@ -628,11 +654,19 @@ struct ProfileManagerWindowView: View {
                                         )
                                     }
                                     .buttonStyle(.plain)
+                                    .id(snapshot.id)
                                     .accessibilityAddTraits(page == .profile && snapshot.id == controller.selectedProfileID ? .isSelected : [])
                                 }
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                         }
+                        .onChange(of: controller.selectedProfileID) { _, id in
+                            if let id { proxy.scrollTo(id) }
+                        }
+                        .onChange(of: listPresentation.displayedProfiles.map(\.id)) { _, _ in
+                            if let id = controller.selectedProfileID { proxy.scrollTo(id) }
+                        }
+                      }
                     }
                 }
         }
@@ -1243,11 +1277,13 @@ struct ProfileManagerWindowView: View {
         shouldFocusNotesOnReveal = false
         notesRevealTask?.cancel()
         detailsDraft = snapshot.map { PlusProfileDetailsDraft(profile: $0.profile) } ?? .init()
+        detailsDraftProfileID = snapshot?.id
         isNotesExpanded = !detailsDraft.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private func isDetailsSaveEnabled(for snapshot: PlusProfileSnapshot) -> Bool {
-        ProfileManagerDetailsFormPresentation(
+        guard detailsDraftProfileID == snapshot.id else { return false }
+        return ProfileManagerDetailsFormPresentation(
             draft: detailsDraft,
             profile: snapshot.profile,
             isSaved: showsSavedConfirmation
@@ -1263,6 +1299,7 @@ struct ProfileManagerWindowView: View {
     }
 
     private func saveDetailsDraft(for snapshot: PlusProfileSnapshot) {
+        guard detailsDraftProfileID == snapshot.id else { return }
         let didSave = controller.updateDetails(for: snapshot.id, draft: detailsDraft)
         guard didSave else {
             return
@@ -1408,8 +1445,51 @@ struct ProfileManagerWindowView: View {
     }
 
     private func openProfile(_ profileID: UUID) {
+        let isChangingProfile = profileID != controller.selectedProfileID
+        if isChangingProfile,
+           let snapshot = controller.selectedProfile,
+           isDetailsSaveEnabled(for: snapshot) {
+            guard controller.updateDetails(for: snapshot.id, draft: detailsDraft) else { return }
+        }
         page = .profile
         controller.selectProfile(id: profileID)
+        if isChangingProfile {
+            // A second key event can arrive before SwiftUI runs onChange.
+            // Hand off the draft in the same turn as the selected profile.
+            syncDrafts(with: controller.selectedProfile)
+        }
+    }
+
+    private var textScale: Double {
+        MenuBarPanelTextScalePreference.normalizedTextScale(textScaleStorage)
+    }
+
+    private func handleKeyboardAction(_ action: ProfileKeyboardAction) -> Bool {
+        switch action {
+        case .zoomIn:
+            textScaleStorage = MenuBarPanelTextScalePreference.zoomedInValue(from: textScale)
+        case .zoomOut:
+            textScaleStorage = MenuBarPanelTextScalePreference.zoomedOutValue(from: textScale)
+        case .resetZoom:
+            textScaleStorage = MenuBarPanelTextScalePreference.defaultScale
+        case .previousProfile, .nextProfile:
+            guard page == .profile, !sidebarListPresentation.displayedProfiles.isEmpty else { return false }
+            moveSelectedProfile(in: action == .previousProfile ? .up : .down)
+        }
+        return true
+    }
+
+    private func moveSelectedProfile(in direction: ProfileListNavigationDirection) {
+        let targetID = ProfileListNavigation.targetID(
+            currentID: controller.selectedProfileID,
+            items: sidebarListPresentation.numberedProfiles,
+            direction: direction
+        )
+        guard let targetID, targetID != controller.selectedProfileID else {
+            return
+        }
+
+        openProfile(targetID)
     }
 
     private func clearSidebarFilter() {

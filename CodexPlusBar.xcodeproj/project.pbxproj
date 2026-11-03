@@ -36,6 +36,7 @@
 		492905C0F183829A8DD4F40D /* ClaudeBootstrapService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EB2884883172C543A1D3822 /* ClaudeBootstrapService.swift */; };
 		4AB9875E4932721CAAE0D3A0 /* DotTrickGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 709228E93767951B3499A1C3 /* DotTrickGenerator.swift */; };
 		4E153C5FA8823885AFBCCB1D /* OpenChamberSyncStatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2820DACD0C61C524A4ECD46 /* OpenChamberSyncStatusView.swift */; };
+		4E8ECBC266AE28522A45DFD0 /* ProfileKeyboardShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42D52FDA17A73C900D1E7869 /* ProfileKeyboardShortcuts.swift */; };
 		5067C0F581700DB9B8B54730 /* CormorantGaramond.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0B6BFE65AA07E2512FA5D398 /* CormorantGaramond.ttf */; };
 		50A80A4FF1A2A1EEC8C3911B /* LabeledValueText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13932526AB2B41F5203FBF68 /* LabeledValueText.swift */; };
 		514B704F987AF3C6993ED4BC /* AccountCatalogService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59FFC3B05EDF309E09E3DD01 /* AccountCatalogService.swift */; };
@@ -66,6 +67,7 @@
 		8491E254498B90904C946B1F /* ProfilePhoneNumberComboBox.swift in Sources */ = {isa = PBXBuildFile; fileRef = F369067FAFB972FD6B6E3E08 /* ProfilePhoneNumberComboBox.swift */; };
 		89BE04B8E01A11995B81279C /* Manrope.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 1180E836FF1F527C13A405F6 /* Manrope.ttf */; };
 		8EBBC44056F2C7852B8BF3CB /* ChatGPTAuthContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49259342335BED6B1E4F0C9D /* ChatGPTAuthContext.swift */; };
+		985DCE74337A9763632F6FDB /* ProfileListInteraction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F1A794B3FC1ECD6CF5F3AC4 /* ProfileListInteraction.swift */; };
 		9926C4922CF7D033DCF17CEE /* EmailToolsWindowPresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7755A62F2846FD0B38D5D005 /* EmailToolsWindowPresenter.swift */; };
 		9D5213CA95982FACB901C44F /* CodexTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B83C451759354D40D65FAC2 /* CodexTheme.swift */; };
 		9EB1AA96F01BEF5E5ED8A336 /* WebSessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E654F84109D3509039ADB773 /* WebSessionStore.swift */; };
@@ -147,9 +149,11 @@
 		39C5A0B333E8C1A19467704E /* AccountWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountWindowView.swift; sourceTree = "<group>"; };
 		3A7364EC8C0544A1929A0EEA /* OpenCodeLocalRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodeLocalRuntime.swift; sourceTree = "<group>"; };
 		3EF3F7392900410162228D43 /* DotTrickSessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DotTrickSessionStore.swift; sourceTree = "<group>"; };
+		3F1A794B3FC1ECD6CF5F3AC4 /* ProfileListInteraction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileListInteraction.swift; sourceTree = "<group>"; };
 		3F48206EF19934DC5F3ABC94 /* PlusProfileController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlusProfileController.swift; sourceTree = "<group>"; };
 		400D81A1F70064BA2F950787 /* MenuBarProfilePreference.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarProfilePreference.swift; sourceTree = "<group>"; };
 		4111BF7FB72F714EF7A7D42A /* WindowChromeSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowChromeSupport.swift; sourceTree = "<group>"; };
+		42D52FDA17A73C900D1E7869 /* ProfileKeyboardShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileKeyboardShortcuts.swift; sourceTree = "<group>"; };
 		4603C263C3EF604B51D7E7DD /* ChatGPTWebURLs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatGPTWebURLs.swift; sourceTree = "<group>"; };
 		47524A60EFC92CD85F147545 /* OpenCodeOpenAICredentialVerifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodeOpenAICredentialVerifier.swift; sourceTree = "<group>"; };
 		49259342335BED6B1E4F0C9D /* ChatGPTAuthContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatGPTAuthContext.swift; sourceTree = "<group>"; };
@@ -336,6 +340,8 @@
 				2865CCBFF7FF69A9A1449352 /* MenuBarRootView.swift */,
 				D2820DACD0C61C524A4ECD46 /* OpenChamberSyncStatusView.swift */,
 				A872BFC23B2CCCBF513E45E1 /* PhoneSummaryView.swift */,
+				42D52FDA17A73C900D1E7869 /* ProfileKeyboardShortcuts.swift */,
+				3F1A794B3FC1ECD6CF5F3AC4 /* ProfileListInteraction.swift */,
 				F369067FAFB972FD6B6E3E08 /* ProfilePhoneNumberComboBox.swift */,
 				BC22ABE1C29F922515DAC181 /* ProfileSearchField.swift */,
 				91700F5F32C34F01643AE183 /* ProfileSignInSection.swift */,
@@ -622,6 +628,8 @@
 				D3227D21FF71D190188827EA /* PlusProfileModels.swift in Sources */,
 				5CC0C7EECA8FBEDC683AE2F3 /* ProfileCatalogStore.swift in Sources */,
 				5EA2CC7B31972AB30800A229 /* ProfileDisplayOrderPreference.swift in Sources */,
+				4E8ECBC266AE28522A45DFD0 /* ProfileKeyboardShortcuts.swift in Sources */,
+				985DCE74337A9763632F6FDB /* ProfileListInteraction.swift in Sources */,
 				F75ADD4591D74B77C5BC03D6 /* ProfilePhoneNumberCatalog.swift in Sources */,
 				8491E254498B90904C946B1F /* ProfilePhoneNumberComboBox.swift in Sources */,
 				009F7B767DF96484F9BBF753 /* ProfileRuntimeRegistry.swift in Sources */,
@@ -676,13 +684,13 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 15;
+				CURRENT_PROJECT_VERSION = 16;
 				INFOPLIST_FILE = Sources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.3.1;
+				MARKETING_VERSION = 1.4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.linda.CodexPlusBar;
 				SDKROOT = macosx;
 			};
@@ -770,13 +778,13 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 15;
+				CURRENT_PROJECT_VERSION = 16;
 				INFOPLIST_FILE = Sources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.3.1;
+				MARKETING_VERSION = 1.4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.linda.CodexPlusBar;
 				SDKROOT = macosx;
 			};

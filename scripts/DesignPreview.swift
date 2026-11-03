@@ -2,6 +2,12 @@
 import AppKit
 import SwiftUI
 
+// The real menu-bar popover becomes key. Let its borderless QA host do the same
+// so native keyboard checks exercise the production window-scoped shortcuts.
+private final class PreviewWindow: NSWindow {
+    override var canBecomeKey: Bool { true }
+}
+
 @main
 enum DesignPreview {
     @MainActor private static let commands = PreviewCommands()
@@ -100,7 +106,7 @@ enum DesignPreview {
             : isEmailTools ? (arguments.contains("--empty") ? EmailToolsLayout.emptySize : arguments.contains("--compact") ? EmailToolsLayout.minimumSize : EmailToolsLayout.defaultSize)
             : arguments.contains("--empty") ? ProfileManagerLayout.emptySize
             : arguments.contains("--compact") ? ProfileManagerLayout.minimumSize : ProfileManagerLayout.defaultSize
-        let window = NSWindow(
+        let window = PreviewWindow(
             contentRect: NSRect(origin: .zero, size: size),
             styleMask: isPanel ? [.borderless] : isBackup ? [.titled, .closable] : [.titled, .closable, .resizable, .fullSizeContentView],
             backing: .buffered, defer: false

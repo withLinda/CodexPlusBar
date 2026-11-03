@@ -13,6 +13,7 @@ struct MenuBarRootView: View {
     @State private var profileFilter = ProfileFilter()
     @State private var profileSearchQuery = ""
     @State private var isProfileSearchPresented = false
+    @State private var keyboardSelectedProfileID: UUID?
     let currentTime: AppMinuteClock
     let openManagerWindow: @MainActor (UUID?) -> Void
     let openEmailToolsWindow: @MainActor () -> Void
@@ -92,15 +93,27 @@ struct MenuBarRootView: View {
                     )
                 }
 
+              ScrollViewReader { proxy in
                 ScrollView(.vertical) {
                     LazyVStack(alignment: .leading, spacing: MenuBarPanelMetrics.rowSpacing) {
-                        content(displayedProfiles: listPresentation.displayedProfiles)
+                        content(displayedProfiles: listPresentation.numberedProfiles)
                     }
                     .frame(width: panelContentWidth, alignment: .leading)
                 }
                 .scrollIndicators(.hidden)
                 .frame(width: panelContentWidth, alignment: .topLeading)
                 .frame(maxHeight: .infinity, alignment: .topLeading)
+                .onChange(of: keyboardSelectedProfileID) { _, id in
+                    if let id { proxy.scrollTo(id) }
+                }
+                .onChange(of: listPresentation.displayedProfiles.map(\.id)) { _, ids in
+                    if let id = keyboardSelectedProfileID, ids.contains(id) {
+                        proxy.scrollTo(id)
+                    } else {
+                        keyboardSelectedProfileID = nil
+                    }
+                }
+              }
 
                 footer
             }
@@ -114,6 +127,10 @@ struct MenuBarRootView: View {
             alignment: .topLeading
         )
         .onAppear(perform: clearStalePreferredProfileID)
+        .background {
+            ProfileKeyboardShortcuts(isEnabled: !controller.isTransferring, handle: handleKeyboardAction)
+                .frame(width: 0, height: 0)
+        }
         .tint(CodexTheme.searchActionToken(preset: CodexThemeRefreshContext(appearanceMode: themeAppearance, contrast: themeContrast, systemVariant: colorScheme == .dark ? .dark : .light).preset).color)
         .onChange(of: controller.profiles.map(\.id)) { _, _ in
             clearStalePreferredProfileID()
@@ -164,7 +181,7 @@ struct MenuBarRootView: View {
     }
 
     @ViewBuilder
-    private func content(displayedProfiles: [PlusProfileSnapshot]) -> some View {
+    private func content(displayedProfiles: [ProfileListItem]) -> some View {
         if controller.profiles.isEmpty {
             CodexCard(tier: .strong, accent: controller.dashboardStatus.tone.foregroundColor) {
                 VStack(alignment: .leading, spacing: 12) {
@@ -196,7 +213,8 @@ struct MenuBarRootView: View {
         } else if displayedProfiles.isEmpty {
             ProfileFilterEmptyState(clearFilter: clearProfileFilter)
         } else {
-            ForEach(displayedProfiles) { snapshot in
+            ForEach(displayedProfiles) { item in
+                let snapshot = item.snapshot
                 let isPinned = snapshot.id == storedPinnedProfileID
 
                 MenuBarProfileRow(
@@ -204,6 +222,8 @@ struct MenuBarRootView: View {
                     referenceDate: currentTime.now,
                     isPinned: isPinned,
                     textScale: panelTextScale,
+                    displayOrdinal: item.ordinal,
+                    isKeyboardSelected: snapshot.id == keyboardSelectedProfileID,
                     searchPhoneNumber: ProfileSearch.matchingPhoneNumber(
                         in: snapshot,
                         query: profileSearchQuery
@@ -227,6 +247,8 @@ struct MenuBarRootView: View {
                         setPinnedProfile(snapshot.id)
                     }
                 )
+                .id(snapshot.id)
+                .accessibilityAddTraits(snapshot.id == keyboardSelectedProfileID ? .isSelected : [])
                 .contextMenu {
                     if snapshot.profile.provider == .codex {
                         Button("Switch OpenChamber OpenAI") {
@@ -284,8 +306,12 @@ struct MenuBarRootView: View {
                 Divider()
                 Button("Larger text", systemImage: "textformat.size.larger", action: zoomPanelIn)
                     .disabled(panelTextScale >= MenuBarPanelTextScalePreference.maximumScale)
+                    .keyboardShortcut("+", modifiers: .command)
                 Button("Smaller text", systemImage: "textformat.size.smaller", action: zoomPanelOut)
                     .disabled(panelTextScale <= MenuBarPanelTextScalePreference.minimumScale)
+                    .keyboardShortcut("-", modifiers: .command)
+                Button("Actual Size") { panelTextScaleStorage = MenuBarPanelTextScalePreference.defaultScale }
+                    .keyboardShortcut("0")
                 Divider()
                 Button("Quit CodexPlusBar", action: quitApp)
                     .keyboardShortcut("q")
@@ -377,7 +403,7 @@ struct MenuBarRootView: View {
     }
 
     private var preferredManagerProfileID: UUID? {
-        currentPinnedProfileID ?? controller.selectedProfileID ?? controller.profiles.first?.id
+        keyboardSelectedProfileID ?? currentPinnedProfileID ?? controller.selectedProfileID ?? controller.profiles.first?.id
     }
 
     private func setPinnedProfile(_ profileID: UUID) {
@@ -416,6 +442,23 @@ struct MenuBarRootView: View {
 
     private func zoomPanelIn() {
         panelTextScaleStorage = MenuBarPanelTextScalePreference.zoomedInValue(from: panelTextScale)
+    }
+
+    private func handleKeyboardAction(_ action: ProfileKeyboardAction) -> Bool {
+        switch action {
+        case .zoomIn: zoomPanelIn()
+        case .zoomOut: zoomPanelOut()
+        case .resetZoom: panelTextScaleStorage = MenuBarPanelTextScalePreference.defaultScale
+        case .previousProfile, .nextProfile:
+            let items = profileListPresentation.numberedProfiles
+            guard !items.isEmpty else { return false }
+            keyboardSelectedProfileID = ProfileListNavigation.targetID(
+                currentID: keyboardSelectedProfileID,
+                items: items,
+                direction: action == .previousProfile ? .up : .down
+            )
+        }
+        return true
     }
 
     private func zoomPanelOut() {
@@ -543,6 +586,8 @@ private struct MenuBarProfileRow: View {
     let referenceDate: Date
     let isPinned: Bool
     let textScale: Double
+    let displayOrdinal: Int
+    let isKeyboardSelected: Bool
     let searchPhoneNumber: String?
     let openManagerWindow: () -> Void
     let switchAndOpen: (() -> Void)?
@@ -557,6 +602,8 @@ private struct MenuBarProfileRow: View {
             referenceDate: referenceDate,
             mode: .menuBar(isPinned: isPinned),
             textScale: textScale,
+            displayOrdinal: displayOrdinal,
+            isKeyboardSelected: isKeyboardSelected,
             searchPhoneNumber: searchPhoneNumber,
             primaryAction: openManagerWindow,
             copyAction: copyProfileLabel,

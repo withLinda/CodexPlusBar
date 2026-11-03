@@ -145,6 +145,8 @@ struct ProfileSummaryRow: View {
     let presentation: ProfileSummaryRowPresentation
     let mode: ProfileSummaryRowMode
     let textScale: Double
+    let displayOrdinal: Int?
+    let isKeyboardSelected: Bool
     let primaryAction: (() -> Void)?
     let copyAction: (() -> Void)?
     let emailAction: (() -> Void)?
@@ -157,6 +159,8 @@ struct ProfileSummaryRow: View {
         referenceDate: Date = .now,
         mode: ProfileSummaryRowMode,
         textScale: Double = 1,
+        displayOrdinal: Int? = nil,
+        isKeyboardSelected: Bool = false,
         searchPhoneNumber: String? = nil,
         primaryAction: (() -> Void)? = nil,
         copyAction: (() -> Void)? = nil,
@@ -174,6 +178,8 @@ struct ProfileSummaryRow: View {
             ),
             mode: mode,
             textScale: textScale,
+            displayOrdinal: displayOrdinal,
+            isKeyboardSelected: isKeyboardSelected,
             primaryAction: primaryAction,
             copyAction: copyAction,
             emailAction: emailAction,
@@ -187,6 +193,8 @@ struct ProfileSummaryRow: View {
         presentation: ProfileSummaryRowPresentation,
         mode: ProfileSummaryRowMode,
         textScale: Double = 1,
+        displayOrdinal: Int? = nil,
+        isKeyboardSelected: Bool = false,
         primaryAction: (() -> Void)? = nil,
         copyAction: (() -> Void)? = nil,
         emailAction: (() -> Void)? = nil,
@@ -197,6 +205,8 @@ struct ProfileSummaryRow: View {
         self.presentation = presentation
         self.mode = mode
         self.textScale = textScale
+        self.displayOrdinal = displayOrdinal
+        self.isKeyboardSelected = isKeyboardSelected
         self.primaryAction = primaryAction
         self.copyAction = copyAction
         self.emailAction = emailAction
@@ -302,7 +312,9 @@ struct ProfileSummaryRow: View {
     }
 
     private var titleRow: some View {
-        HStack(alignment: .top, spacing: 8) {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            ordinalView
+
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 ProfileProviderBadge(provider: presentation.provider, showsText: false)
 
@@ -331,6 +343,8 @@ struct ProfileSummaryRow: View {
 
     private var menuBarTitleLabel: some View {
         HStack(alignment: .firstTextBaseline, spacing: scaled(6)) {
+            ordinalView
+
             ProfileProviderBadge(
                 provider: presentation.provider,
                 textScale: effectiveTextScale,
@@ -343,6 +357,22 @@ struct ProfileSummaryRow: View {
                 .lineLimit(1)
                 .truncationMode(.middle)
                 .frame(minWidth: 40, alignment: .leading)
+        }
+    }
+
+    @ViewBuilder
+    private var ordinalView: some View {
+        if let displayOrdinal {
+            Text("#\(displayOrdinal)")
+                .font(.system(
+                    size: scaled(18),
+                    weight: .bold,
+                    design: .monospaced
+                ))
+                .foregroundStyle(CodexTheme.utilityActionTextToken(preset: themeContext.preset).color)
+                .fixedSize()
+                .frame(minWidth: scaled(36), alignment: .leading)
+                .accessibilityLabel("Account \(displayOrdinal)")
         }
     }
 
@@ -505,7 +535,7 @@ struct ProfileSummaryRow: View {
     }
 
     private var backgroundShape: some View {
-        let isSelected = if case let .sidebar(isSelected) = mode { isSelected } else { false }
+        let isSelected = if case let .sidebar(isSelected) = mode { isSelected } else { isKeyboardSelected }
 
         return RoundedRectangle(cornerRadius: CodexTheme.fieldCornerRadius, style: .continuous)
             .fill(
