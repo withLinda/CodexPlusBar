@@ -106,9 +106,11 @@ struct BackupServiceTests {
         let destination = base.appendingPathComponent("new/CodexPlusBar")
         let profile = backupTestProfile()
         try ProfileCatalogStore(fileURL: source.appendingPathComponent("profiles.json")).saveProfiles([profile])
+        let emailSession = DotTrickSession(localPart: "backuptest", createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+                                          usedVariations: ["backup.test"])
+        try DotTrickSessionStore(fileURL: source.appendingPathComponent("dot-trick-sessions.json")).saveSessions([emailSession])
         for (path, value) in [("DesktopSignIns/test.json", "{\"token\":\"synthetic-desktop\"}"),
                               ("OpenChamberSignIns/test.rotations.json", "{\"rotation\":\"synthetic-refresh\"}"),
-                              ("dot-trick-sessions.json", "[]"),
                               ("ChromeProfiles/Profile test/Cookies", "synthetic-browser-bytes"),
                               ("ChromeProfiles/Profile test/Cache/data", "disposable")] {
             let url = source.appendingPathComponent(path)
@@ -134,6 +136,7 @@ struct BackupServiceTests {
         #expect(restored.provider == .claude)
         #expect(restored.tags == [.pending])
         #expect(restored.phoneNumber == "+1 202 555 0123")
+        #expect(try DotTrickSessionStore(fileURL: destination.appendingPathComponent("dot-trick-sessions.json")).loadSessions() == [emailSession])
         #expect(try String(contentsOf: destination.appendingPathComponent("DesktopSignIns/test.json"), encoding: .utf8).contains("synthetic-desktop"))
         #expect(try String(contentsOf: destination.appendingPathComponent("ChromeProfiles/Profile test/Cookies"), encoding: .utf8) == "synthetic-browser-bytes")
         #expect(!FileManager.default.fileExists(atPath: destination.appendingPathComponent("ChromeProfiles/Profile test/Cache").path))

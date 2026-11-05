@@ -187,7 +187,12 @@ actor BackupService {
         let profiles = try JSONDecoder().decode([PlusProfile].self, from: readJSON(catalog))
         try manifest.validate(profiles: profiles)
         let email = data.appendingPathComponent("dot-trick-sessions.json")
-        if fm.fileExists(atPath: email.path) { _ = try JSONDecoder().decode([DotTrickSession].self, from: readJSON(email)) }
+        if fm.fileExists(atPath: email.path) {
+            // Match DotTrickSessionStore's on-disk dates, including nonempty sessions.
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            _ = try decoder.decode([DotTrickSession].self, from: readJSON(email))
+        }
         let chrome = data.appendingPathComponent("ChromeProfiles/Local State")
         if fm.fileExists(atPath: chrome.path) { _ = try JSONSerialization.jsonObject(with: readJSON(chrome)) }
         for (path, size) in files where path.hasPrefix("DesktopSignIns/") || path.hasPrefix("OpenChamberSignIns/") {
