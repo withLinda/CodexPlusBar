@@ -27,6 +27,7 @@ struct BackupManifest: Codable, Sendable {
 struct BackupPreferences: Codable, Sendable, Equatable {
     var appearance: String?
     var contrast: String?
+    var canvas: String?
     var displayOrder: String?
     var pinnedProfile: String?
     var textScale: Double?
@@ -35,6 +36,7 @@ struct BackupPreferences: Codable, Sendable, Equatable {
     func validate() throws {
         guard appearance.map({ ["system", "light", "dark"].contains($0) }) ?? true,
               contrast.map({ ["hard", "medium", "soft"].contains($0) }) ?? true,
+              canvas.map({ CodexThemeCanvas(rawValue: $0) != nil }) ?? true,
               displayOrder.map({ ProfileDisplayOrder(rawValue: $0) != nil }) ?? true,
               pinnedProfile.map({ $0.isEmpty || UUID(uuidString: $0) != nil }) ?? true,
               textScale.map({ $0.isFinite && (0.5...3).contains($0) }) ?? true else { throw BackupError.invalidData }

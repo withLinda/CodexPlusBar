@@ -12,6 +12,7 @@ struct EmailToolsWindowView: View {
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage(CodexThemeSettings.Keys.appearanceMode) private var appearance = CodexThemeSettings.defaultAppearanceMode
     @AppStorage(CodexThemeSettings.Keys.contrast) private var contrast = CodexThemeSettings.defaultContrast
+    @AppStorage(CodexThemeSettings.Keys.canvas) private var canvas = CodexThemeSettings.defaultCanvas
     @Bindable var controller: DotTrickController
     @State private var inputDraft = ""
     @State private var searchQuery = ""
@@ -22,7 +23,7 @@ struct EmailToolsWindowView: View {
     private enum Field: Hashable { case input, filter }
 
     private var themeContext: CodexThemeRefreshContext {
-        CodexThemeRefreshContext(appearanceMode: appearance, contrast: contrast, systemVariant: colorScheme == .dark ? .dark : .light)
+        CodexThemeRefreshContext(appearanceMode: appearance, contrast: contrast, systemVariant: colorScheme == .dark ? .dark : .light, canvas: canvas)
     }
 
     var body: some View {

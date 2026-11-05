@@ -35,6 +35,7 @@ import WebKit
     static func preferences(in defaults: UserDefaults = .standard) -> BackupPreferences {
         BackupPreferences(appearance: defaults.string(forKey: CodexThemeSettings.Keys.appearanceMode),
                           contrast: defaults.string(forKey: CodexThemeSettings.Keys.contrast),
+                          canvas: defaults.string(forKey: CodexThemeSettings.Keys.canvas),
                           displayOrder: defaults.string(forKey: ProfileDisplayOrderPreference.orderKey),
                           pinnedProfile: defaults.string(forKey: MenuBarProfilePreference.preferredProfileIDKey),
                           textScale: defaults.object(forKey: MenuBarPanelTextScalePreference.textScaleKey) as? Double,
@@ -45,6 +46,7 @@ import WebKit
         try preferences.validate()
         defaults.set(preferences.appearance, forKey: CodexThemeSettings.Keys.appearanceMode)
         defaults.set(preferences.contrast, forKey: CodexThemeSettings.Keys.contrast)
+        defaults.set(preferences.canvas, forKey: CodexThemeSettings.Keys.canvas)
         defaults.set(preferences.displayOrder, forKey: ProfileDisplayOrderPreference.orderKey)
         defaults.set(preferences.pinnedProfile, forKey: MenuBarProfilePreference.preferredProfileIDKey)
         defaults.set(preferences.textScale, forKey: MenuBarPanelTextScalePreference.textScaleKey)

@@ -187,13 +187,14 @@ final class WindowChromeProbeView: NSView {
 }
 
 struct CodexWindowTitleBarGlass: View {
+    @Environment(\.codexThemeRefreshContext) private var themeContext
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorSchemeContrast) private var contrast
     let height: CGFloat
     let seamOverlap: CGFloat
 
     private var warmTintGradient: LinearGradient {
-        let palette = CodexTheme.activePalette
+        let palette = CodexTheme.palette(for: themeContext.preset)
 
         return LinearGradient(
             colors: [
@@ -214,12 +215,12 @@ struct CodexWindowTitleBarGlass: View {
             .overlay(alignment: .top) {
                 Group {
                     if reduceTransparency || contrast == .increased {
-                        CodexTheme.shellFillToken.color
+                        CodexTheme.shellFillToken(for: themeContext.preset).color
                     } else if #available(macOS 26.0, *) {
                         Rectangle()
                             .fill(.clear)
                             .glassEffect(
-                                Glass.clear.tint(CodexTheme.activePalette.bg1.color(alpha: CodexTheme.isDarkTheme ? 0.035 : 0.10)),
+                                Glass.clear.tint(CodexTheme.palette(for: themeContext.preset).bg1.color(alpha: themeContext.variant == .dark ? 0.035 : 0.10)),
                                 in: shape
                             )
                             .overlay {
@@ -258,6 +259,7 @@ private struct CodexWindowTitleBarGlassShape: Shape {
 }
 
 private struct CodexWindowBodyShell<Content: View>: View {
+    @Environment(\.codexThemeRefreshContext) private var themeContext
     let seamOverlap: CGFloat
     let content: Content
 
@@ -270,7 +272,7 @@ private struct CodexWindowBodyShell<Content: View>: View {
     }
 
     var body: some View {
-        let shadow = CodexTheme.shadow(for: .strong)
+        let shadow = CodexTheme.shadow(for: .strong, preset: themeContext.preset)
         let shellShape = CodexWindowBodyMask(cornerRadius: CodexTheme.shellCornerRadius)
         let borderShape = CodexWindowBodyBorderShape(cornerRadius: CodexTheme.shellCornerRadius)
 
@@ -293,16 +295,16 @@ private struct CodexWindowBodyShell<Content: View>: View {
                     .mask(shellShape)
 
                 Rectangle()
-                    .fill(CodexTheme.shellFill(for: .dialog))
+                    .fill(CodexTheme.shellFillToken(for: themeContext.preset).color)
                     .mask(shellShape)
                     .overlay {
                         Rectangle()
-                            .fill(CodexTheme.surfaceSheen(for: .strong))
+                            .fill(CodexTheme.surfaceSheen(for: .strong, preset: themeContext.preset))
                             .mask(shellShape)
                     }
                     .overlay {
                         borderShape
-                            .stroke(CodexTheme.surfaceBorder(for: .strong), lineWidth: 1)
+                            .stroke(CodexTheme.surfaceBorder(for: .strong, preset: themeContext.preset), lineWidth: 1)
                     }
                     .overlay(alignment: .topLeading) {
                         content

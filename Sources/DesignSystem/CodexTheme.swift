@@ -178,19 +178,31 @@ enum CodexThemeContrast: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+enum CodexThemeCanvas: String, CaseIterable, Identifiable, Sendable {
+    case original
+    case dim
+    case deep
+
+    var id: String { rawValue }
+    var title: String { rawValue.capitalized }
+}
+
 struct CodexThemePreset: Identifiable, Sendable, Equatable {
     let variant: CodexThemeVariant
     let contrast: CodexThemeContrast
+    var canvas: CodexThemeCanvas = .deep
 
     var id: String {
-        "\(variant.rawValue)-\(contrast.rawValue)"
+        "\(variant.rawValue)-\(contrast.rawValue)-\(canvas.rawValue)"
     }
 
     static let defaultPreset = CodexThemePreset(variant: .dark, contrast: .hard)
 
     static let allCases: [CodexThemePreset] = CodexThemeVariant.allCases.flatMap { variant in
-        CodexThemeContrast.allCases.map { contrast in
-            CodexThemePreset(variant: variant, contrast: contrast)
+        CodexThemeContrast.allCases.flatMap { contrast in
+            CodexThemeCanvas.allCases.map { canvas in
+                CodexThemePreset(variant: variant, contrast: contrast, canvas: canvas)
+            }
         }
     }
 }
@@ -199,10 +211,12 @@ enum CodexThemeSettings {
     enum Keys {
         static let appearanceMode = "CodexPlusBar.theme.appearanceMode"
         static let contrast = "CodexPlusBar.theme.contrast"
+        static let canvas = "CodexPlusBar.theme.canvas"
     }
 
     static let defaultAppearanceMode = CodexThemeAppearanceMode.dark
     static let defaultContrast = CodexThemeContrast.hard
+    static let defaultCanvas = CodexThemeCanvas.deep
 
     static func appearanceMode(in userDefaults: UserDefaults = .standard) -> CodexThemeAppearanceMode {
         guard let rawValue = userDefaults.string(forKey: Keys.appearanceMode),
@@ -222,6 +236,10 @@ enum CodexThemeSettings {
         return contrast
     }
 
+    static func canvas(in userDefaults: UserDefaults = .standard) -> CodexThemeCanvas {
+        userDefaults.string(forKey: Keys.canvas).flatMap(CodexThemeCanvas.init(rawValue:)) ?? defaultCanvas
+    }
+
     static func systemAppearanceVariant(in userDefaults: UserDefaults = .standard) -> CodexThemeVariant {
         userDefaults.string(forKey: "AppleInterfaceStyle") == "Dark" ? .dark : .light
     }
@@ -231,15 +249,18 @@ struct CodexThemeRefreshContext: Equatable {
     let appearanceMode: CodexThemeAppearanceMode
     let contrast: CodexThemeContrast
     let systemVariant: CodexThemeVariant
+    let canvas: CodexThemeCanvas
 
     init(
         appearanceMode: CodexThemeAppearanceMode = CodexThemeSettings.defaultAppearanceMode,
         contrast: CodexThemeContrast = CodexThemeSettings.defaultContrast,
-        systemVariant: CodexThemeVariant = CodexThemeSettings.systemAppearanceVariant()
+        systemVariant: CodexThemeVariant = CodexThemeSettings.systemAppearanceVariant(),
+        canvas: CodexThemeCanvas = CodexThemeSettings.defaultCanvas
     ) {
         self.appearanceMode = appearanceMode
         self.contrast = contrast
         self.systemVariant = systemVariant
+        self.canvas = canvas
     }
 
     var variant: CodexThemeVariant {
@@ -247,7 +268,7 @@ struct CodexThemeRefreshContext: Equatable {
     }
 
     var preset: CodexThemePreset {
-        CodexThemePreset(variant: variant, contrast: contrast)
+        CodexThemePreset(variant: variant, contrast: contrast, canvas: canvas)
     }
 
     var preferredColorScheme: ColorScheme? {
@@ -259,11 +280,11 @@ struct CodexThemeRefreshContext: Equatable {
 struct CodexEverforestPalette: Sendable, Equatable {
     let variant: CodexThemeVariant
     let contrast: CodexThemeContrast
-    let bgDim: CodexColorToken
-    let bg0: CodexColorToken
-    let bg1: CodexColorToken
-    let bg2: CodexColorToken
-    let bg3: CodexColorToken
+    var bgDim: CodexColorToken
+    var bg0: CodexColorToken
+    var bg1: CodexColorToken
+    var bg2: CodexColorToken
+    var bg3: CodexColorToken
     let bgRed: CodexColorToken
     let bgYellow: CodexColorToken
     let bgGreen: CodexColorToken
@@ -283,6 +304,20 @@ struct CodexEverforestPalette: Sendable, Equatable {
 
     var isDark: Bool {
         variant == .dark
+    }
+
+    func applyingCanvas(_ canvas: CodexThemeCanvas) -> Self {
+        guard isDark, canvas != .original else { return self }
+        // Like snippet-manager, lower the large surfaces by a palette step.
+        // Dim sits halfway to Deep; text and semantic accents keep their colors.
+        let amount = canvas == .dim ? 0.5 : 1.0
+        var adjusted = self
+        adjusted.bgDim = bgDim.mixed(with: bgDim.mixed(with: .init(hex: "#000000"), fraction: 0.4), fraction: amount)
+        adjusted.bg0 = bg0.mixed(with: bgDim, fraction: amount)
+        adjusted.bg1 = bg1.mixed(with: bg0, fraction: amount)
+        adjusted.bg2 = bg2.mixed(with: bg1, fraction: amount)
+        adjusted.bg3 = bg3.mixed(with: bg2, fraction: amount)
+        return adjusted
     }
 
     var primaryText: CodexColorToken {
@@ -360,6 +395,10 @@ enum CodexTheme {
     }
 
     private static func makePalette(for preset: CodexThemePreset) -> CodexEverforestPalette {
+        makeBasePalette(for: preset).applyingCanvas(preset.canvas)
+    }
+
+    private static func makeBasePalette(for preset: CodexThemePreset) -> CodexEverforestPalette {
         switch (preset.variant, preset.contrast) {
         case (.dark, .hard):
             // A deeper charcoal-green adaptation of Everforest Hard for this app.
@@ -528,7 +567,8 @@ enum CodexTheme {
 
         return CodexThemeRefreshContext(
             appearanceMode: CodexThemeSettings.appearanceMode(),
-            contrast: CodexThemeSettings.contrast()
+            contrast: CodexThemeSettings.contrast(),
+            canvas: CodexThemeSettings.canvas()
         ).preset
     }
 
@@ -653,7 +693,11 @@ enum CodexTheme {
         additionalBackgrounds: [CodexColorToken] = []
     ) -> CodexColorToken {
         let palette = palette(for: preset)
-        let backgrounds = readableAccentBackgroundTokens(for: preset) + additionalBackgrounds
+        // Resolve against the brightest canvas so depth changes only the surfaces,
+        // while retaining contrast checks for component-specific backgrounds.
+        var foregroundPreset = preset
+        foregroundPreset.canvas = .original
+        let backgrounds = readableAccentBackgroundTokens(for: foregroundPreset) + additionalBackgrounds
         let minimumNormalTextContrast = 5.0
 
         if token.passesContrast(minimumNormalTextContrast, against: backgrounds) {
@@ -1306,9 +1350,10 @@ private struct CodexThemeRefreshModifier: ViewModifier {
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage(CodexThemeSettings.Keys.appearanceMode) private var appearanceMode = CodexThemeSettings.defaultAppearanceMode
     @AppStorage(CodexThemeSettings.Keys.contrast) private var contrast = CodexThemeSettings.defaultContrast
+    @AppStorage(CodexThemeSettings.Keys.canvas) private var canvas = CodexThemeSettings.defaultCanvas
 
     private var refreshContext: CodexThemeRefreshContext {
-        CodexThemeRefreshContext(appearanceMode: appearanceMode, contrast: contrast, systemVariant: colorScheme == .dark ? .dark : .light)
+        CodexThemeRefreshContext(appearanceMode: appearanceMode, contrast: contrast, systemVariant: colorScheme == .dark ? .dark : .light, canvas: canvas)
     }
 
     func body(content: Content) -> some View {
@@ -1334,9 +1379,10 @@ struct CodexBackdrop: View {
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage(CodexThemeSettings.Keys.appearanceMode) private var appearanceMode = CodexThemeSettings.defaultAppearanceMode
     @AppStorage(CodexThemeSettings.Keys.contrast) private var contrast = CodexThemeSettings.defaultContrast
+    @AppStorage(CodexThemeSettings.Keys.canvas) private var canvas = CodexThemeSettings.defaultCanvas
 
     private var themeContext: CodexThemeRefreshContext {
-        CodexThemeRefreshContext(appearanceMode: appearanceMode, contrast: contrast, systemVariant: colorScheme == .dark ? .dark : .light)
+        CodexThemeRefreshContext(appearanceMode: appearanceMode, contrast: contrast, systemVariant: colorScheme == .dark ? .dark : .light, canvas: canvas)
     }
 
     var body: some View {
@@ -1349,6 +1395,7 @@ struct CodexShell<Content: View>: View {
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage(CodexThemeSettings.Keys.appearanceMode) private var appearanceMode = CodexThemeSettings.defaultAppearanceMode
     @AppStorage(CodexThemeSettings.Keys.contrast) private var contrast = CodexThemeSettings.defaultContrast
+    @AppStorage(CodexThemeSettings.Keys.canvas) private var canvas = CodexThemeSettings.defaultCanvas
 
     let role: CodexSurfaceRole
     let padding: CGFloat
@@ -1365,7 +1412,7 @@ struct CodexShell<Content: View>: View {
     }
 
     private var themeContext: CodexThemeRefreshContext {
-        CodexThemeRefreshContext(appearanceMode: appearanceMode, contrast: contrast, systemVariant: colorScheme == .dark ? .dark : .light)
+        CodexThemeRefreshContext(appearanceMode: appearanceMode, contrast: contrast, systemVariant: colorScheme == .dark ? .dark : .light, canvas: canvas)
     }
 
     var body: some View {

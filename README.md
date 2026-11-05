@@ -98,7 +98,7 @@ Desktop switching uses native Swift, Security, URLSession, and AppKit; `codex-au
 
 Supported desktop storage is the standard `~/.codex/auth.json`, direct macOS Keychain, or `auto` selection. Custom runtime authentication overrides, administrator-managed configuration, encrypted secret storage, and ephemeral credentials report an unsupported-configuration message. Keychain may ask for access. A failed switch reports credential recovery and app-reopening results separately.
 
-Native desktop sign-in switching is included in the **1.4.1 DMG** (introduced in 1.2.0).
+Native desktop sign-in switching is included in the **1.4.2 DMG** (introduced in 1.2.0).
 
 **Since 1.2.3:** Leftover ChatGPT crash-reporting and keyboard-monitor utilities no longer cause a false “could not close” error when switching accounts. CodexPlusBar recognizes only their specific bundle locations; the desktop, Codex app-server, renderers, and unknown helpers still need to exit before the saved sign-in can change.
 
@@ -143,6 +143,10 @@ The compact list keeps used addresses readable, supports keyboard checkbox navig
 - **Hard**, **Medium**, and **Soft** contrast choices.
 - Provider colors, status icons, accessibility labels, and masked email labels for quick scanning.
 
+### Theme depth
+
+**New in 1.4.2:** In **Settings**, choose **Appearance**, **Contrast**, and (for dark appearance) **Canvas: Original, Dim, or Deep**. The default is **Dark / Hard / Deep**. Canvas changes apply immediately to the menu panel and app windows and are included in backups. Existing installations and older backups without a Canvas choice use Deep. Light appearance stays unchanged.
+
 ## Quick start
 
 1. Open CodexPlusBar. Its status appears in the macOS menu bar; it does not add a normal Dock icon.
@@ -167,7 +171,7 @@ CodexPlusBar reads the signed-in web services used by ChatGPT and Claude. These 
 
 The easiest way to install CodexPlusBar is the signed and notarized GitHub DMG. You do not need Xcode. One download supports both Apple silicon and Intel Macs running macOS 14 or newer.
 
-Version **1.4.1 (build 17)** fixes encrypted backup export when saved Email Tools sessions are present. It retains the 1.4.0 numbered accounts, keyboard navigation, shared zoom, and draft protection, plus the 1.3.1 sign-in recovery improvements, [encrypted backup and restore](#move-to-a-new-mac), automatic OpenChamber account sync, multiline profile imports, and native **ChatGPT / Codex** desktop switching. You do not need `codex-auth` or CodexAuthHelper. The download link below always downloads the latest published DMG; [the 1.4.1 release](https://github.com/withLinda/CodexPlusBar/releases/tag/v1.4.1) has version-specific downloads, release notes, and the checksum.
+Version **1.4.2 (build 18)** adds [Canvas depth](#theme-depth): choose Original, Dim, or Deep dark surfaces, with live updates and backup support. It retains the 1.4.1 Email Tools backup fix, numbered accounts, keyboard navigation, shared zoom, draft protection, [encrypted backup and restore](#move-to-a-new-mac), automatic OpenChamber account sync, and native **ChatGPT / Codex** desktop switching. You do not need `codex-auth` or CodexAuthHelper. The download link below always downloads the latest published DMG; [the 1.4.2 release](https://github.com/withLinda/CodexPlusBar/releases/tag/v1.4.2) has version-specific downloads, release notes, and the checksum.
 
 1. [Download `CodexPlusBar.dmg`](https://github.com/withLinda/CodexPlusBar/releases/latest/download/CodexPlusBar.dmg).
 2. If CodexPlusBar is already running, quit it from its menu bar panel.
@@ -186,11 +190,11 @@ cd ~/Downloads
 shasum -a 256 -c CodexPlusBar.dmg.sha256
 ```
 
-The expected result is `CodexPlusBar.dmg: OK`. If verification fails, download both files again from the [same release](https://github.com/withLinda/CodexPlusBar/releases/tag/v1.4.1) before installing.
+The expected result is `CodexPlusBar.dmg: OK`. If verification fails, download both files again from the [same release](https://github.com/withLinda/CodexPlusBar/releases/tag/v1.4.2) before installing.
 
 ### Update an existing installation
 
-To update from 1.3.1 or an earlier release, download the latest DMG and follow steps 2–4 above. Replacing the app keeps your saved profiles, saved desktop and OpenChamber sign-ins, and Chrome sign-ins in `~/Library/Application Support/CodexPlusBar`; you do not need to import them again. After updating the old Mac to 1.4.1, use **Settings → Backup & Transfer → Export Backup…** before moving to a new Mac. Install 1.4.1 or newer there, then [restore the backup](#move-to-a-new-mac).
+To update from 1.4.1 or an earlier release, download the latest DMG and follow steps 2–4 above. Replacing the app keeps your saved profiles, saved desktop and OpenChamber sign-ins, and Chrome sign-ins in `~/Library/Application Support/CodexPlusBar`; you do not need to import them again. After updating the old Mac to 1.4.2, use **Settings → Backup & Transfer → Export Backup…** before moving to a new Mac. Install 1.4.2 or newer there to preserve the Canvas preference, then [restore the backup](#move-to-a-new-mac).
 
 Existing unambiguous CodexAuthHelper snapshots are imported automatically when needed; if no saved desktop sign-in is available, sign in to Codex and choose **Save current sign-in**.
 
@@ -198,7 +202,7 @@ After switching OpenChamber's OpenAI account, wait for **switched and verified**
 
 ### OpenChamber 2 compatibility
 
-The **1.4.1 DMG** retains recovery for missing connections observed with OpenChamber 2.0.2 and its bundled OpenCode 2.0.16, introduced in 1.1.5. Keep OpenChamber running locally with an OpenAI account connected, then use **Save current sign-in** or switch an already-saved profile in CodexPlusBar; no separate bridge installation is needed.
+The **1.4.2 DMG** retains recovery for missing connections observed with OpenChamber 2.0.2 and its bundled OpenCode 2.0.16, introduced in 1.1.5. Keep OpenChamber running locally with an OpenAI account connected, then use **Save current sign-in** or switch an already-saved profile in CodexPlusBar; no separate bridge installation is needed.
 
 If a saved connection was removed, CodexPlusBar can restore it from its saved sign-in after checking the account identity and verifying access with OpenAI. An unavailable bridge or unreadable response still reports an error. If the saved sign-in is missing, damaged, or no longer accepted, sign in again in OpenChamber and choose **Save current sign-in** before retrying.
 
@@ -260,6 +264,8 @@ osascript scripts/inspect_email_tools.applescript
 # Native theme-transition regression (Pillow required):
 bash scripts/render_design.sh --missing-expiry --cycle-theme --output /tmp/theme.png
 bash scripts/render_design.sh --missing-expiry --light --output /tmp/theme-fresh-light.png
+bash scripts/render_design.sh --settings --cycle-canvas --output /tmp/canvas-settings.png
+bash scripts/render_design.sh --cycle-canvas --output /tmp/canvas-manager.png
 python3 scripts/verify_theme_transition.py /tmp/theme.png /tmp/theme-fresh-light.png
 ```
 

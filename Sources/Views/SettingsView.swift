@@ -3,8 +3,10 @@ import SwiftUI
 struct CodexSettingsView: View {
     var openBackup: (BackupTransferMode) -> Void = { _ in }
     var isTransferring = false
+    @Environment(\.colorScheme) private var colorScheme
     @AppStorage(CodexThemeSettings.Keys.appearanceMode) private var appearanceMode = CodexThemeSettings.defaultAppearanceMode
     @AppStorage(CodexThemeSettings.Keys.contrast) private var contrast = CodexThemeSettings.defaultContrast
+    @AppStorage(CodexThemeSettings.Keys.canvas) private var canvas = CodexThemeSettings.defaultCanvas
     @AppStorage(OpenChamberSyncPreference.enabledKey) private var automaticSync = OpenChamberSyncPreference.defaultEnabled
 
     var body: some View {
@@ -39,6 +41,23 @@ struct CodexSettingsView: View {
                         }
                         .labelsHidden()
                         .pickerStyle(.segmented)
+                    }
+
+                    if appearanceMode.forcedVariant == .dark || (appearanceMode == .system && colorScheme == .dark) {
+                        Divider()
+                            .overlay(CodexTheme.surfaceBorder(for: .subtle))
+
+                        CodexSettingsPickerRow(title: "Canvas") {
+                            Picker("Canvas", selection: $canvas) {
+                                ForEach(CodexThemeCanvas.allCases) { canvas in
+                                    Text(canvas.title).tag(canvas)
+                                }
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.segmented)
+                            .accessibilityLabel("Canvas")
+                            .accessibilityValue(canvas.title)
+                        }
                     }
                 }
             }

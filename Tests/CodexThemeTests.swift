@@ -32,7 +32,7 @@ struct CodexThemeTests {
         }
     }
 
-    private let darkHardPreset = CodexThemePreset(variant: .dark, contrast: .hard)
+    private let darkHardPreset = CodexThemePreset(variant: .dark, contrast: .hard, canvas: .original)
     private let lightHardPreset = CodexThemePreset(variant: .light, contrast: .hard)
 
     @Test
@@ -52,17 +52,20 @@ struct CodexThemeTests {
     func themeExposesAllEverforestAppearanceAndContrastPresets() {
         let presetIDs = Set(CodexThemePreset.allCases.map(\.id))
 
-        #expect(presetIDs == Set([
+        let baseIDs = [
             "dark-hard",
             "dark-medium",
             "dark-soft",
             "light-hard",
             "light-medium",
             "light-soft",
-        ]))
+        ]
+        #expect(presetIDs == Set(baseIDs.flatMap { base in
+            ["original", "dim", "deep"].map { "\(base)-\($0)" }
+        }))
         #expect(CodexTheme.palette(for: darkHardPreset).bgDim.hex == "#13191B")
-        #expect(CodexTheme.palette(for: CodexThemePreset(variant: .dark, contrast: .medium)).bgDim.hex == "#232A2E")
-        #expect(CodexTheme.palette(for: CodexThemePreset(variant: .dark, contrast: .soft)).bgDim.hex == "#293136")
+        #expect(CodexTheme.palette(for: CodexThemePreset(variant: .dark, contrast: .medium, canvas: .original)).bgDim.hex == "#232A2E")
+        #expect(CodexTheme.palette(for: CodexThemePreset(variant: .dark, contrast: .soft, canvas: .original)).bgDim.hex == "#293136")
         #expect(CodexTheme.palette(for: lightHardPreset).bg0.hex == "#FFFBEF")
         #expect(CodexTheme.palette(for: CodexThemePreset(variant: .light, contrast: .medium)).bg0.hex == "#FDF6E3")
         #expect(CodexTheme.palette(for: CodexThemePreset(variant: .light, contrast: .soft)).bg0.hex == "#F3EAD3")
@@ -81,7 +84,7 @@ struct CodexThemeTests {
     }
 
     @Test
-    func themeSettingsDefaultToDarkHardAndIgnoreUnknownValues() throws {
+    func themeSettingsDefaultToDarkHardDeepAndIgnoreUnknownValues() throws {
         let suiteName = "CodexThemeTests-\(UUID().uuidString)"
         let userDefaults = try #require(UserDefaults(suiteName: suiteName))
         defer {
@@ -90,12 +93,65 @@ struct CodexThemeTests {
 
         #expect(CodexThemeSettings.appearanceMode(in: userDefaults) == .dark)
         #expect(CodexThemeSettings.contrast(in: userDefaults) == .hard)
+        #expect(CodexThemeSettings.canvas(in: userDefaults) == .deep)
 
         userDefaults.set("sepia", forKey: CodexThemeSettings.Keys.appearanceMode)
         userDefaults.set("paper", forKey: CodexThemeSettings.Keys.contrast)
+        userDefaults.set("unknown", forKey: CodexThemeSettings.Keys.canvas)
 
         #expect(CodexThemeSettings.appearanceMode(in: userDefaults) == .dark)
         #expect(CodexThemeSettings.contrast(in: userDefaults) == .hard)
+        #expect(CodexThemeSettings.canvas(in: userDefaults) == .deep)
+
+        for choice in CodexThemeCanvas.allCases {
+            userDefaults.set(choice.rawValue, forKey: CodexThemeSettings.Keys.canvas)
+            #expect(CodexThemeSettings.canvas(in: userDefaults) == choice)
+        }
+    }
+
+    @Test func canvasDepthDarkensLargeSurfacesWithoutChangingTextOrLightAppearance() {
+        for contrast in CodexThemeContrast.allCases {
+            let presets = CodexThemeCanvas.allCases.map {
+                CodexThemePreset(variant: .dark, contrast: contrast, canvas: $0)
+            }
+            for pair in zip(presets, presets.dropFirst()) {
+                let before = CodexTheme.palette(for: pair.0)
+                let after = CodexTheme.palette(for: pair.1)
+                for (brighter, darker) in [(before.bg0, after.bg0), (before.bg2, after.bg2)] {
+                    #expect(relativeLuminance(brighter) > relativeLuminance(darker))
+                    #expect(deltaLStar(brighter, darker) >= 1.5, "Each depth should be visibly different")
+                }
+                #expect(before.fg == after.fg)
+                #expect(before.accOrange == after.accOrange)
+                for provider in ProfileProvider.allCases {
+                    for selected in [false, true] {
+                        let first = CodexTheme.profileCardFillToken(for: provider, isSelected: selected, preset: pair.0)
+                        let next = CodexTheme.profileCardFillToken(for: provider, isSelected: selected, preset: pair.1)
+                        #expect(relativeLuminance(first) > relativeLuminance(next))
+                    }
+                }
+            }
+            let light = CodexTheme.palette(for: .init(variant: .light, contrast: contrast, canvas: .original))
+            for canvas in CodexThemeCanvas.allCases {
+                #expect(CodexTheme.palette(for: .init(variant: .light, contrast: contrast, canvas: canvas)) == light)
+            }
+        }
+    }
+
+    @Test func canvasDepthKeepsResolvedAccentTextStable() {
+        for contrast in CodexThemeContrast.allCases {
+            let original = CodexThemePreset(variant: .dark, contrast: contrast, canvas: .original)
+            let originalRoles = densePanelAccentTextRoles(for: original)
+            for canvas in CodexThemeCanvas.allCases {
+                let preset = CodexThemePreset(variant: .dark, contrast: contrast, canvas: canvas)
+                for (expected, actual) in zip(originalRoles, densePanelAccentTextRoles(for: preset)) {
+                    #expect(actual.token == expected.token, "\(preset.id) \(actual.name) keeps its text color")
+                }
+                for tone in [CodexProfileTagTone.active, .pending, .needAction] {
+                    #expect(CodexTheme.profileTagTextToken(for: tone, preset: preset) == CodexTheme.profileTagTextToken(for: tone, preset: original))
+                }
+            }
+        }
     }
 
     @Test
@@ -190,7 +246,7 @@ struct CodexThemeTests {
 
     @Test
     func darkCodexCardsStayDeepWhileSelectionRemainsVisible() {
-        let darkPresets = CodexThemePreset.allCases.filter { $0.variant == .dark }
+        let darkPresets = CodexThemePreset.allCases.filter { $0.variant == .dark && $0.canvas == .original }
 
         for preset in darkPresets {
             let base = CodexTheme.surfaceToken(for: .strong, preset: preset)
@@ -349,13 +405,18 @@ struct CodexThemeTests {
 
     @Test
     func themeRefreshContextChangesTokensWithoutResettingViewIdentity() {
-        let hardContext = CodexThemeRefreshContext(appearanceMode: .dark, contrast: .hard)
+        let hardContext = CodexThemeRefreshContext(appearanceMode: .dark, contrast: .hard, canvas: .original)
         let mediumContext = CodexThemeRefreshContext(appearanceMode: .dark, contrast: .medium)
 
         #expect(hardContext.preset == darkHardPreset)
         #expect(mediumContext.preset == CodexThemePreset(variant: .dark, contrast: .medium))
         #expect(hardContext.preferredColorScheme == .dark)
         #expect(mediumContext.preferredColorScheme == .dark)
+
+        let deepContext = CodexThemeRefreshContext(appearanceMode: .dark, contrast: .hard, canvas: .deep)
+        #expect(deepContext != hardContext)
+        #expect(deepContext.preset.canvas == .deep)
+        #expect(CodexTheme.shellFillToken(for: deepContext.preset) != CodexTheme.shellFillToken(for: hardContext.preset))
     }
 
     @Test

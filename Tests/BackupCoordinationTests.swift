@@ -71,6 +71,36 @@ import WebKit
         #expect(defaults.object(forKey: CodexThemeSettings.Keys.contrast) == nil)
         #expect(defaults.string(forKey: "UnrelatedValue") == "leave-me")
     }
+
+    @Test func canvasChoiceSurvivesBackupEncodingAndRestore() throws {
+        let name = "BackupCanvasTests.\(UUID())"
+        let defaults = try #require(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        let key = "CodexPlusBar.theme.canvas"
+
+        for choice in ["original", "dim", "deep"] {
+            defaults.set(choice, forKey: key)
+            let data = try JSONEncoder().encode(BackupSessionBridge.preferences(in: defaults))
+            defaults.removeObject(forKey: key)
+            let restored = try JSONDecoder().decode(BackupPreferences.self, from: data)
+            try BackupSessionBridge.apply(restored, to: defaults)
+            #expect(defaults.string(forKey: key) == choice)
+        }
+    }
+
+    @Test func oldBackupUsesDefaultCanvasAndInvalidCanvasIsRejectedBeforeApplying() throws {
+        let name = "BackupCanvasTests.\(UUID())"
+        let defaults = try #require(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        defaults.set("original", forKey: CodexThemeSettings.Keys.canvas)
+        let legacy = try JSONDecoder().decode(BackupPreferences.self, from: Data(#"{"appearance":"dark","contrast":"hard"}"#.utf8))
+        try BackupSessionBridge.apply(legacy, to: defaults)
+        #expect(CodexThemeSettings.canvas(in: defaults) == .deep)
+
+        let invalid = try JSONDecoder().decode(BackupPreferences.self, from: Data(#"{"appearance":"light","canvas":"unknown"}"#.utf8))
+        #expect(throws: BackupError.invalidData) { try BackupSessionBridge.apply(invalid, to: defaults) }
+        #expect(CodexThemeSettings.appearanceMode(in: defaults) == .dark)
+    }
 }
 
 @MainActor private final class BackupTestPanel {

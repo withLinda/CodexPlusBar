@@ -17,6 +17,7 @@ enum DesignPreview {
         let defaults = UserDefaults.standard
         defaults.set(arguments.contains("--light") ? "light" : "dark", forKey: CodexThemeSettings.Keys.appearanceMode)
         defaults.set(arguments.contains("--soft") ? "soft" : arguments.contains("--medium") ? "medium" : "hard", forKey: CodexThemeSettings.Keys.contrast)
+        defaults.set(arguments.contains("--original") ? "original" : arguments.contains("--dim") ? "dim" : "deep", forKey: CodexThemeSettings.Keys.canvas)
         defaults.set(arguments.contains("--large-text") ? 1.35 : 1, forKey: MenuBarPanelTextScalePreference.textScaleKey)
 
         let app = NSApplication.shared
@@ -100,15 +101,17 @@ enum DesignPreview {
         let isPanel = arguments.contains("--panel")
         let isEmailTools = arguments.contains("--email-tools")
         let isBackup = arguments.contains(where: { $0.hasPrefix("--backup-") })
+        let isSettings = arguments.contains("--settings")
         let size = isPanel
             ? CGSize(width: MenuBarPanelMetrics.width, height: MenuBarPanelMetrics.height)
             : isBackup ? CGSize(width: 480, height: 360)
+            : isSettings ? CGSize(width: 460, height: 440)
             : isEmailTools ? (arguments.contains("--empty") ? EmailToolsLayout.emptySize : arguments.contains("--compact") ? EmailToolsLayout.minimumSize : EmailToolsLayout.defaultSize)
             : arguments.contains("--empty") ? ProfileManagerLayout.emptySize
             : arguments.contains("--compact") ? ProfileManagerLayout.minimumSize : ProfileManagerLayout.defaultSize
         let window = PreviewWindow(
             contentRect: NSRect(origin: .zero, size: size),
-            styleMask: isPanel ? [.borderless] : isBackup ? [.titled, .closable] : [.titled, .closable, .resizable, .fullSizeContentView],
+            styleMask: isPanel ? [.borderless] : isBackup || isSettings ? [.titled, .closable] : [.titled, .closable, .resizable, .fullSizeContentView],
             backing: .buffered, defer: false
         )
         let root: AnyView
@@ -151,7 +154,7 @@ enum DesignPreview {
                 }
             }
             root = AnyView(EmailToolsWindowView(controller: emailController))
-        } else if arguments.contains("--settings") {
+        } else if isSettings {
             root = AnyView(CodexSettingsView())
         } else {
             root = AnyView(ProfileManagerWindowView(controller: controller, currentTime: clock, initiallyShowsDetails: arguments.contains("--details"), initialPage: arguments.contains("--phone-summary") ? .phoneSummary : .profile))
@@ -179,9 +182,14 @@ enum DesignPreview {
                     try capture.run()
                     capture.waitUntilExit()
                     guard capture.terminationStatus == 0 else { exit(capture.terminationStatus) }
-                    if arguments.contains("--cycle-theme") {
-                        for (mode, suffix) in [("light", "-light"), ("dark", "-dark-again")] {
-                            defaults.set(mode, forKey: CodexThemeSettings.Keys.appearanceMode)
+                    if arguments.contains("--cycle-theme") || arguments.contains("--cycle-canvas") {
+                        let cyclingCanvas = arguments.contains("--cycle-canvas")
+                        let key = cyclingCanvas ? CodexThemeSettings.Keys.canvas : CodexThemeSettings.Keys.appearanceMode
+                        let transitions = cyclingCanvas
+                            ? [("original", "-original"), ("dim", "-dim"), ("deep", "-deep-again")]
+                            : [("light", "-light"), ("dark", "-dark-again")]
+                        for (mode, suffix) in transitions {
+                            defaults.set(mode, forKey: key)
                             try await Task.sleep(for: .milliseconds(500))
                             let target = URL(fileURLWithPath: output).deletingPathExtension().path + suffix + ".png"
                             let nextCapture = Process()

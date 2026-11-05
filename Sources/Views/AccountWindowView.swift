@@ -351,6 +351,7 @@ struct ProfileManagerWindowView: View {
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage(CodexThemeSettings.Keys.appearanceMode) private var themeAppearance = CodexThemeSettings.defaultAppearanceMode
     @AppStorage(CodexThemeSettings.Keys.contrast) private var themeContrast = CodexThemeSettings.defaultContrast
+    @AppStorage(CodexThemeSettings.Keys.canvas) private var themeCanvas = CodexThemeSettings.defaultCanvas
     @Bindable var controller: PlusProfileController
     let currentTime: AppMinuteClock
     var openBackup: (BackupTransferMode) -> Void
@@ -486,7 +487,7 @@ struct ProfileManagerWindowView: View {
             resetDetailsFeedback()
             notesRevealTask?.cancel()
         }
-        .tint(CodexTheme.searchActionToken(preset: CodexThemeRefreshContext(appearanceMode: themeAppearance, contrast: themeContrast, systemVariant: colorScheme == .dark ? .dark : .light).preset).color)
+        .tint(CodexTheme.searchActionToken(preset: CodexThemeRefreshContext(appearanceMode: themeAppearance, contrast: themeContrast, systemVariant: colorScheme == .dark ? .dark : .light, canvas: themeCanvas).preset).color)
     }
 
     private var header: some View {
