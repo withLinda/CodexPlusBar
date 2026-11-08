@@ -177,17 +177,33 @@ actor OpenCodeCredentialClient: OpenCodeCredentialServing {
         return !result.data.isEmpty
     }
     private func capabilities() async throws {
-        guard !checkedCapabilities else { return }
+        guard try await supportsStoredCredentials() else { throw OpenCodeCredentialError.unavailable }
+    }
+
+    /// Only a valid older API contract permits the legacy bridge fallback.
+    /// Transport failures and malformed schemas must remain errors.
+    func supportsStoredCredentials() async throws -> Bool {
+        if checkedCapabilities { return true }
         let data = try await send("openapi.json")
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let paths = root["paths"] as? [String: Any], let route = paths["/api/credential"] as? [String: Any],
-              route["get"] != nil, route["post"] != nil,
-              let components = root["components"] as? [String: Any], let schemas = components["schemas"] as? [String: Any],
-              let create = schemas["Credential.CreateInput"] as? [String: Any], let properties = create["properties"] as? [String: Any],
-              properties["value"] != nil, properties["activate"] != nil, properties["integrationID"] != nil else {
-            throw OpenCodeCredentialError.unavailable
+              let paths = root["paths"] as? [String: Any],
+              let components = root["components"] as? [String: Any],
+              let schemas = components["schemas"] as? [String: Any] else {
+            throw OpenCodeCredentialError.invalidResponse
         }
+        guard let routeValue = paths["/api/credential"] else { return false }
+        guard let route = routeValue as? [String: Any] else { throw OpenCodeCredentialError.invalidResponse }
+        for method in ["get", "post"] {
+            if let value = route[method], !(value is [String: Any]) { throw OpenCodeCredentialError.invalidResponse }
+        }
+        guard route["get"] != nil, route["post"] != nil else { return false }
+        guard let createValue = schemas["Credential.CreateInput"] else { return false }
+        guard let create = createValue as? [String: Any] else { throw OpenCodeCredentialError.invalidResponse }
+        guard let propertiesValue = create["properties"] else { return false }
+        guard let properties = propertiesValue as? [String: Any] else { throw OpenCodeCredentialError.invalidResponse }
+        guard properties["value"] != nil, properties["activate"] != nil, properties["integrationID"] != nil else { return false }
         checkedCapabilities = true
+        return true
     }
     private static func validate(_ id: String) throws {
         guard id.hasPrefix("cred_"), id.count > 5, id.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "_") }) else {

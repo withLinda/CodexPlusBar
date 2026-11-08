@@ -11,6 +11,7 @@ extension ProfileRuntimeRegistry: PlusProfileRuntimeProviding {}
 
 @MainActor
 protocol PlusProfileDataServing: AnyObject {
+    func openAppAuthorization(_ url: URL, for profile: PlusProfile) async throws
     func refreshProfile(_ profile: PlusProfile) async throws -> PlusProfileRefreshResult
     func openChromeAccountPage(for profile: PlusProfile) async throws
     func openChromeSignIn(for profile: PlusProfile) async throws
@@ -20,6 +21,10 @@ protocol PlusProfileDataServing: AnyObject {
     func closeChromeSignIn(for profile: PlusProfile) async
     func clearSession(for profile: PlusProfile) async throws
     func removeProfileData(for profile: PlusProfile) async throws
+}
+
+extension PlusProfileDataServing {
+    func openAppAuthorization(_ url: URL, for profile: PlusProfile) async throws { throw AppSignInRepairError.helperUnavailable }
 }
 
 @MainActor
@@ -33,6 +38,10 @@ final class PlusProfileDataService: PlusProfileDataServing {
     ) {
         self.runtimeProvider = runtimeProvider
         self.chromeSessionManager = chromeSessionManager
+    }
+
+    func openAppAuthorization(_ url: URL, for profile: PlusProfile) async throws {
+        try await chromeSessionManager.openAppAuthorization(url, for: profile)
     }
 
     func refreshProfile(_ profile: PlusProfile) async throws -> PlusProfileRefreshResult {

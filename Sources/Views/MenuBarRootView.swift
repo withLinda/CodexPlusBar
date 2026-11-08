@@ -167,7 +167,7 @@ struct MenuBarRootView: View {
                         .frame(width: 28, height: 28)
                 }
                 .buttonStyle(CodexQuietButtonStyle(horizontalPadding: 0, verticalPadding: 0))
-                .disabled(controller.isRefreshing)
+                .disabled(controller.isRefreshing || controller.appSignInRepairProgress != nil)
                 .keyboardShortcut("r")
                 .help(controller.isRefreshing ? "Refreshing profiles…" : "Refresh all profiles")
                 .accessibilityLabel("Refresh all profiles")
@@ -232,10 +232,10 @@ struct MenuBarRootView: View {
                     openManagerWindow: {
                         openManagerWindow(snapshot.id)
                     },
-                        switchAndOpen: snapshot.profile.codexSignIn == nil || !controller.switchingProfileIDs.isEmpty ? nil : {
+                        switchAndOpen: snapshot.profile.codexSignIn == nil || !controller.switchingProfileIDs.isEmpty || controller.appSignInRepairProgress != nil ? nil : {
                         Task<Void, Never> { @MainActor in await controller.switchAndOpen(profileID: snapshot.id) }
                     },
-                    switchOpenChamber: snapshot.profile.openCodeOpenAIAccount == nil || !controller.openCodeSwitchingProfileIDs.isEmpty ? nil : {
+                    switchOpenChamber: snapshot.profile.openCodeOpenAIAccount == nil || !controller.openCodeSwitchingProfileIDs.isEmpty || controller.openChamberCheckProgress != nil || controller.appSignInRepairProgress != nil ? nil : {
                         Task<Void, Never> { @MainActor in await controller.switchOpenChamberAuth(profileID: snapshot.id) }
                     },
                     copyProfileLabel: {
@@ -255,7 +255,7 @@ struct MenuBarRootView: View {
                         Button("Switch OpenChamber OpenAI") {
                             Task { await controller.switchOpenChamberAuth(profileID: snapshot.id) }
                         }
-                        .disabled(snapshot.profile.openCodeOpenAIAccount == nil || !controller.openCodeSwitchingProfileIDs.isEmpty)
+                        .disabled(snapshot.profile.openCodeOpenAIAccount == nil || !controller.openCodeSwitchingProfileIDs.isEmpty || controller.openChamberCheckProgress != nil || controller.appSignInRepairProgress != nil)
                         Divider()
                     }
                     Button(isPinned ? "Current" : "Show on top") {

@@ -60,6 +60,7 @@ private actor ChromeOperationLock {
 
 @MainActor
 protocol ChromeSessionManaging: AnyObject {
+    func openAppAuthorization(_ url: URL, for profile: PlusProfile) async throws
     func openAccountPage(for profile: PlusProfile) async throws
     func openSignIn(for profile: PlusProfile) async throws
     func openPasskeySetup(for profile: PlusProfile) async throws
@@ -77,12 +78,17 @@ protocol ChromeSessionManaging: AnyObject {
     func closeSignIn(for profile: PlusProfile) async
 }
 
+extension ChromeSessionManaging {
+    func openAppAuthorization(_ url: URL, for profile: PlusProfile) async throws { throw AppSignInRepairError.helperUnavailable }
+}
+
 @MainActor
 final class DefaultChromeSessionManager: ChromeSessionManaging {
     private enum ActiveSessionPurpose {
         case accountPage
         case signIn
         case passkeySetup
+        case appAuthorization
     }
 
     private struct ActiveSession {
@@ -107,6 +113,16 @@ final class DefaultChromeSessionManager: ChromeSessionManaging {
         self.launcher = launcher
         self.profileStore = profileStore ?? launcher.profileStore
         self.makeClient = makeClient
+    }
+
+    func openAppAuthorization(_ url: URL, for profile: PlusProfile) async throws {
+        try CodexBrowserAuthorization.validateURL(url)
+        try await withExclusiveOperation {
+            try await self.closeActiveSession()
+            let session = try await self.launcher.launch(profile: profile, mode: .visible, initialURL: url,
+                                                        requiresDevTools: false, storagePolicy: .signIn)
+            self.activeSession = ActiveSession(session: session, purpose: .appAuthorization, provider: profile.provider)
+        }
     }
 
     func openAccountPage(for profile: PlusProfile) async throws {

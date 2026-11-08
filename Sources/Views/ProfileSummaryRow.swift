@@ -45,13 +45,16 @@ struct ProfileSummaryRowPresentation: Equatable, Sendable {
     let pinActionSymbolName: String
     let pinActionAccessibilityLabel: String
     let searchPhoneNumber: String?
+    let needsOpenChamberSignIn: Bool
 
     init(
         snapshot: PlusProfileSnapshot,
         referenceDate: Date = .now,
         mode: ProfileSummaryRowMode,
-        searchPhoneNumber: String? = nil
+        searchPhoneNumber: String? = nil,
+        needsOpenChamberSignIn: Bool = false
     ) {
+        self.needsOpenChamberSignIn = needsOpenChamberSignIn
         provider = snapshot.profile.provider
         title = DisplayFormatter.privateProfileLabel(snapshot.label)
         tags = snapshot.tags
@@ -162,6 +165,7 @@ struct ProfileSummaryRow: View {
         displayOrdinal: Int? = nil,
         isKeyboardSelected: Bool = false,
         searchPhoneNumber: String? = nil,
+        needsOpenChamberSignIn: Bool = false,
         primaryAction: (() -> Void)? = nil,
         copyAction: (() -> Void)? = nil,
         emailAction: (() -> Void)? = nil,
@@ -174,7 +178,8 @@ struct ProfileSummaryRow: View {
                 snapshot: snapshot,
                 referenceDate: referenceDate,
                 mode: mode,
-                searchPhoneNumber: searchPhoneNumber
+                searchPhoneNumber: searchPhoneNumber,
+                needsOpenChamberSignIn: needsOpenChamberSignIn
             ),
             mode: mode,
             textScale: textScale,
@@ -333,6 +338,14 @@ struct ProfileSummaryRow: View {
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(CodexTheme.dataValueText)
                     .accessibilityLabel("Selected profile")
+            }
+
+            if presentation.needsOpenChamberSignIn {
+                Image(systemName: "exclamationmark.circle")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(CodexTheme.signInRepairAccentToken(preset: themeContext.preset).color)
+                    .accessibilityLabel("OpenChamber sign-in needed")
+                    .help("Sign in again in OpenChamber, then save this account’s current sign-in.")
             }
 
             if presentation.accessory != .none {
@@ -539,11 +552,13 @@ struct ProfileSummaryRow: View {
 
         return RoundedRectangle(cornerRadius: CodexTheme.fieldCornerRadius, style: .continuous)
             .fill(
-                CodexTheme.profileCardFillToken(
+                (presentation.needsOpenChamberSignIn
+                 ? CodexTheme.signInRepairFillToken(isSelected: isSelected, preset: themeContext.preset)
+                 : CodexTheme.profileCardFillToken(
                     for: presentation.provider,
                     isSelected: isSelected,
                     preset: themeContext.preset
-                ).color
+                )).color
             )
             .overlay {
                 if isHovered {

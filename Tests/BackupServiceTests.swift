@@ -4,6 +4,25 @@ import WebKit
 @testable import CodexPlusBar
 
 struct BackupServiceTests {
+    @Test func repairedDesktopVaultStillExportsAndRestores() async throws {
+        let f = try NativeSwitchFixture(); defer { f.cleanUp() }
+        let profile = try f.installTarget()
+        let signIn = try CodexSignIn(data: CodexSignInFixture.data(account: "selected", refresh: "repaired"))
+        try await f.service.installRepaired(signIn, for: profile)
+        let source = f.vault.directory.deletingLastPathComponent()
+        try ProfileCatalogStore(fileURL: source.appendingPathComponent("profiles.json")).saveProfiles([profile])
+        let archive = f.home.appendingPathComponent("backup")
+        try await BackupService(root: source).export(to: archive, password: "test backup password",
+            manifest: .init(profileCount: 1, preferences: .init(), cookies: [:]))
+        let restoredHome = f.home.appendingPathComponent("restored")
+        let restoredVault = CodexSignInVault(homeDirectory: restoredHome)
+        let importer = BackupService(root: restoredVault.directory.deletingLastPathComponent())
+        let prepared = try await importer.prepare(from: archive, password: "test backup password")
+        try await importer.commit(prepared)
+        #expect(try restoredVault.load(signIn.identity) == signIn)
+        #expect(restoredVault.hasRepairReceipt(for: signIn))
+    }
+
     @Test func oversizedPortableSessionsCannotProduceAnUnrestorableExport() async throws {
         let base = try backupTestDirectory()
         defer { try? FileManager.default.removeItem(at: base) }

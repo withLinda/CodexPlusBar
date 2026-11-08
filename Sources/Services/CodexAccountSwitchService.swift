@@ -97,6 +97,72 @@ actor CodexAccountSwitchService: CodexAccountSwitchServing {
         return signIn.identity
     }
 
+    /// Repair the saved account without switching an unrelated live desktop account.
+    func installRepaired(_ received: CodexSignIn, for profile: PlusProfile) async throws {
+        guard !isWorking else { throw CodexSignInError.busy }
+        isWorking = true; defer { isWorking = false }
+        try received.validateRepair(for: profile)
+        try await app.validateConfiguration()
+        let store = try resolveStore()
+        let original = try store.read()
+        let active = try original.map { try CodexSignIn(data: $0) }
+        let selected = active == nil || active?.identity.matches(received.identity) == true
+        let installed = vault.hasRepairReceipt(for: received)
+        let installedLive = try vault.repairWasInstalledLive(received, current: original)
+        var signIn = try vault.latestGeneration(of: received)
+        if installed {
+            // Once this grant has been installed, the destination can rotate it
+            // independently. A pending browser grant is no longer authoritative.
+            let current = try selected && installedLive
+                ? active.map { try vault.latestGeneration(of: $0) } : vault.load(received.identity)
+            if let current, current != signIn {
+                try current.validateRepair(for: profile)
+                try vault.saveRefreshed(current, replacing: signIn)
+                signIn = current
+            }
+        }
+        try store.validate(signIn)
+        try Task.checkCancellation()
+        if selected {
+            do { try await app.close() }
+            catch CodexDesktopCloseError.terminationStarted {
+                _ = await reopen(); throw CodexSignInError.appCouldNotClose
+            }
+        }
+        do {
+            try Task.checkCancellation()
+            guard try store.read() == original else { throw CodexSignInError.concurrentChange }
+            var expected = original
+            let repairingInstalledPair = installedLive || original == signIn.data
+            if selected, repairingInstalledPair, original != signIn.data {
+                try store.replace(with: signIn.data, expected: expected)
+                expected = signIn.data
+            }
+            let prepared = try await prepare(signIn) { fresh in
+                try self.vault.saveRefreshed(fresh, replacing: signIn)
+                // Settle consumed-token replacement before cancellation or a
+                // fallible usage verification can leave the app on the old pair.
+                if selected, repairingInstalledPair {
+                    try store.replace(with: fresh.data, expected: expected)
+                    expected = fresh.data
+                }
+            }
+            try vault.save(prepared)
+            try Task.checkCancellation()
+            if selected {
+                // Journal before committing: a lost receipt write or process exit
+                // must not make a later native rotation look like an old grant.
+                try vault.saveRepairIntent(for: received, previous: expected, target: prepared.data)
+                try store.replace(with: prepared.data, expected: expected)
+            }
+            try vault.saveRepairReceipt(for: received, live: selected)
+        } catch {
+            if selected { _ = await reopen() }
+            throw error
+        }
+        if selected, !(await reopen()) { throw CodexSignInError.reopenFailed }
+    }
+
     func switchAndOpen(profile: PlusProfile) async throws {
         guard !isWorking else { throw CodexSignInError.busy }
         isWorking = true

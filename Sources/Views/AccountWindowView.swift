@@ -425,7 +425,14 @@ struct ProfileManagerWindowView: View {
                 OpenChamberSyncStatusView(
                     message: controller.openChamberSyncMessage ?? "OpenChamber sync pending…",
                     isSyncing: controller.isOpenChamberSyncing,
-                    syncNow: { Task { await controller.syncOpenChamberNow() } }
+                    syncNow: { Task { await controller.syncOpenChamberNow() } },
+                    checkMessage: controller.openChamberSignInCheckMessage,
+                    checkProgress: controller.openChamberCheckProgress,
+                    repairCount: controller.openChamberSignInRepairCount,
+                    canCheck: controller.canCheckOpenChamberSignIns,
+                    isBusy: controller.isTransferring || !controller.openCodeSwitchingProfileIDs.isEmpty || controller.appSignInRepairProgress != nil,
+                    checkSignIns: { Task { await controller.checkAllOpenChamberSignIns() } },
+                    cancelCheck: { controller.cancelOpenChamberSignInCheck() }
                 )
             }
             .padding(.top, CodexTheme.chromePadding)
@@ -511,7 +518,7 @@ struct ProfileManagerWindowView: View {
                     Label(controller.isRefreshing ? "Refreshing…" : "Refresh all", systemImage: "arrow.clockwise")
                 }
                 .buttonStyle(CodexSecondaryButtonStyle())
-                .disabled(controller.isRefreshing || controller.profiles.isEmpty)
+                .disabled(controller.isRefreshing || controller.profiles.isEmpty || controller.appSignInRepairProgress != nil)
                 .keyboardShortcut("r", modifiers: [.command, .shift])
 
                 Button(action: addProfile) {
@@ -651,7 +658,8 @@ struct ProfileManagerWindowView: View {
                                             searchPhoneNumber: ProfileSearch.matchingPhoneNumber(
                                                 in: snapshot,
                                                 query: profileSearchQuery
-                                            )
+                                            ),
+                                            needsOpenChamberSignIn: controller.openChamberSignInNeedsRepair(for: snapshot.id)
                                         )
                                     }
                                     .buttonStyle(.plain)
@@ -704,8 +712,8 @@ struct ProfileManagerWindowView: View {
                             openChamberSaved: snapshot.profile.openCodeOpenAIAccount != nil,
                             desktopNeedsRepair: controller.desktopSignInNeedsRepair(for: snapshot.id),
                             openChamberNeedsRepair: controller.openChamberSignInNeedsRepair(for: snapshot.id),
-                            desktopWorking: !controller.switchingProfileIDs.isEmpty,
-                            openChamberWorking: !controller.openCodeSwitchingProfileIDs.isEmpty,
+                            desktopWorking: !controller.switchingProfileIDs.isEmpty || controller.appSignInRepairProgress != nil,
+                            openChamberWorking: !controller.openCodeSwitchingProfileIDs.isEmpty || controller.openChamberCheckProgress != nil || controller.appSignInRepairProgress != nil,
                             desktopStatus: controller.desktopSignInStatus.flatMap { $0.profileID == snapshot.id ? $0 : nil },
                             openChamberStatus: controller.openChamberActionStatus.flatMap { $0.profileID == snapshot.id ? $0 : nil }
                                 ?? (controller.openChamberSyncResult?.needsSignInProfileIDs.contains(snapshot.id) == true
@@ -714,11 +722,17 @@ struct ProfileManagerWindowView: View {
                             saveDesktop: { Task { await controller.saveDesktopSignIn(profileID: snapshot.id) } },
                             switchDesktop: { Task { await controller.switchAndOpen(profileID: snapshot.id) } },
                             saveOpenChamber: { Task { await controller.saveOpenChamberAuth(profileID: snapshot.id) } },
-                            switchOpenChamber: { Task { await controller.switchOpenChamberAuth(profileID: snapshot.id) } }
+                            switchOpenChamber: { Task { await controller.switchOpenChamberAuth(profileID: snapshot.id) } },
+                            repairProgress: controller.appSignInRepairProgress.flatMap { $0.profileID == snapshot.id ? $0 : nil },
+                            repairStatus: controller.appSignInRepairStatus.flatMap { $0.profileID == snapshot.id ? $0 : nil },
+                            canRepair: controller.canRepairAppSignIns,
+                            repairBoth: { Task { await controller.repairBothSignIns(profileID: snapshot.id) } },
+                            cancelRepair: { controller.cancelAppSignInRepair() }
                         )
                     }
 
                     profileDetailsSection(for: snapshot)
+                        .disabled(controller.appSignInRepairProgress?.profileID == snapshot.id)
                         .id("profile-details")
 
                     DisclosureGroup("Connection setup", isExpanded: $isConnectionSetupExpanded) {
@@ -728,7 +742,7 @@ struct ProfileManagerWindowView: View {
                                     Text(provider.displayName).tag(provider)
                                 }
                             }
-                            .disabled(snapshot.isRefreshing)
+                            .disabled(snapshot.isRefreshing || controller.appSignInRepairProgress != nil)
                             .pickerStyle(.menu)
 
                             if snapshot.state == .ready && !controller.isChromeSignInOpen(for: snapshot.id) {
@@ -1135,6 +1149,7 @@ struct ProfileManagerWindowView: View {
             .accessibilityLabel("More profile actions")
             Spacer(minLength: 0)
         }
+        .disabled(controller.appSignInRepairProgress != nil)
     }
 
     @ViewBuilder
@@ -1202,6 +1217,7 @@ struct ProfileManagerWindowView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .disabled(controller.appSignInRepairProgress != nil)
     }
 
     private var headerMetaText: String {

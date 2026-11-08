@@ -82,11 +82,15 @@ To add a login, use OpenChamber's device login code, select the matching CodexPl
 
 The visible **Remove** button beside **Refresh** removes the selected profile directly and schedules login synchronization. A retained active account stays selected. Removal of a surplus active account waits until OpenChamber reports no running sessions; unavailable idle status also defers removal.
 
-Missing logins can be restored from previously saved OAuth sign-ins. A profile with only a browser session shows **OpenChamber sign-in needed** until you sign in and save it. Other providers and API keys are preserved. Automatic sync needs OpenCode's native credential API (verified with OpenChamber 2.5.2 / OpenCode 2.1.4); legacy manual switching remains available on supported older runtimes.
+Missing logins can be restored from previously saved OAuth sign-ins. A profile with only a browser session shows **OpenChamber sign-in needed** until you sign in and save it, or use **Repair both**. Other providers and API keys are preserved. Automatic sync needs OpenCode's native credential API (verified with OpenChamber 2.6.1 / OpenCode 2.2.5); legacy manual switching remains available on supported older runtimes.
+
+**New in 1.5.0:** Choose **Check sign-ins** in Profile Manager to verify all saved OpenChamber sign-ins while keeping the same account selected. Expired tokens are refreshed when possible. Accounts confirmed to need sign-in are highlighted; **not checked** means verification could not finish, such as during a network failure. Choose **Cancel** to stop and keep the completed results. Browser usage and desktop sign-ins are checked separately from this action.
 
 ### Save and switch desktop sign-ins
 
 Select a Codex profile in Profile Manager. The **ChatGPT / Codex** and **OpenChamber** rows each show the action needed for that sign-in: **Save current sign-in** when missing or confirmed to need repair, and **Switch and open** (desktop) or **Switch** (OpenChamber) when saved.
+
+**New in 1.5.0:** **Repair both** updates both app sign-ins for the selected profile. Install ChatGPT / Codex, keep OpenChamber running, and complete the two authorization prompts in the profile’s Chrome window. Saving, account checks, and warning removal happen automatically. The apps receive separate sign-ins so their refresh tokens can rotate independently. If interrupted, choose **Repair both** again to resume. An unrelated account currently selected in either app stays selected; repairing the selected desktop account reopens ChatGPT / Codex.
 
 1. Sign in to the matching account in the desktop app.
 2. Select **Save current sign-in** in its ChatGPT / Codex row.
@@ -98,7 +102,7 @@ Desktop switching uses native Swift, Security, URLSession, and AppKit; `codex-au
 
 Supported desktop storage is the standard `~/.codex/auth.json`, direct macOS Keychain, or `auto` selection. Custom runtime authentication overrides, administrator-managed configuration, encrypted secret storage, and ephemeral credentials report an unsupported-configuration message. Keychain may ask for access. A failed switch reports credential recovery and app-reopening results separately.
 
-Native desktop sign-in switching is included in the **1.4.2 DMG** (introduced in 1.2.0).
+Native desktop sign-in switching is included in the **1.5.0 DMG** (introduced in 1.2.0).
 
 **Since 1.2.3:** Leftover ChatGPT crash-reporting and keyboard-monitor utilities no longer cause a false “could not close” error when switching accounts. CodexPlusBar recognizes only their specific bundle locations; the desktop, Codex app-server, renderers, and unknown helpers still need to exit before the saved sign-in can change.
 
@@ -171,7 +175,7 @@ CodexPlusBar reads the signed-in web services used by ChatGPT and Claude. These 
 
 The easiest way to install CodexPlusBar is the signed and notarized GitHub DMG. You do not need Xcode. One download supports both Apple silicon and Intel Macs running macOS 14 or newer.
 
-Version **1.4.2 (build 18)** adds [Canvas depth](#theme-depth): choose Original, Dim, or Deep dark surfaces, with live updates and backup support. It retains the 1.4.1 Email Tools backup fix, numbered accounts, keyboard navigation, shared zoom, draft protection, [encrypted backup and restore](#move-to-a-new-mac), automatic OpenChamber account sync, and native **ChatGPT / Codex** desktop switching. You do not need `codex-auth` or CodexAuthHelper. The download link below always downloads the latest published DMG; [the 1.4.2 release](https://github.com/withLinda/CodexPlusBar/releases/tag/v1.4.2) has version-specific downloads, release notes, and the checksum.
+Version **1.5.0 (build 19)** adds [Check sign-ins](#openchamber-account-sync) and [Repair both](#save-and-switch-desktop-sign-ins), and fixes reading expired OpenChamber credentials. It retains [Canvas depth](#theme-depth), keyboard navigation, shared zoom, [encrypted backup and restore](#move-to-a-new-mac), automatic OpenChamber account sync, and native **ChatGPT / Codex** desktop switching. You do not need `codex-auth` or CodexAuthHelper. The download link below always downloads the latest published DMG; [the 1.5.0 release](https://github.com/withLinda/CodexPlusBar/releases/tag/v1.5.0) has version-specific downloads, release notes, and the checksum.
 
 1. [Download `CodexPlusBar.dmg`](https://github.com/withLinda/CodexPlusBar/releases/latest/download/CodexPlusBar.dmg).
 2. If CodexPlusBar is already running, quit it from its menu bar panel.
@@ -190,23 +194,23 @@ cd ~/Downloads
 shasum -a 256 -c CodexPlusBar.dmg.sha256
 ```
 
-The expected result is `CodexPlusBar.dmg: OK`. If verification fails, download both files again from the [same release](https://github.com/withLinda/CodexPlusBar/releases/tag/v1.4.2) before installing.
+The expected result is `CodexPlusBar.dmg: OK`. If verification fails, download both files again from the [same release](https://github.com/withLinda/CodexPlusBar/releases/tag/v1.5.0) before installing.
 
 ### Update an existing installation
 
-To update from 1.4.1 or an earlier release, download the latest DMG and follow steps 2–4 above. Replacing the app keeps your saved profiles, saved desktop and OpenChamber sign-ins, and Chrome sign-ins in `~/Library/Application Support/CodexPlusBar`; you do not need to import them again. After updating the old Mac to 1.4.2, use **Settings → Backup & Transfer → Export Backup…** before moving to a new Mac. Install 1.4.2 or newer there to preserve the Canvas preference, then [restore the backup](#move-to-a-new-mac).
+To update from 1.4.2 or an earlier release, download the latest DMG and follow steps 2–4 above. Replacing the app keeps your saved profiles, saved desktop and OpenChamber sign-ins, and Chrome sign-ins in `~/Library/Application Support/CodexPlusBar`; you do not need to import them again. After updating, open Profile Manager and choose **Check sign-ins**. Select a highlighted account and choose **Repair both** to update its desktop and OpenChamber sign-ins, or save a sign-in manually as described above. Before moving to a new Mac, use **Settings → Backup & Transfer → Export Backup…**, install 1.5.0 or newer there, then [restore the backup](#move-to-a-new-mac).
 
 Existing unambiguous CodexAuthHelper snapshots are imported automatically when needed; if no saved desktop sign-in is available, sign in to Codex and choose **Save current sign-in**.
 
-After switching OpenChamber's OpenAI account, wait for **switched and verified**. If OpenChamber's Usage panel still shows an older result, refresh that panel. If the saved sign-in is rejected, sign in to that account again in OpenChamber and use **Save current sign-in** in CodexPlusBar before retrying.
+After switching OpenChamber's OpenAI account, wait for **switched and verified**. If OpenChamber's Usage panel still shows an older result, refresh that panel. If the saved sign-in is rejected, use **Repair both**, or sign in to that account again in OpenChamber and use **Save current sign-in** in CodexPlusBar before retrying.
 
 ### OpenChamber 2 compatibility
 
-The **1.4.2 DMG** retains recovery for missing connections observed with OpenChamber 2.0.2 and its bundled OpenCode 2.0.16, introduced in 1.1.5. Keep OpenChamber running locally with an OpenAI account connected, then use **Save current sign-in** or switch an already-saved profile in CodexPlusBar; no separate bridge installation is needed.
+The **1.5.0 DMG** supports OpenChamber 2.6.1 / OpenCode 2.2.5 and retains recovery for missing connections introduced in 1.1.5. Keep OpenChamber running locally, then use **Repair both**, **Save current sign-in**, or switch an already-saved profile in CodexPlusBar; no separate bridge installation is needed.
 
 If a saved connection was removed, CodexPlusBar can restore it from its saved sign-in after checking the account identity and verifying access with OpenAI. An unavailable bridge or unreadable response still reports an error. If the saved sign-in is missing, damaged, or no longer accepted, sign in again in OpenChamber and choose **Save current sign-in** before retrying.
 
-OpenCode 2 uses `/api/info` for instance verification and stores credentials in its database; the old `auth.json` is no longer the live sign-in store. CodexPlusBar uses a bundled, dependency-free bridge plugin in its own private location under Application Support. The bridge uses OpenCode's integration APIs to import saved sign-ins and its native credential activation API for subsequent switches, including the normal provider-reload notifications. Existing saved profiles are imported when first selected. OpenCode 1 keeps its existing file-based path.
+OpenCode 2 uses `/api/info` for instance verification and stores credentials in its database; the old `auth.json` is no longer the live sign-in store. CodexPlusBar checks API capabilities and prefers native stored-credential reads so an expired token can be handled explicitly rather than failing during an implicit refresh. Supported older V2 builds use the bundled, dependency-free bridge plugin in a private location under Application Support. Imports and switches use supported OpenCode APIs, including normal provider-reload notifications; CodexPlusBar does not write the database directly. Existing saved profiles are imported when first selected. OpenCode 1 keeps its existing file-based path.
 
 Compatibility checks:
 
@@ -219,7 +223,7 @@ OPENCHAMBER_TEST_SWIFT=1 python3 scripts/test_openchamber_v2_bridge.py
 TEST_RUNNER_OPENCHAMBER_RUNTIME_PROBE=1 TEST_RUNNER_OPENCHAMBER_V2_BRIDGE_PROBE=1 make test
 ```
 
-The isolated checks cover importing, switching back, deleting a native connection and recovering its saved sign-in, cross-location provider reloads, concurrent changes, and preserving the legacy file and other providers. The Swift tests also cover invalid snapshots, failed connection reads, and retries after token refresh. The installed-app probes read the current connection without switching accounts; OpenCode may refresh an expired credential while resolving it.
+The isolated checks cover importing, switching back, deleting a native connection and recovering its saved sign-in, cross-location provider reloads, concurrent changes, and preserving the legacy file and other providers. The Swift tests also cover expired stored credentials, bulk checks, active and inactive repairs, interrupted repair recovery, and callback-port reuse. The installed-app probes read connections without switching accounts; the native stored-credential path does not refresh on read, while older bridge-based runtimes may do so.
 
 ## Requirements
 
@@ -292,6 +296,7 @@ CodexPlusBar has no profile-sync server of its own. It connects directly to Chat
 
 - Profile data is stored at `~/Library/Application Support/CodexPlusBar/profiles.json`.
 - Saved desktop OAuth credentials and token-rotation recovery snapshots are stored in `~/Library/Application Support/CodexPlusBar/DesktopSignIns` (owner-only directory and files); the profile catalog contains only their account identity. These snapshots are not encrypted by CodexPlusBar.
+- Incomplete **Repair both** authorizations are kept in the owner-only `~/Library/Application Support/CodexPlusBar/AppSignInRepairs` folder so a retry can resume. They contain sign-in secrets and are not encrypted by CodexPlusBar; temporary pending authorizations are not included in backups.
 - Email Tools sessions are stored at `~/Library/Application Support/CodexPlusBar/dot-trick-sessions.json`.
 - Named Chrome profiles are stored at `~/Library/Application Support/CodexPlusBar/ChromeProfiles`.
 - Profile labels, links, passwords, 2FA keys, phone numbers, notes, and tags stay on your Mac.

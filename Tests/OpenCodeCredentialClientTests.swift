@@ -3,6 +3,27 @@ import Testing
 @testable import CodexPlusBar
 
 struct OpenCodeCredentialClientTests {
+    @Test func nativeCapabilityCheckDistinguishesOlderAPIsFromFailures() async throws {
+        let base = URL(string: "http://127.0.0.1:1234")!
+        let old = OpenCodeCredentialClient(baseURL: base, authorization: nil, request: { request in
+            (Data(#"{"paths":{"/api/credential":{"patch":{}}},"components":{"schemas":{}}}"#.utf8), nativeResponse(request, 200))
+        })
+        #expect(try await old.supportsStoredCredentials() == false)
+        for body in ["{}", "<html>App</html>",
+                     #"{"paths":{"/api/credential":null},"components":{"schemas":{}}}"#,
+                     #"{"paths":{"/api/credential":{"get":null,"post":{}}},"components":{"schemas":{}}}"#,
+                     #"{"paths":{"/api/credential":{"get":{},"post":{}}},"components":{"schemas":{"Credential.CreateInput":{"properties":[]}}}}"#] {
+            let malformed = OpenCodeCredentialClient(baseURL: base, authorization: nil, request: { request in
+                (Data(body.utf8), nativeResponse(request, 200))
+            })
+            await #expect(throws: OpenCodeCredentialError.invalidResponse) { try await malformed.supportsStoredCredentials() }
+        }
+        let failed = OpenCodeCredentialClient(baseURL: base, authorization: nil, request: { request in
+            (nativeCapabilityFixture(), nativeResponse(request, 500))
+        })
+        await #expect(throws: OpenCodeCredentialError.unavailable) { try await failed.supportsStoredCredentials() }
+    }
+
     @Test func malformedOpenAICredentialKindBlocksInventory() async throws {
         var entry = try nativeCredential("alpha")
         entry.value.fields.removeValue(forKey: "type")

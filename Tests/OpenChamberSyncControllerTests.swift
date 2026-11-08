@@ -4,6 +4,17 @@ import Testing
 
 @MainActor
 struct OpenChamberSyncControllerTests {
+    @Test func verifiedCheckClearsOnlyItsOwnPublishedSyncWarning() async throws {
+        let f = ControllerSyncFixture(); defer { f.remove() }
+        let a = try syncProfile(nativeCredential("alpha")), b = try syncProfile(nativeCredential("beta"))
+        let scheduler = OpenChamberSyncScheduler(service: MissingSignInsSyncService(), defaults: f.defaults)
+        scheduler.update(profiles: [a, b], trusted: true)
+        await scheduler.syncNow()
+        scheduler.clearSignInRepair(for: a.id)
+        #expect(scheduler.signInRepairProfileIDs == [b.id])
+        #expect(scheduler.result?.needsSignInProfileIDs == [b.id])
+    }
+
     @Test func confirmedRepairSurvivesCatalogChangeAndFailedSync() async throws {
         let f = ControllerSyncFixture(); defer { f.remove() }
         let a = try syncProfile(nativeCredential("alpha")), b = try syncProfile(nativeCredential("beta"))
@@ -241,9 +252,14 @@ struct CapturedSyncAuth: OpenCodeOpenAIAuthServing {
 final class SyncControllerDataService: PlusProfileDataServing {
     var removeBarrier: SyncBarrier?
     var refreshBarrier: SyncBarrier?
+    var holdFirstRefreshOnly = false
+    var clearBarrier: SyncBarrier?
     func removeProfileData(for profile: PlusProfile) async throws { if let removeBarrier { await removeBarrier.wait() } }
     func refreshProfile(_ profile: PlusProfile) async throws -> PlusProfileRefreshResult {
-        if let refreshBarrier { await refreshBarrier.wait() }
+        if let refreshBarrier {
+            if holdFirstRefreshOnly { self.refreshBarrier = nil }
+            await refreshBarrier.wait()
+        }
         throw ChatGPTAPIError.unauthorized
     }
     func openChromeSignIn(for profile: PlusProfile) async throws {}
@@ -252,7 +268,7 @@ final class SyncControllerDataService: PlusProfileDataServing {
     func syncChromeSession(for profile: PlusProfile) async throws {}
     func waitForChromeSignInToFinish(for profile: PlusProfile) async -> Bool { false }
     func closeChromeSignIn(for profile: PlusProfile) async {}
-    func clearSession(for profile: PlusProfile) async throws {}
+    func clearSession(for profile: PlusProfile) async throws { if let clearBarrier { await clearBarrier.wait() } }
 }
 
 actor SyncTestClock {

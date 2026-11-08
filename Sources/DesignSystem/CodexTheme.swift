@@ -868,6 +868,18 @@ enum CodexTheme {
         ).color
     }
 
+    static func signInRepairFillToken(isSelected: Bool, preset: CodexThemePreset) -> CodexColorToken {
+        let base = isSelected ? surfaceToken(for: .strong, preset: preset) : palette(for: preset).bg0
+        return base.mixed(with: palette(for: preset).bgRed, fraction: palette(for: preset).isDark ? 0.70 : 0.90)
+    }
+
+    static func signInRepairAccentToken(preset: CodexThemePreset) -> CodexColorToken {
+        readableAccentToken(palette(for: preset).accRed, preset: preset, additionalBackgrounds: [
+            signInRepairFillToken(isSelected: false, preset: preset),
+            signInRepairFillToken(isSelected: true, preset: preset)
+        ])
+    }
+
     static func profileProviderAccentToken(
         for provider: ProfileProvider,
         isSelected: Bool = false,

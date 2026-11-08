@@ -2,6 +2,37 @@
 import AppKit
 import SwiftUI
 
+private struct PreviewSignInChecker: OpenChamberSignInChecking {
+    var slow = false
+    func check(profiles: [PlusProfile], didCheck: @escaping @Sendable (OpenChamberSignInCheckUpdate) async -> Void) async throws {
+        for (index, profile) in profiles.enumerated() {
+            if slow { try await Task.sleep(for: .seconds(1)) }
+            try Task.checkCancellation()
+            await didCheck(.init(profileID: profile.id, record: .init(identityKey: profile.openCodeOpenAIAccount?.storageKey,
+                outcome: index == 0 || index == 2 ? .needsSignIn : .verified, checkedAt: .now)))
+        }
+    }
+}
+
+private struct PreviewRepairService: AppSignInRepairing {
+    var slow = false
+    var partial = false
+    func repair(profile: PlusProfile, openURL: @escaping @Sendable (URL) async throws -> Void,
+                progress: @escaping @Sendable (AppSignInRepairProgress) async -> Void,
+                completed: @escaping @Sendable (AppSignInRepairCompletion) async throws -> Void,
+                isCurrent: @escaping @Sendable () async -> Bool) async throws {
+        let identity = profile.codexSignIn ?? .init(accountID: "preview", userID: "preview", email: profile.label)
+        for destination in AppSignInDestination.allCases {
+            await progress(.init(profileID: profile.id, destination: destination,
+                message: "\(destination == .desktop ? "1" : "2") of 2 · Sign in to \(destination.title) in Chrome."))
+            if slow { try await Task.sleep(for: .seconds(60)) }
+            try Task.checkCancellation()
+            if partial && destination == .openChamber { throw AppSignInRepairError.denied }
+            try await completed(.init(destination: destination, identity: identity))
+        }
+    }
+}
+
 // The real menu-bar popover becomes key. Let its borderless QA host do the same
 // so native keyboard checks exercise the production window-scoped shortcuts.
 private final class PreviewWindow: NSWindow {
@@ -54,6 +85,8 @@ enum DesignPreview {
             accountSwitchService: PreviewDesktopService(failure: arguments.contains("--sign-in-error") ? .unauthorized : arguments.contains("--sign-in-network-error") ? .unavailable : nil),
             openCodeAuthService: PreviewOpenCodeService(failure: arguments.contains("--sign-in-error") ? .reauthenticationRequired : arguments.contains("--sign-in-network-error") ? .unavailable : nil),
             syncService: PreviewSyncService(),
+            signInChecker: PreviewSignInChecker(slow: arguments.contains("--check-progress")),
+            repairService: PreviewRepairService(slow: arguments.contains("--repair-progress"), partial: arguments.contains("--repair-partial")),
             autoStart: false
         )
         let now = Date(timeIntervalSince1970: 1_789_473_600)
@@ -64,6 +97,12 @@ enum DesignPreview {
             controller.profiles[0] = first.updating(profile: profile)
         }
         controller.selectedProfileID = controller.profiles.first?.id
+        if arguments.contains(where: { $0.hasPrefix("--repair-") }), let first = controller.profiles.first {
+            Task { await controller.repairBothSignIns(profileID: first.id) }
+        }
+        if arguments.contains("--check-sign-ins") || arguments.contains("--check-progress") {
+            Task { await controller.checkAllOpenChamberSignIns() }
+        }
         commands.restoreAction = {
             guard let original = controller.selectedProfile?.profile else { return }
             do {

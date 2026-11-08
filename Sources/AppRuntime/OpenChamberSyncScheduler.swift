@@ -31,6 +31,18 @@ final class OpenChamberSyncScheduler {
 
     func resetSignInRepairState() { signInRepairProfileIDs.removeAll() }
 
+    func clearSignInRepair(for profileID: UUID) {
+        signInRepairProfileIDs.remove(profileID)
+        if let previous = result, previous.needsSignInProfileIDs.contains(profileID) {
+            result = .init(matchedCount: previous.matchedCount, totalCount: previous.totalCount,
+                           needsSignInProfileIDs: previous.needsSignInProfileIDs.subtracting([profileID]),
+                           pendingCredentialCount: previous.pendingCredentialCount,
+                           deferredActiveRemoval: previous.deferredActiveRemoval,
+                           deferredRestoreProfileIDs: previous.deferredRestoreProfileIDs.subtracting([profileID]))
+            message = "OpenChamber sync pending…"
+        }
+    }
+
     func update(profiles: [PlusProfile], trusted: Bool) {
         let changed = catalog.isTrusted != trusted || keys(catalog.profiles) != keys(profiles)
         catalog = .init(generation: catalog.generation &+ (changed ? 1 : 0), profiles: profiles, isTrusted: trusted)
@@ -78,17 +90,8 @@ final class OpenChamberSyncScheduler {
         await operation?.value
     }
     func resumeAfterManualOperation(repairedProfileID: UUID? = nil) {
-        if let repairedProfileID { signInRepairProfileIDs.remove(repairedProfileID) }
         // Manual repair supersedes this profile's old report, not another profile's warning.
-        if let repairedProfileID, let previous = result,
-           previous.needsSignInProfileIDs.contains(repairedProfileID) {
-            result = .init(matchedCount: previous.matchedCount, totalCount: previous.totalCount,
-                           needsSignInProfileIDs: previous.needsSignInProfileIDs.subtracting([repairedProfileID]),
-                           pendingCredentialCount: previous.pendingCredentialCount,
-                           deferredActiveRemoval: previous.deferredActiveRemoval,
-                           deferredRestoreProfileIDs: previous.deferredRestoreProfileIDs.subtracting([repairedProfileID]))
-            message = "OpenChamber sync pending…"
-        }
+        if let repairedProfileID { clearSignInRepair(for: repairedProfileID) }
         manual = false
         schedule()
     }

@@ -4,6 +4,78 @@ import Testing
 
 struct OpenChamberSyncIntegrationTests {
     @Test(.enabled(if: ProcessInfo.processInfo.environment["OPENCHAMBER_V2_TEST_URL"] != nil))
+    func isolatedRepairReplacesActiveAndInactiveCredentials() async throws {
+        try await IsolatedOpenChamberTestGate.shared.run {
+            let raw = try #require(ProcessInfo.processInfo.environment["OPENCHAMBER_V2_TEST_URL"])
+            let url = try #require(URL(string: raw))
+            let directory = try #require(ProcessInfo.processInfo.environment["OPENCHAMBER_NATIVE_TEST_DIRECTORY"])
+            let home = try CodexSignInFixture.directory(); defer { try? FileManager.default.removeItem(at: home) }
+            let client = OpenCodeCredentialClient(baseURL: url,
+                authorization: "Basic " + Data("opencode:fixture-password".utf8).base64EncodedString(), directory: directory)
+            let original = try await client.inventory()
+            for active in [false, true] {
+                let fresh = try CodexSignIn(data: CodexSignInFixture.data(account: "repair-\(active)", refresh: "repair-fresh-\(active)"))
+                var old = try OpenCodeCredentialValue.legacy(fresh.openChamberAuth())
+                old.fields["refresh"] = .string("repair-old-\(active)")
+                old.fields["metadata"] = .object(["accountID": .string(fresh.identity.accountID), "extra": .string("keep")])
+                let entry = try await client.create(id: "cred_test_repair_\(active)", label: "Repair", value: old, activate: active)
+                #expect(entry.value.fields["metadata"] == old.fields["metadata"])
+                let installer = OpenChamberRepairInstaller(resolveClient: { client }, snapshots: .init(homeDirectory: home), verifier: SyncTestVerifier(), gate: .init())
+                try await installer.install(fresh, for: CodexSignInFixture.profile())
+                let after = try await client.inventory()
+                let saved = try #require(after.oauth.first { (try? $0.value.auth().refresh) == fresh.refreshToken })
+                #expect(saved.value.fields["metadata"] == old.fields["metadata"])
+                #expect(!after.entries.contains { $0.id == entry.id })
+                #expect(after.openAI.first(where: \.active)?.id == (active ? saved.id : original.openAI.first(where: \.active)?.id))
+                try await installer.install(fresh, for: CodexSignInFixture.profile())
+                #expect(try await client.inventory().entries == after.entries)
+                if let selected = original.openAI.first(where: \.active) { try await client.activate(id: selected.id) }
+                try await client.remove(id: saved.id)
+            }
+            #expect(try await client.inventory().entries.sorted { $0.id < $1.id } == original.entries.sorted { $0.id < $1.id })
+        }
+    }
+
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["OPENCHAMBER_V2_TEST_URL"] != nil))
+    func isolatedBulkCheckRefreshesWithoutCyclingAccounts() async throws {
+        try await IsolatedOpenChamberTestGate.shared.run {
+            let raw = try #require(ProcessInfo.processInfo.environment["OPENCHAMBER_V2_TEST_URL"])
+            let url = try #require(URL(string: raw))
+            let directory = try #require(ProcessInfo.processInfo.environment["OPENCHAMBER_NATIVE_TEST_DIRECTORY"])
+            let fixture = try OpenCodeAuthFixture(root: URL(fileURLWithPath: directory)); defer { fixture.remove() }
+            let client = OpenCodeCredentialClient(baseURL: url,
+                authorization: "Basic " + Data("opencode:fixture-password".utf8).base64EncodedString(), directory: directory)
+            let original = try await client.inventory()
+            let snapshots = OpenCodeSignInSnapshotStore(homeDirectory: fixture.home)
+            let expired = try fixture.auth("bulk-check", expires: 0)
+            let fresh = try fixture.auth("bulk-check", refresh: "rotated-bulk-check")
+            var value = OpenCodeCredentialValue.legacy(expired)
+            value.fields["metadata"] = .object(["accountID": .string(expired.accountId), "extra": .string("keep")])
+            // Exercise both inactive checking and repair of the already-selected account.
+            for active in [false, true] {
+                let entry = try await client.create(id: "cred_bulk_check_\(active)", label: "Bulk check", value: value, activate: active)
+                #expect(entry.value.fields["metadata"] == .object(["accountID": .string(expired.accountId), "extra": .string("keep")]))
+                let output = CheckOutput()
+                let checker = OpenChamberSignInCheckService(resolveClient: { client }, snapshots: snapshots,
+                    verifier: CheckRefreshVerifier(fresh: fresh), gate: .init(), now: { OpenCodeAuthFixture.now })
+                try await checker.check(profiles: [syncProfile(entry)]) { await output.append($0) }
+                #expect(await output.values.first?.record.outcome == .verified)
+                let after = try await client.inventory()
+                let replacement = try #require(after.oauth.first { (try? $0.value.auth()) == fresh })
+                #expect(replacement.value.fields["metadata"] == .object(["accountID": .string(expired.accountId), "extra": .string("keep")]))
+                #expect(!after.entries.contains { $0.id == entry.id })
+                #expect(after.openAI.first(where: \.active)?.id == (active ? replacement.id : original.openAI.first(where: \.active)?.id))
+                for untouched in original.entries {
+                    #expect(after.entries.first(where: { $0.id == untouched.id })?.value == untouched.value)
+                }
+                if let selected = original.openAI.first(where: \.active) { try await client.activate(id: selected.id) }
+                try await client.remove(id: replacement.id)
+            }
+            #expect(try await client.inventory().entries.sorted { $0.id < $1.id } == original.entries.sorted { $0.id < $1.id })
+        }
+    }
+
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["OPENCHAMBER_V2_TEST_URL"] != nil))
     func isolatedNativeReconciliationThroughProductionClient() async throws {
         try await IsolatedOpenChamberTestGate.shared.run { try await exerciseNativeSync() }
     }

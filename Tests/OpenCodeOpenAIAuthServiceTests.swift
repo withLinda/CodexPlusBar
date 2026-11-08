@@ -187,8 +187,8 @@ struct OpenCodeAuthFixture: Sendable {
     let authURL: URL
     let service: OpenCodeOpenAIAuthService
 
-    init() throws {
-        home = FileManager.default.temporaryDirectory.appendingPathComponent("openchamber-test-\(UUID())")
+    init(root: URL = FileManager.default.temporaryDirectory) throws {
+        home = root.appendingPathComponent("openchamber-test-\(UUID())")
         authURL = home.appendingPathComponent(".local/share/opencode/auth.json")
         try FileManager.default.createDirectory(at: authURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         let runtime = OpenCodeLocalRuntime(authURL: authURL)

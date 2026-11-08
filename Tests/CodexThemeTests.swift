@@ -3,6 +3,22 @@ import Testing
 @testable import CodexPlusBar
 
 struct CodexThemeTests {
+    @Test func signInRepairRowsRemainReadableAcrossThemes() {
+        for preset in CodexThemePreset.allCases {
+            let palette = CodexTheme.palette(for: preset)
+            for selected in [false, true] {
+                let fill = CodexTheme.signInRepairFillToken(isSelected: selected, preset: preset)
+                for text in [palette.strongText, palette.primaryText, palette.supportText, palette.dataValueText,
+                             CodexTheme.signInRepairAccentToken(preset: preset),
+                             CodexTheme.profileProviderAccentToken(for: .codex, preset: preset)] {
+                    #expect(contrastRatio(text, fill) >= 4.5, "\(preset.id) repair row text must remain readable")
+                }
+                let ordinary = CodexTheme.profileCardFillToken(for: .codex, isSelected: selected, preset: preset)
+                #expect(deltaE76(fill, ordinary) >= 4, "\(preset.id) repair fill must be distinguishable")
+            }
+        }
+    }
+
     @Test func appSignInTextAndControlStatesMeetWCAGAndDeltaLStar() {
         for preset in CodexThemePreset.allCases {
             let palette = CodexTheme.palette(for: preset)

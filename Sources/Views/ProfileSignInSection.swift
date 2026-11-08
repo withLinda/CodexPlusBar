@@ -30,6 +30,11 @@ struct ProfileSignInSection: View {
     let switchDesktop: () -> Void
     let saveOpenChamber: () -> Void
     let switchOpenChamber: () -> Void
+    var repairProgress: AppSignInRepairProgress? = nil
+    var repairStatus: OpenChamberActionStatus? = nil
+    var canRepair: Bool = true
+    var repairBoth: () -> Void = {}
+    var cancelRepair: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -46,7 +51,26 @@ struct ProfileSignInSection: View {
                                 status: openChamberStatus,
                                 saveHelp: "Sign in to this account in OpenChamber first, then save its current OpenAI sign-in.",
                                 switchHelp: "Verify and switch the local OpenAI connection for new requests.",
-                                save: saveOpenChamber, switchAccount: switchOpenChamber)
+                                 save: saveOpenChamber, switchAccount: switchOpenChamber)
+            HStack(alignment: .center, spacing: 12) {
+                if let message = repairProgress?.message ?? repairStatus?.message {
+                    Text(message)
+                        .font(.system(size: 13))
+                        .foregroundStyle(CodexTheme.statusForegroundToken(for: repairStatus?.tone ?? .info, preset: themeContext.preset).color)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("app-sign-in-repair-status")
+                }
+                Spacer(minLength: 0)
+                Button(repairProgress == nil ? "Repair both" : "Cancel",
+                       systemImage: repairProgress == nil ? "arrow.triangle.2.circlepath" : "xmark") {
+                    if repairProgress == nil { repairBoth() } else { cancelRepair() }
+                }
+                .buttonStyle(CodexQuietButtonStyle(font: .system(size: 13), horizontalPadding: 10))
+                .fixedSize()
+                .disabled(repairProgress == nil && !canRepair)
+                .accessibilityLabel(repairProgress == nil ? "Repair both app sign-ins" : "Cancel app sign-in repair")
+                .help("Sign in for each app in Chrome. Both saved sign-ins update automatically; the desktop reopens only when repairing its current account.")
+            }
         }
         .padding(12)
         .background(CodexTheme.surfaceToken(for: .subtle, preset: themeContext.preset).color,

@@ -81,6 +81,17 @@ final class PlusProfileController {
     var desktopSignInStatus: OpenChamberActionStatus?
     private var desktopSignInRepairProfileIDs: Set<UUID> = []
     private var openChamberSignInRepairProfileIDs: Set<UUID> = []
+    private(set) var openChamberCheckProgress: OpenChamberSignInCheckProgress?
+    private(set) var openChamberCheckError: String?
+    private var openChamberUncheckedProfileIDs: Set<UUID>?
+    @ObservationIgnored private var openChamberCheckTask: Task<Void, Never>?
+    @ObservationIgnored private let signInChecker: any OpenChamberSignInChecking
+    private(set) var appSignInRepairProgress: AppSignInRepairProgress?
+    private(set) var appSignInRepairStatus: OpenChamberActionStatus?
+    @ObservationIgnored private var appSignInRepairTask: Task<Void, Never>?
+    @ObservationIgnored private var repairExpectedProfile: PlusProfile?
+    @ObservationIgnored private var repairedDestinations: [AppSignInDestination] = []
+    @ObservationIgnored private let repairService: any AppSignInRepairing
     var openChamberSyncResult: OpenChamberSyncResult? { syncScheduler.result }
     var openChamberSyncMessage: String? { syncScheduler.message }
     var isOpenChamberSyncing: Bool { syncScheduler.isSyncing }
@@ -103,6 +114,8 @@ final class PlusProfileController {
         accountSwitchService: any CodexAccountSwitchServing = CodexAccountSwitchService(),
         openCodeAuthService: any OpenCodeOpenAIAuthServing = OpenCodeOpenAIAuthService(),
         syncService: any OpenChamberSyncServing = OpenChamberSyncService(),
+        signInChecker: any OpenChamberSignInChecking = OpenChamberSignInCheckService(),
+        repairService: any AppSignInRepairing = AppSignInRepairService(),
         syncDefaults: UserDefaults = .standard,
         autoRefreshInterval: TimeInterval = 300,
         maxConcurrentProfileRefreshes: Int = 3,
@@ -115,6 +128,8 @@ final class PlusProfileController {
         self.dataService = dataService
         self.accountSwitchService = accountSwitchService
         self.openCodeAuthService = openCodeAuthService
+        self.signInChecker = signInChecker
+        self.repairService = repairService
         self.syncScheduler = OpenChamberSyncScheduler(service: syncService, defaults: syncDefaults)
         self.autoRefreshIntervalNanoseconds = UInt64(autoRefreshInterval * 1_000_000_000)
         self.maxConcurrentProfileRefreshes = max(1, maxConcurrentProfileRefreshes)
@@ -152,6 +167,8 @@ final class PlusProfileController {
     func pauseForBackup() async throws {
         guard !isTransferring else { throw BackupError.busy }
         isTransferring = true
+        openChamberCheckTask?.cancel()
+        appSignInRepairTask?.cancel()
         bootstrapTask?.cancel(); autoRefreshTask?.cancel()
         await syncScheduler.pauseForManualOperation()
         // Closing the app-owned sign-in session releases its return-to-app waiter.
@@ -183,6 +200,8 @@ final class PlusProfileController {
     }
 
     deinit {
+        appSignInRepairTask?.cancel()
+        openChamberCheckTask?.cancel()
         bootstrapTask?.cancel()
         autoRefreshTask?.cancel()
     }
@@ -366,7 +385,7 @@ final class PlusProfileController {
         _ provider: ProfileProvider,
         for profileID: UUID
     ) async -> Bool {
-        guard !isTransferring else { return false }
+        guard !isTransferring, appSignInRepairProgress == nil else { return false }
         activeDataOperations += 1
         defer { activeDataOperations -= 1 }
         guard let index = indexOfProfile(profileID) else {
@@ -408,7 +427,7 @@ final class PlusProfileController {
 
     @discardableResult
     func updateDetails(for profileID: UUID, draft: PlusProfileDetailsDraft) -> Bool {
-        guard !isTransferring else { return false }
+        guard !isTransferring, appSignInRepairProgress?.profileID != profileID else { return false }
         guard let index = indexOfProfile(profileID) else {
             return false
         }
@@ -469,7 +488,7 @@ final class PlusProfileController {
     }
 
     func refreshAll() async {
-        guard !isTransferring else { return }
+        guard !isTransferring, appSignInRepairProgress == nil else { return }
         guard isRefreshing == false else { return }
         guard profiles.isEmpty == false else {
             statusMessage = "Add a profile, then sign in one by one."
@@ -508,7 +527,7 @@ final class PlusProfileController {
     }
 
     func switchAndOpen(profileID: UUID) async {
-        guard !isTransferring else { return }
+        guard !isTransferring, appSignInRepairProgress == nil else { return }
         activeDataOperations += 1
         defer { activeDataOperations -= 1 }
         guard switchingProfileIDs.isEmpty, let index = indexOfProfile(profileID),
@@ -534,7 +553,7 @@ final class PlusProfileController {
     }
 
     func saveDesktopSignIn(profileID: UUID) async {
-        guard !isTransferring else { return }
+        guard !isTransferring, appSignInRepairProgress == nil else { return }
         activeDataOperations += 1
         defer { activeDataOperations -= 1 }
         guard switchingProfileIDs.isEmpty, let index = indexOfProfile(profileID),
@@ -581,13 +600,201 @@ final class PlusProfileController {
         desktopSignInRepairProfileIDs.contains(profileID)
     }
 
+    var canRepairAppSignIns: Bool {
+        !isTransferring && appSignInRepairProgress == nil && openChamberCheckProgress == nil
+            && switchingProfileIDs.isEmpty && openCodeSwitchingProfileIDs.isEmpty && chromeSignInProfileIDs.isEmpty
+    }
+
+    func repairBothSignIns(profileID: UUID) async {
+        guard canRepairAppSignIns, let profile = profiles.first(where: { $0.id == profileID })?.profile,
+              profile.provider == .codex else { return }
+        repairExpectedProfile = profile
+        repairedDestinations = []
+        appSignInRepairStatus = nil
+        desktopSignInStatus = nil; openChamberActionStatus = nil
+        appSignInRepairProgress = .init(profileID: profileID, destination: .desktop, message: "Preparing sign-in repair…")
+        activeDataOperations += 1
+        let task = Task { [weak self, repairService] in
+            guard let self else { return }
+            await syncScheduler.pauseForManualOperation()
+            do {
+                // Existing browser work drains before the authorization window takes ownership.
+                while activeDataOperations > 1 || isRefreshing {
+                    try await Task.sleep(for: .milliseconds(50))
+                }
+                try Task.checkCancellation()
+                try await repairService.repair(profile: profile, openURL: { [weak self] url in
+                    guard let self else { throw CancellationError() }
+                    try await self.openRepairAuthorization(url, profile: profile)
+                }, progress: { [weak self] progress in
+                    await self?.setRepairProgress(progress)
+                }, completed: { [weak self] completion in
+                    guard let self else { throw CancellationError() }
+                    try await self.applyRepairCompletion(completion)
+                }, isCurrent: { [weak self] in await self?.repairProfileIsCurrent() == true })
+                appSignInRepairStatus = .init(profileID: profileID, message: "Both app sign-ins updated.", tone: .success)
+            } catch {
+                let message: String
+                if error is CancellationError { message = "Repair cancelled." }
+                else if let error = error as? AppSignInRepairError { message = error.localizedDescription }
+                else if let error = error as? CodexSignInError { message = error.localizedDescription }
+                else if let error = error as? OpenCodeCredentialError { message = error.localizedDescription }
+                else if let error = error as? OpenCodeOpenAIVerificationError { message = error.localizedDescription }
+                else { message = "Repair could not finish. Try again." }
+                let prefix = repairedDestinations.isEmpty ? "" : repairedDestinations.map(\.title).joined(separator: " and ") + " updated. "
+                appSignInRepairStatus = .init(profileID: profileID, message: prefix + message,
+                    tone: error is CancellationError ? .neutral : .warning)
+            }
+            await dataService.closeChromeSignIn(for: profile)
+            appSignInRepairProgress = nil; repairExpectedProfile = nil; appSignInRepairTask = nil
+            activeDataOperations -= 1
+            syncScheduler.resumeAfterManualOperation()
+        }
+        appSignInRepairTask = task
+        await withTaskCancellationHandler { await task.value } onCancel: { task.cancel() }
+    }
+
+    func cancelAppSignInRepair() { appSignInRepairTask?.cancel() }
+
+    private func openRepairAuthorization(_ url: URL, profile: PlusProfile) async throws {
+        try Task.checkCancellation()
+        guard repairProfileIsCurrent() else { throw AppSignInRepairError.changed }
+        try await dataService.openAppAuthorization(url, for: profile)
+    }
+
+    private func setRepairProgress(_ progress: AppSignInRepairProgress) {
+        appSignInRepairProgress = progress
+    }
+
+    private func repairProfileIsCurrent() -> Bool {
+        guard let expected = repairExpectedProfile, let current = profiles.first(where: { $0.id == expected.id })?.profile else { return false }
+        return current.provider == expected.provider && current.label == expected.label
+            && current.codexSignIn == expected.codexSignIn && current.openCodeOpenAIAccount == expected.openCodeOpenAIAccount
+    }
+
+    private func applyRepairCompletion(_ completion: AppSignInRepairCompletion) throws {
+        guard repairProfileIsCurrent(), let expected = repairExpectedProfile, let index = indexOfProfile(expected.id) else {
+            throw AppSignInRepairError.changed
+        }
+        let previous = profiles[index]
+        var updated = previous.profile
+        switch completion.destination {
+        case .desktop: updated.codexSignIn = completion.identity
+        case .openChamber:
+            let identity = OpenCodeOpenAIIdentity(accountID: completion.identity.accountID, userID: completion.identity.userID, email: completion.identity.email)
+            updated.openCodeOpenAIAccount = identity
+            updated.openChamberSignInCheck = .init(identityKey: identity.storageKey, outcome: .verified, checkedAt: .now)
+        }
+        profiles[index] = previous.updating(profile: updated)
+        guard persistProfiles() else { profiles[index] = previous; throw AppSignInRepairError.storageFailed }
+        repairExpectedProfile = updated
+        repairedDestinations.append(completion.destination)
+        switch completion.destination {
+        case .desktop: desktopSignInRepairProfileIDs.remove(updated.id)
+        case .openChamber:
+            openChamberSignInRepairProfileIDs.remove(updated.id)
+            openChamberUncheckedProfileIDs?.remove(updated.id)
+            syncScheduler.clearSignInRepair(for: updated.id)
+        }
+    }
+
     func openChamberSignInNeedsRepair(for profileID: UUID) -> Bool {
-        openChamberSignInRepairProfileIDs.contains(profileID)
+        guard let profile = profiles.first(where: { $0.id == profileID })?.profile, profile.provider == .codex else { return false }
+        return profile.currentOpenChamberSignInCheck?.outcome == .needsSignIn
+            || openChamberSignInRepairProfileIDs.contains(profileID)
             || syncScheduler.signInRepairProfileIDs.contains(profileID)
     }
 
+    var canCheckOpenChamberSignIns: Bool {
+        !isTransferring && appSignInRepairProgress == nil && openChamberCheckProgress == nil && openCodeSwitchingProfileIDs.isEmpty
+            && profiles.contains { $0.profile.provider == .codex }
+    }
+
+    var openChamberSignInRepairCount: Int {
+        profiles.filter { openChamberSignInNeedsRepair(for: $0.id) }.count
+    }
+
+    var openChamberSignInCheckMessage: String? {
+        let count = openChamberSignInRepairCount
+        if let progress = openChamberCheckProgress {
+            return "Checking OpenChamber · \(progress.completed)/\(progress.total) · \(count) need sign-in"
+        }
+        let eligible = profiles.filter { $0.profile.provider == .codex }
+        let hasEvidence = eligible.contains { $0.profile.currentOpenChamberSignInCheck != nil }
+        guard hasEvidence || count > 0 || openChamberUncheckedProfileIDs != nil || openChamberCheckError != nil else { return nil }
+        let unchecked = eligible.filter { snapshot in
+            let outcome = snapshot.profile.currentOpenChamberSignInCheck?.outcome
+            return openChamberUncheckedProfileIDs?.contains(snapshot.id) == true || outcome == nil || outcome == .unchecked
+        }.count
+        return "OpenChamber · \(count) need sign-in" + (unchecked > 0 ? " · \(unchecked) not checked" : "")
+            + (openChamberCheckError.map { " · \($0)" } ?? "")
+    }
+
+    func checkAllOpenChamberSignIns() async {
+        guard canCheckOpenChamberSignIns else { return }
+        let input = profiles.map(\.profile).filter { $0.provider == .codex }
+        openChamberCheckProgress = .init(completed: 0, total: input.count)
+        openChamberUncheckedProfileIDs = Set(input.map(\.id))
+        openChamberCheckError = nil
+        activeDataOperations += 1
+        let task = Task { [weak self, signInChecker] in
+            guard let self else { return }
+            await syncScheduler.pauseForManualOperation()
+            defer {
+                openChamberCheckProgress = nil
+                activeDataOperations -= 1
+                openChamberCheckTask = nil
+                syncScheduler.resumeAfterManualOperation()
+            }
+            do {
+                try Task.checkCancellation()
+                try await signInChecker.check(profiles: input) { [weak self] update in
+                    await self?.applySignInCheck(update)
+                }
+            } catch is CancellationError {
+                // Keep completed results and show the remaining unchecked count.
+            } catch {
+                openChamberCheckError = "Check unavailable. Open local OpenChamber and retry."
+            }
+        }
+        openChamberCheckTask = task
+        await withTaskCancellationHandler { await task.value } onCancel: { task.cancel() }
+    }
+
+    func cancelOpenChamberSignInCheck() { openChamberCheckTask?.cancel() }
+
+    private func applySignInCheck(_ update: OpenChamberSignInCheckUpdate) {
+        openChamberCheckProgress?.completed += 1
+        guard let index = indexOfProfile(update.profileID), profiles[index].profile.provider == .codex,
+              profiles[index].profile.openCodeOpenAIAccount?.storageKey == update.record.identityKey else { return }
+        var profile = profiles[index].profile
+        if update.record.outcome != .unchecked {
+            openChamberUncheckedProfileIDs?.remove(profile.id)
+            if update.record.outcome == .verified {
+                openChamberSignInRepairProfileIDs.remove(profile.id)
+                syncScheduler.clearSignInRepair(for: profile.id)
+            } else { openChamberSignInRepairProfileIDs.insert(profile.id) }
+        }
+        // A network failure must not erase a previously confirmed rejection.
+        if update.record.outcome != .unchecked || profile.currentOpenChamberSignInCheck?.outcome != .needsSignIn {
+            profile.openChamberSignInCheck = update.record
+            profiles[index] = profiles[index].updating(profile: profile)
+            if !persistProfiles() { openChamberCheckError = "Check results could not be saved." }
+        }
+    }
+
+    private func clearOpenChamberCheck(for profileID: UUID, verified: Bool) {
+        guard let index = indexOfProfile(profileID) else { return }
+        var profile = profiles[index].profile
+        profile.openChamberSignInCheck = verified
+            ? .init(identityKey: profile.openCodeOpenAIAccount?.storageKey, outcome: .verified, checkedAt: .now) : nil
+        profiles[index] = profiles[index].updating(profile: profile)
+        openChamberUncheckedProfileIDs?.remove(profileID)
+        persistProfiles()
+    }
+
     func saveOpenChamberAuth(profileID: UUID) async {
-        guard !isTransferring else { return }
+        guard !isTransferring, appSignInRepairProgress == nil, openChamberCheckProgress == nil else { return }
         activeDataOperations += 1
         defer { activeDataOperations -= 1 }
         guard openCodeSwitchingProfileIDs.isEmpty, let index = indexOfProfile(profileID),
@@ -613,6 +820,7 @@ final class PlusProfileController {
             let previous = profiles[currentIndex]
             var updated = previous.profile
             updated.openCodeOpenAIAccount = identity
+            updated.openChamberSignInCheck = nil
             profiles[currentIndex] = previous.updating(profile: updated)
             guard persistProfiles() else {
                 profiles[currentIndex] = previous
@@ -620,6 +828,7 @@ final class PlusProfileController {
             }
             openChamberActionStatus = .init(profileID: profileID, message: "OpenChamber sign-in saved.", tone: .success)
             openChamberSignInRepairProfileIDs.remove(profileID)
+            openChamberUncheckedProfileIDs?.remove(profileID)
             saved = true
         } catch {
             openChamberActionStatus = .init(profileID: profileID, message: error.localizedDescription, tone: .critical)
@@ -627,7 +836,7 @@ final class PlusProfileController {
     }
 
     func switchOpenChamberAuth(profileID: UUID) async {
-        guard !isTransferring else { return }
+        guard !isTransferring, appSignInRepairProgress == nil, openChamberCheckProgress == nil else { return }
         activeDataOperations += 1
         defer { activeDataOperations -= 1 }
         guard openCodeSwitchingProfileIDs.isEmpty, let index = indexOfProfile(profileID),
@@ -642,6 +851,7 @@ final class PlusProfileController {
         do {
             try await openCodeAuthService.switchTo(profile: profile)
             openChamberSignInRepairProfileIDs.remove(profileID)
+            clearOpenChamberCheck(for: profileID, verified: true)
             switched = true
             openChamberActionStatus = .init(profileID: profileID,
                 message: "OpenChamber OpenAI switched and verified. Refresh OpenChamber’s Usage panel if it still shows an older result.", tone: .success)
@@ -657,7 +867,7 @@ final class PlusProfileController {
     }
 
     func clearSession(for profileID: UUID) async {
-        guard !isTransferring else { return }
+        guard !isTransferring, appSignInRepairProgress == nil else { return }
         activeDataOperations += 1
         defer { activeDataOperations -= 1 }
         guard let index = indexOfProfile(profileID) else { return }
@@ -665,9 +875,12 @@ final class PlusProfileController {
 
         do {
             try await dataService.clearSession(for: snapshot.profile)
-            var updatedProfile = snapshot.profile
+            guard let currentIndex = indexOfProfile(profileID),
+                  profiles[currentIndex].profile.provider == snapshot.profile.provider else { return }
+            let current = profiles[currentIndex]
+            var updatedProfile = current.profile
             updatedProfile.lastKnownState = .needsLogin
-            profiles[index] = snapshot.updating(
+            profiles[currentIndex] = current.updating(
                 profile: updatedProfile,
                 state: .needsLogin,
                 usage: .some(nil),
@@ -689,7 +902,7 @@ final class PlusProfileController {
     }
 
     func removeProfile(id profileID: UUID) async {
-        guard !isTransferring else { return }
+        guard !isTransferring, appSignInRepairProgress == nil else { return }
         activeDataOperations += 1
         defer { activeDataOperations -= 1 }
         guard !removingProfileIDs.contains(profileID), let index = indexOfProfile(profileID) else { return }
@@ -738,7 +951,7 @@ final class PlusProfileController {
     }
 
     func openChrome(for profileID: UUID) async {
-        guard !isTransferring else { return }
+        guard !isTransferring, appSignInRepairProgress == nil else { return }
         activeDataOperations += 1
         defer { activeDataOperations -= 1 }
         guard var index = indexOfProfile(profileID) else { return }
@@ -796,7 +1009,7 @@ final class PlusProfileController {
     }
 
     func openChromePasskeySetup(for profileID: UUID) async {
-        guard !isTransferring else { return }
+        guard !isTransferring, appSignInRepairProgress == nil else { return }
         activeDataOperations += 1
         defer { activeDataOperations -= 1 }
         guard let index = indexOfProfile(profileID) else { return }
@@ -822,7 +1035,7 @@ final class PlusProfileController {
     }
 
     func syncChromeSession(for profileID: UUID) async {
-        guard !isTransferring else { return }
+        guard !isTransferring, appSignInRepairProgress == nil else { return }
         activeDataOperations += 1
         defer { activeDataOperations -= 1 }
         guard let index = indexOfProfile(profileID) else { return }
@@ -845,7 +1058,7 @@ final class PlusProfileController {
     }
 
     func closeChromeSignIn(for profileID: UUID) async {
-        guard !isTransferring else { return }
+        guard !isTransferring, appSignInRepairProgress == nil else { return }
         activeDataOperations += 1
         defer { activeDataOperations -= 1 }
         guard let index = indexOfProfile(profileID) else { return }
@@ -863,7 +1076,9 @@ final class PlusProfileController {
     }
 
     private func refreshProfile(id profileID: UUID, isBackgroundBatch: Bool) async {
-        guard !isTransferring else { return }
+        // Repair waits for refreshAll to finish. Let that already-scheduled batch
+        // drain, including rows marked as loading before repair was requested.
+        guard !isTransferring, appSignInRepairProgress == nil || isBackgroundBatch else { return }
         activeDataOperations += 1
         defer { activeDataOperations -= 1 }
         guard let index = indexOfProfile(profileID) else { return }
@@ -903,6 +1118,8 @@ final class PlusProfileController {
     }
 
     private func loadStoredProfiles() {
+        openChamberUncheckedProfileIDs = nil
+        openChamberCheckError = nil
         desktopSignInRepairProfileIDs.removeAll()
         openChamberSignInRepairProfileIDs.removeAll()
         syncScheduler.resetSignInRepairState()
@@ -960,7 +1177,7 @@ final class PlusProfileController {
     }
 
     func syncOpenChamberNow() async {
-        guard !isTransferring else { return }
+        guard !isTransferring, appSignInRepairProgress == nil else { return }
         await syncScheduler.syncNow()
     }
 

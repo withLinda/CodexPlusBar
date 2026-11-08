@@ -11,19 +11,23 @@ protocol OpenCodeV2Serving: Sendable {
     func activate(_ credential: OpenCodeV2Credential, expected: OpenCodeV2Credential) async throws -> OpenCodeV2Credential
 }
 
-/// V2 has no HTTP credential import/export route. A location-scoped plugin uses
-/// the public integration API; no direct database writes or global config edits.
+/// Prefer native stored credentials so reads cannot implicitly refresh OAuth.
+/// Older V2 builds use the location-scoped bridge, never direct database writes.
 actor OpenCodeV2Client: OpenCodeV2Serving {
     private let baseURL: URL
     private let authorization: String?
     private let directory: URL
     private let session: URLSession
+    private let native: OpenCodeCredentialClient
+    private var supportsNative: Bool?
+    private var nativeLocationReady = false
     private var installed = false
 
     init(baseURL: URL, authorization: String?, homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser) {
         self.baseURL = baseURL
         self.authorization = authorization
         directory = homeDirectory.appendingPathComponent("Library/Application Support/CodexPlusBar/OpenChamberBridge-v1")
+        native = OpenCodeCredentialClient(baseURL: baseURL, authorization: authorization, directory: directory.path)
         let configuration = URLSessionConfiguration.ephemeral
         configuration.connectionProxyDictionary = [:]
         configuration.httpCookieStorage = nil
@@ -37,6 +41,9 @@ actor OpenCodeV2Client: OpenCodeV2Serving {
 
     func read(id: String? = nil) async throws -> OpenCodeV2Credential {
         try installBridge()
+        if let inventory = try await nativeInventory() {
+            return try storedCredential(id: id, in: inventory)
+        }
         if let id {
             // The bridge deliberately hides internal errors. Confirm absence
             // through the public API instead of treating every RPC 500 as a
@@ -66,6 +73,18 @@ actor OpenCodeV2Client: OpenCodeV2Serving {
     func install(_ auth: OpenCodeOpenAIAuth, expected: OpenCodeV2Credential) async throws -> OpenCodeV2Credential {
         try installBridge()
         _ = try auth.identity()
+        if let inventory = try await nativeInventory() {
+            guard try storedCredential(id: nil, in: inventory) == expected else {
+                throw OpenCodeOpenAIAuthError.changedWhileReading
+            }
+            let created = try await native.create(id: "cred_" + UUID().uuidString.replacingOccurrences(of: "-", with: ""),
+                                                  label: auth.identity().email, value: .legacy(auth), activate: true)
+            let current = try await read()
+            guard current.id == created.id, current.auth == auth else {
+                throw OpenCodeOpenAIAuthError.changedWhileReading
+            }
+            return current
+        }
         return try await rpc("import", input: ImportInput(auth: auth, expected: expected))
     }
 
@@ -96,6 +115,29 @@ actor OpenCodeV2Client: OpenCodeV2Serving {
             let type: String
             let id: String?
         }
+    }
+
+    private func nativeInventory() async throws -> OpenCodeCredentialInventory? {
+        if supportsNative == nil { supportsNative = try await native.supportsStoredCredentials() }
+        guard supportsNative == true else { return nil }
+        if !nativeLocationReady {
+            // Provider/integration discovery can otherwise race a cold location.
+            _ = try await send(path: "api/plugin", body: nil, status: 200)
+            _ = try await send(path: "api/integration", body: nil, status: 200)
+            nativeLocationReady = true
+        }
+        return try await native.inventory()
+    }
+
+    private func storedCredential(id: String?, in inventory: OpenCodeCredentialInventory) throws -> OpenCodeV2Credential {
+        let entry: OpenCodeStoredCredential?
+        if let id { entry = inventory.openAI.first { $0.id == id } }
+        else { entry = inventory.openAI.first(where: \.active) }
+        guard let entry else {
+            throw id == nil ? OpenCodeOpenAIAuthError.providerMissing : .credentialNotFound
+        }
+        do { return try OpenCodeV2Credential(id: entry.id, auth: entry.value.auth()) }
+        catch OpenCodeCredentialError.unsupportedMethod { throw OpenCodeOpenAIAuthError.unsupportedCredential }
     }
 
     private func rpc<Value: Encodable>(_ method: String, input: Value) async throws -> OpenCodeV2Credential {

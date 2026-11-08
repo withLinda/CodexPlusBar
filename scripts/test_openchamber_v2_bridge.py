@@ -145,8 +145,15 @@ def main():
                     output = (root / "swift-tests.log").read_text(errors="replace")
                     native_passed = "Test isolatedServerSwitchesThroughProductionClient() passed" in output
                     sync_passed = "Test isolatedNativeReconciliationThroughProductionClient() passed" in output
+                    expired_passed = "Test isolatedExpiredSignInsUseControlledRefresh() passed" in output
+                    bulk_passed = "Test isolatedBulkCheckRefreshesWithoutCyclingAccounts() passed" in output
+                    repair_passed = "Test isolatedRepairReplacesActiveAndInactiveCredentials() passed" in output
+                    helper_passed = "Test installedOfficialHelperStartsAndCancelsWithoutSigningIn() passed" in output
                     summary = [line for line in output.splitlines() if "Test run with" in line]
-                    if not native_passed or not sync_passed or not summary or "passed" not in summary[-1] or result not in (0, None):
+                    if (not all((native_passed, sync_passed, expired_passed, bulk_passed, repair_passed, helper_passed))
+                            or not summary or any("failed" in line for line in summary)
+                            or "passed" not in summary[-1] or result not in (0, None)
+                            or "Restarting after unexpected exit" in output):
                         print(output[-12000:])
                         raise AssertionError("Swift integration suite did not pass")
                     print(summary[-1])

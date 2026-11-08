@@ -172,6 +172,53 @@ struct CodexSignInVault: Sendable {
 
     func url(for identity: CodexSignInIdentity) -> URL { directory.appendingPathComponent(identity.storageKey + ".json") }
 
+    func hasRepairReceipt(for signIn: CodexSignIn) -> Bool {
+        FileManager.default.fileExists(atPath: repairReceiptURL(signIn).path)
+    }
+
+    private struct RepairReceipt: Codable {
+        let live: Bool
+        let committed: Bool
+        let previousFingerprint: String?
+        let targetFingerprint: String?
+    }
+
+    func repairWasInstalledLive(_ signIn: CodexSignIn, current: Data?) throws -> Bool {
+        guard hasRepairReceipt(for: signIn) else { return false }
+        let receipt = try JSONDecoder().decode(RepairReceipt.self, from: Data(contentsOf: repairReceiptURL(signIn)))
+        guard receipt.live else { return false }
+        if receipt.committed { return true }
+        let observed = fingerprint(current)
+        if observed == receipt.targetFingerprint { return true }
+        if observed == receipt.previousFingerprint { return false }
+        // Another writer may have changed the old pair before our write, or
+        // rotated the new one afterward. Bytes alone cannot distinguish them.
+        throw AppSignInRepairError.interruptedInstallation
+    }
+
+    func saveRepairIntent(for signIn: CodexSignIn, previous: Data?, target: Data) throws {
+        try writeRepairReceipt(.init(live: true, committed: false, previousFingerprint: fingerprint(previous),
+                                     targetFingerprint: fingerprint(target)), for: signIn)
+    }
+
+    func saveRepairReceipt(for signIn: CodexSignIn, live: Bool) throws {
+        try writeRepairReceipt(.init(live: live, committed: true, previousFingerprint: nil, targetFingerprint: nil), for: signIn)
+    }
+
+    private func writeRepairReceipt(_ receipt: RepairReceipt, for signIn: CodexSignIn) throws {
+        do { try OpenCodePrivateFile.write(JSONEncoder().encode(receipt), to: repairReceiptURL(signIn)) }
+        catch { throw CodexSignInError.storageFailed }
+    }
+
+    private func fingerprint(_ data: Data?) -> String? {
+        data.map { SHA256.hash(data: $0).map { String(format: "%02x", $0) }.joined() }
+    }
+
+    private func repairReceiptURL(_ signIn: CodexSignIn) -> URL {
+        let key = SHA256.hash(data: Data(signIn.refreshToken.utf8)).map { String(format: "%02x", $0) }.joined()
+        return directory.appendingPathComponent(signIn.identity.storageKey + ".repair-" + key + ".json")
+    }
+
     func save(_ signIn: CodexSignIn) throws {
         let signIn = try latestGeneration(of: signIn)
         do {

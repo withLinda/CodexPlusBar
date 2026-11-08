@@ -18,7 +18,10 @@
 		12A58B7E69D7EAC0C1FB8E9E /* ClaudeUsageService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B0D9071FF9E12547FAB4DEF /* ClaudeUsageService.swift */; };
 		177E39EDA3111E142BC4F794 /* MenuBarRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2865CCBFF7FF69A9A1449352 /* MenuBarRootView.swift */; };
 		183BED074053630F30DCA01B /* ChromeCookieImporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05F6D1A01173879911B4E355 /* ChromeCookieImporter.swift */; };
+		1CC950CFB0E4FC260FC0F66E /* CodexBrowserAuthorization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 016B95B308851AA63C6088B6 /* CodexBrowserAuthorization.swift */; };
 		21284C4342EE9DBC5B114877 /* ProfileSignInSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91700F5F32C34F01643AE183 /* ProfileSignInSection.swift */; };
+		22BEC6AF178AF0F21F382E18 /* OpenChamberSignInCheckService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52247492C355D2EFB16E98B0 /* OpenChamberSignInCheckService.swift */; };
+		2742347C89158A8A05B2CF97 /* AppSignInRepair.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE7E6AC2D9C64EF6BB961BAE /* AppSignInRepair.swift */; };
 		27CDE503346F4D51A31A9AE3 /* CodexAppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25E2086F686897E104CED98A /* CodexAppDelegate.swift */; };
 		28E0C29A3990704FA9270764 /* OneTimePasswordGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2CCF039048CB5F92D4BDF6C /* OneTimePasswordGenerator.swift */; };
 		2D6D5AF1227D948AE7BE28A3 /* BackupTransferView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C149779AC27E32D9B6856CF /* BackupTransferView.swift */; };
@@ -58,6 +61,7 @@
 		69D7B2EE7C28081914B8726E /* WebBootstrapService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61B4EA1729DE901852DAB94B /* WebBootstrapService.swift */; };
 		6ADDCE751FD6C31E1759C80C /* ProfileSummaryRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D71430D5A24E98E43ED2A14 /* ProfileSummaryRow.swift */; };
 		6E5FDEE47EFD3F385F90F3EA /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDB2F727B33B769B1AD9836D /* SettingsView.swift */; };
+		725C797EC57E4E9996CEAC6C /* OpenChamberSignInCheck.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF6939812FFC583F68E28929 /* OpenChamberSignInCheck.swift */; };
 		73BB12CD8E133AA0E131CC9F /* PhoneSummaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A872BFC23B2CCCBF513E45E1 /* PhoneSummaryView.swift */; };
 		75DFB4C19F6056DBAE57A1F3 /* MenuBarProfilePreference.swift in Sources */ = {isa = PBXBuildFile; fileRef = 400D81A1F70064BA2F950787 /* MenuBarProfilePreference.swift */; };
 		7836C2439EBAE653FD60F644 /* OpenChamberSyncPreference.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9913EFDBB3E4A5DE5537F51 /* OpenChamberSyncPreference.swift */; };
@@ -88,11 +92,13 @@
 		CB270E9D6E3940EABEF8D770 /* BackupBrowserGuard.swift in Sources */ = {isa = PBXBuildFile; fileRef = F55FBE20C4C7CB8781822ED0 /* BackupBrowserGuard.swift */; };
 		CC412EF18E07D35C281F957C /* OpenCodeSignInSnapshotStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F39863D2B64EA5F98248247 /* OpenCodeSignInSnapshotStore.swift */; };
 		CD935828B3D69DD9B8881440 /* ChatGPTWebURLs.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4603C263C3EF604B51D7E7DD /* ChatGPTWebURLs.swift */; };
+		CE6316CED6A57A5D6BECC697 /* AppSignInRepairInstaller.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B4671C024513861FD71CACC /* AppSignInRepairInstaller.swift */; };
 		D041CB961950C4955A07CD17 /* BackupTransferController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B88A6B70F083AB6EADAF2B6E /* BackupTransferController.swift */; };
 		D0C880B3CDC00F69A7687930 /* Inter-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = AB2B62885A823A8F2ACA0311 /* Inter-SemiBold.ttf */; };
 		D25BB72CFD7CE4B812F2E58B /* OpenChamberSyncStateStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B39904930FBF14684F139DA3 /* OpenChamberSyncStateStore.swift */; };
 		D3227D21FF71D190188827EA /* PlusProfileModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5ADC9A58E39E55458BD610F6 /* PlusProfileModels.swift */; };
 		D48361CC16D6E80718EEE496 /* BackupArchive.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EBC778B3C5FE9FCF54E6ED4 /* BackupArchive.swift */; };
+		D49D416889BF3625E1F6D3B2 /* AppSignInRepairService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 813D8011E6C10F6047DB9AAB /* AppSignInRepairService.swift */; };
 		D5550C919F5E95543ACF794D /* Inter-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 33360E8618EAD73760FD014F /* Inter-Medium.ttf */; };
 		D6CA6FF0C21311398F56C566 /* OpenChamberSyncScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C26E6A53E3766353307F15A /* OpenChamberSyncScheduler.swift */; };
 		D74C0C215FE67426FF797835 /* ProfileSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = A86489B28B4EEE86C87A88E9 /* ProfileSearch.swift */; };
@@ -123,6 +129,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		016B95B308851AA63C6088B6 /* CodexBrowserAuthorization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexBrowserAuthorization.swift; sourceTree = "<group>"; };
 		05F6D1A01173879911B4E355 /* ChromeCookieImporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChromeCookieImporter.swift; sourceTree = "<group>"; };
 		05FB861FD211C30C13F441A6 /* AuthSessionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthSessionService.swift; sourceTree = "<group>"; };
 		0943E3401A421B19D7C9FE6C /* ChromeDevToolsClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChromeDevToolsClient.swift; sourceTree = "<group>"; };
@@ -144,6 +151,7 @@
 		25D2C2B42C380F7B710C02D7 /* BackupService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupService.swift; sourceTree = "<group>"; };
 		25E2086F686897E104CED98A /* CodexAppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexAppDelegate.swift; sourceTree = "<group>"; };
 		2865CCBFF7FF69A9A1449352 /* MenuBarRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarRootView.swift; sourceTree = "<group>"; };
+		2B4671C024513861FD71CACC /* AppSignInRepairInstaller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSignInRepairInstaller.swift; sourceTree = "<group>"; };
 		33360E8618EAD73760FD014F /* Inter-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Inter-Medium.ttf"; sourceTree = "<group>"; };
 		38D97AFB21D00935D66A3DE2 /* WorkspaceLimitService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceLimitService.swift; sourceTree = "<group>"; };
 		39C5A0B333E8C1A19467704E /* AccountWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountWindowView.swift; sourceTree = "<group>"; };
@@ -162,6 +170,7 @@
 		4B83C451759354D40D65FAC2 /* CodexTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexTheme.swift; sourceTree = "<group>"; };
 		4C26E6A53E3766353307F15A /* OpenChamberSyncScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenChamberSyncScheduler.swift; sourceTree = "<group>"; };
 		4EBC778B3C5FE9FCF54E6ED4 /* BackupArchive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupArchive.swift; sourceTree = "<group>"; };
+		52247492C355D2EFB16E98B0 /* OpenChamberSignInCheckService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenChamberSignInCheckService.swift; sourceTree = "<group>"; };
 		534B523C2B9C7E021F4C3316 /* ProfilePhoneNumberCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfilePhoneNumberCatalog.swift; sourceTree = "<group>"; };
 		53E8040E2C459A442745D324 /* HTTPTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTTPTransport.swift; sourceTree = "<group>"; };
 		58AE54A19ADBA050F96F0AF6 /* AppMinuteClock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppMinuteClock.swift; sourceTree = "<group>"; };
@@ -185,6 +194,7 @@
 		7D6E8D24A2C7E16B085B2581 /* MenuBarPanelTextScalePreference.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarPanelTextScalePreference.swift; sourceTree = "<group>"; };
 		7FBDDA2EC7DC9B304A1496C4 /* ProfileDisplayOrderPreference.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileDisplayOrderPreference.swift; sourceTree = "<group>"; };
 		80F5D0C3B1F4F079A0CF0221 /* JSONDecoder+ChatGPT.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "JSONDecoder+ChatGPT.swift"; sourceTree = "<group>"; };
+		813D8011E6C10F6047DB9AAB /* AppSignInRepairService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSignInRepairService.swift; sourceTree = "<group>"; };
 		81400FBA3D7B45736A65F770 /* ChatGPTAPIError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatGPTAPIError.swift; sourceTree = "<group>"; };
 		8416D8C433CC85EDA06BDC61 /* CodexLegacySignInImporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexLegacySignInImporter.swift; sourceTree = "<group>"; };
 		864277862C546E5920AB3163 /* EmailToolsWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmailToolsWindowView.swift; sourceTree = "<group>"; };
@@ -220,6 +230,7 @@
 		D6EC5BF584B2DCC0B7B9E2B9 /* SingleInstanceCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SingleInstanceCoordinator.swift; sourceTree = "<group>"; };
 		D9913EFDBB3E4A5DE5537F51 /* OpenChamberSyncPreference.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenChamberSyncPreference.swift; sourceTree = "<group>"; };
 		DF562E09FAC0315C1413120C /* CodexAccountSwitchService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexAccountSwitchService.swift; sourceTree = "<group>"; };
+		DF6939812FFC583F68E28929 /* OpenChamberSignInCheck.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenChamberSignInCheck.swift; sourceTree = "<group>"; };
 		DFD291B6EF8F8223AD2C9F09 /* OpenCodeCredentialClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodeCredentialClient.swift; sourceTree = "<group>"; };
 		E61CD774A9F9F92C7F47948A /* OpenChamberSyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenChamberSyncService.swift; sourceTree = "<group>"; };
 		E654F84109D3509039ADB773 /* WebSessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSessionStore.swift; sourceTree = "<group>"; };
@@ -227,6 +238,7 @@
 		F369067FAFB972FD6B6E3E08 /* ProfilePhoneNumberComboBox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfilePhoneNumberComboBox.swift; sourceTree = "<group>"; };
 		F55FBE20C4C7CB8781822ED0 /* BackupBrowserGuard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupBrowserGuard.swift; sourceTree = "<group>"; };
 		FA93438B8CFDA14DDC4B2D65 /* ProfileCatalogStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileCatalogStore.swift; sourceTree = "<group>"; };
+		FE7E6AC2D9C64EF6BB961BAE /* AppSignInRepair.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSignInRepair.swift; sourceTree = "<group>"; };
 		FF11C163E2745CE7277AF9DE /* DisplayFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayFormatter.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -258,6 +270,8 @@
 			children = (
 				9436E943E02911A56E969EE6 /* AccountCatalogNormalizer.swift */,
 				59FFC3B05EDF309E09E3DD01 /* AccountCatalogService.swift */,
+				2B4671C024513861FD71CACC /* AppSignInRepairInstaller.swift */,
+				813D8011E6C10F6047DB9AAB /* AppSignInRepairService.swift */,
 				163E83213FAB46565EBD1730 /* ArrayChunking.swift */,
 				05FB861FD211C30C13F441A6 /* AuthSessionService.swift */,
 				81400FBA3D7B45736A65F770 /* ChatGPTAPIError.swift */,
@@ -272,6 +286,7 @@
 				924C221CA29B37E3E43DE9F4 /* ClaudeRequestSigner.swift */,
 				5B0D9071FF9E12547FAB4DEF /* ClaudeUsageService.swift */,
 				DF562E09FAC0315C1413120C /* CodexAccountSwitchService.swift */,
+				016B95B308851AA63C6088B6 /* CodexBrowserAuthorization.swift */,
 				6754FC49ADD93718F33ABDB6 /* CodexDesktopApp.swift */,
 				8416D8C433CC85EDA06BDC61 /* CodexLegacySignInImporter.swift */,
 				CAAD6E2326B542701573C814 /* CodexSignIn.swift */,
@@ -283,6 +298,7 @@
 				80F5D0C3B1F4F079A0CF0221 /* JSONDecoder+ChatGPT.swift */,
 				252004FBE714815D978A9765 /* JSONFileStorage.swift */,
 				D2CCF039048CB5F92D4BDF6C /* OneTimePasswordGenerator.swift */,
+				52247492C355D2EFB16E98B0 /* OpenChamberSignInCheckService.swift */,
 				A358996D3CFA906F7755E4E8 /* OpenChamberSyncPlanner.swift */,
 				E61CD774A9F9F92C7F47948A /* OpenChamberSyncService.swift */,
 				B39904930FBF14684F139DA3 /* OpenChamberSyncStateStore.swift */,
@@ -408,9 +424,11 @@
 			isa = PBXGroup;
 			children = (
 				4B7391381874E52F3048629C /* AccountCatalogModels.swift */,
+				FE7E6AC2D9C64EF6BB961BAE /* AppSignInRepair.swift */,
 				49259342335BED6B1E4F0C9D /* ChatGPTAuthContext.swift */,
 				709228E93767951B3499A1C3 /* DotTrickGenerator.swift */,
 				1610283AB18BDD56386F800B /* DotTrickSession.swift */,
+				DF6939812FFC583F68E28929 /* OpenChamberSignInCheck.swift */,
 				5ADC9A58E39E55458BD610F6 /* PlusProfileModels.swift */,
 				534B523C2B9C7E021F4C3316 /* ProfilePhoneNumberCatalog.swift */,
 				A86489B28B4EEE86C87A88E9 /* ProfileSearch.swift */,
@@ -561,6 +579,9 @@
 				563064CF1C3E48B210149351 /* App.swift in Sources */,
 				E4AD402967D10612FF63C9EE /* AppMinuteClock.swift in Sources */,
 				BC003F04CC2311D620A13E4D /* AppRuntimeController.swift in Sources */,
+				2742347C89158A8A05B2CF97 /* AppSignInRepair.swift in Sources */,
+				CE6316CED6A57A5D6BECC697 /* AppSignInRepairInstaller.swift in Sources */,
+				D49D416889BF3625E1F6D3B2 /* AppSignInRepairService.swift in Sources */,
 				466FDB783C536BDA6B79301D /* ArrayChunking.swift in Sources */,
 				7B7FAA38CCFD43257B91E417 /* AuthSessionService.swift in Sources */,
 				D48361CC16D6E80718EEE496 /* BackupArchive.swift in Sources */,
@@ -585,6 +606,7 @@
 				12A58B7E69D7EAC0C1FB8E9E /* ClaudeUsageService.swift in Sources */,
 				9F4BB893794F0163A8A84E66 /* CodexAccountSwitchService.swift in Sources */,
 				27CDE503346F4D51A31A9AE3 /* CodexAppDelegate.swift in Sources */,
+				1CC950CFB0E4FC260FC0F66E /* CodexBrowserAuthorization.swift in Sources */,
 				09B474841ADFED7C0BB9BD8F /* CodexDesktopApp.swift in Sources */,
 				DEF34F589596A99C9895724F /* CodexLegacySignInImporter.swift in Sources */,
 				348E43439B1CB45D07EEB785 /* CodexSignIn.swift in Sources */,
@@ -609,6 +631,8 @@
 				177E39EDA3111E142BC4F794 /* MenuBarRootView.swift in Sources */,
 				EF220468E18F70E23DBE1256 /* MenuBarStatusItemController.swift in Sources */,
 				28E0C29A3990704FA9270764 /* OneTimePasswordGenerator.swift in Sources */,
+				725C797EC57E4E9996CEAC6C /* OpenChamberSignInCheck.swift in Sources */,
+				22BEC6AF178AF0F21F382E18 /* OpenChamberSignInCheckService.swift in Sources */,
 				34FAB5E3DDE1E8310BE8FFFA /* OpenChamberSyncPlanner.swift in Sources */,
 				7836C2439EBAE653FD60F644 /* OpenChamberSyncPreference.swift in Sources */,
 				D6CA6FF0C21311398F56C566 /* OpenChamberSyncScheduler.swift in Sources */,
@@ -684,13 +708,13 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 18;
+				CURRENT_PROJECT_VERSION = 19;
 				INFOPLIST_FILE = Sources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.4.2;
+				MARKETING_VERSION = 1.5.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.linda.CodexPlusBar;
 				SDKROOT = macosx;
 			};
@@ -778,13 +802,13 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 18;
+				CURRENT_PROJECT_VERSION = 19;
 				INFOPLIST_FILE = Sources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.4.2;
+				MARKETING_VERSION = 1.5.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.linda.CodexPlusBar;
 				SDKROOT = macosx;
 			};

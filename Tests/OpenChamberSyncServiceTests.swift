@@ -243,8 +243,13 @@ actor SyncTestClient: OpenCodeCredentialServing {
         self.entries = entries; self.running = running; self.loseCreateResponse = loseCreateResponse; self.loseDeleteResponse = loseDeleteResponse; self.removalBarrier = removalBarrier
     }
     func append(_ entry: OpenCodeStoredCredential) { entries.append(entry) }
+    func replaceValue(id: String, value: OpenCodeCredentialValue) {
+        if let index = entries.firstIndex(where: { $0.id == id }) { entries[index].value = value }
+    }
     func inventory() -> OpenCodeCredentialInventory { .init(entries: entries, connectionIDs: Set(entries.filter { $0.integrationID == "openai" }.map(\.id))) }
     func create(id: String, label: String, value: OpenCodeCredentialValue, activate: Bool) throws -> OpenCodeStoredCredential {
+        guard !entries.contains(where: { $0.id == id }) else { throw OpenCodeCredentialError.invalidResponse }
+        if activate { for i in entries.indices where entries[i].integrationID == "openai" { entries[i].active = false } }
         let entry = OpenCodeStoredCredential(id: id, integrationID: "openai", label: label, active: activate || !entries.contains(where: { $0.active }), value: value)
         entries.append(entry); operations.append("create:" + id)
         if loseCreateResponse { loseCreateResponse = false; throw URLError(.timedOut) }

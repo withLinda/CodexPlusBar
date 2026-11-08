@@ -3,6 +3,75 @@ import Testing
 @testable import CodexPlusBar
 
 struct OpenCodeV2Tests {
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["OPENCHAMBER_V2_TEST_URL"] != nil))
+    func isolatedExpiredSignInsUseControlledRefresh() async throws {
+        try await IsolatedOpenChamberTestGate.shared.run {
+            let rawURL = try #require(ProcessInfo.processInfo.environment["OPENCHAMBER_V2_TEST_URL"])
+            let url = try #require(URL(string: rawURL))
+            let directory = try #require(ProcessInfo.processInfo.environment["OPENCHAMBER_NATIVE_TEST_DIRECTORY"])
+            let fixture = try OpenCodeAuthFixture(root: URL(fileURLWithPath: directory)); defer { fixture.remove() }
+            let authorization = "Basic " + Data("opencode:fixture-password".utf8).base64EncodedString()
+            let native = OpenCodeCredentialClient(baseURL: url, authorization: authorization, directory: directory)
+            let client = OpenCodeV2Client(baseURL: url, authorization: authorization, homeDirectory: fixture.home)
+            let original = try await client.read()
+            let expired = try fixture.auth("expired-native", expires: 0)
+            let rotated = try fixture.auth("expired-native", refresh: "rotated-native")
+            let entry = try await native.create(id: "cred_fixture_expired", label: "Expired", value: .legacy(expired), activate: false)
+            try OpenCodeSignInSnapshotStore(homeDirectory: fixture.home).saveNative(entry, identity: expired.identity())
+            var profile = fixture.profile("expired-native")
+            profile.openCodeOpenAIAccount = try expired.identity()
+            // This production-client read formerly returned the user's generic
+            // bridge error before our verifier could refresh the expired pair.
+            #expect(try await client.read(id: entry.id).auth == expired)
+            #expect(try await client.read() == original)
+            let runtime = OpenCodeLocalRuntime(authURL: fixture.authURL, v2: client)
+            let rejected = OpenCodeOpenAICredentialVerifier(request: { request in
+                #expect(request.url?.path == "/oauth/token")
+                return (Data(#"{"error":"invalid_grant"}"#.utf8), nativeResponse(request, 400))
+            })
+            let rejectingService = OpenCodeOpenAIAuthService(homeDirectory: fixture.home, resolveRuntime: { runtime },
+                                                            verifier: rejected, now: { OpenCodeAuthFixture.now })
+            let rejection = await #expect(throws: OpenCodeOpenAISwitchError.self) {
+                try await rejectingService.switchTo(profile: profile)
+            }
+            #expect(rejection?.requiresNewSignIn == true)
+            #expect(rejection?.recovery == .unchanged)
+            #expect(try await client.read() == original)
+            let verifier = V2TestVerifier(refreshed: rotated)
+            let service = OpenCodeOpenAIAuthService(homeDirectory: fixture.home, resolveRuntime: { runtime },
+                                                   verifier: verifier, now: { OpenCodeAuthFixture.now })
+            try await service.switchTo(profile: profile)
+            let installed = try await client.read()
+            #expect(installed.auth == rotated)
+            #expect(await verifier.refreshCount == 1)
+            await #expect(throws: OpenCodeOpenAIAuthError.changedWhileReading) {
+                try await client.install(expired, expected: original)
+            }
+            #expect(try await client.read() == installed)
+            _ = try await client.activate(original, expected: installed)
+            try await native.remove(id: installed.id)
+            try await native.remove(id: entry.id)
+
+            // Repair an already-selected expired account as well. The old
+            // bridge import called resolve() on this outgoing pair too.
+            let expiredCurrent = try fixture.auth("expired-current", expires: 0)
+            let rotatedCurrent = try fixture.auth("expired-current", refresh: "rotated-current")
+            let currentEntry = try await native.create(id: "cred_fixture_expired_current", label: "Current",
+                                                       value: .legacy(expiredCurrent), activate: true)
+            var currentProfile = fixture.profile("expired-current")
+            currentProfile.openCodeOpenAIAccount = try expiredCurrent.identity()
+            let currentService = OpenCodeOpenAIAuthService(homeDirectory: fixture.home, resolveRuntime: { runtime },
+                                                         verifier: V2TestVerifier(refreshed: rotatedCurrent),
+                                                         now: { OpenCodeAuthFixture.now })
+            try await currentService.switchTo(profile: currentProfile)
+            let repaired = try await client.read()
+            #expect(repaired.auth == rotatedCurrent)
+            _ = try await client.activate(original, expected: repaired)
+            try await native.remove(id: repaired.id)
+            try await native.remove(id: currentEntry.id)
+        }
+    }
+
     @Test func nativeSnapshotSurvivesFailedRefreshInstallAndBackgroundReadback() async throws {
         let fixture = try OpenCodeAuthFixture(); defer { fixture.remove() }
         let expired = try fixture.auth("target", expires: 0)
@@ -34,7 +103,8 @@ struct OpenCodeV2Tests {
         let rawURL = try #require(ProcessInfo.processInfo.environment["OPENCHAMBER_V2_TEST_URL"])
         let url = try #require(URL(string: rawURL))
         #expect(url.host == "127.0.0.1")
-        let fixture = try OpenCodeAuthFixture()
+        let directory = try #require(ProcessInfo.processInfo.environment["OPENCHAMBER_NATIVE_TEST_DIRECTORY"])
+        let fixture = try OpenCodeAuthFixture(root: URL(fileURLWithPath: directory))
         defer { fixture.remove() }
         let target = try fixture.auth("swift-target")
         let profile = try await fixture.prepareTarget(target)
@@ -90,6 +160,17 @@ struct OpenCodeV2Tests {
         #expect(current.id.hasPrefix("cred_"))
         #expect(try !current.auth.identity().accountID.isEmpty)
         #expect(try await client.read(id: current.id).id == current.id)
+        let native = try #require(runtime.credentials)
+        let inventory = try await native.inventory()
+        for entry in inventory.oauth {
+            let stored = try await client.read(id: entry.id)
+            let matchesStored = try stored.auth == entry.value.auth()
+            #expect(matchesStored, "Switch reads must preserve the stored OAuth pair, including expired pairs")
+        }
+        let after = try await native.inventory()
+        let unchanged = inventory.entries == after.entries
+        #expect(unchanged, "Read-only probe must not refresh or change native credentials")
+        print("Read-only OpenChamber switch probe checked \(inventory.oauth.count) saved OAuth connections.")
         #expect((try? Data(contentsOf: runtime.authURL)) == legacy)
     }
 
