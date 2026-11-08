@@ -318,11 +318,7 @@ struct ProfileManagerSessionPanelPresentation: Equatable, Sendable {
 
         switch snapshot.state {
         case .idle, .needsLogin:
-            if provider == .claude {
-                summaryText = "Saved Claude sign-in is checked automatically."
-            } else {
-                summaryText = "Open Codex to sign in."
-            }
+            summaryText = "Open Codex to sign in."
         case .loading:
             summaryText = "Checking this profile."
         case .ready:
@@ -564,7 +560,7 @@ struct ProfileManagerWindowView: View {
     private var bodyContent: some View {
         if controller.profiles.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Track Codex and Claude usage from the menu bar.")
+                Text("Track Codex usage from the menu bar.")
                     .font(ProfileManagerTypography.body)
                     .foregroundStyle(CodexTheme.supportText)
                 HStack(spacing: 8) {
@@ -735,26 +731,18 @@ struct ProfileManagerWindowView: View {
                         .disabled(controller.appSignInRepairProgress?.profileID == snapshot.id)
                         .id("profile-details")
 
-                    DisclosureGroup("Connection setup", isExpanded: $isConnectionSetupExpanded) {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Picker("Usage service", selection: providerBinding(for: snapshot)) {
-                                ForEach(ProfileProvider.allCases) { provider in
-                                    Text(provider.displayName).tag(provider)
-                                }
-                            }
-                            .disabled(snapshot.isRefreshing || controller.appSignInRepairProgress != nil)
-                            .pickerStyle(.menu)
-
-                            if snapshot.state == .ready && !controller.isChromeSignInOpen(for: snapshot.id) {
+                    if snapshot.state == .ready && !controller.isChromeSignInOpen(for: snapshot.id) {
+                        DisclosureGroup("Connection setup", isExpanded: $isConnectionSetupExpanded) {
+                            VStack(alignment: .leading, spacing: 12) {
                                 chromeSignInPanel(for: snapshot, metrics: metrics)
                             }
+                            .padding(.top, 8)
                         }
-                        .padding(.top, 8)
+                        .font(ProfileManagerTypography.smallStrong)
+                        .foregroundStyle(CodexTheme.primaryText)
+                        .padding(12)
+                        .background(CodexTheme.surfaceFill(for: .subtle), in: RoundedRectangle(cornerRadius: 8))
                     }
-                    .font(ProfileManagerTypography.smallStrong)
-                    .foregroundStyle(CodexTheme.primaryText)
-                    .padding(12)
-                    .background(CodexTheme.surfaceFill(for: .subtle), in: RoundedRectangle(cornerRadius: 8))
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.bottom, metrics.detailStackSpacing)
@@ -1577,22 +1565,6 @@ struct ProfileManagerWindowView: View {
         Task {
             await controller.openChrome(for: profileID)
         }
-    }
-
-    private func providerBinding(for snapshot: PlusProfileSnapshot) -> Binding<ProfileProvider> {
-        Binding(
-            get: {
-                controller.profiles
-                    .first(where: { $0.id == snapshot.id })?
-                    .profile.provider
-                    ?? snapshot.profile.provider
-            },
-            set: { provider in
-                Task {
-                    await controller.setProvider(provider, for: snapshot.id)
-                }
-            }
-        )
     }
 
     private func openChromePasskeySetup(_ profileID: UUID) {

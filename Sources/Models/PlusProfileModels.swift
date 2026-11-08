@@ -8,30 +8,25 @@ enum PlusProfileStoredState: String, Codable, Equatable, Sendable {
     case failed
 }
 
-enum ProfileProvider: String, Codable, CaseIterable, Equatable, Identifiable, Sendable {
-    case codex
-    case claude
+/// Unknown provider IDs remain serializable so inactive records survive upgrades.
+struct ProfileProvider: RawRepresentable, Codable, CaseIterable, Hashable, Identifiable, Sendable {
+    let rawValue: String
+    static let codex = Self(rawValue: "codex")
+    static let allCases: [Self] = [.codex]
 
-    var id: String {
-        rawValue
+    var id: String { rawValue }
+    var displayName: String { self == .codex ? "Codex" : "Unsupported provider" }
+    var systemImage: String { "terminal.fill" }
+
+    init(rawValue: String) { self.rawValue = rawValue }
+
+    init(from decoder: Decoder) throws {
+        rawValue = try decoder.singleValueContainer().decode(String.self)
     }
 
-    var displayName: String {
-        switch self {
-        case .codex:
-            return "Codex"
-        case .claude:
-            return "Claude"
-        }
-    }
-
-    var systemImage: String {
-        switch self {
-        case .codex:
-            return "terminal.fill"
-        case .claude:
-            return "sparkles"
-        }
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
     }
 }
 
@@ -196,7 +191,7 @@ struct PlusProfile: Identifiable, Codable, Equatable, Sendable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
 
         id = try container.decode(UUID.self, forKey: .id)
-        provider = (try? container.decodeIfPresent(ProfileProvider.self, forKey: .provider)) ?? .codex
+        provider = try container.decodeIfPresent(ProfileProvider.self, forKey: .provider) ?? .codex
         label = try container.decode(String.self, forKey: .label)
         codexAccountKey = try container.decodeIfPresent(String.self, forKey: .codexAccountKey)
         codexSignIn = try container.decodeIfPresent(CodexSignInIdentity.self, forKey: .codexSignIn)
@@ -1155,35 +1150,25 @@ struct ProfileLimitCounts: Equatable, Sendable {
 
 struct ProfileProviderCounts: Equatable, Sendable {
     let codex: Int
-    let claude: Int
 
-    init(codex: Int = 0, claude: Int = 0) {
+    init(codex: Int = 0) {
         self.codex = codex
-        self.claude = claude
     }
 
     init(snapshots: [PlusProfileSnapshot]) {
         codex = snapshots.count { $0.profile.provider == .codex }
-        claude = snapshots.count { $0.profile.provider == .claude }
     }
 
     var total: Int {
-        codex + claude
+        codex
     }
 
     func count(for provider: ProfileProvider) -> Int {
-        switch provider {
-        case .codex:
-            return codex
-        case .claude:
-            return claude
-        }
+        provider == .codex ? codex : 0
     }
 
     var accessibilityText: String {
-        let codexText = codex == 1 ? "1 Codex profile" : "\(codex) Codex profiles"
-        let claudeText = claude == 1 ? "1 Claude profile" : "\(claude) Claude profiles"
-        return "\(codexText), \(claudeText)"
+        codex == 1 ? "1 Codex profile" : "\(codex) Codex profiles"
     }
 }
 
@@ -1314,7 +1299,6 @@ final class PlusProfileRuntime {
     let transport: any HTTPTransport
     private let authContextWritable: (any ChatGPTAuthContextWritable)?
     private(set) var authContext: ChatGPTAuthContext?
-    private(set) var claudeOrganizationID: String?
 
     init(
         dataStore: WKWebsiteDataStore,
@@ -1329,9 +1313,5 @@ final class PlusProfileRuntime {
     func updateAuthContext(_ context: ChatGPTAuthContext?) {
         authContext = context
         authContextWritable?.updateAuthContext(context)
-    }
-
-    func updateClaudeOrganizationID(_ organizationID: String?) {
-        claudeOrganizationID = organizationID
     }
 }

@@ -91,7 +91,7 @@ enum DesignPreview {
         )
         let now = Date(timeIntervalSince1970: 1_789_473_600)
         controller.profiles = arguments.contains("--empty") ? [] : fixtures(
-            now: now, missingExpiry: arguments.contains("--missing-expiry"), codexOnly: arguments.contains("--codex-only")
+            now: now, missingExpiry: arguments.contains("--missing-expiry")
         )
         if arguments.contains("--empty-notes"), let first = controller.profiles.first {
             var profile = first.profile
@@ -252,13 +252,12 @@ enum DesignPreview {
         app.run()
     }
 
-    private static func fixtures(now: Date, missingExpiry: Bool, codexOnly: Bool) -> [PlusProfileSnapshot] {
+    private static func fixtures(now: Date, missingExpiry: Bool) -> [PlusProfileSnapshot] {
         let labels = ["studio@example.com", "research@example.com", "alex.personal@example.com", "a.long.profile.name.for.layout.review@example.com", "backup@example.com", "team@example.com"]
         let remaining = [82, 24, 100, 0, 68, 0]
         return labels.enumerated().map { index, label in
-            let isClaude = index == 1 && !codexOnly
             let profile = PlusProfile(
-                id: UUID(), provider: isClaude ? .claude : .codex,
+                id: UUID(), provider: .codex,
                 label: label,
                 codexSignIn: index == 0 || index == 2 ? CodexSignInIdentity(accountID: "preview-\(index)", userID: "preview", email: label) : nil,
                 openCodeOpenAIAccount: index == 0 || index == 3 ? OpenCodeOpenAIIdentity(accountID: "preview-\(index)", userID: "preview", email: label) : nil,
@@ -266,7 +265,7 @@ enum DesignPreview {
                 password: "preview-only", twoFactorCode: "JBSWY3DPEHPK3PXP",
                 phoneNumber: index < 3 ? "+1 202 555 0123" : index == 3 ? "+1 202 555 0198" : nil,
                 notes: "A quiet place for account notes.",
-                expiresAt: missingExpiry || isClaude ? nil : now.addingTimeInterval(Double(index + 3) * 86_400),
+                expiresAt: missingExpiry ? nil : now.addingTimeInterval(Double(index + 3) * 86_400),
                 tags: [index == 3 || index == 5 ? .needAction : index == 1 ? .pending : .active],
                 webDataStoreID: UUID(), sortOrder: index, createdAt: now,
                 lastRefreshAt: now.addingTimeInterval(-120), lastKnownState: index == 5 ? .needsLogin : .active

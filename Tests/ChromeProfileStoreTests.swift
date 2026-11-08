@@ -3,6 +3,31 @@ import Testing
 @testable import CodexPlusBar
 
 struct ChromeProfileStoreTests {
+    @Test @MainActor
+    func startupMaintenancePreservesInactiveBrowserFolders() throws {
+        let root = makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let catalog = ProfileCatalogStore(fileURL: root.appendingPathComponent("profiles.json"))
+        let inactive = try legacyTestProfile()
+        let active = sampleProfile()
+        try catalog.saveProfiles([active, inactive])
+        let controller = PlusProfileController(catalogStore: catalog, autoStart: false)
+        let browserRoot = root.appendingPathComponent("ChromeProfiles")
+        let legacyDirectory = browserRoot.appendingPathComponent(inactive.webDataStoreID.uuidString)
+        let cookie = legacyDirectory.appendingPathComponent("Default/Cookies")
+        try FileManager.default.createDirectory(at: cookie.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("inactive-session".utf8).write(to: cookie)
+        let store = ChromeProfileStore(rootDirectory: browserRoot)
+
+        let report = try store.migrateAndPrune(profiles: controller.storedProfiles)
+
+        #expect(report.removedOrphanCount == 0)
+        #expect(report.migratedProfileCount == 0)
+        #expect(FileManager.default.fileExists(atPath: cookie.path))
+        #expect(!FileManager.default.fileExists(atPath: store.profileDirectory(for: inactive).path))
+        #expect(controller.profiles.map(\.id) == [active.id])
+    }
+
     @Test
     func profileDirectoryUsesExistingWebDataStoreIdentifier() {
         let root = URL(fileURLWithPath: "/tmp/CodexPlusBarChromeProfiles", isDirectory: true)

@@ -8,20 +8,6 @@ enum ChatGPTWebURLs {
     static let passkeySetupPage = URL(string: "chrome://password-manager/settings")!
 }
 
-enum ClaudeWebURLs {
-    static let loginPage = URL(string: "https://claude.ai/login")!
-    static let usagePage = URL(string: "https://claude.ai/settings/usage")!
-    static let cookieScope = URL(string: "https://claude.ai/")!
-    static let bootstrapEndpoint = URL(
-        string:
-            "https://claude.ai/edge-api/bootstrap"
-                + "?statsig_hashing_algorithm=djb2"
-                + "&growthbook_format=sdk"
-                + "&include_system_prompts=false"
-    )!
-    static let organizationsEndpoint = URL(string: "https://claude.ai/api/organizations")!
-}
-
 enum ChromeBrowserSignInURLs {
     static let googleAccountEmail = "linda.fitriani@gmail.com"
 

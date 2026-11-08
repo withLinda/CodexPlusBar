@@ -37,14 +37,9 @@ struct PlusProfileModelsTests {
     }
 
     @Test
-    func profileFilterCanShowOnlyOneProvider() {
+    func profileFilterCanToggleCodexSelection() {
         let codex = sampleSnapshot(tags: [], provider: .codex)
-        let claude = sampleSnapshot(tags: [], provider: .claude)
-        let rows = [codex, claude]
-
-        #expect(
-            ProfileFilter(provider: .claude).apply(to: rows).map(\.id) == [claude.id]
-        )
+        #expect(ProfileFilter(provider: .codex).apply(to: [codex]).map(\.id) == [codex.id])
 
         var filter = ProfileFilter()
         filter.toggle(.codex)
@@ -56,17 +51,15 @@ struct PlusProfileModelsTests {
     }
 
     @Test
-    func profileProviderCountsKeepProviderTotalsSeparate() {
+    func profileProviderCountsSummarizeCodexProfiles() {
         let counts = ProfileProviderCounts(snapshots: [
             sampleSnapshot(tags: [], provider: .codex),
             sampleSnapshot(tags: [], provider: .codex),
-            sampleSnapshot(tags: [], provider: .claude),
         ])
 
         #expect(counts.codex == 2)
-        #expect(counts.claude == 1)
-        #expect(counts.count(for: .claude) == 1)
-        #expect(counts.accessibilityText == "2 Codex profiles, 1 Claude profile")
+        #expect(counts.count(for: .codex) == 2)
+        #expect(counts.accessibilityText == "2 Codex profiles")
     }
 
     @Test
@@ -115,15 +108,14 @@ struct PlusProfileModelsTests {
     }
 
     @Test
-    func profileProviderRoundTripsClaude() throws {
-        var profile = sampleProfile(emailLink: nil)
-        profile.provider = .claude
+    func profileProviderRoundTripsCodexAndOnlyOffersCodex() throws {
+        let profile = sampleProfile(emailLink: nil)
 
         let data = try JSONEncoder().encode(profile)
         let decoded = try JSONDecoder().decode(PlusProfile.self, from: data)
 
-        #expect(decoded.provider == .claude)
-        #expect(ProfileProvider.allCases.map(\.displayName) == ["Codex", "Claude"])
+        #expect(decoded.provider == .codex)
+        #expect(ProfileProvider.allCases.map(\.displayName) == ["Codex"])
     }
 
     @Test

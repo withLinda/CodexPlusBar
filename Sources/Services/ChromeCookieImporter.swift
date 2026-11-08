@@ -36,22 +36,6 @@ enum ChromeCookieImporter {
         return importedCookies
     }
 
-    static func claudeHTTPCookies(
-        from cookies: [ChromeDevToolsCookie],
-        scope: URL = ClaudeWebURLs.cookieScope
-    ) throws -> [HTTPCookie] {
-        let host = scope.host?.lowercased() ?? "claude.ai"
-        let importedCookies = cookies
-            .filter { isCookieDomain($0.domain, host: host) }
-            .compactMap(makeHTTPCookie)
-
-        guard importedCookies.isEmpty == false else {
-            throw ChatGPTAPIError.unauthorized
-        }
-
-        return importedCookies
-    }
-
     @MainActor
     static func storeChatGPTCookies(
         from cookies: [ChromeDevToolsCookie],
@@ -63,27 +47,15 @@ enum ChromeCookieImporter {
     }
 
     @MainActor
-    static func storeClaudeCookies(
-        from cookies: [ChromeDevToolsCookie],
-        in sessionStore: WebSessionStore
-    ) async throws -> Int {
-        let importedCookies = try claudeHTTPCookies(from: cookies)
-        await sessionStore.replaceCookies(importedCookies, for: ClaudeWebURLs.cookieScope)
-        return importedCookies.count
-    }
-
-    @MainActor
     static func storeCookies(
         from cookies: [ChromeDevToolsCookie],
         for provider: ProfileProvider,
         in sessionStore: WebSessionStore
     ) async throws -> Int {
-        switch provider {
-        case .codex:
-            return try await storeChatGPTCookies(from: cookies, in: sessionStore)
-        case .claude:
-            return try await storeClaudeCookies(from: cookies, in: sessionStore)
+        guard provider == .codex else {
+            throw ChatGPTAPIError.unsupported("This saved provider is inactive.")
         }
+        return try await storeChatGPTCookies(from: cookies, in: sessionStore)
     }
 
     private static func isCookieDomain(

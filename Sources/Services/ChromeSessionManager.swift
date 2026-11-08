@@ -31,7 +31,7 @@ struct ChromeSignInFinishDetector: Sendable {
 }
 
 /// Chrome permits only one browser process for a user-data directory.  The
-/// profile refresh code can ask for several restores at the same time, so the
+/// sign-in and cookie operations can overlap, so the
 /// shared-root manager needs a real async mutex rather than relying on
 /// `@MainActor` alone (actor-isolated methods can still overlap at `await`).
 private actor ChromeOperationLock {
@@ -65,10 +65,6 @@ protocol ChromeSessionManaging: AnyObject {
     func openSignIn(for profile: PlusProfile) async throws
     func openPasskeySetup(for profile: PlusProfile) async throws
     func syncCookies(
-        for profile: PlusProfile,
-        into sessionStore: WebSessionStore
-    ) async throws -> ChromeCookieImportResult
-    func restoreCookies(
         for profile: PlusProfile,
         into sessionStore: WebSessionStore
     ) async throws -> ChromeCookieImportResult
@@ -246,24 +242,6 @@ final class DefaultChromeSessionManager: ChromeSessionManaging {
         }
     }
 
-    func restoreCookies(
-        for profile: PlusProfile,
-        into sessionStore: WebSessionStore
-    ) async throws -> ChromeCookieImportResult {
-        try await withExclusiveOperation {
-            guard self.profileStore.hasProfileDirectory(for: profile) else {
-                throw ChatGPTAPIError.unauthorized
-            }
-
-            try await self.closeActiveSession()
-
-            return try await self.importCookies(
-                for: profile,
-                into: sessionStore
-            )
-        }
-    }
-
     func waitForSignInToFinish(for profile: PlusProfile) async -> Bool {
         guard let activeSession,
               activeSession.session.profileID == profile.id,
@@ -410,31 +388,19 @@ final class DefaultChromeSessionManager: ChromeSessionManaging {
         return try await makeClient(endpoint)
     }
 
-    private func signInURL(for provider: ProfileProvider) -> URL {
-        switch provider {
-        case .codex:
-            return ChatGPTWebURLs.loginPage
-        case .claude:
-            return ClaudeWebURLs.loginPage
-        }
+    private func signInURL(for provider: ProfileProvider) throws -> URL {
+        guard provider == .codex else { throw ChatGPTAPIError.unsupported("This saved provider is inactive.") }
+        return ChatGPTWebURLs.loginPage
     }
 
-    private func accountPage(for provider: ProfileProvider) -> URL {
-        switch provider {
-        case .codex:
-            return ChatGPTWebURLs.usagePage
-        case .claude:
-            return ClaudeWebURLs.usagePage
-        }
+    private func accountPage(for provider: ProfileProvider) throws -> URL {
+        guard provider == .codex else { throw ChatGPTAPIError.unsupported("This saved provider is inactive.") }
+        return ChatGPTWebURLs.usagePage
     }
 
-    private func cookieScope(for provider: ProfileProvider) -> URL {
-        switch provider {
-        case .codex:
-            return ChatGPTWebURLs.cookieScope
-        case .claude:
-            return ClaudeWebURLs.cookieScope
-        }
+    private func cookieScope(for provider: ProfileProvider) throws -> URL {
+        guard provider == .codex else { throw ChatGPTAPIError.unsupported("This saved provider is inactive.") }
+        return ChatGPTWebURLs.cookieScope
     }
 
     private func closeInspectorSession(

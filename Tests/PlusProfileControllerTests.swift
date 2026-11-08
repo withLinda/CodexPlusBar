@@ -6,6 +6,39 @@ import WebKit
 @MainActor
 struct PlusProfileControllerTests {
     @Test
+    func inactiveLegacyProfilesSurviveCodexEditsAndRemovalWithoutRuntimeWork() async throws {
+        let directory = makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = ProfileCatalogStore(fileURL: directory.appendingPathComponent("profiles.json"))
+        let codex = sampleProfile(label: "codex@example.test", sortOrder: 0)
+        let legacy = try legacyTestProfile()
+        try store.saveProfiles([codex, legacy])
+        let service = StubPlusProfileDataService(refreshResults: [codex.id: .failure(.unauthorized)])
+        let controller = PlusProfileController(catalogStore: store, dataService: service, autoStart: false)
+
+        #expect(controller.profiles.map(\.id) == [codex.id])
+        await controller.refreshAll()
+        await controller.openChrome(for: legacy.id)
+        await controller.removeProfile(id: legacy.id)
+        #expect(service.openedChromeProfileIDs.isEmpty)
+        #expect(service.removedProfileIDs.isEmpty)
+        var draft = PlusProfileDetailsDraft(profile: codex)
+        draft.label = "Updated Codex"
+        #expect(controller.updateDetails(for: codex.id, draft: draft))
+        var saved = try store.loadProfiles()
+        #expect(saved.first(where: { $0.id == legacy.id })?.notes == legacy.notes)
+        #expect(saved.first(where: { $0.id == legacy.id })?.provider.rawValue == "claude")
+        await controller.removeProfile(id: codex.id)
+        saved = try store.loadProfiles()
+        #expect(saved.map(\.id) == [legacy.id])
+        #expect(saved.first?.webDataStoreID == legacy.webDataStoreID)
+        #expect(saved.first?.password == legacy.password)
+        #expect(controller.profiles.isEmpty)
+        let reloaded = PlusProfileController(catalogStore: store, dataService: service, autoStart: false)
+        #expect(reloaded.profiles.isEmpty)
+    }
+
+    @Test
     func selectorPublisherReceivesRefreshAndImmediateSessionInvalidation() async throws {
         let directory = makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -542,49 +575,6 @@ struct PlusProfileControllerTests {
     }
 
     @Test
-    func claudeOpenUsesSavedSessionAndOpensItsAccountPage() async throws {
-        let tempDirectory = makeTemporaryDirectory()
-        let store = ProfileCatalogStore(
-            fileURL: tempDirectory.appendingPathComponent("profiles.json", isDirectory: false)
-        )
-        var profile = sampleProfile(label: "claude@example.com", sortOrder: 0)
-        profile.provider = .claude
-        profile.lastKnownState = .needsLogin
-        try store.saveProfiles([profile])
-        let usage = makeUsage(
-            accountID: "841724c1-1111-4222-8333-123456789abc",
-            primaryUsedPercent: 18,
-            secondaryUsedPercent: 0
-        )
-        let service = StubPlusProfileDataService(
-            refreshResults: [
-                profile.id: .success(
-                    PlusProfileRefreshResult(
-                        usage: usage,
-                        detectedNote: "Claude",
-                        expiryRefresh: .unchanged
-                    )
-                ),
-            ]
-        )
-        let controller = PlusProfileController(
-            catalogStore: store,
-            dataService: service,
-            autoStart: false
-        )
-
-        await controller.openChrome(for: profile.id)
-
-        let row = try #require(controller.profiles.first)
-        #expect(row.state == .ready)
-        #expect(row.usage?.accountID == usage.accountID)
-        #expect(service.openedChromeAccountPageProfileIDs == [profile.id])
-        #expect(service.openedChromeProfileIDs.isEmpty)
-        #expect(service.waitedForChromeProfileIDs.isEmpty)
-        #expect(controller.isChromeSignInOpen(for: profile.id) == false)
-    }
-
-    @Test
     func returningFromSignInBrowserAutomaticallySyncsAndRefreshesUsage() async throws {
         let tempDirectory = makeTemporaryDirectory()
         let store = ProfileCatalogStore(
@@ -636,36 +626,6 @@ struct PlusProfileControllerTests {
         #expect(controller.isChromeSignInOpen(for: profile.id) == false)
         #expect(row.state == .ready)
         #expect(row.usage?.accountID == "acct_auto_close")
-    }
-
-    @Test
-    func changingProviderClosesOldSignInAndPersistsClaude() async throws {
-        let tempDirectory = makeTemporaryDirectory()
-        let store = ProfileCatalogStore(
-            fileURL: tempDirectory.appendingPathComponent("profiles.json", isDirectory: false)
-        )
-        let profile = sampleProfile(label: "switch@example.com", sortOrder: 0)
-        try store.saveProfiles([profile])
-        let service = StubPlusProfileDataService(refreshResults: [:])
-        let controller = PlusProfileController(
-            catalogStore: store,
-            dataService: service,
-            autoStart: false
-        )
-
-        await controller.openChrome(for: profile.id)
-        let didChange = await controller.setProvider(.claude, for: profile.id)
-
-        let row = try #require(controller.profiles.first)
-        #expect(didChange)
-        #expect(row.profile.provider == .claude)
-        #expect(row.profile.detectedNote == nil)
-        #expect(row.state == .needsLogin)
-        #expect(row.usage == nil)
-        #expect(row.statusMessage == "Open Chrome to sign in to Claude.")
-        #expect(controller.isChromeSignInOpen(for: profile.id) == false)
-        #expect(service.closedChromeProfileIDs == [profile.id])
-        #expect(try store.loadProfiles().first?.provider == .claude)
     }
 
     @Test

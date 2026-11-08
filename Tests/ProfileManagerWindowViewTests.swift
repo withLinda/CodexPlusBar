@@ -429,23 +429,23 @@ struct ProfileManagerWindowViewTests {
     @Test
     func filterPresentationExposesProviderSegmentsAndSelection() throws {
         let presentation = ProfileFilterBarPresentation(
-            filter: ProfileFilter(provider: .claude),
-            shownCount: 2,
+            filter: ProfileFilter(provider: .codex),
+            shownCount: 5,
             totalCount: 5,
-            providerCounts: ProfileProviderCounts(codex: 3, claude: 2)
+            providerCounts: ProfileProviderCounts(codex: 5)
         )
 
         #expect(
-            presentation.segments.prefix(3).map(\.displayText)
-                == ["All 5", "Codex 3", "Claude 2"]
+            presentation.segments.prefix(2).map(\.displayText)
+                == ["All 5", "Codex 5"]
         )
-        let claude = try #require(
-            presentation.segments.first { $0.kind == .provider(.claude) }
+        let codex = try #require(
+            presentation.segments.first { $0.kind == .provider(.codex) }
         )
-        #expect(claude.isSelected)
-        #expect(claude.accessibilityLabel == "Claude profiles")
-        #expect(presentation.accessibilitySummaryText.contains("Claude only"))
-        #expect(presentation.controlSummaryText == "Claude · 2 of 5 shown")
+        #expect(codex.isSelected)
+        #expect(codex.accessibilityLabel == "Codex profiles")
+        #expect(presentation.accessibilitySummaryText.contains("Codex only"))
+        #expect(presentation.controlSummaryText == "Codex · 5 profiles")
     }
 
     @Test
@@ -482,25 +482,13 @@ struct ProfileManagerWindowViewTests {
         #expect(idle.isSyncDisabled)
         #expect(idle.showsCancel == false)
 
-        var claudeProfile = snapshot.profile
-        claudeProfile.provider = .claude
-        let claude = ProfileManagerSessionPanelPresentation(
-            snapshot: snapshot.updating(profile: claudeProfile),
-            isChromeSignInOpen: false
-        )
-        #expect(claude.title == "Claude sign-in")
-        #expect(claude.primaryTitle == "Open Claude")
-        #expect(claude.summaryText == "Saved Claude sign-in is checked automatically.")
-        #expect(claude.showsPasskeyHelp == false)
-
-        let readyClaude = ProfileManagerSessionPanelPresentation(
+        let readyCodex = ProfileManagerSessionPanelPresentation(
             snapshot: snapshot.updating(
-                profile: claudeProfile,
                 state: .ready,
                 usage: .some(
                     PlusProfileUsage(
                         accountID: "841724c1-1111-4222-8333-123456789abc",
-                        planType: "claude",
+                        planType: "plus",
                         primaryWindow: WorkspaceLimitWindow(
                             usedPercent: 25,
                             resetAt: Date(timeIntervalSince1970: 1_776_000_900)
@@ -509,14 +497,14 @@ struct ProfileManagerWindowViewTests {
                         fetchedAt: Date(timeIntervalSince1970: 1_776_000_000)
                     )
                 ),
-                statusMessage: .some("Waiting for Claude sign-in in Chrome.")
+                statusMessage: .some("Waiting for Codex sign-in in Chrome.")
             ),
             isChromeSignInOpen: true
         )
-        #expect(readyClaude.summaryText == "Claude session is synced.")
-        #expect(readyClaude.primaryTitle == "Show Claude")
-        #expect(readyClaude.showsSync == false)
-        #expect(readyClaude.showsCancel == false)
+        #expect(readyCodex.summaryText == "Codex session is synced.")
+        #expect(readyCodex.primaryTitle == "Show Codex")
+        #expect(readyCodex.showsSync == false)
+        #expect(readyCodex.showsCancel == false)
     }
 
     @Test(arguments: ["nextReset", "nextSevenDayReset"])
@@ -525,8 +513,7 @@ struct ProfileManagerWindowViewTests {
         defer { try? FileManager.default.removeItem(at: tempDirectory) }
         let store = ProfileCatalogStore(fileURL: tempDirectory.appendingPathComponent("profiles.json"))
         let fiveHourSoon = sampleProfile(label: "five-hour@example.com", sortOrder: 0)
-        var sevenDaySoon = sampleProfile(label: "seven-day@example.com", sortOrder: 1)
-        sevenDaySoon.provider = .claude
+        let sevenDaySoon = sampleProfile(label: "seven-day@example.com", sortOrder: 1)
         let savedProfiles = [fiveHourSoon, sevenDaySoon]
         try store.saveProfiles(savedProfiles)
         let controller = PlusProfileController(

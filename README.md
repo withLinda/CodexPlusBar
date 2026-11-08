@@ -51,8 +51,18 @@ Finish active work before desktop switching: it closes and reopens the app. Brow
 
 ## Get started
 
-1. **Install.** [Download the DMG](https://github.com/withLinda/CodexPlusBar/releases/latest/download/CodexPlusBar.dmg), drag CodexPlusBar to **Applications**, and open it from there. Look in the menu bar, not the Dock.
-2. **Add an account.** Open **Manage profiles → Add profile**. Set its label in **Profile details** and select **Codex** in **Connection setup**.
+### Install from the DMG
+
+1. [Download CodexPlusBar.dmg](https://github.com/withLinda/CodexPlusBar/releases/latest/download/CodexPlusBar.dmg). The same download supports Apple silicon and Intel Macs running macOS 14 or later.
+2. Open the downloaded DMG and drag **CodexPlusBar.app** onto the **Applications** shortcut.
+3. Eject the disk image, then open **CodexPlusBar** from Applications. Confirm macOS's first-open prompt if shown. The app appears in the **menu bar**, not the Dock.
+
+The DMG is Developer ID-signed and notarized by Apple. [Version 1.6.2 release notes and SHA256SUMS](https://github.com/withLinda/CodexPlusBar/releases/tag/v1.6.2) are available for this update.
+
+### Add your first account
+
+1. **Open the manager.** Click CodexPlusBar in the menu bar and choose **Manage profiles**.
+2. **Add an account.** Choose **Add profile** and set its label in **Profile details**. Profiles now use Codex automatically.
 3. **Sign in.** Choose **Open Codex** and sign in in the dedicated Chrome window. No API key is needed for usage tracking.
 4. **Check your capacity.** Return and choose **Check now** if needed. Add your other accounts and pin a favorite.
 
@@ -60,7 +70,7 @@ Ready to change accounts in your apps? [Save their sign-ins and start switching]
 
 **Reading the numbers:** percentages mean **remaining**, not used. `5H` and `7D` are quota windows. `—` means unavailable. Subscription expiry is separate from a quota reset. Changes to ChatGPT's website can temporarily affect refreshes.
 
-**Updating?** Quit CodexPlusBar, replace it with the latest DMG, reopen, and refresh. Your saved profiles stay in place.
+**Updating?** Quit CodexPlusBar, open the latest DMG, drag the new app into Applications, and choose **Replace**. Eject the DMG, reopen the app, and refresh. Your saved Codex profiles stay in place. Version 1.6.2 removes Claude support; earlier Claude records remain stored but inactive and hidden. Existing backups can still be restored.
 
 ## Switch automatically in OpenChamber
 

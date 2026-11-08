@@ -42,7 +42,7 @@ final class BackupTransferController {
     var canSubmitPassword: Bool {
         !isBusy && !profiles.isTransferring && (mode == .export ? password.count >= 8 && password == confirmation : !password.isEmpty && sourceURL != nil)
     }
-    var replacesExistingData: Bool { !profiles.profiles.isEmpty || !email.sessions.isEmpty }
+    var replacesExistingData: Bool { !profiles.storedProfiles.isEmpty || !email.sessions.isEmpty }
     var sessionSummary: String {
         if profiles.isRefreshing { return "Checking account sessions…" }
         let needsLogin = profiles.profiles.filter { $0.state == .needsLogin }.count
@@ -171,8 +171,8 @@ final class BackupTransferController {
         } catch { resume(reload: false); throw error }
     }
 
-    private func captureManifest() async -> BackupManifest {
-        let values = profiles.profiles.map(\.profile)
+    func captureManifest() async -> BackupManifest {
+        let values = profiles.storedProfiles
         return BackupManifest(profileCount: values.count, preferences: BackupSessionBridge.preferences(),
                               cookies: await BackupSessionBridge.collectCookies(profiles: values))
     }

@@ -90,17 +90,17 @@ struct OpenCodeOpenAIAuthServiceTests {
         #expect(try Data(contentsOf: fixture.authURL) == before)
     }
 
-    @Test func wrongProfileAndClaudeCannotCaptureCredential() async throws {
+    @Test func wrongProfileAndInactiveProviderCannotCaptureCredential() async throws {
         let fixture = try OpenCodeAuthFixture()
         defer { fixture.remove() }
         try fixture.write(fixture.auth("first"))
         await #expect(throws: OpenCodeOpenAIAuthError.identityMismatch) {
             try await fixture.service.saveCurrent(for: fixture.profile("second"))
         }
-        var claude = fixture.profile("first")
-        claude.provider = .claude
+        var inactive = fixture.profile("first")
+        inactive.provider = ProfileProvider(rawValue: "retired-provider")
         await #expect(throws: OpenCodeOpenAIAuthError.identityMismatch) {
-            try await fixture.service.saveCurrent(for: claude)
+            try await fixture.service.saveCurrent(for: inactive)
         }
     }
 

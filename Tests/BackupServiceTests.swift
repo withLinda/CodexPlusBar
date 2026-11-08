@@ -4,6 +4,41 @@ import WebKit
 @testable import CodexPlusBar
 
 struct BackupServiceTests {
+    @Test @MainActor
+    func mixedLegacyBackupRestoresRecordsWithoutActivatingLegacyCookies() async throws {
+        let base = try backupTestDirectory()
+        defer { try? FileManager.default.removeItem(at: base) }
+        let source = base.appendingPathComponent("source")
+        let destination = base.appendingPathComponent("restored")
+        var codex = backupTestProfile()
+        codex.provider = .codex
+        let legacy = try legacyTestProfile()
+        try ProfileCatalogStore(fileURL: source.appendingPathComponent("profiles.json")).saveProfiles([codex, legacy])
+        let cookies = [legacy.id.uuidString: [BackupCookie(name: "sessionKey", value: "inactive-cookie",
+            domain: ".claude.ai", path: "/", secure: true, httpOnly: true, expires: nil, sameSite: nil)]]
+        let archive = base.appendingPathComponent("mixed.backup")
+        try await BackupService(root: source).export(to: archive, password: "test backup password",
+            manifest: .init(profileCount: 2, preferences: .init(), cookies: cookies))
+        let importer = BackupService(root: destination)
+        let prepared = try await importer.prepare(from: archive, password: "test backup password")
+        try await importer.commit(prepared)
+        let suite = "LegacyBackup-\(UUID())"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        try await BackupSessionBridge.finishRestore(root: destination, defaults: defaults)
+        let restored = try ProfileCatalogStore(fileURL: destination.appendingPathComponent("profiles.json")).loadProfiles()
+        let inactive = try #require(restored.first(where: { $0.id == legacy.id }))
+        #expect(restored.count == 2)
+        #expect(inactive.provider.rawValue == "claude")
+        #expect(inactive.notes == legacy.notes)
+        #expect(BackupSessionBridge.takeRestoredStore(for: inactive.webDataStoreID) == nil)
+        if let active = restored.first(where: { $0.id == codex.id }) {
+            #expect(BackupSessionBridge.takeRestoredStore(for: active.webDataStoreID) != nil)
+            try await WKWebsiteDataStore.remove(forIdentifier: active.webDataStoreID)
+        }
+        try await WKWebsiteDataStore.remove(forIdentifier: inactive.webDataStoreID)
+    }
+
     @Test func repairedDesktopVaultStillExportsAndRestores() async throws {
         let f = try NativeSwitchFixture(); defer { f.cleanUp() }
         let profile = try f.installTarget()
@@ -30,7 +65,7 @@ struct BackupServiceTests {
         let root = base.appendingPathComponent("source")
         try ProfileCatalogStore(fileURL: root.appendingPathComponent("profiles.json")).saveProfiles(profiles)
         let cookies = (0..<1_000).map { index in
-            BackupCookie(name: "cookie-\(index)", value: String(repeating: "x", count: 2_560), domain: ".claude.ai",
+            BackupCookie(name: "cookie-\(index)", value: String(repeating: "x", count: 2_560), domain: ".chatgpt.com",
                          path: "/", secure: true, httpOnly: true, expires: nil, sameSite: nil)
         }
         let file = base.appendingPathComponent("existing")
@@ -105,7 +140,7 @@ struct BackupServiceTests {
         let name = "backup-replay-\(UUID())", defaults = try #require(UserDefaults(suiteName: name))
         defer { defaults.removePersistentDomain(forName: name) }
         let manifest = BackupManifest(profileCount: 1, preferences: BackupPreferences(appearance: "light"),
-            cookies: [profile.id.uuidString: [BackupCookie(name: "sessionKey", value: "synthetic-replay", domain: ".claude.ai", path: "/", secure: true, httpOnly: true, expires: nil, sameSite: nil)]])
+            cookies: [profile.id.uuidString: [BackupCookie(name: "sessionKey", value: "synthetic-replay", domain: ".chatgpt.com", path: "/", secure: true, httpOnly: true, expires: nil, sameSite: nil)]])
         let receipt = root.appendingPathComponent(BackupService.receiptName)
         try JSONEncoder().encode(manifest).write(to: receipt)
         try await BackupSessionBridge.finishRestore(root: root, defaults: defaults)
@@ -138,7 +173,7 @@ struct BackupServiceTests {
         }
         let exporter = BackupService(root: source)
         let file = base.appendingPathComponent("transfer.codexplusbarbackup")
-        let cookies = [profile.id.uuidString: [BackupCookie(name: "sessionKey", value: "synthetic-cookie", domain: ".claude.ai", path: "/", secure: true, httpOnly: true, expires: nil, sameSite: nil)]]
+        let cookies = [profile.id.uuidString: [BackupCookie(name: "sessionKey", value: "synthetic-cookie", domain: ".chatgpt.com", path: "/", secure: true, httpOnly: true, expires: nil, sameSite: nil)]]
         let manifest = BackupManifest(profileCount: 1, preferences: .init(), cookies: cookies)
         try await exporter.export(to: file, password: "my backup password", manifest: manifest)
         let importer = BackupService(root: destination)
@@ -152,7 +187,7 @@ struct BackupServiceTests {
         #expect(restored.webDataStoreID != profile.webDataStoreID)
         #expect(restored.password == "synthetic-password")
         #expect(restored.notes == "Keep all my notes\nincluding this line")
-        #expect(restored.provider == .claude)
+        #expect(restored.provider == .codex)
         #expect(restored.tags == [.pending])
         #expect(restored.phoneNumber == "+1 202 555 0123")
         #expect(try DotTrickSessionStore(fileURL: destination.appendingPathComponent("dot-trick-sessions.json")).loadSessions() == [emailSession])
@@ -204,8 +239,17 @@ struct BackupServiceTests {
 }
 
 func backupTestProfile() -> PlusProfile {
-    PlusProfile(id: UUID(), provider: .claude, label: "Backup test", emailLink: "https://example.com", detectedNote: nil,
+    PlusProfile(id: UUID(), provider: .codex, label: "Backup test", emailLink: "https://example.com", detectedNote: nil,
                 password: "synthetic-password", twoFactorCode: "JBSWY3DPEHPK3PXP", phoneNumber: "+1 202 555 0123",
                 notes: "Keep all my notes\nincluding this line", tags: [.pending], webDataStoreID: UUID(), sortOrder: 0,
                 createdAt: Date(timeIntervalSince1970: 1_700_000_000), lastRefreshAt: nil, lastKnownState: .unknown)
+}
+
+// Archived provider values are data fixtures, not supported runtime providers.
+func legacyTestProfile(provider: String = "claude") throws -> PlusProfile {
+    let data = try JSONEncoder().encode(backupTestProfile())
+    var object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+    object["provider"] = provider
+    object["sortOrder"] = 1
+    return try JSONDecoder().decode(PlusProfile.self, from: JSONSerialization.data(withJSONObject: object))
 }

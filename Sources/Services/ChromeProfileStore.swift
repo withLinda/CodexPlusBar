@@ -120,7 +120,9 @@ struct ChromeProfileStore {
         var removedDisposableItemCount = 0
         let profileIDs = Set(profiles.map(\.webDataStoreID))
 
-        for profile in profiles {
+        // Inactive records still protect their folders from orphan deletion.
+        // Only live Codex profiles participate in migration and cache cleanup.
+        for profile in profiles where profile.provider == .codex {
             let legacyDirectory = legacyProfileDirectory(for: profile)
             let hadLegacyDirectory = fileManager.fileExists(atPath: legacyDirectory.path)
             _ = try ensureProfileDirectory(for: profile)

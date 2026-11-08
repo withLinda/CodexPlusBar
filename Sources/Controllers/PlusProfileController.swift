@@ -71,6 +71,9 @@ final class PlusProfileController {
         didSet { selectorPublisher?.update(profiles: profiles, observations: [:], trusted: selectorCatalogTrusted) }
     }
     var selectedProfileID: UUID?
+    @ObservationIgnored private var inactiveProfiles: [PlusProfile] = []
+    /// Backups and catalog writes include inactive records, unlike the live profile list.
+    var storedProfiles: [PlusProfile] { profiles.map(\.profile) + inactiveProfiles }
     var statusMessage: String?
     var isRefreshing = false
     private(set) var isTransferring = false
@@ -150,7 +153,7 @@ final class PlusProfileController {
 
     /// Starts the refresh loops after app startup work (such as the Chrome
     /// storage migration) has completed.  Keeping this separate from `init`
-    /// prevents a first-run migration from racing a Claude cookie restore.
+    /// prevents a first-run migration from racing session work.
     func startBackgroundTasks() {
         guard !isTransferring else { return }
         guard bootstrapTask == nil, autoRefreshTask == nil else {
@@ -395,51 +398,6 @@ final class PlusProfileController {
 
     func selectProfile(id: UUID?) {
         selectedProfileID = id ?? profiles.first?.id
-    }
-
-    @discardableResult
-    func setProvider(
-        _ provider: ProfileProvider,
-        for profileID: UUID
-    ) async -> Bool {
-        guard !isTransferring, appSignInRepairProgress == nil else { return false }
-        activeDataOperations += 1
-        defer { activeDataOperations -= 1 }
-        guard let index = indexOfProfile(profileID) else {
-            return false
-        }
-
-        let snapshot = profiles[index]
-        guard snapshot.profile.provider != provider else {
-            return true
-        }
-
-        let previousProfiles = profiles
-        let previousProfile = snapshot.profile
-        var updatedProfile = previousProfile
-        updatedProfile.provider = provider
-        updatedProfile.detectedNote = nil
-        updatedProfile.expiresAt = nil
-        updatedProfile.lastRefreshAt = nil
-        updatedProfile.lastKnownState = .needsLogin
-
-        profiles[index] = snapshot.updating(
-            profile: updatedProfile,
-            state: .needsLogin,
-            usage: .some(nil),
-            statusMessage: .some("Open Chrome to sign in to \(provider.displayName)."),
-            isRefreshing: false
-        )
-
-        guard persistProfiles() else {
-            profiles = previousProfiles
-            return false
-        }
-
-        chromeSignInProfileIDs.remove(profileID)
-        await dataService.closeChromeSignIn(for: previousProfile)
-        updateDashboardStatus()
-        return true
     }
 
     @discardableResult
@@ -938,7 +896,7 @@ final class PlusProfileController {
                 var profile = snapshot.profile; profile.sortOrder = offset
                 return snapshot.updating(profile: profile)
             }
-            do { try catalogStore.saveProfiles(candidate.map(\.profile)) }
+            do { try catalogStore.saveProfiles(candidate.map(\.profile) + inactiveProfiles) }
             catch {
                 updateCatalogConsumers(trusted: false)
                 statusMessage = "The profile list could not be saved locally."
@@ -975,16 +933,8 @@ final class PlusProfileController {
         guard !isTransferring, appSignInRepairProgress == nil else { return }
         activeDataOperations += 1
         defer { activeDataOperations -= 1 }
-        guard var index = indexOfProfile(profileID) else { return }
-        var snapshot = profiles[index]
-
-        if snapshot.profile.provider == .claude, snapshot.state != .ready {
-            await refreshProfile(id: profileID)
-
-            guard let refreshedIndex = indexOfProfile(profileID) else { return }
-            index = refreshedIndex
-            snapshot = profiles[index]
-        }
+        guard let index = indexOfProfile(profileID) else { return }
+        let snapshot = profiles[index]
 
         if snapshot.state == .ready, snapshot.usage != nil {
             do {
@@ -1155,13 +1105,15 @@ final class PlusProfileController {
 
         do {
             let loadResult = try catalogStore.loadProfilesWithReport()
+            inactiveProfiles = loadResult.profiles.filter { $0.provider != .codex }
+            let activeProfiles = loadResult.profiles.filter { $0.provider == .codex }
             trusted = loadResult.sourceExists
             let pendingRestore = FileManager.default.fileExists(atPath: catalogStore.directory.appendingPathComponent(BackupService.receiptName).path)
-            let migration = pendingRestore ? (loadResult.profiles, changed: false) : accountSwitchService.migrate(loadResult.profiles)
+            let migration = pendingRestore ? (activeProfiles, changed: false) : accountSwitchService.migrate(activeProfiles)
             storedProfiles = migration.0
             if migration.changed {
                 do {
-                    try catalogStore.saveProfiles(storedProfiles)
+                    try catalogStore.saveProfiles(storedProfiles + inactiveProfiles)
                     repairMessage = "Imported saved desktop sign-ins."
                 } catch {
                     trusted = false
@@ -1171,7 +1123,7 @@ final class PlusProfileController {
 
             if loadResult.removedDuplicateCount > 0 {
                 do {
-                    try catalogStore.saveProfiles(storedProfiles)
+                    try catalogStore.saveProfiles(storedProfiles + inactiveProfiles)
                     repairMessage = loadResult.removedDuplicateCount == 1
                         ? "Fixed 1 duplicate saved profile."
                         : "Fixed \(loadResult.removedDuplicateCount) duplicate saved profiles."
@@ -1411,7 +1363,7 @@ final class PlusProfileController {
         }
 
         do {
-            try catalogStore.saveProfiles(profiles.map(\.profile))
+            try catalogStore.saveProfiles(storedProfiles)
             updateCatalogConsumers(trusted: true)
             return true
         } catch {

@@ -183,7 +183,7 @@ struct ProfileSummaryRowTests {
 
     @Test
     func rowPresentationExposesProviderIdentity() {
-        var profile = sampleSnapshot(
+        let profile = sampleSnapshot(
             state: .ready,
             usage: nil,
             note: nil,
@@ -192,7 +192,6 @@ struct ProfileSummaryRowTests {
             isRefreshing: false,
             emailLink: nil
         ).profile
-        profile.provider = .claude
 
         let presentation = ProfileSummaryRowPresentation(
             snapshot: PlusProfileSnapshot(
@@ -205,7 +204,7 @@ struct ProfileSummaryRowTests {
             mode: .sidebar(isSelected: false)
         )
 
-        #expect(presentation.provider == .claude)
+        #expect(presentation.provider == .codex)
     }
 
     @Test

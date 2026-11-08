@@ -12,7 +12,7 @@ import WebKit
 
     static func collectCookies(profiles: [PlusProfile]) async -> [String: [BackupCookie]] {
         var result: [String: [BackupCookie]] = [:]
-        for profile in profiles {
+        for profile in profiles where profile.provider == .codex {
             let store = WKWebsiteDataStore(forIdentifier: profile.webDataStoreID)
             let cookies = await store.httpCookieStore.allCookies().map(BackupCookie.init)
             result[profile.id.uuidString] = cookies.filter { $0.isValid(for: profile.provider) }
@@ -21,7 +21,7 @@ import WebKit
     }
 
     static func restoreCookies(_ cookies: [String: [BackupCookie]], profiles: [PlusProfile]) async throws {
-        for profile in profiles {
+        for profile in profiles where profile.provider == .codex {
             let store = WKWebsiteDataStore(forIdentifier: profile.webDataStoreID)
             restoredStores[profile.webDataStoreID] = store
             for record in cookies[profile.id.uuidString] ?? [] {

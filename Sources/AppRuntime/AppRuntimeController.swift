@@ -116,7 +116,7 @@ final class AppRuntimeController {
         }
         do {
             let report = try chromeProfileStore.migrateAndPrune(
-                profiles: controller.profiles.map(\.profile)
+                profiles: controller.storedProfiles
             )
             Self.logger.info(
                 "Chrome storage prepared: migrated=\(report.migratedProfileCount, privacy: .public), orphans=\(report.removedOrphanCount, privacy: .public), disposableItems=\(report.removedDisposableItemCount, privacy: .public)"

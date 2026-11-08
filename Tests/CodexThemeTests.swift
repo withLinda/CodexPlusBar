@@ -231,7 +231,7 @@ struct CodexThemeTests {
     }
 
     @Test
-    func darkHardProviderCardsUseDeepAquaAndBlueSurfaceFamilies() {
+    func darkHardCodexCardsUseDeepAquaSurfaces() {
         #expect(
             CodexTheme.profileCardFillToken(
                 for: .codex,
@@ -244,19 +244,6 @@ struct CodexThemeTests {
                 isSelected: true,
                 preset: darkHardPreset
             ).hex == "#202E2F"
-        )
-        #expect(
-            CodexTheme.profileCardFillToken(
-                for: .claude,
-                preset: darkHardPreset
-            ).hex == "#222E34"
-        )
-        #expect(
-            CodexTheme.profileCardFillToken(
-                for: .claude,
-                isSelected: true,
-                preset: darkHardPreset
-            ).hex == "#2C3A40"
         )
     }
 
@@ -312,23 +299,10 @@ struct CodexThemeTests {
                     isSelected: isSelected,
                     preset: preset
                 )
-                let claudeFill = CodexTheme.profileCardFillToken(
-                    for: .claude,
-                    isSelected: isSelected,
-                    preset: preset
-                )
 
                 #expect(
                     codexFill == base.mixed(with: palette.codexProviderSurfaceTint, fraction: 0.44),
                     "\(preset.id) Codex cards should use their calm provider surface"
-                )
-                #expect(
-                    claudeFill == base.mixed(with: palette.bgBlue, fraction: 0.44),
-                    "\(preset.id) Claude cards should use the cool blue provider surface"
-                )
-                #expect(
-                    deltaE76(codexFill, claudeFill) >= 4,
-                    "\(preset.id) provider cards should keep a visible but calm perceptual color difference"
                 )
 
                 for provider in ProfileProvider.allCases {

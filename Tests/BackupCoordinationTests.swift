@@ -5,6 +5,31 @@ import WebKit
 @testable import CodexPlusBar
 
 @MainActor struct BackupCoordinationTests {
+    @Test(arguments: [false, true])
+    func exportCountsInactiveRecordsButOnlyCollectsCodexSessions(onlyLegacy: Bool) async throws {
+        let root = try backupTestDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = ProfileCatalogStore(fileURL: root.appendingPathComponent("profiles.json"))
+        let legacy = try legacyTestProfile()
+        let codex = backupTestProfile()
+        try store.saveProfiles(onlyLegacy ? [legacy] : [codex, legacy])
+        let profiles = PlusProfileController(catalogStore: store, autoStart: false)
+        let transfer = BackupTransferController(profiles: profiles,
+            email: DotTrickController(store: .init(fileURL: root.appendingPathComponent("email.json"))), root: root)
+        let manifest = await transfer.captureManifest()
+        #expect(transfer.replacesExistingData)
+        #expect(manifest.profileCount == (onlyLegacy ? 1 : 2))
+        #expect(manifest.cookies[legacy.id.uuidString] == nil)
+        #expect(manifest.cookies.count == (onlyLegacy ? 0 : 1))
+        let service = BackupService(root: root)
+        let archive = root.appendingPathComponent("test.backup")
+        try await service.export(to: archive, password: "test backup password", manifest: manifest)
+        let prepared = try await service.prepare(from: archive, password: "test backup password")
+        #expect(prepared.manifest.profileCount == manifest.profileCount)
+        await service.discard(prepared)
+        if !onlyLegacy { try? await WKWebsiteDataStore.remove(forIdentifier: codex.webDataStoreID) }
+    }
+
     @Test func nativePanelOwnsTheWorkflowUntilItCloses() async throws {
         let root = try backupTestDirectory()
         defer { try? FileManager.default.removeItem(at: root) }
@@ -39,7 +64,7 @@ import WebKit
     @Test func portableSessionRoundTripRetainsHttpOnlyAndNeverTouchesUnrelatedDomains() async throws {
         let profile = backupTestProfile()
         let store = WKWebsiteDataStore(forIdentifier: profile.webDataStoreID)
-        let cookie = try #require(BackupCookie(name: "sessionKey", value: "fixture-only", domain: ".claude.ai", path: "/",
+        let cookie = try #require(BackupCookie(name: "sessionKey", value: "fixture-only", domain: ".chatgpt.com", path: "/",
                                              secure: true, httpOnly: true, expires: Date().addingTimeInterval(3600), sameSite: "Lax").cookie)
         await store.httpCookieStore.setCookie(cookie)
         let foreign = try #require(HTTPCookie(properties: [.name: "private", .value: "do-not-export", .domain: "example.com", .path: "/"]))

@@ -333,8 +333,6 @@ actor RepairCompletions {
         let task = Task { await controller.repairBothSignIns(profileID: profile.id) }
         await barrier.started()
         #expect(!controller.canCheckOpenChamberSignIns)
-        let changedProvider = await controller.setProvider(.claude, for: profile.id)
-        #expect(!changedProvider)
         await controller.removeProfile(id: profile.id)
         await controller.saveDesktopSignIn(profileID: profile.id)
         #expect(controller.desktopSignInStatus == nil)

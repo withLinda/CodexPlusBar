@@ -65,9 +65,11 @@ struct BackupCookie: Codable, Sendable, Equatable {
     }
 
     func isValid(for provider: ProfileProvider) -> Bool {
-        let host = provider == .codex ? "chatgpt.com" : "claude.ai"
+        let host = "chatgpt.com"
         let normalized = domain.hasPrefix(".") ? String(domain.dropFirst()).lowercased() : domain.lowercased()
-        return (normalized == host || normalized.hasSuffix("." + host)) &&
+        // Old backups may contain inactive provider sessions. Validate their shape,
+        // but only Codex cookies are collected or replayed by BackupSessionBridge.
+        return (provider != .codex || normalized == host || normalized.hasSuffix("." + host)) &&
             !name.isEmpty && name.utf8.count < 1_024 && value.utf8.count <= 65_536 &&
             path.hasPrefix("/") && path.utf8.count <= 4_096 &&
             [name, value, domain, path].allSatisfy { !$0.contains("\0") && !$0.contains("\r") && !$0.contains("\n") } &&

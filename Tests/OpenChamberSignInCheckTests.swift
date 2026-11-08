@@ -78,7 +78,8 @@ struct OpenChamberSignInCheckTests {
         }
         var profiles = try entries.map(syncProfile)
         profiles.append(fixture.profile("missing"))
-        var claude = fixture.profile("claude"); claude.provider = .claude; profiles.append(claude)
+        var inactive = fixture.profile("inactive")
+        inactive.provider = ProfileProvider(rawValue: "retired-provider"); profiles.append(inactive)
         let client = SyncTestClient(entries), output = CheckOutput()
         let verifier = OpenCodeOpenAICredentialVerifier(request: { request in
             if request.url?.path == "/oauth/token" {

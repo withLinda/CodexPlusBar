@@ -15,7 +15,6 @@
 		0993B93FC6CCC397E02E65BF /* AccountWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39C5A0B333E8C1A19467704E /* AccountWindowView.swift */; };
 		09B474841ADFED7C0BB9BD8F /* CodexDesktopApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6754FC49ADD93718F33ABDB6 /* CodexDesktopApp.swift */; };
 		0ECB503ED16561F8384807F8 /* AccountWindowPresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0F88F72B4D638B549072FF2 /* AccountWindowPresenter.swift */; };
-		12A58B7E69D7EAC0C1FB8E9E /* ClaudeUsageService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B0D9071FF9E12547FAB4DEF /* ClaudeUsageService.swift */; };
 		177E39EDA3111E142BC4F794 /* MenuBarRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2865CCBFF7FF69A9A1449352 /* MenuBarRootView.swift */; };
 		183BED074053630F30DCA01B /* ChromeCookieImporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05F6D1A01173879911B4E355 /* ChromeCookieImporter.swift */; };
 		1CC950CFB0E4FC260FC0F66E /* CodexBrowserAuthorization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 016B95B308851AA63C6088B6 /* CodexBrowserAuthorization.swift */; };
@@ -39,7 +38,6 @@
 		46246E7896E5BDE19A4AE73A /* WorkspaceModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77CB4E67AC5FFFB8307F18C5 /* WorkspaceModels.swift */; };
 		466FDB783C536BDA6B79301D /* ArrayChunking.swift in Sources */ = {isa = PBXBuildFile; fileRef = 163E83213FAB46565EBD1730 /* ArrayChunking.swift */; };
 		48B7FCBD9CC11882A8B198D7 /* SelectorExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82984AC505E159F9A21AD9A5 /* SelectorExport.swift */; };
-		492905C0F183829A8DD4F40D /* ClaudeBootstrapService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EB2884883172C543A1D3822 /* ClaudeBootstrapService.swift */; };
 		4AB9875E4932721CAAE0D3A0 /* DotTrickGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 709228E93767951B3499A1C3 /* DotTrickGenerator.swift */; };
 		4E153C5FA8823885AFBCCB1D /* OpenChamberSyncStatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2820DACD0C61C524A4ECD46 /* OpenChamberSyncStatusView.swift */; };
 		4E8ECBC266AE28522A45DFD0 /* ProfileKeyboardShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42D52FDA17A73C900D1E7869 /* ProfileKeyboardShortcuts.swift */; };
@@ -83,7 +81,6 @@
 		A138671D146C2050370844D9 /* SelectorIdentityEvidence.swift in Sources */ = {isa = PBXBuildFile; fileRef = 141945054A9AE6F2CB73663E /* SelectorIdentityEvidence.swift */; };
 		A46CCD4FC90E071D45142211 /* Inter-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 1BC15159CBDD759D56C8596E /* Inter-Regular.ttf */; };
 		A899E6D55407F7CD8C0ACA04 /* ChatGPTAPIError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81400FBA3D7B45736A65F770 /* ChatGPTAPIError.swift */; };
-		AA02EDD36F547BD1E6727C0D /* ClaudeRequestSigner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 924C221CA29B37E3E43DE9F4 /* ClaudeRequestSigner.swift */; };
 		AAC2DD0D6D608AC9668FD83F /* EmailToolsWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 864277862C546E5920AB3163 /* EmailToolsWindowView.swift */; };
 		AEAB7F867EAA417C39CA40EA /* PlusProfileDataService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F0C740A5ED0A2BB15A75554 /* PlusProfileDataService.swift */; };
 		B0D9DEA1A710685A443CABDE /* MenuBarPanelTextScalePreference.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D6E8D24A2C7E16B085B2581 /* MenuBarPanelTextScalePreference.swift */; };
@@ -186,7 +183,6 @@
 		593821B61D542EC1B0B5D40E /* CodexPlusBar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CodexPlusBar.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		59FFC3B05EDF309E09E3DD01 /* AccountCatalogService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountCatalogService.swift; sourceTree = "<group>"; };
 		5ADC9A58E39E55458BD610F6 /* PlusProfileModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlusProfileModels.swift; sourceTree = "<group>"; };
-		5B0D9071FF9E12547FAB4DEF /* ClaudeUsageService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeUsageService.swift; sourceTree = "<group>"; };
 		5CA83EE4A24F4C71DD746CEE /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		61B4EA1729DE901852DAB94B /* WebBootstrapService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebBootstrapService.swift; sourceTree = "<group>"; };
 		632A895FCE893F0DABA5EB65 /* ChromeLauncher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChromeLauncher.swift; sourceTree = "<group>"; };
@@ -209,10 +205,8 @@
 		8416D8C433CC85EDA06BDC61 /* CodexLegacySignInImporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexLegacySignInImporter.swift; sourceTree = "<group>"; };
 		864277862C546E5920AB3163 /* EmailToolsWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmailToolsWindowView.swift; sourceTree = "<group>"; };
 		8DB2AA3A3AF7C0E47B6DF5CE /* CookieBackedTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CookieBackedTransport.swift; sourceTree = "<group>"; };
-		8EB2884883172C543A1D3822 /* ClaudeBootstrapService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeBootstrapService.swift; sourceTree = "<group>"; };
 		8F39863D2B64EA5F98248247 /* OpenCodeSignInSnapshotStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodeSignInSnapshotStore.swift; sourceTree = "<group>"; };
 		91700F5F32C34F01643AE183 /* ProfileSignInSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileSignInSection.swift; sourceTree = "<group>"; };
-		924C221CA29B37E3E43DE9F4 /* ClaudeRequestSigner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeRequestSigner.swift; sourceTree = "<group>"; };
 		9436E943E02911A56E969EE6 /* AccountCatalogNormalizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountCatalogNormalizer.swift; sourceTree = "<group>"; };
 		98D3E3E241F3226CD7AA400E /* CodexSignInVerifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexSignInVerifier.swift; sourceTree = "<group>"; };
 		9AD32F42F517EFCA76D09BFC /* SelectorExportStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectorExportStore.swift; sourceTree = "<group>"; };
@@ -294,9 +288,6 @@
 				632A895FCE893F0DABA5EB65 /* ChromeLauncher.swift */,
 				68B451BFB2C027E9029F6F23 /* ChromeProfileStore.swift */,
 				1BAB88AED342C0D907A72DB5 /* ChromeSessionManager.swift */,
-				8EB2884883172C543A1D3822 /* ClaudeBootstrapService.swift */,
-				924C221CA29B37E3E43DE9F4 /* ClaudeRequestSigner.swift */,
-				5B0D9071FF9E12547FAB4DEF /* ClaudeUsageService.swift */,
 				DF562E09FAC0315C1413120C /* CodexAccountSwitchService.swift */,
 				016B95B308851AA63C6088B6 /* CodexBrowserAuthorization.swift */,
 				6754FC49ADD93718F33ABDB6 /* CodexDesktopApp.swift */,
@@ -619,9 +610,6 @@
 				66B9F1CD41EAB57A4E9B5275 /* ChromeLauncher.swift in Sources */,
 				64FA25D57C1F29959BB5115B /* ChromeProfileStore.swift in Sources */,
 				2ECE03F2044A2EB02194E7B5 /* ChromeSessionManager.swift in Sources */,
-				492905C0F183829A8DD4F40D /* ClaudeBootstrapService.swift in Sources */,
-				AA02EDD36F547BD1E6727C0D /* ClaudeRequestSigner.swift in Sources */,
-				12A58B7E69D7EAC0C1FB8E9E /* ClaudeUsageService.swift in Sources */,
 				9F4BB893794F0163A8A84E66 /* CodexAccountSwitchService.swift in Sources */,
 				27CDE503346F4D51A31A9AE3 /* CodexAppDelegate.swift in Sources */,
 				1CC950CFB0E4FC260FC0F66E /* CodexBrowserAuthorization.swift in Sources */,
@@ -732,13 +720,13 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 21;
+				CURRENT_PROJECT_VERSION = 22;
 				INFOPLIST_FILE = Sources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.6.1;
+				MARKETING_VERSION = 1.6.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.linda.CodexPlusBar;
 				SDKROOT = macosx;
 			};
@@ -826,13 +814,13 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 21;
+				CURRENT_PROJECT_VERSION = 22;
 				INFOPLIST_FILE = Sources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.6.1;
+				MARKETING_VERSION = 1.6.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.linda.CodexPlusBar;
 				SDKROOT = macosx;
 			};

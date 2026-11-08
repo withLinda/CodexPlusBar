@@ -4,6 +4,15 @@ import Testing
 
 struct ProfileCatalogStoreTests {
     @Test
+    func unsupportedProviderIdentityRoundTripsInsteadOfBecomingCodex() throws {
+        let profile = try legacyTestProfile(provider: "retired-provider")
+        #expect(profile.provider.rawValue == "retired-provider")
+        #expect(profile.provider != .codex)
+        let restored = try JSONDecoder().decode(PlusProfile.self, from: JSONEncoder().encode(profile))
+        #expect(restored.provider.rawValue == "retired-provider")
+    }
+
+    @Test
     func saveAndLoadProfilesPreservesOrderAndIdentifiers() throws {
         let tempDirectory = makeTemporaryDirectory()
         let store = ProfileCatalogStore(

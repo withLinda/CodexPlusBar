@@ -844,12 +844,7 @@ enum CodexTheme {
         let base = isSelected
             ? surfaceToken(for: .strong, preset: preset)
             : cardFillToken(for: .nested, preset: preset)
-        let providerTint = switch provider {
-        case .codex:
-            palette.codexProviderSurfaceTint
-        case .claude:
-            palette.bgBlue
-        }
+        let providerTint = palette.codexProviderSurfaceTint
 
         return base.mixed(
             with: providerTint,
@@ -886,12 +881,7 @@ enum CodexTheme {
         preset: CodexThemePreset
     ) -> CodexColorToken {
         let palette = palette(for: preset)
-        let accent = switch provider {
-        case .codex:
-            palette.accOrange
-        case .claude:
-            palette.accBlue
-        }
+        let accent = palette.accOrange
 
         return readableAccentToken(
             accent,
