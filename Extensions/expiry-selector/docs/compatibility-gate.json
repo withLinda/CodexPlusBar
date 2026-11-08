@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "target": { "openchamber": "2.7.0", "opencode": "2.2.6" },
+  "proofs": [
+    { "id": "extensionLifecycle", "status": "partial", "reason": "Built probe loads in two native locations; actual OpenChamber extension install/unload is not exercised." },
+    { "id": "singleOwner", "status": "partial", "reason": "Process-global identity sharing passes; FIFO and two-process listener exclusion remain untested." },
+    { "id": "promptBoundary", "status": "partial", "reason": "Prompt activation before first transport passes; synthetic wake/tool continuation remain untested." },
+    { "id": "retryBoundary", "status": "partial", "reason": "Actual retry changes A to B; exactly-once tool side effects remain untested." },
+    { "id": "transportCoherence", "status": "partial", "reason": "Deliberately stale model header is repaired on HTTP, WS and WS-to-HTTP fallback; delayed native provider reload and both header casings remain to be tested." },
+    { "id": "lateFailureAttribution", "status": "partial", "reason": "Controlled late A failure after cross-location B activation attributes A; concurrent title/generate remain untested." },
+    { "id": "missingActivationReadback", "status": "passed", "reason": "Missing native ID leaves A selected; verified through plugin active connection readback." },
+    { "id": "nativeRefreshSingleFlight", "status": "not-run", "reason": "Controlled fixture OAuth refresh proof remains unimplemented." },
+    { "id": "browserIdentity.accountAndUser", "status": "blocked", "reason": "No representative sanitized browser session/JWT fixture establishes the browser user ID and its relationship to native chatgpt_user_id. Existing session tests use opaque token-alpha/token-bravo placeholders without user fields." },
+    { "id": "competitorAndMaintenanceReload", "status": "not-run", "reason": "Competitor guard and maintenance barrier reload proofs remain unimplemented." }
+  ]
+}

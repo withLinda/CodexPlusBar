@@ -1,0 +1,23 @@
+{
+  "name": "codexplusbar-expiry-selector",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "build": "node scripts/build.mjs",
+    "test:runtime": "node scripts/runtime-probe.mjs",
+    "verify:package": "node scripts/verify-package.mjs"
+  },
+  "devDependencies": {
+    "@openchamber/sdk": "2.7.0",
+    "@opencode/plugin": "2.2.6",
+    "@types/node": "25.5.0",
+    "@types/ws": "8.18.2",
+    "esbuild": "0.28.2",
+    "typescript": "7.0.2",
+    "vitest": "4.1.0",
+    "ws": "8.22.1"
+  }
+}
