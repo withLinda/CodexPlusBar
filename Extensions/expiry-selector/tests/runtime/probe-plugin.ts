@@ -2,7 +2,8 @@ import type { Plugin } from '@opencode/plugin';
 import { fixtureAccount } from './fixtures.js';
 import { accounts, credential } from './fixtures.js';
 import { NativeAdapter } from '../../src/plugin/native-adapter.js';
-import { cohereAccountHeader } from '../../src/plugin/request-observer.js';
+import { RequestObserver } from '../../src/plugin/request-observer.js';
+import { registerTransportHooks } from '../../src/plugin/transport-hooks.js';
 import { tokenIdentity } from '../../src/shared/identity.js';
 import { createProbeOwner } from './probe-owner.js';
 
@@ -77,7 +78,8 @@ export default {
     }));
     const observed: { kind: string; transport: string; accountID: string; header: string | null; before: string | null }[] = [];
     const exhausted: string[] = [];
-    const primary = new Map<string, string>();
+    const observer = new RequestObserver();
+    const beforeHeaders = new Map<string, string | null>();
     await ctx.rpc.register(rpc, {
       async control(input) {
         const value = input as { promptTarget?: string | null; retryTarget?: string | null; racedHeader?: string | null; httpOnly?: boolean; activate?: string; releaseRefresh?: boolean; skipTitle?: boolean;
@@ -123,6 +125,7 @@ export default {
         return owner.status();
       },
       async status() { return { ...owner.status(), observed, exhausted,
+        observerRecords: observer.size,
         resolvesStarted: owner.resolvesStarted, refreshCalls: owner.refreshCalls, toolEffects, promptCalls,
         delayedReloads, transportWaiting, titleWaiting,
         fixtureTools: (await ctx.tool.list()).filter(tool => tool.name.includes('expiry')).map(tool => ({ id: tool.id, name: tool.name })),
@@ -143,11 +146,16 @@ export default {
       if (transportGate) { transportWaiting = true; await transportGate.promise; }
     }, { providerID: 'openai' });
     await ctx.session.hook('http.request', event => {
-      const before = event.request.headers.get('chatgpt-account-id');
-      cohereAccountHeader(event.request.url, event.request.headers, managed);
+      beforeHeaders.set(`${event.sessionID}:${event.kind}:http`, event.request.headers.get('chatgpt-account-id'));
+    }, { providerID: 'openai' });
+    await ctx.session.hook('experimental.ws.handshake', event => {
+      beforeHeaders.set(`${event.sessionID}:${event.kind}:ws`, new Headers(event.headers).get('chatgpt-account-id'));
+    }, { providerID: 'openai' });
+    const disposeObserver = await registerTransportHooks(ctx, observer, () => managed);
+    await ctx.session.hook('http.request', event => {
+      const before = beforeHeaders.get(`${event.sessionID}:${event.kind}:http`) ?? null;
       const accountID = fixtureAccount(event.request.headers.get('authorization'));
       observed.push({ kind: event.kind, transport: 'http', accountID, header: event.request.headers.get('chatgpt-account-id'), before });
-      if (event.kind === 'primary') primary.set(event.sessionID, accountID);
       const url = new URL(event.request.url);
       if (url.origin !== 'https://chatgpt.com' || !url.pathname.startsWith('/backend-api/codex/')) throw new Error('Unexpected route');
       event.request.headers.set('x-fixture-kind', event.kind);
@@ -155,24 +163,25 @@ export default {
     }, { providerID: 'openai' });
     await ctx.session.hook('experimental.ws.handshake', event => {
       const headers = new Headers(event.headers);
-      const before = headers.get('chatgpt-account-id');
-      cohereAccountHeader(event.url, headers, managed);
+      const before = beforeHeaders.get(`${event.sessionID}:${event.kind}:ws`) ?? null;
       event.headers = Object.fromEntries(headers.entries());
       const accountID = fixtureAccount(headers.get('authorization'));
       observed.push({ kind: event.kind, transport: 'websocket', accountID, header: headers.get('chatgpt-account-id'), before });
-      if (event.kind === 'primary') primary.set(event.sessionID, accountID);
       const url = new URL(event.url);
       if (url.origin !== 'wss://chatgpt.com' || !url.pathname.startsWith('/backend-api/codex/')) throw new Error('Unexpected WS route');
       event.url = origin.replace('http:', 'ws:') + (httpOnly ? '/refuse' : url.pathname);
     }, { providerID: 'openai' });
     await ctx.session.hook('retry', async event => {
       if (!retryTarget) return;
-      const identity = primary.get(event.sessionID);
-      if (identity) exhausted.push(identity);
+      const attribution = observer.takeRetryAttribution({ locationKey: ctx.location.directory, sessionID: event.sessionID,
+        providerID: event.model.providerID, modelID: event.model.id, agent: event.agent });
+      if (!attribution) return;
+      exhausted.push(attribution.identity.accountID);
       if (!await queuedActivate(retryTarget)) return;
       if (await native.activeID() === retryTarget) event.decision = { retry: true, delay: 0 };
     }, { providerID: 'openai' });
     return async () => {
+      await disposeObserver();
       owner.locations.delete(ctx.location.directory);
       if (!owner.locations.size) { await owner.close(); delete globals[key]; }
     };

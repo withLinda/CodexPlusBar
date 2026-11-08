@@ -132,6 +132,7 @@ test('synthetic wake observes global selection without running the prompt select
   await runtime.api(`/api/experimental/session/${session.id}/wait`, {});
   expect(provider.requests.slice(before).map(row => row.accountID)).toEqual([accounts.A.accountID]);
   expect((await runtime.rpc('status')).promptCalls).toBe(initial.promptCalls);
+  await expect.poll(async () => (await runtime.rpc('status')).observerRecords).toBe(0);
 });
 
 test('concurrent generate on B cannot replace primary A retry attribution', async () => {

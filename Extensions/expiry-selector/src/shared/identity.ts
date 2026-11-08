@@ -11,9 +11,11 @@ export function tokenIdentity(authorization: string | null): Identity | null {
     const claims = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
     const auth = claims?.['https://api.openai.com/auth'];
     const accountID: unknown = auth?.chatgpt_account_id;
-    const userID: unknown = auth?.chatgpt_user_id;
-    if (typeof accountID !== 'string' || !accountID || accountID.includes('\n') ||
-        typeof userID !== 'string' || !userID || userID.includes('\n')) return null;
+    const userID: unknown = auth?.chatgpt_user_id ?? auth?.user_id;
+    if (auth?.chatgpt_user_id !== undefined && auth?.user_id !== undefined && auth.chatgpt_user_id !== auth.user_id) return null;
+    const canonical = (value: unknown): value is string => typeof value === 'string' && value.length > 0 && value.length <= 512 &&
+      value.trim() === value && !/[\x00-\x1f\x7f]/.test(value);
+    if (!canonical(accountID) || !canonical(userID)) return null;
     return { accountID, identityKey: createHash('sha256').update(`${accountID}\n${userID}`).digest('hex') };
   } catch { return null; }
 }
