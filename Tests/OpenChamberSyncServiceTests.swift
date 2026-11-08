@@ -3,6 +3,57 @@ import Testing
 @testable import CodexPlusBar
 
 struct OpenChamberSyncServiceTests {
+    @Test func selectorAllowsInactiveRestoreWithoutChangingConfirmedActiveConnection() async throws {
+        let fixture = try SyncServiceFixture(); defer { fixture.remove() }
+        let active = try nativeCredential("active", active: true), missing = try nativeCredential("missing")
+        try fixture.snapshots.saveNative(missing, identity: missing.openAIIdentity())
+        let client = SyncTestClient([active])
+        let service = OpenChamberSyncService(resolveClient: { client }, gate: .init(), snapshots: fixture.snapshots,
+            stateStore: fixture.state, verifier: SyncTestVerifier(), selector: MaintenanceTestControl(state: .auto))
+        let result = try await service.reconcile(catalog: fixture.catalog([active, missing]), isCurrent: { _ in true })
+        #expect(result.matchedCount == 2)
+        #expect(!result.deferredSelectorMutation)
+        #expect(await client.inventory().openAI.first(where: \.active) == active)
+    }
+
+    @Test func nativeLoginAppearingDuringSnapshotVerificationPreventsSavedTokenRefresh() async throws {
+        let fixture = try SyncServiceFixture(); defer { fixture.remove() }
+        let active = try nativeCredential("active", active: true), missing = try nativeCredential("missing")
+        try fixture.snapshots.saveNative(missing, identity: missing.openAIIdentity())
+        let client = SyncTestClient([active]), verifier = AppearingNativeVerifier(client: client, entry: missing)
+        let service = OpenChamberSyncService(resolveClient: { client }, gate: .init(), snapshots: fixture.snapshots,
+            stateStore: fixture.state, verifier: verifier, selector: MaintenanceTestControl(state: .auto))
+        let result = try await service.reconcile(catalog: fixture.catalog([active, missing]), isCurrent: { _ in true })
+        #expect(await verifier.refreshes == 0)
+        #expect(result.matchedCount == 2)
+    }
+
+    @Test func selectorOwnershipDefersAllRemovalsButKeepsVerifiedBindings() async throws {
+        let fixture = try SyncServiceFixture(); defer { fixture.remove() }
+        let a = try nativeCredential("alpha", active: true), old = try nativeCredential("old")
+        let client = SyncTestClient([a, old])
+        let selector = MaintenanceTestControl(state: .auto)
+        let service = OpenChamberSyncService(resolveClient: { client }, gate: .init(), snapshots: fixture.snapshots,
+            stateStore: fixture.state, selector: selector)
+        let result = try await service.reconcile(catalog: fixture.catalog([a]), isCurrent: { _ in true })
+        #expect(result.deferredSelectorMutation)
+        #expect(result.matchedCount == 1)
+        #expect(await client.operations.isEmpty)
+        #expect(await client.entries.count == 2)
+    }
+
+    @Test func selectorOwnershipDefersFirstNativeCredentialCreation() async throws {
+        let fixture = try SyncServiceFixture(); defer { fixture.remove() }
+        let entry = try nativeCredential("alpha")
+        try fixture.snapshots.saveNative(entry, identity: entry.openAIIdentity())
+        let client = SyncTestClient([])
+        let service = OpenChamberSyncService(resolveClient: { client }, gate: .init(), snapshots: fixture.snapshots,
+            stateStore: fixture.state, selector: MaintenanceTestControl(state: .auto))
+        let result = try await service.reconcile(catalog: fixture.catalog([entry]), isCurrent: { _ in true })
+        #expect(result.deferredSelectorMutation)
+        #expect(await client.operations.isEmpty)
+    }
+
     @Test func malformedRefreshResponseDefersRestoreInsteadOfRequestingNewSignIn() async throws {
         let fixture = try SyncServiceFixture(); defer { fixture.remove() }
         let entry = try nativeCredential("alpha")
@@ -203,6 +254,21 @@ private struct FailedRestoreVerifier: OpenCodeOpenAICredentialVerifying {
     let failure: OpenCodeOpenAIVerificationError
     func verify(_ auth: OpenCodeOpenAIAuth) async throws { throw failure }
     func refresh(_ auth: OpenCodeOpenAIAuth) async throws -> OpenCodeOpenAIAuth { throw failure }
+}
+
+private actor AppearingNativeVerifier: OpenCodeOpenAICredentialVerifying {
+    let client: SyncTestClient
+    let entry: OpenCodeStoredCredential
+    var refreshes = 0
+    init(client: SyncTestClient, entry: OpenCodeStoredCredential) { self.client = client; self.entry = entry }
+    func verify(_ auth: OpenCodeOpenAIAuth) async throws {
+        await client.append(entry)
+        throw OpenCodeOpenAIVerificationError.unauthorized
+    }
+    func refresh(_ auth: OpenCodeOpenAIAuth) async throws -> OpenCodeOpenAIAuth {
+        refreshes += 1
+        throw OpenCodeOpenAIVerificationError.reauthenticationRequired
+    }
 }
 
 struct SyncServiceFixture {

@@ -70,6 +70,7 @@
 		7836C2439EBAE653FD60F644 /* OpenChamberSyncPreference.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9913EFDBB3E4A5DE5537F51 /* OpenChamberSyncPreference.swift */; };
 		7ABB06A77AA7DF87C790A849 /* ProfileTagViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2D8B357AE9E8E39D52E54D8 /* ProfileTagViews.swift */; };
 		7B7FAA38CCFD43257B91E417 /* AuthSessionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05FB861FD211C30C13F441A6 /* AuthSessionService.swift */; };
+		7F093870C9CF42FD88FD1DEA /* SelectorControlClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09FE3A6F87B8EE3861949B8E /* SelectorControlClient.swift */; };
 		7FEC8D0EA907E8BB4C62CFF1 /* BackupManifest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21DF02CC5E50936F42A54924 /* BackupManifest.swift */; };
 		8491E254498B90904C946B1F /* ProfilePhoneNumberComboBox.swift in Sources */ = {isa = PBXBuildFile; fileRef = F369067FAFB972FD6B6E3E08 /* ProfilePhoneNumberComboBox.swift */; };
 		89BE04B8E01A11995B81279C /* Manrope.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 1180E836FF1F527C13A405F6 /* Manrope.ttf */; };
@@ -138,6 +139,7 @@
 		05F6D1A01173879911B4E355 /* ChromeCookieImporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChromeCookieImporter.swift; sourceTree = "<group>"; };
 		05FB861FD211C30C13F441A6 /* AuthSessionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthSessionService.swift; sourceTree = "<group>"; };
 		0943E3401A421B19D7C9FE6C /* ChromeDevToolsClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChromeDevToolsClient.swift; sourceTree = "<group>"; };
+		09FE3A6F87B8EE3861949B8E /* SelectorControlClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectorControlClient.swift; sourceTree = "<group>"; };
 		0B6BFE65AA07E2512FA5D398 /* CormorantGaramond.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = CormorantGaramond.ttf; sourceTree = "<group>"; };
 		0D71430D5A24E98E43ED2A14 /* ProfileSummaryRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileSummaryRow.swift; sourceTree = "<group>"; };
 		0EB1DD9E6856835EF0ECA2C6 /* CodexSignInStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexSignInStorage.swift; sourceTree = "<group>"; };
@@ -322,6 +324,7 @@
 				1F0C740A5ED0A2BB15A75554 /* PlusProfileDataService.swift */,
 				FA93438B8CFDA14DDC4B2D65 /* ProfileCatalogStore.swift */,
 				AC100253BC756ECF8B338B48 /* ProfileRuntimeRegistry.swift */,
+				09FE3A6F87B8EE3861949B8E /* SelectorControlClient.swift */,
 				4C2420E56C976EAC7063683C /* SelectorExportPublisher.swift */,
 				9AD32F42F517EFCA76D09BFC /* SelectorExportStore.swift */,
 				141945054A9AE6F2CB73663E /* SelectorIdentityEvidence.swift */,
@@ -677,6 +680,7 @@
 				21284C4342EE9DBC5B114877 /* ProfileSignInSection.swift in Sources */,
 				6ADDCE751FD6C31E1759C80C /* ProfileSummaryRow.swift in Sources */,
 				7ABB06A77AA7DF87C790A849 /* ProfileTagViews.swift in Sources */,
+				7F093870C9CF42FD88FD1DEA /* SelectorControlClient.swift in Sources */,
 				48B7FCBD9CC11882A8B198D7 /* SelectorExport.swift in Sources */,
 				35BD902A6191BBF858BFA966 /* SelectorExportPublisher.swift in Sources */,
 				4036E5B4D91CF9FADA81B301 /* SelectorExportStore.swift in Sources */,

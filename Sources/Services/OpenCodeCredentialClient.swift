@@ -152,6 +152,7 @@ actor OpenCodeCredentialClient: OpenCodeCredentialServing {
     }
 
     func create(id: String, label: String, value: OpenCodeCredentialValue, activate: Bool) async throws -> OpenCodeStoredCredential {
+        try await SelectorMaintenanceContext.check()
         try Self.validate(id)
         _ = try value.auth()
         let data = try await send("api/credential", method: "POST", body: JSONEncoder().encode(Create(id: id, label: label, value: value, activate: activate)), status: 200)
@@ -164,10 +165,12 @@ actor OpenCodeCredentialClient: OpenCodeCredentialServing {
         _ = try await send("api/credential/\(id)", method: "PATCH", body: JSONEncoder().encode(["label": label]), status: 204)
     }
     func activate(id: String) async throws {
+        try await SelectorMaintenanceContext.check()
         try Self.validate(id)
         _ = try await send("api/credential/\(id)/activate", method: "POST", body: Data("{}".utf8), status: 204)
     }
     func remove(id: String) async throws {
+        try await SelectorMaintenanceContext.check()
         try Self.validate(id)
         _ = try await send("api/credential/\(id)", method: "DELETE", status: 204)
     }

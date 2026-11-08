@@ -114,13 +114,16 @@ struct AppSignInRepairTests {
         await client.activate(id: installed.id)
         let barrier = cancel ? SyncBarrier() : nil
         let verifier = RepairRotationVerifier(fresh: try c.openChamberAuth(), barrier: barrier)
-        let retry = OpenChamberRepairInstaller(resolveClient: { client }, snapshots: snapshots, verifier: verifier, gate: .init())
+        let selector = MaintenanceTestControl(state: .auto)
+        let retry = OpenChamberRepairInstaller(resolveClient: { client }, snapshots: snapshots, verifier: verifier, gate: .init(), selector: selector)
         let task = Task { try await retry.install(a, for: CodexSignInFixture.profile()) }
         if let barrier {
             await barrier.started(); task.cancel(); await barrier.release()
             await #expect(throws: CancellationError.self) { try await task.value }
         } else { try await task.value }
         #expect(try await client.inventory().openAI.first(where: \.active)?.value.auth().refresh == "fresh-c")
+        #expect(await selector.events.last == "end")
+        #expect(await selector.state == .paused)
         // Original receipt must reach C across an app restart, including when
         // native rotation B was adopted before our controlled refresh B -> C.
         try await OpenChamberRepairInstaller(resolveClient: { client }, snapshots: snapshots, verifier: verifier, gate: .init())

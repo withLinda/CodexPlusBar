@@ -154,15 +154,17 @@ struct OpenChamberSignInCheckTests {
         #expect(try snapshots.resolved(expired) == fresh)
     }
 
-    @Test func cancelAfterRefreshResponsePreservesFreshNativeValueBeforeStopping() async throws {
+    @Test(arguments: [false, true]) func cancelAfterRefreshResponsePreservesFreshNativeValueBeforeStopping(selectorRunning: Bool) async throws {
         let fixture = try OpenCodeAuthFixture(); defer { fixture.remove() }
         let expired = try fixture.auth("expired", expires: 0), fresh = try fixture.auth("expired", refresh: "fresh")
         let entry = OpenCodeStoredCredential(id: "cred_expired", integrationID: "openai", label: "Expired", active: false, value: .legacy(expired))
         let original = try nativeCredential("original", active: true)
         let client = SyncTestClient([original, entry]), barrier = SyncBarrier(), output = CheckOutput()
         let snapshots = OpenCodeSignInSnapshotStore(homeDirectory: fixture.home)
+        let selector = MaintenanceTestControl(state: .auto)
         let service = OpenChamberSignInCheckService(resolveClient: { client }, snapshots: snapshots,
-            verifier: CountingCheckVerifier(fresh: fresh, barrier: barrier), gate: OpenCodeOperationGate(), now: { OpenCodeAuthFixture.now })
+            verifier: CountingCheckVerifier(fresh: fresh, barrier: barrier), gate: OpenCodeOperationGate(), now: { OpenCodeAuthFixture.now },
+            selector: selectorRunning ? selector : nil)
         let task = Task { try await service.check(profiles: [syncProfile(entry)]) { await output.append($0) } }
         await barrier.started(); task.cancel(); await barrier.release()
         await #expect(throws: CancellationError.self) { try await task.value }
@@ -170,6 +172,7 @@ struct OpenChamberSignInCheckTests {
         #expect(try await client.inventory().oauth.contains { try $0.value.auth() == fresh })
         #expect(await output.values.isEmpty)
         #expect(await client.inventory().openAI.first(where: \.active) == original)
+        if selectorRunning { #expect(await selector.events.last == "end"); #expect(await selector.state == .paused) }
     }
 }
 

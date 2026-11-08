@@ -654,6 +654,7 @@ final class PlusProfileController {
                 let message: String
                 if error is CancellationError { message = "Repair cancelled." }
                 else if let error = error as? AppSignInRepairError { message = error.localizedDescription }
+                else if let error = error as? SelectorControlError { message = error.localizedDescription }
                 else if let error = error as? CodexSignInError { message = error.localizedDescription }
                 else if let error = error as? OpenCodeCredentialError { message = error.localizedDescription }
                 else if let error = error as? OpenCodeOpenAIVerificationError { message = error.localizedDescription }
@@ -771,7 +772,8 @@ final class PlusProfileController {
             } catch is CancellationError {
                 // Keep completed results and show the remaining unchecked count.
             } catch {
-                openChamberCheckError = "Check unavailable. Open local OpenChamber and retry."
+                openChamberCheckError = (error as? SelectorControlError)?.localizedDescription
+                    ?? "Check unavailable. Open local OpenChamber and retry."
             }
         }
         openChamberCheckTask = task

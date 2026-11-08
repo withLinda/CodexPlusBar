@@ -3,6 +3,41 @@ import Testing
 @testable import CodexPlusBar
 
 struct OpenCodeOpenAIAuthServiceTests {
+    @Test func selectorRestartDuringVerificationPreventsLocalCredentialWrite() async throws {
+        let fixture = try OpenCodeAuthFixture(); defer { fixture.remove() }
+        let target = try fixture.auth("target"), original = try fixture.auth("original")
+        let profile = try await fixture.prepareTarget(target)
+        try fixture.write(original)
+        let selector = MaintenanceTestControl(state: .auto)
+        let service = OpenCodeOpenAIAuthService(homeDirectory: fixture.home,
+            resolveRuntime: { OpenCodeLocalRuntime(authURL: fixture.authURL) },
+            verifier: OpenCodeOpenAICredentialVerifier(request: { request in
+                await selector.restart()
+                return (Data(#"{"rate_limit":{}}"#.utf8), HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!)
+            }), operationGate: .init(), selector: selector)
+        await #expect(throws: (any Error).self) { try await service.switchTo(profile: profile) }
+        #expect(try fixture.current() == original)
+    }
+
+    @Test func manualSwitchObtainsAndReleasesMaintenanceOutsideTheLocalGate() async throws {
+        let fixture = try OpenCodeAuthFixture(); defer { fixture.remove() }
+        let target = try fixture.auth("target"), original = try fixture.auth("original")
+        let profile = try await fixture.prepareTarget(target)
+        try fixture.write(original)
+        let gate = OpenCodeOperationGate()
+        let selector = MaintenanceTestControl(state: .auto, gate: gate)
+        let service = OpenCodeOpenAIAuthService(homeDirectory: fixture.home,
+            resolveRuntime: { OpenCodeLocalRuntime(authURL: fixture.authURL) }, verifier: OpenCodeOpenAICredentialVerifier(request: { request in
+                (Data(#"{"rate_limit":{}}"#.utf8), HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!)
+            }),
+            operationGate: gate, selector: selector)
+        try await service.switchTo(profile: profile)
+        #expect(try fixture.current() == target)
+        #expect(await selector.events.first == "begin")
+        #expect(await selector.events.last == "end")
+        #expect(await selector.state == .paused)
+    }
+
     @Test(.enabled(if: ProcessInfo.processInfo.environment["OPENCHAMBER_RUNTIME_PROBE"] == "1"))
     func installedLocalRuntimeCanBeDiscoveredReadOnly() async throws {
         let runtime = try await OpenCodeLocalRuntime.discover()

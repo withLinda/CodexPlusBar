@@ -39,7 +39,8 @@ final class OpenChamberSyncScheduler {
                            needsSignInProfileIDs: previous.needsSignInProfileIDs.subtracting([profileID]),
                            pendingCredentialCount: previous.pendingCredentialCount,
                            deferredActiveRemoval: previous.deferredActiveRemoval,
-                           deferredRestoreProfileIDs: previous.deferredRestoreProfileIDs.subtracting([profileID]))
+                           deferredRestoreProfileIDs: previous.deferredRestoreProfileIDs.subtracting([profileID]),
+                           deferredSelectorMutation: previous.deferredSelectorMutation)
             message = "OpenChamber sync pending…"
         }
     }
@@ -158,6 +159,7 @@ final class OpenChamberSyncScheduler {
         if let error = error as? OpenChamberSyncError { return error.localizedDescription }
         if let error = error as? OpenCodeCredentialError { return error.localizedDescription }
         if let error = error as? OpenCodeOpenAIAuthError { return error.localizedDescription }
+        if let error = error as? SelectorControlError { return error.localizedDescription }
         return "OpenChamber sync could not finish. It will retry."
     }
 }

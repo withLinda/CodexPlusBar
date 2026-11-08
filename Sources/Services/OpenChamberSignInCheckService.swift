@@ -10,19 +10,23 @@ actor OpenChamberSignInCheckService: OpenChamberSignInChecking {
     private let verifier: any OpenCodeOpenAICredentialVerifying
     private let gate: OpenCodeOperationGate
     private let now: @Sendable () -> Date
+    private let selector: any SelectorControlling
 
     init(resolveClient: @escaping @Sendable () async throws -> any OpenCodeCredentialServing = {
         guard let client = try await OpenCodeLocalRuntime.discover().credentials else { throw OpenCodeCredentialError.unavailable }
         return client
     }, snapshots: OpenCodeSignInSnapshotStore = .init(),
          verifier: any OpenCodeOpenAICredentialVerifying = OpenCodeOpenAICredentialVerifier(),
-         gate: OpenCodeOperationGate = .shared, now: @escaping @Sendable () -> Date = { .now }) {
+         gate: OpenCodeOperationGate = .shared, now: @escaping @Sendable () -> Date = { .now }, selector: (any SelectorControlling)? = nil) {
         self.resolveClient = resolveClient; self.snapshots = snapshots; self.verifier = verifier
         self.gate = gate; self.now = now
+        self.selector = selector ?? SelectorControlClient(homeDirectory: snapshots.homeDirectory)
     }
 
     func check(profiles: [PlusProfile], didCheck: @escaping @Sendable (OpenChamberSignInCheckUpdate) async -> Void) async throws {
-        try await gate.withOperation { try await self.perform(profiles: profiles, didCheck: didCheck) }
+        try await selector.withMaintenance(reason: .signInRepair) {
+            try await self.gate.withOperation { try await self.perform(profiles: profiles, didCheck: didCheck) }
+        }
     }
 
     private func perform(profiles: [PlusProfile], didCheck: @escaping @Sendable (OpenChamberSignInCheckUpdate) async -> Void) async throws {
@@ -80,15 +84,16 @@ actor OpenChamberSignInCheckService: OpenChamberSignInChecking {
                     // or native token rotation that happened while the request was in flight.
                     let before = try await client.inventory()
                     try requireCandidatesUnchanged(identity, binding: binding, expected: expected, in: before)
+                    try await SelectorMaintenanceContext.check()
                     let fresh = try await verifier.refresh(auth)
                     guard try fresh.identity().matches(identity) else { throw OpenCodeOpenAIAuthError.identityMismatch }
                     try snapshots.saveRefreshed(fresh, replacing: auth)
                     auth = fresh
                     if let original = entry {
                         // Finish preserving consumed-token replacements even after Cancel.
-                        let replacement = try await Task.detached {
+                        let replacement = try await SelectorMaintenanceContext.settle {
                             try await self.publish(fresh, replacing: original, inventory: before, client: client)
-                        }.value
+                        }
                         entry = replacement
                         binding = replacement.id
                         expected.removeAll { $0.id == original.id }; expected.append(replacement)
@@ -163,6 +168,7 @@ actor OpenChamberSignInCheckService: OpenChamberSignInChecking {
         let id = "cred_" + UUID().uuidString.replacingOccurrences(of: "-", with: "")
         let value = original.value.replacingTokens(auth)
         let activate = selected.id == original.id
+        try await SelectorMaintenanceContext.check()
         do { _ = try await client.create(id: id, label: original.label, value: value, activate: activate) }
         catch {
             // POST may have committed before a dropped response. Read back its exact ID.
@@ -178,6 +184,7 @@ actor OpenChamberSignInCheckService: OpenChamberSignInChecking {
         // Only retire the predecessor if it is still byte-for-byte ours and inactive.
         let latest = try await client.inventory()
         if let old = latest.entries.first(where: { $0.id == original.id }), !old.active, old.value == original.value {
+            try await SelectorMaintenanceContext.check()
             try await client.remove(id: original.id)
         }
         return created

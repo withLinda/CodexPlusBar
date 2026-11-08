@@ -77,6 +77,7 @@ actor OpenCodeV2Client: OpenCodeV2Serving {
             guard try storedCredential(id: nil, in: inventory) == expected else {
                 throw OpenCodeOpenAIAuthError.changedWhileReading
             }
+            try await SelectorMaintenanceContext.check()
             let created = try await native.create(id: "cred_" + UUID().uuidString.replacingOccurrences(of: "-", with: ""),
                                                   label: auth.identity().email, value: .legacy(auth), activate: true)
             let current = try await read()
@@ -85,6 +86,7 @@ actor OpenCodeV2Client: OpenCodeV2Serving {
             }
             return current
         }
+        try await SelectorMaintenanceContext.check()
         return try await rpc("import", input: ImportInput(auth: auth, expected: expected))
     }
 
@@ -95,6 +97,7 @@ actor OpenCodeV2Client: OpenCodeV2Serving {
         guard try target.auth.identity().matches(credential.auth.identity()) else {
             throw OpenCodeOpenAIAuthError.identityMismatch
         }
+        try await SelectorMaintenanceContext.check()
         _ = try await send(path: "api/credential/\(target.id)/activate", body: Data("{}".utf8), status: 204)
         let current = try await read()
         guard current.id == target.id else { throw OpenCodeOpenAIAuthError.changedWhileReading }

@@ -123,6 +123,8 @@ struct OpenCodeOpenAISwitchError: LocalizedError {
             reason = error.localizedDescription
         } else if let error = cause as? OpenCodeOpenAIAuthError {
             reason = error.localizedDescription
+        } else if let error = cause as? SelectorControlError {
+            reason = error.localizedDescription
         } else if cause is CancellationError {
             reason = "Verification was cancelled."
         } else {
@@ -153,6 +155,7 @@ actor OpenCodeOpenAIAuthService: OpenCodeOpenAIAuthServing {
     private var isOperating = false
     private let operationGate: OpenCodeOperationGate
     private let snapshots: OpenCodeSignInSnapshotStore
+    private let selector: any SelectorControlling
 
     init(homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
          resolveRuntime: @escaping @Sendable () async throws -> OpenCodeLocalRuntime = {
@@ -160,7 +163,7 @@ actor OpenCodeOpenAIAuthService: OpenCodeOpenAIAuthServing {
          },
          verifier: any OpenCodeOpenAICredentialVerifying = OpenCodeOpenAICredentialVerifier(),
          now: @escaping @Sendable () -> Date = { .now },
-         operationGate: OpenCodeOperationGate = .shared) {
+         operationGate: OpenCodeOperationGate = .shared, selector: (any SelectorControlling)? = nil) {
         self.homeDirectory = homeDirectory
         storeDirectory = homeDirectory.appendingPathComponent("Library/Application Support/CodexPlusBar/OpenChamberSignIns")
         self.resolveRuntime = resolveRuntime
@@ -168,6 +171,7 @@ actor OpenCodeOpenAIAuthService: OpenCodeOpenAIAuthServing {
         self.now = now
         self.operationGate = operationGate
         self.snapshots = OpenCodeSignInSnapshotStore(homeDirectory: homeDirectory)
+        self.selector = selector ?? SelectorControlClient(homeDirectory: homeDirectory)
     }
 
     func saveCurrent(for profile: PlusProfile) async throws -> OpenCodeOpenAIIdentity {
@@ -213,7 +217,9 @@ actor OpenCodeOpenAIAuthService: OpenCodeOpenAIAuthServing {
     }
 
     func switchTo(profile: PlusProfile) async throws {
-        try await operationGate.withOperation { try await self.switchToUnlocked(profile: profile) }
+        try await selector.withMaintenance(reason: .manualAccountChange) {
+            try await self.operationGate.withOperation { try await self.switchToUnlocked(profile: profile) }
+        }
     }
 
     private func switchToUnlocked(profile: PlusProfile) async throws {
@@ -269,6 +275,7 @@ actor OpenCodeOpenAIAuthService: OpenCodeOpenAIAuthServing {
                     // This repairs the same account; rolling it back would restore
                     // a consumed token. Keep the fresh pair but report any failure.
                     let repaired = try self.replacingOpenAI(in: original.object, with: refreshed)
+                    try await SelectorMaintenanceContext.settle { try await SelectorMaintenanceContext.check() }
                     try OpenCodePrivateFile.write(repaired, to: runtime.authURL, expected: expected)
                     expected = repaired
                     recovery = .currentSignInRefreshed
@@ -279,6 +286,7 @@ actor OpenCodeOpenAIAuthService: OpenCodeOpenAIAuthServing {
             if isCurrentAccount { return }
 
             let output = try replacingOpenAI(in: original.object, with: prepared)
+            try await SelectorMaintenanceContext.check()
             try OpenCodePrivateFile.write(output, to: runtime.authURL, expected: expected)
             installed = output
             try requireUnchanged(runtime.authURL, expected: output)
@@ -290,6 +298,7 @@ actor OpenCodeOpenAIAuthService: OpenCodeOpenAIAuthServing {
         } catch {
             if let installed {
                 do {
+                    try await SelectorMaintenanceContext.settle { try await SelectorMaintenanceContext.check() }
                     try requireUnchanged(runtime.authURL, expected: installed)
                     try OpenCodePrivateFile.write(original.data, to: runtime.authURL, expected: installed)
                     try requireUnchanged(runtime.authURL, expected: original.data)
@@ -325,6 +334,7 @@ actor OpenCodeOpenAIAuthService: OpenCodeOpenAIAuthServing {
             }
         }
         try Task.checkCancellation()
+        try await SelectorMaintenanceContext.check()
         let refreshed = try await verifier.refresh(auth)
         guard try auth.identity().matches(refreshed.identity()) else { throw OpenCodeOpenAIAuthError.identityMismatch }
         try snapshots.saveRefreshed(refreshed, replacing: auth)
@@ -457,7 +467,11 @@ actor OpenCodeOpenAIAuthService: OpenCodeOpenAIAuthServing {
                 try self.save(refreshed, identity: selected)
                 if sameAccount || existing != nil {
                     attemptedAuth = refreshed
-                    let repaired = try await client.install(refreshed, expected: expected)
+                    let previous = expected
+                    let repaired = try await SelectorMaintenanceContext.settle {
+                        try await SelectorMaintenanceContext.check()
+                        return try await client.install(refreshed, expected: previous)
+                    }
                     expected = repaired
                     if sameAccount { recovery = .currentSignInRefreshed }
                     else { installed = repaired }
@@ -469,6 +483,7 @@ actor OpenCodeOpenAIAuthService: OpenCodeOpenAIAuthServing {
             if sameAccount { return }
             attemptedAuth = prepared
             let result: OpenCodeV2Credential
+            try await SelectorMaintenanceContext.check()
             if let installed, installed.auth == prepared {
                 result = installed
             } else if let existing, existing.auth == prepared {
@@ -485,14 +500,17 @@ actor OpenCodeOpenAIAuthService: OpenCodeOpenAIAuthServing {
         } catch {
             // A cancelled/failed HTTP response may follow a committed import.
             // Reconcile in an uncancelled task before deciding what to restore.
-            let current = try? await Task.detached { try await client.read(id: nil) }.value
+            let current = try? await SelectorMaintenanceContext.settle { try await client.read(id: nil) }
             if let current, sameAccount, let attemptedAuth, current.auth == attemptedAuth {
                 try? saveV2(current, identity: selected)
                 recovery = .currentSignInRefreshed
             } else if let current, !sameAccount,
                       current == installed || (installed == nil && attemptedAuth != nil && current.auth == attemptedAuth) {
                 do {
-                    let restored = try await Task.detached { try await client.activate(original, expected: current) }.value
+                    let restored = try await SelectorMaintenanceContext.settle {
+                        try await SelectorMaintenanceContext.check()
+                        return try await client.activate(original, expected: current)
+                    }
                     guard restored.id == original.id else { throw OpenCodeOpenAIAuthError.changedWhileReading }
                     recovery = .restored
                 } catch OpenCodeOpenAIAuthError.changedWhileReading {

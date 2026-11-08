@@ -16,15 +16,19 @@ actor OpenChamberRepairInstaller {
     private let snapshots: OpenCodeSignInSnapshotStore
     private let verifier: any OpenCodeOpenAICredentialVerifying
     private let gate: OpenCodeOperationGate
+    private let selector: any SelectorControlling
     init(resolveClient: @escaping @Sendable () async throws -> any OpenCodeCredentialServing = {
         guard let client = try await OpenCodeLocalRuntime.discover().credentials else { throw OpenCodeCredentialError.unavailable }
         return client
     }, snapshots: OpenCodeSignInSnapshotStore = .init(), verifier: any OpenCodeOpenAICredentialVerifying = OpenCodeOpenAICredentialVerifier(),
-         gate: OpenCodeOperationGate = .shared) {
+         gate: OpenCodeOperationGate = .shared, selector: (any SelectorControlling)? = nil) {
         self.resolveClient = resolveClient; self.snapshots = snapshots; self.verifier = verifier; self.gate = gate
+        self.selector = selector ?? SelectorControlClient(homeDirectory: snapshots.homeDirectory)
     }
     func install(_ signIn: CodexSignIn, for profile: PlusProfile) async throws {
-        try await gate.withOperation { try await self.perform(signIn, profile: profile) }
+        try await selector.withMaintenance(reason: .signInRepair) {
+            try await self.gate.withOperation { try await self.perform(signIn, profile: profile) }
+        }
     }
     private func perform(_ signIn: CodexSignIn, profile: PlusProfile) async throws {
         try signIn.validateRepair(for: profile)
@@ -58,6 +62,7 @@ actor OpenChamberRepairInstaller {
         if refresh {
             try Task.checkCancellation()
             guard try await client.inventory().entries == before.entries else { throw AppSignInRepairError.changed }
+            try await SelectorMaintenanceContext.check()
             let fresh = try await verifier.refresh(auth)
             guard try fresh.identity().matches(identity) else { throw AppSignInRepairError.identityMismatch }
             try snapshots.saveRefreshed(fresh, replacing: auth)
@@ -75,7 +80,7 @@ actor OpenChamberRepairInstaller {
     /// Preserve a consumed installed generation even if the caller is cancelled.
     private func settle(_ auth: OpenCodeOpenAIAuth, profile: PlusProfile, before: OpenCodeCredentialInventory,
                         client: any OpenCodeCredentialServing) async throws -> OpenCodeCredentialInventory {
-        try await Task.detached { try await self.publish(auth, profile: profile, before: before, client: client) }.value
+        try await SelectorMaintenanceContext.settle { try await self.publish(auth, profile: profile, before: before, client: client) }
     }
 
     private func publish(_ auth: OpenCodeOpenAIAuth, profile: PlusProfile, before: OpenCodeCredentialInventory,
@@ -92,6 +97,7 @@ actor OpenChamberRepairInstaller {
         guard current.entries == before.entries else { throw AppSignInRepairError.changed }
         let activate = selected == nil || original?.id == selected?.id
         let expectedValue = existing?.value ?? value
+        try await SelectorMaintenanceContext.check()
         if let existing {
             if activate, !existing.active { try await client.activate(id: existing.id) }
         } else {
@@ -108,6 +114,7 @@ actor OpenChamberRepairInstaller {
             let latest = try await client.inventory()
             guard latest.openAI.first(where: \.active)?.id == (activate ? id : selected?.id) else { throw AppSignInRepairError.changed }
             if let unchanged = latest.entries.first(where: { $0.id == old.id }), !unchanged.active, unchanged.value == old.value {
+                try await SelectorMaintenanceContext.check()
                 try await client.remove(id: old.id)
             }
         }

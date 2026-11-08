@@ -4,6 +4,7 @@ import Foundation
 /// Access is serialized by OpenCodeOperationGate. Only identity keys, never labels, form paths.
 struct OpenCodeSignInSnapshotStore: Sendable {
     let directory: URL
+    var homeDirectory: URL { directory.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent() }
     init(homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser) {
         directory = homeDirectory.appendingPathComponent("Library/Application Support/CodexPlusBar/OpenChamberSignIns")
     }
