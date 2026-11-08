@@ -29,7 +29,7 @@ export function publicStatus(v: any): PublicStatus {
     lastSwitch: v.lastSwitch === null ? null : number(v.lastSwitch?.atMs) && text(v.lastSwitch?.credentialID)
       ? { atMs: v.lastSwitch.atMs, credentialID: v.lastSwitch.credentialID } : invalid(),
     exclusions: v.exclusions.map((row: any) => text(row?.credentialID) && code(row?.code) ? { credentialID: row.credentialID, code: row.code } : invalid()),
-    recentHistory: v.recentHistory.map((row: any) => number(row?.atMs) && code(row?.code) && (row.credentialID === undefined || text(row.credentialID))
-      ? { atMs: row.atMs, code: row.code, ...(row.credentialID === undefined ? {} : { credentialID: row.credentialID }) } : invalid()),
+    recentHistory: v.recentHistory.map((row: any) => number(row?.atMs) && code(row?.code) && nullableText(row.credentialID)
+      ? { atMs: row.atMs, code: row.code, credentialID: row.credentialID } : invalid()),
   };
 }

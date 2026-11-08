@@ -1,5 +1,5 @@
 import { spawn, execFileSync } from 'node:child_process';
-import { mkdtemp, mkdir, writeFile, readFile, rm, copyFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, rm, copyFile, cp } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -21,7 +21,7 @@ async function unusedPort() {
   });
 }
 
-export async function startHarness(fixtureOrigin: string, sharedCoordinatorPort?: number, hostDelivery = false, production = false) {
+export async function startHarness(fixtureOrigin: string, sharedCoordinatorPort?: number, hostDelivery = false, production = false, packaged = false) {
   const version = execFileSync(binary, ['--version'], { encoding: 'utf8' }).trim();
   if (version !== 'opencode v2.2.6') throw new Error(`Unsupported runtime: ${version}`);
   const checksum = createHash('sha256').update(await readFile(binary)).digest('hex');
@@ -30,30 +30,40 @@ export async function startHarness(fixtureOrigin: string, sharedCoordinatorPort?
   for (const directory of [...locations, ...['home', 'data', 'config', 'cache', 'state'].map(p => join(root, p))]) {
     await mkdir(directory, { recursive: true, mode: 0o700 });
   }
-  const plugin = join(root, 'extension', 'plugin');
+  const plugin = packaged ? join(root, 'helper') : join(root, 'extension', 'plugin');
+  if (packaged) await cp(resolve('dist'), join(root, 'extension'), { recursive: true });
+  if (packaged) {
+    const refresh = join(root, 'refresh-helper');
+    await mkdir(refresh, { mode: 0o700 });
+    await copyFile(resolve('.runtime/package-refresh.js'), join(refresh, 'probe.js'));
+    await writeFile(join(refresh, 'package.json'), JSON.stringify({ name: 'expiry-fixture-refresh', type: 'module', exports: './index.js' }));
+    await writeFile(join(refresh, 'index.js'), `import probe from './probe.js'; export default { ...probe, setup(ctx) { return probe.setup({ ...ctx, options: ${JSON.stringify({ fixtureOrigin })} }); } };\n`);
+  }
   await mkdir(plugin, { recursive: true, mode: 0o700 });
-  await copyFile(resolve(production ? '.runtime/production-probe.js' : '.runtime/probe-plugin.js'), join(plugin, 'probe.js'));
-  if (production) {
+  await copyFile(resolve(packaged ? '.runtime/package-helper.js' : production ? '.runtime/production-probe.js' : '.runtime/probe-plugin.js'), join(plugin, 'probe.js'));
+  const snapshotPath = packaged ? join(root, 'home/Library/Application Support/CodexPlusBar/Exports/openchamber-selector-v1.json') : join(root, 'home/fixture-snapshot.json');
+  if (production || packaged) {
+    await mkdir(join(snapshotPath, '..'), { recursive: true, mode: 0o700 });
     const now = Date.now();
-    await writeFile(join(root, 'home/fixture-snapshot.json'), JSON.stringify({ schemaVersion: 1, sequence: 1, sourceInstanceID: crypto.randomUUID(),
+    await writeFile(snapshotPath, JSON.stringify({ schemaVersion: 1, sequence: 1, sourceInstanceID: crypto.randomUUID(),
       generatedAtMs: now, catalogTrusted: true, accounts: (['A', 'B'] as const).map((name, index) => {
         const identity = tokenIdentity(`Bearer ${credential(name).access}`)!;
         return { ...identity, profileID: crypto.randomUUID(), credentialID: accounts[name].id, label: name, bindingObservedAtMs: now,
           usage: { observedAtMs: now, identityKey: identity.identityKey, allowed: true, limitReached: false,
             fiveHour: { remainingPercent: 50, resetAtMs: now + 3600000 }, sevenDay: { state: 'not-applicable' } },
-          entitlement: { observedAtMs: now, accountID: identity.accountID, expiresAtMs: now + (index + 1) * 86400000,
+          entitlement: { observedAtMs: now, accountID: identity.accountID, expiresAtMs: now + (packaged ? 17 + index * 13 : index + 1) * 86400000,
             active: true, usable: true, deactivated: false, match: 'canonical' }, unavailableReasons: [] };
       }) }), { mode: 0o600 });
   }
   await writeFile(join(plugin, 'package.json'), JSON.stringify({ name: 'expiry-selector-probe', version: '0.1.0', type: 'module', exports: './index.js' }));
-  const coordinatorPort = sharedCoordinatorPort ?? await unusedPort();
+  const coordinatorPort = packaged ? 53971 : sharedCoordinatorPort ?? await unusedPort();
   await writeFile(join(plugin, 'index.js'), `import probe from './probe.js'; export default { ...probe, setup(ctx) { return probe.setup({ ...ctx, options: ${JSON.stringify({ fixtureOrigin, coordinatorPort })} }); } };\n`);
-  await writeFile(join(root, 'extension', 'package.json'), JSON.stringify({ name: 'expiry-selector-probe', version: '0.1.0',
+  if (!packaged) await writeFile(join(root, 'extension', 'package.json'), JSON.stringify({ name: 'expiry-selector-probe', version: '0.1.0',
     openchamber: { apiVersion: 1, engines: { openchamber: '>=2.7.0' }, contributes: {
       panel: { id: 'expiry-selector-probe', name: 'Compatibility fixture', icon: 'settings' }, opencodePlugin: 'plugin',
     } } }));
   const configuration = {
-    plugins: hostDelivery ? [] : [{ package: plugin, options: { fixtureOrigin, coordinatorPort } }],
+    plugins: hostDelivery && !packaged ? [] : [{ package: plugin, options: { fixtureOrigin, coordinatorPort } }],
     providers: { openai: { package: '@opencode/ai/providers/openai', settings: { transport: 'websocket', encoding: 'none' },
       models: { 'gpt-5.7': { name: 'Fixture', limit: { context: 100_000, output: 1000 } } } } },
     model: 'openai/gpt-5.7',
@@ -74,12 +84,15 @@ export async function startHarness(fixtureOrigin: string, sharedCoordinatorPort?
     hostAction('install');
     env.OPENCODE_CONFIG = join(root, 'host-instance', 'opencode.managed.json');
   }
-  const child = spawn('/usr/bin/sandbox-exec', ['-p', profile, binary, 'serve', '--hostname', '127.0.0.1', '--port', String(port)],
-    { cwd: root, env, stdio: ['ignore', 'pipe', 'pipe'] });
   let log = '';
-  child.stdout.on('data', chunk => { log = (log + String(chunk)).slice(-12_000); });
-  child.stderr.on('data', chunk => { log = (log + String(chunk)).slice(-12_000); });
-  const exited = new Promise<void>(done => child.once('exit', () => done()));
+  const launch = () => {
+    const child = spawn('/usr/bin/sandbox-exec', ['-p', profile, binary, 'serve', '--hostname', '127.0.0.1', '--port', String(port)],
+      { cwd: root, env, stdio: ['ignore', 'pipe', 'pipe'] });
+    child.stdout.on('data', chunk => { log = (log + String(chunk)).slice(-12_000); });
+    child.stderr.on('data', chunk => { log = (log + String(chunk)).slice(-12_000); });
+    return child;
+  };
+  let child = launch();
   async function api(path: string, body?: unknown, location = locations[0]!, method = body === undefined ? 'GET' : 'POST'): Promise<any> {
     if (!path.startsWith('/api/') && path !== '/openapi.json') throw new Error('Fixture API path required');
     const response = await fetch(`http://127.0.0.1:${port}${path}`, {
@@ -91,11 +104,15 @@ export async function startHarness(fixtureOrigin: string, sharedCoordinatorPort?
     const text = await response.text();
     return text ? JSON.parse(text) : undefined;
   }
-  async function close() {
+  async function stop() {
+    const exited = child.exitCode === null ? new Promise<void>(done => child.once('exit', () => done())) : Promise.resolve();
     if (child.exitCode === null) child.kill('SIGTERM');
     const kill = setTimeout(() => child.kill('SIGKILL'), 5000);
     await exited;
     clearTimeout(kill);
+  }
+  async function close() {
+    await stop();
     await rm(root, { recursive: true, force: true });
   }
   try {
@@ -126,6 +143,9 @@ export async function startHarness(fixtureOrigin: string, sharedCoordinatorPort?
         await delay(50);
       }
       if (!plugins.data.some((p: any) => p.id === 'codexplusbar-expiry-selector-probe' && p.state.status === 'active')) throw new Error(`Probe did not load: ${JSON.stringify(plugins.data.filter((p: any) => p.source.type !== 'builtin'))} ${log}`);
+      if (packaged && !plugins.data.some((p: any) => p.id === 'codexplusbar-expiry-selector' && p.state.status === 'active')) {
+        throw new Error(`Built plugin absent: ${JSON.stringify(plugins.data.filter((p: any) => p.source.type !== 'builtin'))}; managed: ${await readFile(join(root, 'host-instance/opencode.managed.json'), 'utf8')}`);
+      }
       await api('/api/integration', undefined, location);
     }
     const rpc = async (method: string, input: unknown = {}, location = locations[0]!) =>
@@ -144,7 +164,18 @@ export async function startHarness(fixtureOrigin: string, sharedCoordinatorPort?
         method: release ? 'POST' : 'GET', headers: { authorization: 'Bearer expiry-fixture-control' }, signal: AbortSignal.timeout(1000) });
       return response.json();
     };
-    return { root, api, rpc, locations, version, checksum, close, configure, coordinatorPort, ownerStatus, hostAction, diagnostic: () => log };
+    const restart = async () => {
+      await stop(); child = launch();
+      for (let attempt = 0; attempt < 100; attempt++) {
+        try { if ((await api('/api/info')).pid === child.pid) {
+          for (const location of locations) { await api('/api/plugin', undefined, location); await api('/api/integration', undefined, location); }
+          return;
+        } } catch { /* Await isolated process readiness. */ }
+        await delay(100);
+      }
+      throw new Error('Isolated restart failed');
+    };
+    return { root, snapshotPath, api, rpc, locations, version, checksum, close, restart, configure, coordinatorPort, ownerStatus, hostAction, diagnostic: () => log };
   } catch (error) {
     await close();
     throw error;

@@ -2,6 +2,8 @@
 
 Selects the earliest verified OpenAI subscription expiry among identity-matched accounts with usable five-hour and applicable seven-day quota. Unknown, stale, exhausted, expired, or conflicting evidence cannot qualify an automatic replacement.
 
+Expiry means the subscription countdown shown in CodexPlusBar, such as **Expires in 16d 6h**. A healthy account with 17 days left is preferred over one with 30 days left. The panel shows days/hours remaining; hover for the exact expiry date. OAuth token expiry and quota reset timers do not determine priority.
+
 ## Build and verify
 
 Requires Node 22+, npm, and the pinned development dependencies. From this repository:
@@ -17,6 +19,8 @@ npm --prefix Extensions/expiry-selector run verify:package
 On a clean checkout, run `make test AGENT_NAME=expiry-selector` first. Swift contract tests generate the ignored cross-language export fixture. Runtime tests require the supported OpenChamber macOS installation and run with synthetic credentials in isolated homes.
 
 The built `dist/` folder is the extension. Do not install the source directory or `.runtime/` probes. Packaging verification must pass before installation.
+
+The local acceptance archive is `output/expiry-selector-0.1.0.zip` at the repository root. Extract it and select its `expiry-selector/` folder when installing. The archive contains the same eight verified distribution files. The source-tree report `docs/acceptance-2026-11-09.md` records its checksum and review boundaries.
 
 ## Supported boundary
 
@@ -51,4 +55,4 @@ Published observations: `~/Library/Application Support/CodexPlusBar/Exports/open
 
 ## Acceptance status
 
-Tasks 1–7 have isolated runtime and Swift evidence in `docs/runtime-compatibility.md` and the implementation ledger. Packaging and final acceptance are in progress. Live installation, live account switching, native settings changes, and rollback have **not** been authorized or performed for this extension.
+The built package has isolated native-runtime acceptance evidence, including host delivery/removal, concurrent prompts, actual-request quota attribution, HTTP/WS coherence, process restart, delayed refresh, and service crash. See `docs/runtime-compatibility.md` for exact coverage and `docs/acceptance-2026-11-09.md` for final checks and self-review. Live installation, live account switching, native settings changes, and live rollback have **not** been authorized or performed for this extension.

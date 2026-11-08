@@ -68,6 +68,15 @@ test('missing descriptor is diagnostic, never a second backend discovery', async
   await expect(new SelectorClient({ directory: f.directory }).call('status')).rejects.toThrow('selector-unavailable');
 });
 
+test('quota history without a credential ID stays readable through the service', async () => {
+  const history = [{ atMs: 1_800_000_000_000, code: 'cooldown', credentialID: null }];
+  const port = await upstream((_request, response) => {
+    response.end(JSON.stringify({ protocolVersion: 1, epoch: f.descriptor.epoch, ...status(), recentHistory: history }));
+  });
+  const f = await descriptorFixture(port);
+  expect((await new SelectorClient({ directory: f.directory, port }).call('status')).recentHistory).toEqual(history);
+});
+
 test('oversized or redirected upstream is refused without following another origin', async () => {
   let redirect = false;
   const port = await upstream((_request, response) => {

@@ -34,7 +34,9 @@ export async function fakeProvider() {
   const requests: { accountID: string; header: string | undefined; sessionID: string | undefined; model: string; toolResults: number; kind: string | undefined }[] = [];
   const websockets: { accountID: string; header: string | undefined; frames: { previous: boolean; inputs: number }[] }[] = [];
   const behaviors: (() => Promise<'quota' | 'ok' | 'tool'>)[] = [];
+  const refresh = { calls: 0, gate: null as ReturnType<typeof Promise.withResolvers<void>> | null };
   const server = createServer(async (request, response) => {
+    if (request.url === '/refresh') { refresh.calls++; await refresh.gate?.promise; response.writeHead(200).end('{}'); return; }
     if (request.url === '/refuse') { response.writeHead(426).end(); return; }
     try {
       const accountID = fixtureAccount(request.headers.authorization);
@@ -79,6 +81,6 @@ export async function fakeProvider() {
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   const address = server.address();
   if (!address || typeof address === 'string') throw new Error('No fixture listener');
-  return { origin: `http://127.0.0.1:${address.port}`, requests, websockets, behaviors,
+  return { origin: `http://127.0.0.1:${address.port}`, requests, websockets, behaviors, refresh,
     close: () => new Promise<void>((resolve, reject) => { for (const client of ws.clients) client.terminate(); ws.close(); server.closeAllConnections(); server.close(e => e ? reject(e) : resolve()); }) };
 }

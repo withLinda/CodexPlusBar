@@ -1,6 +1,61 @@
 # Expiry selector compatibility gate
 
-Date: 2026-11-08. **Task 1 feasibility gate passed. No installable selector yet.**
+Updated: 2026-11-09. **Built extension passes isolated acceptance. Live rollout remains pending authorization.**
+
+## Built-package acceptance (2026-11-09)
+
+Final verification: 168 TypeScript tests in 13 files passed, with zero skips.
+The dedicated runtime gate passed 43 cases in three files, including the 18
+built-package cases below; these are a subset of the 168, not additional tests.
+Swift reported 568 tests in 62 suites with `TEST SUCCEEDED`; ten opt-in checks
+were skipped. Typecheck, distribution build, eight-file package verification,
+and the macOS build passed. See [the acceptance record](acceptance-2026-11-09.md)
+for the skipped checks, archive checksum, review method, and deferred live work.
+
+The actual eight-file `dist/` extension is delivered by the installed host's
+installer/catalog/managed configuration into two isolated native locations.
+All account identities and provider responses are synthetic; HOME/XDG are private
+and outbound traffic is restricted to loopback by the OS. The fixed-port tests
+validate the descriptor PID against their own isolated backend before sending controls.
+
+`package.integration.test.ts` executes 18 built-package cases:
+
+- 17-day subscription preferred to 30-day subscription; positive 5H and applicable
+  7D evidence required; exhausted windows excluded and fresh positive evidence recovers.
+- Tool → quota failure → native B retry: one tool effect, one prompt, same model/context.
+- Cooldown survives a real OS process restart and a deleted/recreated credential ID;
+  fresh identity binding and positive post-reset evidence are required.
+- Stale publisher leaves native requests working on the current account.
+- HTTP/WS token-account agreement, socket replacement with full context, and four
+  delayed native-header-publication cases (both header casings, HTTP fallback and WS).
+- Synthetic wake uses native selection without injecting user prompt admission.
+- 50 simultaneous prompts across two locations converge with one activation.
+- Two late A failures plus a simultaneous title request preserve B and cool down A only.
+- Native user interruption does not rotate or exhaust an account.
+- Native delayed refresh is single-flight across two locations; Pause waits for it;
+  host disable during refresh drains the owner without stale activation.
+- Fixed-port collision with a second built-package OS process blocks that owner.
+- Authenticated built service health/status, service crash independence, host uninstall
+  draining hooks/listener, and a normal native request after synthetic rollback.
+
+Test-only helpers precede the selector for synthetic OAuth refresh callbacks and
+follow it for transport redirection. No selector hooks/coordinator are wrapped or
+replaced. Native integration contexts retain the transforms present at their creation,
+so registering the refresh helper afterward does not intercept the selector's resolver.
+The package verifier excludes every helper from the distribution.
+
+Test boundary: unload **during an already-dispatched activation** is covered by the
+production coordinator/ownership barrier tests and the native feasibility harness,
+not an injected pause inside the built artifact's native activation call. The live
+Settings UI, real account mapping/switching, real CodexPlusBar restart freshness,
+native settings restoration, and live rollback are deferred until explicitly authorized.
+The earlier authorized read-only identity evidence remains valid; it was not repeated.
+
+Built-package testing found and fixed the service projection rejecting quota history
+with `credentialID: null`. A focused service regression failed before the correction.
+The panel countdown was browser-checked at 16d 6h, 17d, 30d and expired, at 360px width.
+
+The historical feasibility evidence below remains the record of the initial gate.
 
 ## Completed gate (supersedes the checkpoint below)
 

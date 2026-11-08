@@ -6,7 +6,13 @@ const host = connectHost();
 const node = (id: string) => document.getElementById(id)!;
 const set = (id: string, value: string) => { if (node(id).textContent !== value) node(id).textContent = value; };
 const age = (time: number | null) => time === null ? 'unknown' : Date.now() - time < 60_000 ? 'just now' : `${Math.floor(Math.max(0, Date.now() - time) / 60_000)}m ago`;
-const date = (time: number | null) => time === null ? 'Unknown expiry' : `Expires ${new Date(time).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`;
+const expiryText = (time: number | null) => {
+  if (time === null) return 'Unknown expiry';
+  const remaining = time - Date.now();
+  if (remaining <= 0) return 'Expired';
+  const hours = Math.floor(remaining / 3_600_000), days = Math.floor(hours / 24);
+  return days > 0 ? `Expires in ${days}d ${hours % 24}h` : hours > 0 ? `Expires in ${hours}h` : 'Expires in less than 1h';
+};
 const messages: Record<string, string> = {
   paused: 'Auto is paused. Your native account stays selected.', maintenance: 'Sign-in maintenance holds Auto paused. Finish the operation in CodexPlusBar before resuming.',
   'competing-switcher': 'Native limit switching or fallback is still enabled in a location. Disable those settings in OpenChamber before enabling Auto.',
@@ -61,7 +67,9 @@ function render(state: PanelState) {
       account.credentialID === s?.nextCredentialID && !stale && !unverified ? 'Next eligible' : null].filter(Boolean);
     for (const tag of tags) { const el = document.createElement('span'); el.className = 'tag'; el.dataset.active = String(tag === 'Native active'); el.textContent = tag; heading.append(el); }
     item.append(heading);
-    const expiry = document.createElement('p'); expiry.className = 'expiry'; expiry.textContent = date(account.expiresAtMs); item.append(expiry);
+    const expiry = document.createElement('p'); expiry.className = 'expiry'; expiry.textContent = expiryText(account.expiresAtMs);
+    if (account.expiresAtMs !== null) expiry.title = new Date(account.expiresAtMs).toLocaleString();
+    item.append(expiry);
     const quotas = document.createElement('div'); quotas.className = 'quotas';
     for (const [title, value] of [['5H', account.fiveHourRemaining], ['7D', account.sevenDayRemaining]] as const) {
       const group = document.createElement('span'), caption = document.createElement('span'), amount = document.createElement('strong');

@@ -12,6 +12,10 @@ await build({
 });
 await build({ entryPoints: ['tests/runtime/production-probe.ts'], outfile: '.runtime/production-probe.js',
   bundle: true, platform: 'node', format: 'esm', target: 'node22' });
+await build({ entryPoints: ['tests/runtime/package-helper.ts'], outfile: '.runtime/package-helper.js',
+  bundle: true, platform: 'node', format: 'esm', target: 'node22' });
+await build({ entryPoints: ['tests/runtime/package-refresh.ts'], outfile: '.runtime/package-refresh.js',
+  bundle: true, platform: 'node', format: 'esm', target: 'node22' });
 if (process.argv.includes('--probes-only')) process.exit(0);
 
 const metadata = JSON.parse(await readFile('package.json', 'utf8'));
