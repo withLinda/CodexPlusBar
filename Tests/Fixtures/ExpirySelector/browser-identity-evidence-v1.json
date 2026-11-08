@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "provenance": {
+    "observedAt": "2026-11-08",
+    "method": "explicitly authorized local Swift session/catalog GET probe",
+    "profilesObserved": 2,
+    "bothProfilesAgreed": true,
+    "rawValuesRetained": false
+  },
+  "nativeIdentity": { "accountID": "fixture-account", "userID": "fixture-user" },
+  "session": {
+    "account": { "id": "fixture-account" },
+    "user": { "id": "fixture-user" }
+  },
+  "tokenClaims": {
+    "sub": "fixture-distinct-subject",
+    "https://api.openai.com/auth": {
+      "chatgpt_account_id": "fixture-account",
+      "chatgpt_user_id": "fixture-user",
+      "user_id": "fixture-user"
+    }
+  },
+  "catalogFieldShapes": {
+    "account.account_id": "string",
+    "account.account_owner_id": "string",
+    "account.account_user_id": "string",
+    "account.id": "absent",
+    "account.is_deactivated": "boolean",
+    "can_access_with_session": "boolean",
+    "entitlement.expires_at": "string",
+    "entitlement.has_active_subscription": "boolean"
+  },
+  "canonicalCatalogMatchesPerProfile": 1
+}

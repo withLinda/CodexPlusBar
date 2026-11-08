@@ -1,6 +1,56 @@
 # Expiry selector compatibility gate
 
-Date: 2026-11-08. **BLOCKED — Task 1 is incomplete. No installable selector.**
+Date: 2026-11-08. **Task 1 feasibility gate passed. No installable selector yet.**
+
+## Completed gate (supersedes the checkpoint below)
+
+`npm --prefix Extensions/expiry-selector run test:runtime` exited 0 with **21 tests,
+zero skips**: 18 local HTTP model requests and 4 WebSocket connections/exchanges.
+Typecheck passed. Swift's final non-opt-in run passed **525 tests / 58 suites** with
+`TEST SUCCEEDED`; the live identity test was intentionally skipped in that run,
+after the separately authorized two-profile live run described below.
+
+Additional runtime cases beyond the original six:
+
+- Native refresh: two actual location resolvers overlap on one expired fixture
+  OAuth connection. Exactly one controlled native refresh callback runs; both
+  callers receive the rotated pair and the public stored inventory retains it.
+- Tool continuation/retry: A tool response → A quota failure → B retry. Three model
+  requests retain `gpt-5.7`, one existing tool result, one tool execution and one
+  admitted prompt. Synthetic wake bypasses prompt admission and uses global A.
+- Auxiliary attribution: generate B while primary A awaits failure does not exhaust
+  B; a delayed title A arriving after primary retry B does not replace B's record.
+- Native activation/reload race: a supported test-only provider transform holds
+  publication of the account-header projection while native activation/reload
+  proceeds. A transport barrier observes the resolved B-token/A-header pair.
+  Both header casings pass on HTTP fallback and WS. Temporarily removing the
+  production repair made **all four cases fail**; restoring it passed the full suite.
+  This controls publication of derived state, not the runtime's internal scheduler.
+- A shared test-only FIFO runs real native calls across locations. Maintenance
+  acknowledges only after the dispatched activation result settles, rejects resume
+  during the hold, and remains paused after release.
+- A second real OpenCode process cannot acquire the same loopback listener, and its
+  prompt cannot switch A to B. Last-location unload retains ownership until an
+  outstanding activation result settles; re-enable creates a new epoch.
+- A fixture plugin with the exact competing ID is detected from native inventory
+  after configuration reload and blocks activation until removed.
+- Installed OpenChamber host lifecycle code installs/grants/disables/enables/removes
+  the packaged fixture through a private extension store and its managed config.
+  Both explicit locations share an owner; the host may also load its root location.
+  Disable/uninstall remove the plugin from both and release the listener. This is
+  the real installed host's service-layer lifecycle, not desktop Settings UI QA.
+
+The host test extracts a **read-only copy** of the installed ASAR into ignored
+`.runtime/host`, then runs its installer/catalog/managed-config modules in a child
+with temporary HOME/XDG and loopback-only egress. ASAR SHA256:
+`c4ef6a1bdd7fef0c2a388223441cc7541aae5a377cff33443d6b273e05449589`.
+No installed bundle or live extension store is changed.
+
+The queue, private fixture control server, fake OAuth method, tool, lifecycle host
+driver, and redirector remain under `tests/` only. They establish feasibility, not
+production policy, durable cooldown, control authentication, or restart safety.
+Tasks 2–9 must implement and rerun the production contract; actual desktop rollout
+and real-account switching still require separate authorization.
 
 ## Environment
 
@@ -14,9 +64,29 @@ Date: 2026-11-08. **BLOCKED — Task 1 is incomplete. No installable selector.**
 - Node `25.8.2`, npm `11.11.1`; exact dependencies and lockfile committed.
 - Published SDK versions verified: `@openchamber/sdk@2.7.0`, `@opencode/plugin@2.2.6`.
 
-## Blocking check: `browserIdentity.accountAndUser`
+## Browser evidence check: resolved with user authorization
 
-The required browser-to-native identity proof is **unavailable**, not disproved.
+The user authorized the local evidence probe. `authorizedBrowserIdentityEvidence` ran
+inside the Swift test host with the app's signer/session/catalog decoder, at most two
+active profiles, GET requests only, an ephemeral URLSession, redirects/proxies/cookie
+storage disabled, and no native credential calls. Both profiles independently showed:
+
+- `session.account.id` and `claims.auth.chatgpt_account_id` match the saved native account.
+- `session.user.id`, `claims.auth.chatgpt_user_id`, and `claims.auth.user_id` match the saved native user.
+- `claims.sub` is a different identity; never use it as a fallback.
+- Exactly one normalized catalog entry matches the canonical account.
+- Explicit catalog accessibility, deactivation, subscription-active and expiry fields exist.
+
+The report contains only fixed-field shapes and agreement labels. The shared fixture
+`Tests/Fixtures/ExpirySelector/browser-identity-evidence-v1.json` recreates those observed
+relationships with fake values; it contains no token, cookie, email, real identity or label.
+The authorized run completed **524 tests / 58 suites**, including the live evidence check,
+with `TEST SUCCEEDED`. The preceding non-opt-in run skipped the live check and separately
+passed both sanitizer tests. All raw session data remained in memory.
+
+### Historical blocker (now resolved)
+
+At the earlier checkpoint, browser-to-native identity proof was unavailable.
 Existing `Tests/AuthSessionServiceTests.swift` session fixtures contain an account ID
 and opaque `token-alpha`/`token-bravo` placeholders. They contain neither an authenticated
 session user ID nor usable token claims. `AuthSessionService` currently decodes only
@@ -26,17 +96,17 @@ browser user's identity. Native OAuth tests do have `chatgpt_user_id`, but manuf
 the same field in a browser fixture would not establish the live browser contract.
 
 Design §11.9 requires representative browser/session/catalog evidence before Task 2.
-No real browser session, profile store, saved native credential, cookie, or live sign-in
-was read to fill this gap. No identity fallback to email or saved profile data was added.
+At that checkpoint no live browser evidence had been read. The later authorized
+probe resolved the gap without an identity fallback to email or saved profile data.
 
-**To unblock:** supply a provenance-reviewed sanitized browser session/token-claim and
+The original next step was to supply a provenance-reviewed sanitized browser session/token-claim and
 catalog fixture, or explicitly authorize a narrowly scoped read-only local evidence probe.
 That probe must compare browser account+user to native account+user locally and output
 only fake-value shapes, field names, and agreement booleans/hashes. It must not export
 tokens/cookies, switch accounts, refresh native credentials, or change settings.
-Then rerun and complete all ten proofs; this gap does not authorize skipping the rest.
+The approved probe supplies that evidence. The remaining runtime proofs still must pass.
 
-## Executed native runtime subset
+## Historical six-test checkpoint
 
 Six tests ran against the built probe loaded by the actual bundled binary:
 
@@ -63,9 +133,8 @@ connections/exchanges**, plus rejected WS upgrade attempts used to exercise fall
 No provider calls leave the machine: macOS Seatbelt denies non-loopback outbound traffic
 for the child and descendants. This is OS-enforced exclusion, not a packet-capture claim.
 
-The machine-readable `compatibility-gate.json` maps all ten required proofs to the exact
-remaining work. `test:runtime` intentionally exits nonzero while any proof is partial,
-blocked, or not run. A passing six-test subset is never the full gate.
+The machine-readable `compatibility-gate.json` now records all ten completed proofs.
+`test:runtime` still exits nonzero if any proof becomes partial, blocked, or not run.
 
 ## Isolation and reproducibility
 
@@ -83,11 +152,10 @@ transport interceptor redirects verified fixture requests to loopback after the 
 observer sees Codex-shaped URLs. No production configuration or database is opened.
 
 Task 1's build creates `.runtime/probe-plugin.js`; it is not `dist/` and must not be installed.
-`verify:package` intentionally rejects this incomplete state. Native extension lifecycle,
-tool replay, auxiliary concurrency, single-flight refresh, competitor reload, and maintenance
-barrier checks have not passed and are not represented by mocked replacements.
+`verify:package` intentionally rejects this non-distributable fixture state. Task 8
+will produce the installable selector, and Task 9 will repeat the gate on that build.
 
-## Other verification
+## Historical checkpoint verification
 
 - `npm --prefix Extensions/expiry-selector run typecheck`: passed.
 - `npm --prefix Extensions/expiry-selector run build`: passed (test probe only).

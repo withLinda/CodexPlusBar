@@ -9,7 +9,18 @@ import { accounts, credential } from './fixtures.js';
 const binary = '/Applications/OpenChamber.app/Contents/Resources/opencode-cli/opencode';
 const tempParent = '/private/var/folders/43/wvysbd0n0fs9n2724h44s4br0000gn/T/opencode';
 
-export async function startHarness(fixtureOrigin: string) {
+async function unusedPort() {
+  return new Promise<number>(resolvePort => {
+    const listener = createServer();
+    listener.listen(0, '127.0.0.1', () => {
+      const address = listener.address();
+      if (!address || typeof address === 'string') throw new Error('Missing port');
+      listener.close(() => resolvePort(address.port));
+    });
+  });
+}
+
+export async function startHarness(fixtureOrigin: string, sharedCoordinatorPort?: number, hostDelivery = false) {
   const version = execFileSync(binary, ['--version'], { encoding: 'utf8' }).trim();
   if (version !== 'opencode v2.2.6') throw new Error(`Unsupported runtime: ${version}`);
   const checksum = createHash('sha256').update(await readFile(binary)).digest('hex');
@@ -18,31 +29,38 @@ export async function startHarness(fixtureOrigin: string) {
   for (const directory of [...locations, ...['home', 'data', 'config', 'cache', 'state'].map(p => join(root, p))]) {
     await mkdir(directory, { recursive: true, mode: 0o700 });
   }
-  const plugin = join(root, 'plugin');
-  await mkdir(plugin, { mode: 0o700 });
-  await copyFile(resolve('.runtime/probe-plugin.js'), join(plugin, 'index.js'));
+  const plugin = join(root, 'extension', 'plugin');
+  await mkdir(plugin, { recursive: true, mode: 0o700 });
+  await copyFile(resolve('.runtime/probe-plugin.js'), join(plugin, 'probe.js'));
   await writeFile(join(plugin, 'package.json'), JSON.stringify({ name: 'expiry-selector-probe', version: '0.1.0', type: 'module', exports: './index.js' }));
-  await writeFile(join(root, 'opencode.json'), JSON.stringify({
-    plugins: [{ package: plugin, options: { fixtureOrigin } }],
+  const coordinatorPort = sharedCoordinatorPort ?? await unusedPort();
+  await writeFile(join(plugin, 'index.js'), `import probe from './probe.js'; export default { ...probe, setup(ctx) { return probe.setup({ ...ctx, options: ${JSON.stringify({ fixtureOrigin, coordinatorPort })} }); } };\n`);
+  await writeFile(join(root, 'extension', 'package.json'), JSON.stringify({ name: 'expiry-selector-probe', version: '0.1.0',
+    openchamber: { apiVersion: 1, engines: { openchamber: '>=2.7.0' }, contributes: {
+      panel: { id: 'expiry-selector-probe', name: 'Compatibility fixture', icon: 'settings' }, opencodePlugin: 'plugin',
+    } } }));
+  const configuration = {
+    plugins: hostDelivery ? [] : [{ package: plugin, options: { fixtureOrigin, coordinatorPort } }],
     providers: { openai: { package: '@opencode/ai/providers/openai', settings: { transport: 'websocket', encoding: 'none' },
       models: { 'gpt-5.7': { name: 'Fixture', limit: { context: 100_000, output: 1000 } } } } },
     model: 'openai/gpt-5.7',
-  }), { mode: 0o600 });
+  };
+  await writeFile(join(root, 'opencode.json'), JSON.stringify(configuration), { mode: 0o600 });
   // Enforced by the OS, including native OAuth and model-catalog requests.
   const profile = '(version 1)(allow default)(deny network-outbound)(allow network-outbound (remote ip "localhost:*"))';
-  const port = await new Promise<number>(resolvePort => {
-    const listener = createServer();
-    listener.listen(0, '127.0.0.1', () => {
-      const address = listener.address();
-      if (!address || typeof address === 'string') throw new Error('Missing port');
-      listener.close(() => resolvePort(address.port));
-    });
-  });
+  const port = await unusedPort();
   // A whitelist removes all inherited OpenCode, OpenAI, proxy, and provider credentials.
-  const env = { PATH: '/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin', HOME: join(root, 'home'),
+  const env: NodeJS.ProcessEnv = { PATH: '/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin', HOME: join(root, 'home'),
     TMPDIR: root, XDG_DATA_HOME: join(root, 'data'), XDG_CONFIG_HOME: join(root, 'config'),
     XDG_CACHE_HOME: join(root, 'cache'), XDG_STATE_HOME: join(root, 'state'),
     OPENCODE_SERVER_PASSWORD: 'expiry-fixture-password', OPENCODE_LOG_LEVEL: 'ERROR' };
+  const hostAction = (action: string) => JSON.parse(execFileSync('/usr/bin/sandbox-exec', ['-p', profile, process.execPath,
+    resolve('tests/runtime/host-control.mjs'), root, action], { env, encoding: 'utf8' }));
+  if (hostDelivery) {
+    execFileSync(process.execPath, ['scripts/extract-probe-host.mjs']);
+    hostAction('install');
+    env.OPENCODE_CONFIG = join(root, 'host-instance', 'opencode.managed.json');
+  }
   const child = spawn('/usr/bin/sandbox-exec', ['-p', profile, binary, 'serve', '--hostname', '127.0.0.1', '--port', String(port)],
     { cwd: root, env, stdio: ['ignore', 'pipe', 'pipe'] });
   let log = '';
@@ -99,7 +117,21 @@ export async function startHarness(fixtureOrigin: string) {
     }
     const rpc = async (method: string, input: unknown = {}, location = locations[0]!) =>
       (await api(`/api/rpc/expiry.probe/${method}`, { input }, location)).output;
-    return { api, rpc, locations, version, checksum, close, diagnostic: () => log };
+    const configure = async (enabled: boolean, competitor = false) => {
+      const competitorPath = join(root, 'competitor');
+      await mkdir(competitorPath, { recursive: true });
+      await writeFile(join(competitorPath, 'package.json'), JSON.stringify({ name: 'expiry-fixture-competitor', type: 'module', exports: './index.js' }));
+      await writeFile(join(competitorPath, 'index.js'), "export default { id: 'openchamber-limit-failover', async setup() {} };\n");
+      await writeFile(join(root, 'opencode.json'), JSON.stringify({ ...configuration,
+        plugins: [...(enabled ? configuration.plugins : []), ...(competitor ? [{ package: competitorPath }] : [])] }), { mode: 0o600 });
+      for (const location of locations) await api('/api/location/reload', {}, location);
+    };
+    const ownerStatus = async (release = false) => {
+      const response = await fetch(`http://127.0.0.1:${coordinatorPort}${release ? '/release' : ''}`, {
+        method: release ? 'POST' : 'GET', headers: { authorization: 'Bearer expiry-fixture-control' }, signal: AbortSignal.timeout(1000) });
+      return response.json();
+    };
+    return { api, rpc, locations, version, checksum, close, configure, coordinatorPort, ownerStatus, hostAction, diagnostic: () => log };
   } catch (error) {
     await close();
     throw error;

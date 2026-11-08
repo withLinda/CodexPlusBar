@@ -17,24 +17,43 @@ function terminalEvents(id: string) {
   ];
 }
 
+function toolEvents(id: string) {
+  const item = { type: 'function_call', id: `fc_${id}`, call_id: `call_${id}`, name: 'expiry_fixture_effect',
+    arguments: '{}', status: 'completed' };
+  return [
+    { type: 'response.created', response: { id: `resp_${id}`, status: 'in_progress', output: [] } },
+    { type: 'response.output_item.added', output_index: 0, item: { ...item, arguments: '' } },
+    { type: 'response.function_call_arguments.delta', item_id: item.id, output_index: 0, delta: '{}' },
+    { type: 'response.output_item.done', output_index: 0, item },
+    { type: 'response.completed', response: { id: `resp_${id}`, status: 'completed', output: [item],
+      usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } } },
+  ];
+}
+
 export async function fakeProvider() {
-  const requests: { accountID: string; header: string | undefined; sessionID: string | undefined }[] = [];
+  const requests: { accountID: string; header: string | undefined; sessionID: string | undefined; model: string; toolResults: number; kind: string | undefined }[] = [];
   const websockets: { accountID: string; header: string | undefined; frames: { previous: boolean; inputs: number }[] }[] = [];
-  const behaviors: (() => Promise<'quota' | 'ok'>)[] = [];
+  const behaviors: (() => Promise<'quota' | 'ok' | 'tool'>)[] = [];
   const server = createServer(async (request, response) => {
     if (request.url === '/refuse') { response.writeHead(426).end(); return; }
     try {
       const accountID = fixtureAccount(request.headers.authorization);
+      // Inspect only synthetic payloads in this fake server; retain counts, never content.
+      const chunks = [];
+      for await (const chunk of request) chunks.push(chunk);
+      const body = JSON.parse(Buffer.concat(chunks).toString());
       requests.push({ accountID, header: request.headers['chatgpt-account-id'] as string | undefined,
-        sessionID: request.headers['x-opencode-session-id'] as string | undefined });
-      // Drain only fixture payloads; never retain prompts or bodies.
-      for await (const _ of request) { /* consume */ }
-      if (await behaviors.shift()?.() === 'quota') {
+        sessionID: request.headers['x-opencode-session-id'] as string | undefined,
+        kind: request.headers['x-fixture-kind'] as string | undefined,
+        model: body.model, toolResults: body.input?.filter((item: any) => item.type === 'function_call_output').length ?? 0 });
+      const behavior = await behaviors.shift()?.();
+      if (behavior === 'quota') {
         response.writeHead(429, { 'content-type': 'application/json' }).end(JSON.stringify({ error: { type: 'insufficient_quota', code: 'insufficient_quota', message: 'Fixture exhausted' } }));
         return;
       }
       response.writeHead(200, { 'content-type': 'text/event-stream' });
-      for (const event of terminalEvents(String(requests.length))) response.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
+      const events = behavior === 'tool' ? toolEvents(String(requests.length)) : terminalEvents(String(requests.length));
+      for (const event of events) response.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
       response.end();
     } catch {
       response.writeHead(400).end('Invalid fixture request');
