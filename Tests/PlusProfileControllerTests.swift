@@ -5,6 +5,34 @@ import WebKit
 
 @MainActor
 struct PlusProfileControllerTests {
+    @Test
+    func selectorPublisherReceivesRefreshAndImmediateSessionInvalidation() async throws {
+        let directory = makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = ProfileCatalogStore(fileURL: directory.appendingPathComponent("profiles.json"))
+        var profile = sampleProfile(label: "selector@example.test", sortOrder: 0)
+        let identity = OpenCodeOpenAIIdentity(accountID: "account-a", userID: "user-a", email: "unused@example.test")
+        profile.openCodeOpenAIAccount = identity
+        try store.saveProfiles([profile])
+        let usage = PlusProfileUsage(accountID: "account-a", planType: "plus",
+            primaryWindow: .init(usedPercent: 25, resetAt: .now.addingTimeInterval(3600)), secondaryWindow: nil, fetchedAt: .now)
+        let evidence = SelectorObservation(identityKey: identity.storageKey, accountID: identity.accountID,
+            usage: .init(observedAt: usage.fetchedAt, identityKey: identity.storageKey, allowed: true, limitReached: false,
+                fiveHour: .init(remainingPercent: 75, resetAt: usage.primaryWindow.resetAt), sevenDay: .notApplicable),
+            entitlement: nil, unavailableReasons: ["expiry-unknown"])
+        let data = StubPlusProfileDataService(refreshResults: [profile.id: .success(.init(usage: usage, detectedNote: nil, selectorObservation: evidence))])
+        var writes: [SelectorExport] = []
+        let publisher = SelectorExportPublisher(binding: { _ in "credential-a" }, write: { writes.append($0) })
+        let controller = PlusProfileController(catalogStore: store, dataService: data, selectorPublisher: publisher, autoStart: false)
+        await controller.refreshProfile(id: profile.id)
+        await publisher.publishNow()
+        #expect(writes.last?.accounts.first?.usage?.fiveHour.remainingPercent == 75)
+        await controller.clearSession(for: profile.id)
+        #expect(writes.last?.accounts.isEmpty == true)
+        await controller.removeProfile(id: profile.id)
+        #expect(writes.last?.accounts.isEmpty == true)
+    }
+
     @Test(arguments: ["{invalid", #"{"openai":{"type":"api","key":"synthetic"}}"#])
     func brokenOutgoingOpenChamberLoginDoesNotMarkSelectedSnapshotBroken(outgoing: String) async throws {
         let fixture = try OpenCodeAuthFixture()

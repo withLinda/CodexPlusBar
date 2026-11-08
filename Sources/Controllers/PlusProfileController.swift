@@ -67,7 +67,9 @@ struct OpenChamberActionStatus: Equatable {
 final class PlusProfileController {
     static let touchIDPasskeyHelpMessage = "Touch ID works when the OpenAI passkey is in Apple Passwords or synced into this Chrome profile. Touch ID help opens the full Chrome setup; normal sign-in stays lightweight."
 
-    var profiles: [PlusProfileSnapshot] = []
+    var profiles: [PlusProfileSnapshot] = [] {
+        didSet { selectorPublisher?.update(profiles: profiles, observations: [:], trusted: selectorCatalogTrusted) }
+    }
     var selectedProfileID: UUID?
     var statusMessage: String?
     var isRefreshing = false
@@ -107,6 +109,8 @@ final class PlusProfileController {
     @ObservationIgnored private let autoRefreshSleep: @Sendable (UInt64) async throws -> Void
     @ObservationIgnored private var bootstrapTask: Task<Void, Never>?
     @ObservationIgnored private var autoRefreshTask: Task<Void, Never>?
+    @ObservationIgnored private let selectorPublisher: (any SelectorExportPublishing)?
+    @ObservationIgnored private var selectorCatalogTrusted = false
 
     init(
         catalogStore: ProfileCatalogStore = ProfileCatalogStore(),
@@ -116,6 +120,7 @@ final class PlusProfileController {
         syncService: any OpenChamberSyncServing = OpenChamberSyncService(),
         signInChecker: any OpenChamberSignInChecking = OpenChamberSignInCheckService(),
         repairService: any AppSignInRepairing = AppSignInRepairService(),
+        selectorPublisher: (any SelectorExportPublishing)? = nil,
         syncDefaults: UserDefaults = .standard,
         autoRefreshInterval: TimeInterval = 300,
         maxConcurrentProfileRefreshes: Int = 3,
@@ -130,10 +135,12 @@ final class PlusProfileController {
         self.openCodeAuthService = openCodeAuthService
         self.signInChecker = signInChecker
         self.repairService = repairService
+        self.selectorPublisher = selectorPublisher
         self.syncScheduler = OpenChamberSyncScheduler(service: syncService, defaults: syncDefaults)
         self.autoRefreshIntervalNanoseconds = UInt64(autoRefreshInterval * 1_000_000_000)
         self.maxConcurrentProfileRefreshes = max(1, maxConcurrentProfileRefreshes)
         self.autoRefreshSleep = autoRefreshSleep
+        self.syncScheduler.onBindingsChanged = { [weak self] in self?.selectorPublisher?.bindingsChanged() }
         loadStoredProfiles()
 
         if autoStart {
@@ -162,11 +169,21 @@ final class PlusProfileController {
             }
         }
         syncScheduler.start()
+        selectorPublisher?.start()
+    }
+
+    func stopBackgroundTasks() {
+        bootstrapTask?.cancel(); bootstrapTask = nil
+        autoRefreshTask?.cancel(); autoRefreshTask = nil
+        syncScheduler.stop()
+        selectorPublisher?.stop()
     }
 
     func pauseForBackup() async throws {
         guard !isTransferring else { throw BackupError.busy }
         isTransferring = true
+        selectorPublisher?.stop()
+        for profile in profiles { selectorPublisher?.invalidate(profileID: profile.id) }
         openChamberCheckTask?.cancel()
         appSignInRepairTask?.cancel()
         bootstrapTask?.cancel(); autoRefreshTask?.cancel()
@@ -872,6 +889,7 @@ final class PlusProfileController {
         defer { activeDataOperations -= 1 }
         guard let index = indexOfProfile(profileID) else { return }
         let snapshot = profiles[index]
+        selectorPublisher?.invalidate(profileID: profileID)
 
         do {
             try await dataService.clearSession(for: snapshot.profile)
@@ -909,6 +927,7 @@ final class PlusProfileController {
         removingProfileIDs.insert(profileID)
         defer { removingProfileIDs.remove(profileID) }
         let snapshot = profiles[index]
+        selectorPublisher?.invalidate(profileID: profileID)
 
         do {
             try await dataService.removeProfileData(for: snapshot.profile)
@@ -919,14 +938,14 @@ final class PlusProfileController {
             }
             do { try catalogStore.saveProfiles(candidate.map(\.profile)) }
             catch {
-                syncScheduler.update(profiles: profiles.map(\.profile), trusted: false)
+                updateCatalogConsumers(trusted: false)
                 statusMessage = "The profile list could not be saved locally."
                 return
             }
             profiles = candidate
             desktopSignInRepairProfileIDs.remove(profileID)
             openChamberSignInRepairProfileIDs.remove(profileID)
-            syncScheduler.update(profiles: candidate.map(\.profile), trusted: true)
+            updateCatalogConsumers(trusted: true)
             chromeSignInProfileIDs.remove(profileID)
 
             if selectedProfileID == profileID {
@@ -1086,7 +1105,9 @@ final class PlusProfileController {
         setRefreshingState(for: profileID, isRefreshing: true)
 
         do {
+            let ticket = await selectorPublisher?.beginRefresh(profileID: profileID)
             let result = try await dataService.refreshProfile(snapshot.profile)
+            if let ticket { await selectorPublisher?.completeRefresh(ticket: ticket, observation: result.selectorObservation) }
             guard let currentIndex = indexOfProfile(profileID) else { return }
             let current = profiles[currentIndex]
             var updatedProfile = current.profile
@@ -1118,6 +1139,7 @@ final class PlusProfileController {
     }
 
     private func loadStoredProfiles() {
+        for profile in profiles { selectorPublisher?.invalidate(profileID: profile.id) }
         openChamberUncheckedProfileIDs = nil
         openChamberCheckError = nil
         desktopSignInRepairProfileIDs.removeAll()
@@ -1171,7 +1193,7 @@ final class PlusProfileController {
             )
         }
         selectedProfileID = profiles.first?.id
-        syncScheduler.update(profiles: storedProfiles, trusted: trusted)
+        updateCatalogConsumers(trusted: trusted)
         statusMessage = repairMessage ?? statusMessage
         updateDashboardStatus()
     }
@@ -1388,12 +1410,18 @@ final class PlusProfileController {
 
         do {
             try catalogStore.saveProfiles(profiles.map(\.profile))
-            syncScheduler.update(profiles: profiles.map(\.profile), trusted: true)
+            updateCatalogConsumers(trusted: true)
             return true
         } catch {
-            syncScheduler.update(profiles: profiles.map(\.profile), trusted: false)
+            updateCatalogConsumers(trusted: false)
             statusMessage = "The profile list could not be saved locally."
             return false
         }
+    }
+
+    private func updateCatalogConsumers(trusted: Bool) {
+        selectorCatalogTrusted = trusted
+        syncScheduler.update(profiles: profiles.map(\.profile), trusted: trusted)
+        selectorPublisher?.update(profiles: profiles, observations: [:], trusted: trusted)
     }
 }

@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "sourceInstanceID": "76DD023C-9512-4D9C-A844-131135346C69",
+  "sequence": 7,
+  "generatedAtMs": 1800000000000,
+  "catalogTrusted": true,
+  "accounts": [
+    {
+      "profileID": "00000000-0000-4000-8000-000000000001",
+      "credentialID": "credential-a",
+      "identityKey": "bbf953fb0b82d0dc18d77cb78c35dfb8e1db684d7029f16e1e79b1c20e787ec9",
+      "accountID": "account-a",
+      "label": "Alpha",
+      "bindingObservedAtMs": 1800000000000,
+      "usage": {"observedAtMs": 1799999990000, "identityKey": "bbf953fb0b82d0dc18d77cb78c35dfb8e1db684d7029f16e1e79b1c20e787ec9", "allowed": true, "limitReached": false, "fiveHour": {"remainingPercent": 25, "resetAtMs": 1800003600000}, "sevenDay": {"state": "not-applicable"}},
+      "entitlement": {"observedAtMs": 1799999990000, "accountID": "account-a", "expiresAtMs": 1800086400000, "active": true, "deactivated": false, "usable": true, "match": "canonical"},
+      "unavailableReasons": []
+    },
+    {
+      "profileID": "00000000-0000-4000-8000-000000000002",
+      "credentialID": "credential-b",
+      "identityKey": "404cb83d3aecba0b072353170acb1d3096a681f97f1b6f17a36916c5e973948b",
+      "accountID": "account-b",
+      "label": "Beta",
+      "bindingObservedAtMs": 1800000000000,
+      "usage": {"observedAtMs": 1799999990000, "identityKey": "404cb83d3aecba0b072353170acb1d3096a681f97f1b6f17a36916c5e973948b", "allowed": true, "limitReached": false, "fiveHour": {"remainingPercent": 1, "resetAtMs": 1800003600000}, "sevenDay": {"state": "available", "remainingPercent": 20, "resetAtMs": 1800604800000}},
+      "entitlement": {"observedAtMs": 1799999990000, "accountID": "account-b", "expiresAtMs": 1800172800000, "active": null, "deactivated": false, "usable": true, "match": "unique-alias"},
+      "unavailableReasons": []
+    },
+    {
+      "profileID": "00000000-0000-4000-8000-000000000003",
+      "credentialID": "credential-c",
+      "identityKey": "d783890426cb49c317f5b3e81594de302f8c60b52a02c9ed555c58186b854741",
+      "accountID": "account-c",
+      "label": "Gamma",
+      "bindingObservedAtMs": 1800000000000,
+      "usage": null,
+      "entitlement": null,
+      "unavailableReasons": ["usage-unknown", "expiry-unknown"]
+    }
+  ]
+}

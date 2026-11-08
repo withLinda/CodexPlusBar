@@ -18,6 +18,7 @@ final class OpenChamberSyncScheduler {
     @ObservationIgnored private var debounce: Task<Void, Never>?
     @ObservationIgnored private var retry: Task<Void, Never>?
     @ObservationIgnored private var observer: SyncPreferenceObserver?
+    @ObservationIgnored var onBindingsChanged: (@MainActor () -> Void)?
 
     init(service: any OpenChamberSyncServing = OpenChamberSyncService(), defaults: UserDefaults = .standard,
          sleep: @escaping @Sendable (TimeInterval) async throws -> Void = { try await Task.sleep(for: .seconds($0)) }) {
@@ -90,6 +91,7 @@ final class OpenChamberSyncScheduler {
         await operation?.value
     }
     func resumeAfterManualOperation(repairedProfileID: UUID? = nil) {
+        onBindingsChanged?()
         // Manual repair supersedes this profile's old report, not another profile's warning.
         if let repairedProfileID { clearSignInRepair(for: repairedProfileID) }
         manual = false
@@ -125,6 +127,7 @@ final class OpenChamberSyncScheduler {
                 }
             }
             self?.isSyncing = false
+            self?.onBindingsChanged?()
             self?.operation = nil
         }
         operation = task

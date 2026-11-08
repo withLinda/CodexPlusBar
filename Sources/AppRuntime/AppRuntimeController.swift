@@ -30,6 +30,7 @@ final class AppRuntimeController {
     )
     private var hasStarted = false
     private var localReopenObserver: Any?
+    private var terminationObserver: Any?
 
     init(singleInstanceCoordinator: SingleInstanceCoordinator = SingleInstanceCoordinator()) {
         let chromeProfileStore = ChromeProfileStore()
@@ -43,6 +44,7 @@ final class AppRuntimeController {
         )
         let controller = PlusProfileController(
             dataService: dataService,
+            selectorPublisher: SelectorExportPublisher(),
             autoStart: false
         )
         let dotTrickController = DotTrickController()
@@ -68,6 +70,10 @@ final class AppRuntimeController {
     func start() {
         guard hasStarted == false else { return }
         hasStarted = true
+        terminationObserver = NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification,
+            object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.controller.stopBackgroundTasks() }
+            }
 
         localReopenObserver = NotificationCenter.default.addObserver(
             forName: CodexAppNotifications.reopenAccountWindowLocally,
