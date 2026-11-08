@@ -5,7 +5,7 @@ export type SelectionInput = {
   snapshot: SelectorExportV1; connections: NativeConnection[]; activeCredentialID: string | null;
   cooldowns: Record<string, Cooldown>; failedIdentityKeys: Set<string>; nowMs: number;
 };
-export const supportedMethods = new Set(['chatgpt-browser', 'chatgpt-headless']);
+export const supportedMethods = new Set(['oauth', 'chatgpt-browser', 'chatgpt-headless']);
 
 const fresh = (time: number, maximum: number, now: number) => Number.isSafeInteger(time) && time >= 0 && time <= now + limits.futureSkewMs && now - time <= maximum;
 export function positiveUsage(usage: UsageObservation, now: number): boolean {

@@ -1,6 +1,6 @@
 import { build } from 'esbuild';
 
-// Task 1 builds only the compatibility probe. It is never an installable extension.
+// Isolated runtime probes; packaging is supplied separately.
 await build({
   entryPoints: ['tests/runtime/probe-plugin.ts'],
   outfile: '.runtime/probe-plugin.js',
@@ -9,3 +9,5 @@ await build({
   format: 'esm',
   target: 'node22',
 });
+await build({ entryPoints: ['tests/runtime/production-probe.ts'], outfile: '.runtime/production-probe.js',
+  bundle: true, platform: 'node', format: 'esm', target: 'node22' });

@@ -3,11 +3,13 @@ import { RequestObserver, repairTransportHeaders, type RequestScope } from './re
 
 /** Native 2.2.6 model/transport hooks. No credentials, bodies, or prompts are retained. */
 export async function registerTransportHooks(ctx: Plugin.Context, observer: RequestObserver,
-  managed: () => ReadonlySet<string>, unsupported: (reason: string) => void = () => {}) {
+  managed: () => ReadonlySet<string>, unsupported: (reason: string) => void = () => {},
+  lifecycle: (event: { type: string; created: number; location?: { directory: string }; data: unknown }) => void = () => {}) {
   const locationKey = ctx.location.directory;
   const scope = (event: { sessionID: string; model: { providerID: string; id: string }; agent: string; kind: RequestScope['kind'] }): RequestScope =>
     ({ locationKey, sessionID: event.sessionID, providerID: event.model.providerID, modelID: event.model.id, agent: event.agent, kind: event.kind });
   const registrations: { dispose(): Promise<void> }[] = [];
+  try {
   registrations.push(await ctx.session.hook('model.request', event => { observer.beginPrimary(scope(event)); }, { providerID: 'openai' }));
   registrations.push(await ctx.session.hook('http.request', event => {
     const result = repairTransportHeaders({ url: event.request.url, headers: event.request.headers, managed: managed() });
@@ -22,10 +24,17 @@ export async function registerTransportHooks(ctx: Plugin.Context, observer: Requ
     const request = scope(event), generation = observer.generation(request);
     if (generation !== null) observer.observeTransport({ ...request, generation, identity: result.identity, transport: 'websocket', observedAtMs: Date.now() });
   }, { providerID: 'openai' }));
+  } catch (error) {
+    await Promise.allSettled(registrations.map(registration => registration.dispose()));
+    throw error;
+  }
   const abort = new AbortController();
-  const events = ctx.event.subscribe({ types: ['session.execution.succeeded', 'session.execution.failed', 'session.execution.interrupted', 'session.deleted'], signal: abort.signal });
+  const events = ctx.event.subscribe({ types: ['session.execution.succeeded', 'session.execution.failed', 'session.execution.interrupted', 'session.deleted', 'config.updated'], signal: abort.signal });
   const consume = (async () => {
-    try { for await (const event of events) observer.handleLifecycle(event); }
+    try { for await (const event of events) {
+      if (event.type !== 'config.updated') observer.handleLifecycle(event);
+      lifecycle(event);
+    } }
     catch { if (!abort.signal.aborted) { observer.forgetLocation(locationKey); unsupported('attribution-unknown'); } }
   })();
   return async () => {

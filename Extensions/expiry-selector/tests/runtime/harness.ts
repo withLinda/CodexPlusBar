@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { createHash } from 'node:crypto';
 import { accounts, credential } from './fixtures.js';
+import { tokenIdentity } from '../../src/shared/identity.js';
 
 const binary = '/Applications/OpenChamber.app/Contents/Resources/opencode-cli/opencode';
 const tempParent = '/private/var/folders/43/wvysbd0n0fs9n2724h44s4br0000gn/T/opencode';
@@ -20,7 +21,7 @@ async function unusedPort() {
   });
 }
 
-export async function startHarness(fixtureOrigin: string, sharedCoordinatorPort?: number, hostDelivery = false) {
+export async function startHarness(fixtureOrigin: string, sharedCoordinatorPort?: number, hostDelivery = false, production = false) {
   const version = execFileSync(binary, ['--version'], { encoding: 'utf8' }).trim();
   if (version !== 'opencode v2.2.6') throw new Error(`Unsupported runtime: ${version}`);
   const checksum = createHash('sha256').update(await readFile(binary)).digest('hex');
@@ -31,7 +32,19 @@ export async function startHarness(fixtureOrigin: string, sharedCoordinatorPort?
   }
   const plugin = join(root, 'extension', 'plugin');
   await mkdir(plugin, { recursive: true, mode: 0o700 });
-  await copyFile(resolve('.runtime/probe-plugin.js'), join(plugin, 'probe.js'));
+  await copyFile(resolve(production ? '.runtime/production-probe.js' : '.runtime/probe-plugin.js'), join(plugin, 'probe.js'));
+  if (production) {
+    const now = Date.now();
+    await writeFile(join(root, 'home/fixture-snapshot.json'), JSON.stringify({ schemaVersion: 1, sequence: 1, sourceInstanceID: crypto.randomUUID(),
+      generatedAtMs: now, catalogTrusted: true, accounts: (['A', 'B'] as const).map((name, index) => {
+        const identity = tokenIdentity(`Bearer ${credential(name).access}`)!;
+        return { ...identity, profileID: crypto.randomUUID(), credentialID: accounts[name].id, label: name, bindingObservedAtMs: now,
+          usage: { observedAtMs: now, identityKey: identity.identityKey, allowed: true, limitReached: false,
+            fiveHour: { remainingPercent: 50, resetAtMs: now + 3600000 }, sevenDay: { state: 'not-applicable' } },
+          entitlement: { observedAtMs: now, accountID: identity.accountID, expiresAtMs: now + (index + 1) * 86400000,
+            active: true, usable: true, deactivated: false, match: 'canonical' }, unavailableReasons: [] };
+      }) }), { mode: 0o600 });
+  }
   await writeFile(join(plugin, 'package.json'), JSON.stringify({ name: 'expiry-selector-probe', version: '0.1.0', type: 'module', exports: './index.js' }));
   const coordinatorPort = sharedCoordinatorPort ?? await unusedPort();
   await writeFile(join(plugin, 'index.js'), `import probe from './probe.js'; export default { ...probe, setup(ctx) { return probe.setup({ ...ctx, options: ${JSON.stringify({ fixtureOrigin, coordinatorPort })} }); } };\n`);
@@ -131,7 +144,7 @@ export async function startHarness(fixtureOrigin: string, sharedCoordinatorPort?
         method: release ? 'POST' : 'GET', headers: { authorization: 'Bearer expiry-fixture-control' }, signal: AbortSignal.timeout(1000) });
       return response.json();
     };
-    return { api, rpc, locations, version, checksum, close, configure, coordinatorPort, ownerStatus, hostAction, diagnostic: () => log };
+    return { root, api, rpc, locations, version, checksum, close, configure, coordinatorPort, ownerStatus, hostAction, diagnostic: () => log };
   } catch (error) {
     await close();
     throw error;

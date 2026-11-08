@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 
-for (const args of [['scripts/build.mjs'], ['node_modules/vitest/vitest.mjs', 'run', 'tests/runtime/selector.integration.test.ts']]) {
+for (const args of [['scripts/build.mjs'], ['node_modules/vitest/vitest.mjs', 'run', 'tests/runtime/selector.integration.test.ts', 'tests/runtime/production.integration.test.ts']]) {
   const result = spawnSync(process.execPath, args, { stdio: 'inherit' });
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
