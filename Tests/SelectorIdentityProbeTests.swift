@@ -89,16 +89,18 @@ struct SelectorIdentityProbeTests {
                 do { context = try AuthSessionService.decodeAuthContext(from: data) }
                 catch { throw IdentityProbeError.sessionUnavailable }
                 let catalogData = try await probeRequest(AccountCatalogService.makeRequest(), store: sessions, client: client, context: context)
-                let catalog: [AccountCatalogItem]
-                do { catalog = try AccountCatalogService.decodeCatalog(from: catalogData) }
+                let decoded: AccountCatalogService.Catalog
+                do { decoded = try AccountCatalogService.decodeCatalogEvidence(from: catalogData) }
                 catch { throw IdentityProbeError.catalogUnavailable }
-                let matched = catalog.filter { $0.accountID == native.accountID }
+                let matched = decoded.displayItems.filter { $0.accountID == native.accountID }
+                let evidence = decoded.evidenceItems.filter { $0.accountID == native.accountID }
                 let rawCatalog = try probeObject(catalogData)
                 let accounts = rawCatalog["accounts"] as? [String: Any] ?? [:]
                 let matchingRows = accounts.values.compactMap { $0 as? [String: Any] }.filter { row in
                     let account = row["account"] as? [String: Any] ?? [:]
                     return (account["account_id"] as? String ?? account["id"] as? String) == native.accountID
                 }
+                let matchingPayloads = try matchingRows.map { try JSONSerialization.data(withJSONObject: $0, options: [.sortedKeys]) }
                 let row = matchingRows.first ?? [:]
                 let entitlement = row["entitlement"] as? [String: Any] ?? [:]
                 let rawAccount = row["account"] as? [String: Any] ?? [:]
@@ -112,7 +114,13 @@ struct SelectorIdentityProbeTests {
                         "account.is_deactivated": fieldShape(rawAccount["is_deactivated"]),
                         "can_access_with_session": fieldShape(row["can_access_with_session"]),
                         "entitlement.expires_at": fieldShape(entitlement["expires_at"]),
-                        "entitlement.has_active_subscription": fieldShape(entitlement["has_active_subscription"])
+                        "entitlement.has_active_subscription": fieldShape(entitlement["has_active_subscription"]),
+                        "raw.canonicalMatches": String(matchingRows.count),
+                        "raw.duplicateRowsEqual": String(matchingPayloads.count == 2 && matchingPayloads[0] == matchingPayloads[1]),
+                        "evidence.canonicalMatches": String(evidence.count),
+                        "evidence.validRows": String(evidence.filter { $0.selectorEvidence?.valid == true }.count),
+                        "evidence.expiryRows": String(evidence.filter { $0.expiresAt != nil }.count),
+                        "evidence.explicitFlagsRows": String(evidence.filter { $0.selectorEvidence?.deactivated != nil && $0.selectorEvidence?.usable != nil }.count)
                     ]
                 ))
             } catch {

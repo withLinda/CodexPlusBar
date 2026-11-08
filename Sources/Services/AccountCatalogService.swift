@@ -64,12 +64,16 @@ struct AccountCatalogService {
     private static func normalizeCatalog(from payload: Any) throws -> Catalog {
         let collection = try WorkspacePayloadSupport.extractCollection(from: payload, traceHint: traceHint)
         var items: [AccountCatalogItem] = []
+        var evidenceItems: [AccountCatalogItem] = []
         var encounteredUnrecognizedEntry = false
 
         for entry in collection.entries {
             switch parseCatalogItem(from: entry) {
             case let .catalogItem(item):
                 items.append(item)
+                if !isIdenticalDefaultMirror(entry, in: collection.entries) {
+                    evidenceItems.append(item)
+                }
             case .unrecognized:
                 encounteredUnrecognizedEntry = true
             }
@@ -92,7 +96,22 @@ struct AccountCatalogService {
         case .sortByNameThenID:
             displayItems = normalizedItems.sorted(by: itemSort)
         }
-        return Catalog(displayItems: displayItems, evidenceItems: items)
+        return Catalog(displayItems: displayItems, evidenceItems: evidenceItems)
+    }
+
+    /// ChatGPT repeats a canonical row under `default`. Collapse only that exact
+    /// mirror, never conflicting duplicates or the display normalizer's fallbacks.
+    private static func isIdenticalDefaultMirror(_ entry: WorkspaceEntry, in entries: [WorkspaceEntry]) -> Bool {
+        guard entry.fallbackID == "default", let object = entry.payload as? JSONObject,
+              let account = object["account"] as? JSONObject,
+              let id = WorkspacePayloadSupport.firstNonEmptyString(from: account["account_id"], account["id"]),
+              id != "default",
+              let canonical = entries.first(where: { $0.fallbackID == id }),
+              let canonicalObject = canonical.payload as? JSONObject,
+              let mirrorData = try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]),
+              let canonicalData = try? JSONSerialization.data(withJSONObject: canonicalObject, options: [.sortedKeys]) else { return false }
+        // JSON equality preserves boolean versus numeric types (NSDictionary equality does not).
+        return mirrorData == canonicalData
     }
 
     private static func parseCatalogItem(from entry: WorkspaceEntry) -> CatalogParseResult {

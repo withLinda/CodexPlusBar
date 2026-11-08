@@ -73,7 +73,8 @@ struct SelectorObservation: Equatable, Sendable {
         }
         var entitlement: SelectorEntitlementObservation?
         if let catalog, let entitlementObservedAt {
-            // Use unmerged catalog rows: normalization for display must not hide ambiguity.
+            // Only exact canonical/default mirrors are collapsed by the decoder;
+            // display normalization must never hide conflicting evidence.
             let matches = catalog.filter { $0.accountID == nativeIdentity.accountID }
             if matches.count == 1, let item = matches.first, let raw = item.selectorEvidence,
                raw.valid, let deactivated = raw.deactivated, let usable = raw.usable {

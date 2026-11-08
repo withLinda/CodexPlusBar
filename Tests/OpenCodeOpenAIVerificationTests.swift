@@ -10,7 +10,7 @@ struct OpenCodeOpenAIVerificationTests {
         let gate = OpenAIVerificationGate()
         let runtime = OpenCodeLocalRuntime(authURL: fixture.authURL)
         let service = OpenCodeOpenAIAuthService(homeDirectory: fixture.home, resolveRuntime: { runtime },
-                                               verifier: gate, now: { OpenCodeAuthFixture.now })
+                                               verifier: gate, now: { OpenCodeAuthFixture.now }, selector: SelectorControlClient(homeDirectory: fixture.home, connectionRefused: { true }))
         let task = Task { try await service.switchTo(profile: profile) }
         await gate.waitUntilStarted()
         await #expect(throws: OpenCodeOpenAIAuthError.busy) { try await service.switchTo(profile: profile) }

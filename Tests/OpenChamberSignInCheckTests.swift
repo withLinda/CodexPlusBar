@@ -13,7 +13,7 @@ struct OpenChamberSignInCheckTests {
         try snapshots.saveNative(entry, identity: entry.openAIIdentity())
         let client = SyncTestClient([selected, entry, duplicate]), barrier = SyncBarrier(), output = CheckOutput()
         let service = OpenChamberSignInCheckService(resolveClient: { client }, snapshots: snapshots,
-            verifier: WaitingCheckVerifier(fresh: fresh, barrier: barrier), gate: .init(), now: { OpenCodeAuthFixture.now })
+            verifier: WaitingCheckVerifier(fresh: fresh, barrier: barrier), gate: .init(), now: { OpenCodeAuthFixture.now }, selector: MaintenanceTestControl(state: .paused))
         let task = Task { try await service.check(profiles: [syncProfile(entry)]) { await output.append($0) } }
         await barrier.started()
         await client.activate(id: duplicate.id)
@@ -32,7 +32,7 @@ struct OpenChamberSignInCheckTests {
         let client = SyncTestClient(snapshotOnly ? [other] : [other, old])
         let barrier = SyncBarrier(), output = CheckOutput()
         let service = OpenChamberSignInCheckService(resolveClient: { client }, snapshots: snapshots,
-            verifier: RejectingCheckVerifier(barrier: barrier), gate: .init())
+            verifier: RejectingCheckVerifier(barrier: barrier), gate: .init(), selector: MaintenanceTestControl(state: .paused))
         let task = Task { try await service.check(profiles: [syncProfile(old)]) { await output.append($0) } }
         await barrier.started()
         var replacement = old.value; replacement.fields["refresh"] = .string("new-login")
@@ -52,7 +52,7 @@ struct OpenChamberSignInCheckTests {
         entry.value.fields[field] = .string("unreadable-or-unsupported")
         let client = SyncTestClient([entry]), output = CheckOutput()
         let service = OpenChamberSignInCheckService(resolveClient: { client }, snapshots: snapshots,
-            verifier: SyncTestVerifier(), gate: .init())
+            verifier: SyncTestVerifier(), gate: .init(), selector: MaintenanceTestControl(state: .paused))
         try await service.check(profiles: [profile]) { await output.append($0) }
         #expect(await output.values.first?.record.outcome == .unchecked)
         #expect(await client.operations.isEmpty)
@@ -91,7 +91,7 @@ struct OpenChamberSignInCheckTests {
             }
         })
         let service = OpenChamberSignInCheckService(resolveClient: { client },
-            snapshots: .init(homeDirectory: fixture.home), verifier: verifier, gate: OpenCodeOperationGate(), now: { OpenCodeAuthFixture.now })
+            snapshots: .init(homeDirectory: fixture.home), verifier: verifier, gate: OpenCodeOperationGate(), now: { OpenCodeAuthFixture.now }, selector: MaintenanceTestControl(state: .paused))
         try await service.check(profiles: profiles) { await output.append($0) }
         #expect(await output.values.map(\.record.outcome) == [.verified, .needsSignIn, .unchecked, .needsSignIn])
         #expect(await client.entries == entries)
@@ -108,7 +108,7 @@ struct OpenChamberSignInCheckTests {
         let client = SyncTestClient([original, entry]), output = CheckOutput()
         let snapshots = OpenCodeSignInSnapshotStore(homeDirectory: fixture.home)
         let service = OpenChamberSignInCheckService(resolveClient: { client }, snapshots: snapshots,
-            verifier: CheckRefreshVerifier(fresh: fresh, failure: .unavailable), gate: OpenCodeOperationGate(), now: { OpenCodeAuthFixture.now })
+            verifier: CheckRefreshVerifier(fresh: fresh, failure: .unavailable), gate: OpenCodeOperationGate(), now: { OpenCodeAuthFixture.now }, selector: MaintenanceTestControl(state: .paused))
         try await service.check(profiles: [syncProfile(entry)]) { await output.append($0) }
         #expect(await output.values.first?.record.outcome == .unchecked)
         #expect(try snapshots.resolved(expired) == fresh)
@@ -127,7 +127,7 @@ struct OpenChamberSignInCheckTests {
         let client = SyncTestClient([original, entry], loseCreateResponse: true)
         let verifier = CountingCheckVerifier(fresh: fresh), output = CheckOutput()
         let service = OpenChamberSignInCheckService(resolveClient: { client }, snapshots: .init(homeDirectory: fixture.home),
-            verifier: verifier, gate: OpenCodeOperationGate(), now: { OpenCodeAuthFixture.now })
+            verifier: verifier, gate: OpenCodeOperationGate(), now: { OpenCodeAuthFixture.now }, selector: MaintenanceTestControl(state: .paused))
         try await service.check(profiles: [syncProfile(entry), syncProfile(entry)]) { await output.append($0) }
         #expect(await output.values.map(\.record.outcome) == [.verified, .verified])
         #expect(await verifier.refreshes == 1)
@@ -143,7 +143,7 @@ struct OpenChamberSignInCheckTests {
         let snapshots = OpenCodeSignInSnapshotStore(homeDirectory: fixture.home)
         let verifier = CountingCheckVerifier(fresh: fresh, barrier: barrier)
         let service = OpenChamberSignInCheckService(resolveClient: { client }, snapshots: snapshots,
-            verifier: verifier, gate: OpenCodeOperationGate(), now: { OpenCodeAuthFixture.now })
+            verifier: verifier, gate: OpenCodeOperationGate(), now: { OpenCodeAuthFixture.now }, selector: MaintenanceTestControl(state: .paused))
         let task = Task { try await service.check(profiles: [syncProfile(entry)]) { await output.append($0) } }
         await barrier.started()
         await client.activate(id: other.id)
@@ -164,7 +164,7 @@ struct OpenChamberSignInCheckTests {
         let selector = MaintenanceTestControl(state: .auto)
         let service = OpenChamberSignInCheckService(resolveClient: { client }, snapshots: snapshots,
             verifier: CountingCheckVerifier(fresh: fresh, barrier: barrier), gate: OpenCodeOperationGate(), now: { OpenCodeAuthFixture.now },
-            selector: selectorRunning ? selector : nil)
+            selector: selectorRunning ? selector : SelectorControlClient(homeDirectory: fixture.home, connectionRefused: { true }))
         let task = Task { try await service.check(profiles: [syncProfile(entry)]) { await output.append($0) } }
         await barrier.started(); task.cancel(); await barrier.release()
         await #expect(throws: CancellationError.self) { try await task.value }

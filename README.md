@@ -90,15 +90,17 @@ Missing logins can be restored from previously saved OAuth sign-ins. A profile w
 
 **New in 1.6.0:** Install both the updated CodexPlusBar app and the optional **Account Priority 0.1.0** extension. CodexPlusBar publishes verified subscription expiry and quota observations; the extension selects the soonest-expiring eligible OpenAI account through native OpenCode controls. An account with **17 days remaining** is preferred over one with **30 days**, provided its 5H and applicable 7D quota are available. The panel shows **Expires in 16d 6h**, freshness, exclusions, and the selected account.
 
-1. Update CodexPlusBar using the [1.6.0 DMG](https://github.com/withLinda/CodexPlusBar/releases/download/v1.6.0/CodexPlusBar.dmg), then open it and refresh your accounts.
-2. Download [expiry-selector-0.1.0.zip](https://github.com/withLinda/CodexPlusBar/releases/download/v1.6.0/expiry-selector-0.1.0.zip) and extract it.
+**Fixed in 1.6.1:** ChatGPT may repeat the same account under its ID and `default`. Identical copies now produce verified expiry evidence; conflicting copies remain ineligible. If 1.6.0 shows **Unknown expiry** for every account, update CodexPlusBar and refresh. The existing 0.1.0 extension remains compatible.
+
+1. Update CodexPlusBar using the [1.6.1 DMG](https://github.com/withLinda/CodexPlusBar/releases/download/v1.6.1/CodexPlusBar.dmg), then open it and refresh your accounts.
+2. Download [expiry-selector-0.1.0.zip](https://github.com/withLinda/CodexPlusBar/releases/download/v1.6.1/expiry-selector-0.1.0.zip) and extract it.
 3. In OpenChamber **Settings → Extensions**, install the extracted **expiry-selector** folder and approve its plugin/local-service capabilities.
 4. Open **Account Priority** and confirm its initial **Paused** state and the expected account evidence. Record your current native account and limit-switch/fallback settings.
 5. Disable competing native limit switching/fallback settings, then choose **Enable Auto**. Before native **Use**, choose **Pause Auto** and wait for acknowledgement; resume explicitly afterward.
 
 Verified with **OpenChamber 2.7.0 / OpenCode 2.2.6**. Unknown or stale evidence cannot qualify a replacement; if no account qualifies, the current native account remains selected. Activation is global across locations, and requests already in flight may finish on their original account. Native OpenCode owns OAuth refresh. CodexPlusBar's sign-in-changing actions hold Auto paused; background sync defers removals while the selector is present or cannot be verified.
 
-The extension alone is insufficient: it needs the publisher in CodexPlusBar 1.6.0 or later. See the [extension guide](Extensions/expiry-selector/README.md) for supported configurations, maintenance recovery and rollback, and the [acceptance record](Extensions/expiry-selector/docs/acceptance-2026-11-09.md) for isolated test coverage and live-test boundaries.
+The extension alone is insufficient: use CodexPlusBar **1.6.1 or later** for the corrected expiry publisher. **Blocked** with a native-switching warning means OpenChamber's competing account switching or fallback is enabled; disable those settings before enabling Auto. See the [extension guide](Extensions/expiry-selector/README.md) for supported configurations, maintenance recovery and rollback, and the [acceptance record](Extensions/expiry-selector/docs/acceptance-2026-11-09.md) for isolated test coverage and live-test boundaries.
 
 ### Save and switch desktop sign-ins
 
@@ -116,7 +118,7 @@ Desktop switching uses native Swift, Security, URLSession, and AppKit; `codex-au
 
 Supported desktop storage is the standard `~/.codex/auth.json`, direct macOS Keychain, or `auto` selection. Custom runtime authentication overrides, administrator-managed configuration, encrypted secret storage, and ephemeral credentials report an unsupported-configuration message. Keychain may ask for access. A failed switch reports credential recovery and app-reopening results separately.
 
-Native desktop sign-in switching is included in the **1.6.0 DMG** (introduced in 1.2.0).
+Native desktop sign-in switching is included in the **1.6.1 DMG** (introduced in 1.2.0).
 
 **Since 1.2.3:** Leftover ChatGPT crash-reporting and keyboard-monitor utilities no longer cause a false “could not close” error when switching accounts. CodexPlusBar recognizes only their specific bundle locations; the desktop, Codex app-server, renderers, and unknown helpers still need to exit before the saved sign-in can change.
 
@@ -189,7 +191,7 @@ CodexPlusBar reads the signed-in web services used by ChatGPT and Claude. These 
 
 The easiest way to install CodexPlusBar is the signed and notarized GitHub DMG. You do not need Xcode. One download supports both Apple silicon and Intel Macs running macOS 14 or newer.
 
-Version **1.6.0 (build 20)** adds the verified observation publisher and maintenance coordination required by the optional [OpenChamber Account Priority extension](#automatic-subscription-expiry-priority-in-openchamber). It retains Check sign-ins, Repair both, Canvas depth, keyboard navigation, shared zoom, encrypted backup and restore, automatic account sync, and native desktop switching. You do not need `codex-auth` or CodexAuthHelper. The download link below always downloads the latest published DMG; [the 1.6.0 release](https://github.com/withLinda/CodexPlusBar/releases/tag/v1.6.0) includes both packages, release notes, and checksums.
+Version **1.6.1 (build 21)** fixes unknown subscription expiry in the optional [OpenChamber Account Priority extension](#automatic-subscription-expiry-priority-in-openchamber), introduced in 1.6.0. It retains Check sign-ins, Repair both, Canvas depth, keyboard navigation, shared zoom, encrypted backup and restore, automatic account sync, and native desktop switching. You do not need `codex-auth` or CodexAuthHelper. The download link below always downloads the latest published DMG; [the 1.6.1 release](https://github.com/withLinda/CodexPlusBar/releases/tag/v1.6.1) includes both packages, release notes, and checksums.
 
 1. [Download `CodexPlusBar.dmg`](https://github.com/withLinda/CodexPlusBar/releases/latest/download/CodexPlusBar.dmg).
 2. If CodexPlusBar is already running, quit it from its menu bar panel.

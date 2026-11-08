@@ -30,7 +30,7 @@ struct OpenCodeV2Tests {
                 return (Data(#"{"error":"invalid_grant"}"#.utf8), nativeResponse(request, 400))
             })
             let rejectingService = OpenCodeOpenAIAuthService(homeDirectory: fixture.home, resolveRuntime: { runtime },
-                                                            verifier: rejected, now: { OpenCodeAuthFixture.now })
+                                                            verifier: rejected, now: { OpenCodeAuthFixture.now }, selector: MaintenanceTestControl(state: .paused))
             let rejection = await #expect(throws: OpenCodeOpenAISwitchError.self) {
                 try await rejectingService.switchTo(profile: profile)
             }
@@ -39,7 +39,7 @@ struct OpenCodeV2Tests {
             #expect(try await client.read() == original)
             let verifier = V2TestVerifier(refreshed: rotated)
             let service = OpenCodeOpenAIAuthService(homeDirectory: fixture.home, resolveRuntime: { runtime },
-                                                   verifier: verifier, now: { OpenCodeAuthFixture.now })
+                                                   verifier: verifier, now: { OpenCodeAuthFixture.now }, selector: MaintenanceTestControl(state: .paused))
             try await service.switchTo(profile: profile)
             let installed = try await client.read()
             #expect(installed.auth == rotated)
@@ -62,7 +62,7 @@ struct OpenCodeV2Tests {
             currentProfile.openCodeOpenAIAccount = try expiredCurrent.identity()
             let currentService = OpenCodeOpenAIAuthService(homeDirectory: fixture.home, resolveRuntime: { runtime },
                                                          verifier: V2TestVerifier(refreshed: rotatedCurrent),
-                                                         now: { OpenCodeAuthFixture.now })
+                                                         now: { OpenCodeAuthFixture.now }, selector: MaintenanceTestControl(state: .paused))
             try await currentService.switchTo(profile: currentProfile)
             let repaired = try await client.read()
             #expect(repaired.auth == rotatedCurrent)
@@ -115,7 +115,7 @@ struct OpenCodeV2Tests {
         let original = try await client.read()
         let runtime = OpenCodeLocalRuntime(authURL: fixture.authURL, v2: client)
         let service = OpenCodeOpenAIAuthService(homeDirectory: fixture.home, resolveRuntime: { runtime },
-                                               verifier: V2TestVerifier(), now: { OpenCodeAuthFixture.now })
+                                               verifier: V2TestVerifier(), now: { OpenCodeAuthFixture.now }, selector: MaintenanceTestControl(state: .paused))
         var originalProfile = fixture.profile("original")
         originalProfile.label = try original.auth.identity().email
         originalProfile.openCodeOpenAIAccount = try await service.saveCurrent(for: originalProfile)
@@ -443,7 +443,7 @@ struct OpenCodeV2Tests {
                          verifier: V2TestVerifier = V2TestVerifier()) -> OpenCodeOpenAIAuthService {
         OpenCodeOpenAIAuthService(homeDirectory: fixture.home,
                                  resolveRuntime: { OpenCodeLocalRuntime(authURL: fixture.authURL, v2: client) },
-                                 verifier: verifier, now: { OpenCodeAuthFixture.now })
+                                 verifier: verifier, now: { OpenCodeAuthFixture.now }, selector: MaintenanceTestControl(state: .paused))
     }
 
     @Test func outgoingCredentialFailureAfterVerificationDoesNotMarkTargetBroken() async throws {

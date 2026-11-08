@@ -67,7 +67,7 @@ struct OpenChamberSyncServiceTests {
             return (Data(#"{"access_token":"","refresh_token":"synthetic-new","expires_in":3600}"#.utf8), response)
         })
         let service = OpenChamberSyncService(resolveClient: { client }, gate: .init(), snapshots: fixture.snapshots,
-            stateStore: fixture.state, verifier: verifier)
+            stateStore: fixture.state, verifier: verifier, selector: SelectorControlClient(homeDirectory: fixture.home, connectionRefused: { true }))
         let result = try await service.reconcile(catalog: catalog, isCurrent: { _ in true })
         #expect(result.needsSignInProfileIDs.isEmpty)
         #expect(result.deferredRestoreProfileIDs == Set(catalog.profiles.map(\.id)))
@@ -81,7 +81,7 @@ struct OpenChamberSyncServiceTests {
         let client = SyncTestClient([])
         let catalog = try fixture.catalog([entry])
         let service = OpenChamberSyncService(resolveClient: { client }, gate: .init(), snapshots: fixture.snapshots,
-            stateStore: fixture.state, verifier: FailedRestoreVerifier(failure: failure))
+            stateStore: fixture.state, verifier: FailedRestoreVerifier(failure: failure), selector: SelectorControlClient(homeDirectory: fixture.home, connectionRefused: { true }))
         let result = try await service.reconcile(catalog: catalog, isCurrent: { _ in true })
         let id = try #require(catalog.profiles.first?.id)
         if failure == .reauthenticationRequired {
@@ -285,7 +285,8 @@ struct SyncServiceFixture {
         .init(generation: 1, profiles: try entries.enumerated().map { index, entry in var p = try syncProfile(entry); p.sortOrder = index; return p }, isTrusted: true)
     }
     func service(_ client: SyncTestClient) -> OpenChamberSyncService {
-        OpenChamberSyncService(resolveClient: { client }, gate: OpenCodeOperationGate(), snapshots: snapshots, stateStore: state, verifier: SyncTestVerifier())
+        OpenChamberSyncService(resolveClient: { client }, gate: OpenCodeOperationGate(), snapshots: snapshots, stateStore: state, verifier: SyncTestVerifier(),
+            selector: SelectorControlClient(homeDirectory: home, connectionRefused: { true }))
     }
 }
 

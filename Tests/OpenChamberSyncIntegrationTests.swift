@@ -20,7 +20,7 @@ struct OpenChamberSyncIntegrationTests {
                 old.fields["metadata"] = .object(["accountID": .string(fresh.identity.accountID), "extra": .string("keep")])
                 let entry = try await client.create(id: "cred_test_repair_\(active)", label: "Repair", value: old, activate: active)
                 #expect(entry.value.fields["metadata"] == old.fields["metadata"])
-                let installer = OpenChamberRepairInstaller(resolveClient: { client }, snapshots: .init(homeDirectory: home), verifier: SyncTestVerifier(), gate: .init())
+                let installer = OpenChamberRepairInstaller(resolveClient: { client }, snapshots: .init(homeDirectory: home), verifier: SyncTestVerifier(), gate: .init(), selector: MaintenanceTestControl(state: .paused))
                 try await installer.install(fresh, for: CodexSignInFixture.profile())
                 let after = try await client.inventory()
                 let saved = try #require(after.oauth.first { (try? $0.value.auth().refresh) == fresh.refreshToken })
@@ -57,7 +57,7 @@ struct OpenChamberSyncIntegrationTests {
                 #expect(entry.value.fields["metadata"] == .object(["accountID": .string(expired.accountId), "extra": .string("keep")]))
                 let output = CheckOutput()
                 let checker = OpenChamberSignInCheckService(resolveClient: { client }, snapshots: snapshots,
-                    verifier: CheckRefreshVerifier(fresh: fresh), gate: .init(), now: { OpenCodeAuthFixture.now })
+                    verifier: CheckRefreshVerifier(fresh: fresh), gate: .init(), now: { OpenCodeAuthFixture.now }, selector: MaintenanceTestControl(state: .paused))
                 try await checker.check(profiles: [syncProfile(entry)]) { await output.append($0) }
                 #expect(await output.values.first?.record.outcome == .verified)
                 let after = try await client.inventory()
@@ -105,7 +105,7 @@ struct OpenChamberSyncIntegrationTests {
         var missing = try syncProfile(nativeCredential("nativemissing")); missing.openCodeOpenAIAccount = nil; missing.sortOrder = 2
         var profiles = [profileA, profileB, missing]
         let service = OpenChamberSyncService(resolveClient: { client }, gate: .init(), snapshots: fixture.snapshots,
-                                            stateStore: fixture.state, verifier: SyncTestVerifier())
+                                            stateStore: fixture.state, verifier: SyncTestVerifier(), selector: SelectorControlClient(homeDirectory: fixture.home, connectionRefused: { true }))
         func catalog() -> OpenChamberSyncCatalog { .init(generation: 1, profiles: profiles, isTrusted: true) }
         let first = try await service.reconcile(catalog: catalog(), isCurrent: { _ in true })
         #expect(first.matchedCount == 2)
@@ -124,7 +124,7 @@ struct OpenChamberSyncIntegrationTests {
         #expect(waiting.pendingCredentialCount == 1)
         var added = try syncProfile(pending); added.openCodeOpenAIAccount = nil
         let runtime = OpenCodeLocalRuntime(authURL: fixture.home.appendingPathComponent("auth.json"), credentials: client)
-        let auth = OpenCodeOpenAIAuthService(homeDirectory: fixture.home, resolveRuntime: { runtime }, operationGate: .init())
+        let auth = OpenCodeOpenAIAuthService(homeDirectory: fixture.home, resolveRuntime: { runtime }, operationGate: .init(), selector: MaintenanceTestControl(state: .paused))
         added.openCodeOpenAIAccount = try await auth.saveCurrent(for: added)
         profiles.append(added)
         let captured = try await service.reconcile(catalog: catalog(), isCurrent: { _ in true })

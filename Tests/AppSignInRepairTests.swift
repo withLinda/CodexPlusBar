@@ -107,7 +107,7 @@ struct AppSignInRepairTests {
         let c = try CodexSignIn(data: CodexSignInFixture.data(refresh: "fresh-c"))
         let snapshots = OpenCodeSignInSnapshotStore(homeDirectory: home)
         let client = SyncTestClient([try nativeCredential("other", active: true)])
-        try await OpenChamberRepairInstaller(resolveClient: { client }, snapshots: snapshots, verifier: SyncTestVerifier(), gate: .init())
+        try await OpenChamberRepairInstaller(resolveClient: { client }, snapshots: snapshots, verifier: SyncTestVerifier(), gate: .init(), selector: MaintenanceTestControl(state: .paused))
             .install(a, for: CodexSignInFixture.profile())
         let installed = try #require(await client.inventory().oauth.first { (try? $0.value.auth().refresh) == "receipt-a" })
         await client.replaceValue(id: installed.id, value: try installed.value.replacingTokens(b.openChamberAuth()))
@@ -126,7 +126,7 @@ struct AppSignInRepairTests {
         #expect(await selector.state == .paused)
         // Original receipt must reach C across an app restart, including when
         // native rotation B was adopted before our controlled refresh B -> C.
-        try await OpenChamberRepairInstaller(resolveClient: { client }, snapshots: snapshots, verifier: verifier, gate: .init())
+        try await OpenChamberRepairInstaller(resolveClient: { client }, snapshots: snapshots, verifier: verifier, gate: .init(), selector: MaintenanceTestControl(state: .paused))
             .install(a, for: CodexSignInFixture.profile())
         #expect(try await client.inventory().openAI.first(where: \.active)?.value.auth().refresh == "fresh-c")
     }
@@ -221,7 +221,7 @@ struct AppSignInRepairTests {
         let old = OpenCodeStoredCredential(id: "cred_old", integrationID: "openai", label: "Old", active: false, value: value)
         let selected = try nativeCredential("other", active: true)
         let client = SyncTestClient([selected, old], loseCreateResponse: true)
-        let installer = OpenChamberRepairInstaller(resolveClient: { client }, snapshots: .init(homeDirectory: home), verifier: SyncTestVerifier(), gate: .init())
+        let installer = OpenChamberRepairInstaller(resolveClient: { client }, snapshots: .init(homeDirectory: home), verifier: SyncTestVerifier(), gate: .init(), selector: MaintenanceTestControl(state: .paused))
         try await installer.install(fresh, for: CodexSignInFixture.profile())
         let inventory = await client.inventory()
         #expect(inventory.openAI.first(where: \.active) == selected)
@@ -236,7 +236,7 @@ struct AppSignInRepairTests {
         let home = try CodexSignInFixture.directory(); defer { try? FileManager.default.removeItem(at: home) }
         let fresh = try CodexSignIn(data: CodexSignInFixture.data(refresh: "repair-first"))
         let client = SyncTestClient([try nativeCredential("other", active: true)])
-        let installer = OpenChamberRepairInstaller(resolveClient: { client }, snapshots: .init(homeDirectory: home), verifier: SyncTestVerifier(), gate: .init())
+        let installer = OpenChamberRepairInstaller(resolveClient: { client }, snapshots: .init(homeDirectory: home), verifier: SyncTestVerifier(), gate: .init(), selector: MaintenanceTestControl(state: .paused))
         try await installer.install(fresh, for: CodexSignInFixture.profile())
         let saved = try #require(await client.inventory().oauth.first { (try? $0.value.auth().refresh) == "repair-first" })
         let rotated = try CodexSignIn(data: CodexSignInFixture.data(refresh: "native-rotation"))

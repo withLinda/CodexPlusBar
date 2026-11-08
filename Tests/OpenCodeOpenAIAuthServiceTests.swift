@@ -234,7 +234,7 @@ struct OpenCodeAuthFixture: Sendable {
             return (Data(#"{"rate_limit":{}}"#.utf8), response)
         })
         service = OpenCodeOpenAIAuthService(homeDirectory: home, resolveRuntime: { runtime },
-                                           verifier: verifier, now: { Self.now })
+                                           verifier: verifier, now: { Self.now }, selector: SelectorControlClient(homeDirectory: home, connectionRefused: { true }))
     }
 
     func remove() { try? FileManager.default.removeItem(at: home) }
@@ -290,7 +290,7 @@ struct OpenCodeAuthFixture: Sendable {
         let runtime = OpenCodeLocalRuntime(authURL: authURL)
         return OpenCodeOpenAIAuthService(homeDirectory: home, resolveRuntime: { runtime },
                                         verifier: OpenCodeOpenAICredentialVerifier(request: request, now: { Self.now }),
-                                        now: { Self.now })
+                                        now: { Self.now }, selector: SelectorControlClient(homeDirectory: home, connectionRefused: { true }))
     }
 
     func othersUnchanged() throws -> Bool {

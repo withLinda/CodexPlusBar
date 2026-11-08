@@ -41,6 +41,70 @@ struct SelectorObservationTests {
     }
 
     @Test
+    func identicalDefaultMirrorPreservesVerifiedExpiryAndAliasIdentity() throws {
+        let raw = try mirroredCatalog()
+        let decoded = try AccountCatalogService.decodeCatalogEvidence(from: raw)
+        let result = try observation(catalog: decoded.evidenceItems)
+        #expect(result.entitlement?.expiresAt == Date(timeIntervalSince1970: 1_811_808_000))
+        #expect(result.entitlement?.observedAt == time)
+        #expect(result.unavailableReasons.isEmpty)
+        #expect(try observation(account: "alias-a", usageAccount: "alias-a", catalog: decoded.evidenceItems).entitlement?.match == .uniqueAlias)
+    }
+
+    @Test(arguments: ["expiry", "active", "usable", "numeric-flag", "deactivated", "missing-flag", "extra-field", "different-account"])
+    func differingDefaultMirrorCannotSupplyAutomationExpiry(_ difference: String) throws {
+        let decoded = try AccountCatalogService.decodeCatalogEvidence(from: mirroredCatalog(difference: difference))
+        if difference == "different-account" {
+            // An unrelated default must not replace the canonical account's explicit unknown expiry.
+            #expect(try observation(catalog: decoded.evidenceItems).entitlement?.expiresAt == nil)
+        } else {
+            #expect(try observation(catalog: decoded.evidenceItems).entitlement == nil)
+        }
+    }
+
+    @Test(arguments: ["noncanonical-key", "missing-explicit-id"])
+    func identicalRowsWithoutCanonicalMirrorIdentityRemainSeparate(_ boundary: String) throws {
+        var row: [String: Any] = [
+            "account": ["account_id": "account-a", "is_deactivated": false],
+            "can_access_with_session": true,
+            "entitlement": ["expires_at": "2027-06-01T00:00:00Z", "has_active_subscription": true]
+        ]
+        if boundary == "missing-explicit-id" { row["account"] = ["is_deactivated": false] }
+        let key = boundary == "noncanonical-key" ? "unrelated-key" : "account-a"
+        let data = try JSONSerialization.data(withJSONObject: ["accounts": [key: row, "default": row]])
+        let decoded = try AccountCatalogService.decodeCatalogEvidence(from: data)
+        #expect(decoded.evidenceItems.count == 2)
+        if boundary == "noncanonical-key" {
+            #expect(try observation(catalog: decoded.evidenceItems).entitlement == nil)
+        } else {
+            #expect(Set(decoded.evidenceItems.map(\.accountID)) == ["account-a", "default"])
+        }
+    }
+
+    private func mirroredCatalog(difference: String? = nil) throws -> Data {
+        var canonical: [String: Any] = [
+            "account": ["account_id": "account-a", "account_user_id": "alias-a", "is_deactivated": false],
+            "can_access_with_session": true,
+            "entitlement": ["expires_at": "2027-06-01T00:00:00Z", "has_active_subscription": true]
+        ]
+        var mirror = canonical
+        switch difference {
+        case "expiry": mirror["entitlement"] = ["expires_at": "2027-06-02T00:00:00Z", "has_active_subscription": true]
+        case "active": mirror["entitlement"] = ["expires_at": "2027-06-01T00:00:00Z", "has_active_subscription": false]
+        case "usable": mirror["can_access_with_session"] = false
+        case "numeric-flag": mirror["can_access_with_session"] = 1
+        case "deactivated": mirror["account"] = ["account_id": "account-a", "account_user_id": "alias-a", "is_deactivated": true]
+        case "missing-flag": mirror.removeValue(forKey: "can_access_with_session")
+        case "extra-field": mirror["unknown_access_field"] = false
+        case "different-account":
+            canonical["entitlement"] = ["expires_at": NSNull(), "has_active_subscription": true]
+            mirror["account"] = ["account_id": "account-b", "is_deactivated": false]
+        default: break
+        }
+        return try JSONSerialization.data(withJSONObject: ["accounts": ["account-a": canonical, "default": mirror]])
+    }
+
+    @Test
     func explicitNullExpiryIsNewUnknownEvidence() throws {
         let result = try observation(catalog: catalog(expiry: "null"))
         let entitlement = try #require(result.entitlement)
