@@ -23,6 +23,15 @@ export type SelectorExportV1 = {
   catalogTrusted: boolean; accounts: SelectorAccount[];
 };
 export type Exclusion = { credentialID: string; code: string };
+export type Mode = 'paused' | 'auto';
+export type Trigger = 'prompt' | 'retry' | 'snapshot' | 'tick' | 'recheck' | 'resume';
+export type NativeConnection = { id: string; label: string; method: string };
+export type Cooldown = { identityKey: string; failedAtMs: number; resetAtMs: number;
+  reason: 'quota' | 'long-rate-limit'; source: 'provider' | 'usage' | 'fallback' };
+export type SelectionDecision =
+  | { action: 'keep'; credentialID: string; exclusions: Exclusion[] }
+  | { action: 'activate'; credentialID: string; identityKey: string; exclusions: Exclusion[] }
+  | { action: 'blocked'; code: string; exclusions: Exclusion[] };
 export type SnapshotReadResult =
   | { ok: true; snapshot: SelectorExportV1; exclusions: Exclusion[] }
   | { ok: false; code: 'snapshot-missing' | 'snapshot-invalid' | 'publisher-stale' | 'catalog-untrusted' };
