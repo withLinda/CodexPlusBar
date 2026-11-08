@@ -1,27 +1,54 @@
-# CodexPlusBar expiry selector
+# Account Priority for OpenChamber
 
-**Compatibility probe only. Not ready to install.**
+Selects the earliest verified OpenAI subscription expiry among identity-matched accounts with usable five-hour and applicable seven-day quota. Unknown, stale, exhausted, expired, or conflicting evidence cannot qualify an automatic replacement.
 
-This folder belongs to the approved expiry-aware selector implementation. Work stopped at
-Task 1's required browser identity evidence gate. The Swift publisher and account-maintenance
-coordination will live under the repository's `Sources/` after that gate passes.
+## Build and verify
 
-See [runtime-compatibility.md](docs/runtime-compatibility.md) for the six executed native
-tests, the precise blocker, and all untested requirements.
+Requires Node 22+, npm, and the pinned development dependencies. From this repository:
 
-## Development
-
-```bash
-npm --prefix Extensions/expiry-selector ci --ignore-scripts
+```sh
+npm --prefix Extensions/expiry-selector ci
 npm --prefix Extensions/expiry-selector run typecheck
-npm --prefix Extensions/expiry-selector run test:runtime
+npm --prefix Extensions/expiry-selector run build
+npm --prefix Extensions/expiry-selector test
+npm --prefix Extensions/expiry-selector run verify:package
 ```
 
-The runtime command builds a **test-only** plugin and launches the installed OpenCode 2.2.6
-binary in private temporary directories with fake credentials and loopback-only networking.
-It deliberately exits nonzero until the complete feasibility gate is satisfied. `build`
-currently builds only this probe; `verify:package` rejects it as non-installable.
+On a clean checkout, run `make test AGENT_NAME=expiry-selector` first. Swift contract tests generate the ignored cross-language export fixture. Runtime tests require the supported OpenChamber macOS installation and run with synthetic credentials in isolated homes.
 
-No production Auto selection, service, panel, export, or maintenance client exists yet.
-The probe is never installed into the user's OpenChamber. It cleans up its child process
-and temporary state; no live rollback is required.
+The built `dist/` folder is the extension. Do not install the source directory or `.runtime/` probes. Packaging verification must pass before installation.
+
+## Supported boundary
+
+- Verified OpenChamber **2.7.0** and bundled OpenCode **2.2.6** on macOS. Other OpenCode versions block Auto until tested. The manifest's host minimum is not evidence that future versions are compatible.
+- Native `chatgpt-browser` and `chatgpt-headless` OAuth connections with matching access-token and account metadata identities. No independent OAuth storage or refresh implementation.
+- Native selection is global across locations. Prompt admission and primary retry are guarded; this does not promise per-session account isolation or exact expiry ordering for every synthetic/tool continuation.
+- Retries use the account observed on the actual primary HTTP/WS request. Title and other background work never spend another account's quota retry budget. Unrecognized failures retain native retry handling.
+- Recheck rereads published observations and native inventory. Refresh CodexPlusBar for new usage/expiry evidence. Publisher heartbeat older than 90 seconds, usage older than 15 minutes, and entitlement older than 24 hours are ineligible.
+- If no candidate qualifies, the current native account remains selected and native error handling continues.
+
+## Install and operate (requires user authorization)
+
+1. Record the selected native account and the current OpenChamber native limit-switch/fallback settings.
+2. Install the verified `dist/` folder through **Settings → Extensions**. Approve its plugin and local service capabilities. First installation starts paused.
+3. Open **Account Priority**. Confirm paused status and the expected identity-linked accounts and observation freshness.
+4. Disable competing native limit switching/fallback intentionally. Auto requires the `openchamber-limit-failover` plugin to be absent in every attached location, including when another provider's settings keep it loaded. This extension never changes those settings.
+5. Enable Auto only after confirming the mapping. Controls wait for acknowledgement; a timed-out control is unconfirmed, not proof it failed. Retry the same operation's acknowledgement.
+
+Before native **Use**, click **Pause Auto**, wait for acknowledgement, then use the native control. Resume explicitly when ready. CodexPlusBar's manual switch/check/repair operations obtain an acknowledged maintenance hold and leave Auto paused. A hold does not stop OpenCode's own OAuth refreshes or model requests. Background sync defers removals whenever a selector owns selection or cannot be verified.
+
+## Unload and rollback
+
+Pause and wait for acknowledgement, then disable/remove the extension through Settings. Restore the prior native selected account and prior limit-switch/fallback settings using native controls. Verify a normal request. Do not remove credentials or profiles. Re-enable only when requested.
+
+The panel's service is a status/control bridge. Closing it or a service crash does not stop the plugin's coordinator. Disabling/removing the extension unloads its hooks and drains pending native work before releasing its listener. The fixed control port is `127.0.0.1:53971`; a collision blocks Auto rather than choosing another port.
+
+Private files: `~/.codexplusbar-selector/runtime.json` (live epoch/bearer; removed on clean shutdown), `state.json` (paused/Auto preference, cooldowns, bounded redacted history). Both are 0600 inside a 0700 directory. Preferences/history may remain after removal. No OAuth credentials are kept there.
+
+For a crashed maintenance client, Auto stays paused. First confirm all CodexPlusBar maintenance operations have ended, then disable the extension and wait for its listener to close. Back up `state.json` privately; change only `maintenanceRecovery` to `false` and keep `desiredMode` as `paused`, retaining all cooldowns/history and 0600 permissions. Re-enable, inspect paused status, and Resume explicitly. Do not edit a running owner's files or delete cooldown evidence to recover a hold.
+
+Published observations: `~/Library/Application Support/CodexPlusBar/Exports/openchamber-selector-v1.json`. This file contains sanitized identity/account mapping and quota/entitlement evidence, never tokens, cookies, or prompts.
+
+## Acceptance status
+
+Tasks 1–7 have isolated runtime and Swift evidence in `docs/runtime-compatibility.md` and the implementation ledger. Packaging and final acceptance are in progress. Live installation, live account switching, native settings changes, and rollback have **not** been authorized or performed for this extension.

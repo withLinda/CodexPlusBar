@@ -79,6 +79,20 @@ test('paused recheck computes the candidate and active status without activating
   expect(await h.coordinator.recheck('recheck')).toEqual(status);
   expect(h.activations).toEqual([]);
 });
+
+test('status exposes bounded account evidence without identities, and recheck observes selection during maintenance', async () => {
+  const h = await harness();
+  await h.coordinator.recheck('inspect');
+  const status = h.coordinator.status();
+  expect(status.accounts[0]).toMatchObject({ credentialID: 'credential-a', expiresAtMs: fixture.accounts[0]!.entitlement!.expiresAtMs,
+    fiveHourRemaining: fixture.accounts[0]!.usage!.fiveHour.remainingPercent });
+  expect(JSON.stringify(status)).not.toContain(fixture.accounts[0]!.identityKey);
+  expect(JSON.stringify(status)).not.toContain(fixture.accounts[0]!.accountID);
+  await h.coordinator.beginMaintenance('hold', 'manual-account-change');
+  h.setActive('credential-c'); await h.coordinator.recheck('after-use');
+  expect(h.coordinator.status()).toMatchObject({ activeCredentialID: 'credential-c', blockedReason: 'maintenance', nextCredentialID: null });
+  expect(h.activations).toEqual([]);
+});
 test('pause and last detach wait for activation already dispatched', async () => {
   const h = await harness(); await h.coordinator.setMode('auto', 'enable');
   const activation = gate(); h.setActivateGate(activation);

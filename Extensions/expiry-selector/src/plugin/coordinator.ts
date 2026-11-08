@@ -18,12 +18,16 @@ export type CoordinatorDependencies = {
   loadState: () => Promise<SelectorState>; saveState: (state: SelectorState) => Promise<void>;
 };
 export type AttributedRetry = Omit<LimitFailureInput, 'nowMs' | 'usage'> & { locationKey: string; sessionID: string; modelID: string; attempt: number };
+export type AccountStatus = { credentialID: string; label: string; expiresAtMs: number | null;
+  fiveHourRemaining: number | null; sevenDayRemaining: number | 'not-applicable' | null;
+  usageObservedAtMs: number | null; entitlementObservedAtMs: number | null };
 export type SelectorStatus = {
   mode: Mode; blockedReason: string | null; supportedVersions: { opencode: string; openchamber: string };
   activeCredentialID: string | null; activeLabel: string | null; nextCredentialID: string | null;
   snapshotAgeMs: number | null; exclusions: { credentialID: string; code: string }[];
   holdsCount: number; lastSwitch: { atMs: number; credentialID: string } | null;
   recentHistory: SelectorState['recentHistory']; checking: boolean;
+  accounts: AccountStatus[]; snapshotGeneratedAtMs: number | null; nativeObservedAtMs: number | null;
 };
 
 export class SelectorCoordinator {
@@ -40,7 +44,7 @@ export class SelectorCoordinator {
   private chains = new Map<string, { attempt: number; failed: Set<string>; locationKey: string; sessionID: string; startedAtMs: number }>();
   private view: SelectorStatus = { mode: 'paused', blockedReason: 'paused', supportedVersions: { opencode: '2.2.6', openchamber: '2.7.0' },
     activeCredentialID: null, activeLabel: null, nextCredentialID: null, snapshotAgeMs: null, exclusions: [], holdsCount: 0,
-    lastSwitch: null, recentHistory: [], checking: false };
+    lastSwitch: null, recentHistory: [], checking: false, accounts: [], snapshotGeneratedAtMs: null, nativeObservedAtMs: null };
   constructor(private readonly dependencies: CoordinatorDependencies) {}
 
   async initialize(): Promise<void> {
@@ -62,13 +66,22 @@ export class SelectorCoordinator {
     };
   }
 
-  status(): SelectorStatus { return structuredClone({ ...this.view, holdsCount: this.holds.size + (this.state.maintenanceRecovery && !this.holds.size ? 1 : 0) }); }
+  status(): SelectorStatus { return structuredClone({ ...this.view,
+    snapshotAgeMs: this.view.snapshotGeneratedAtMs === null ? null : Math.max(0, this.dependencies.now() - this.view.snapshotGeneratedAtMs),
+    holdsCount: this.holds.size + (this.state.maintenanceRecovery && !this.holds.size ? 1 : 0) }); }
   invalidate(reason: string): void { this.generation++; this.view.blockedReason = reason; }
   unsupportedRoute(locationKey: string): void { this.unsupported.add(locationKey); this.invalidate('unsupported-route'); }
   managedIdentities(): ReadonlySet<string> { return new Set(this.managed); }
   async refreshSnapshot(): Promise<SnapshotReadResult> {
     const result = await this.dependencies.readSnapshot(this.dependencies.now());
     this.managed = new Set(result.ok ? result.snapshot.accounts.map(row => row.identityKey) : []);
+    if (result.ok) {
+      this.view.snapshotGeneratedAtMs = result.snapshot.generatedAtMs;
+      this.view.accounts = result.snapshot.accounts.map(row => ({ credentialID: row.credentialID, label: row.label,
+        expiresAtMs: row.entitlement?.expiresAtMs ?? null, fiveHourRemaining: row.usage?.fiveHour.remainingPercent ?? null,
+        sevenDayRemaining: row.usage?.sevenDay.state === 'not-applicable' ? 'not-applicable' : row.usage?.sevenDay.remainingPercent ?? null,
+        usageObservedAtMs: row.usage?.observedAtMs ?? null, entitlementObservedAtMs: row.entitlement?.observedAtMs ?? null }));
+    } else { this.view.accounts = []; this.view.snapshotGeneratedAtMs = null; }
     return result;
   }
   handleLifecycle(event: { type: string; created: number; location?: { directory: string }; data: unknown }): void {
@@ -144,6 +157,16 @@ export class SelectorCoordinator {
     };
     this.view.checking = true;
     try {
+      // Inspection is read-only even while a hold or competing switcher blocks selection.
+      if (adapter && this.dependencies.owns()) {
+        const inventory = await adapter.connections(), active = await adapter.activeID();
+        if (generation !== this.generation) return this.blocked('checking-cancelled');
+        this.view.activeCredentialID = active;
+        this.view.activeLabel = inventory.find(row => row.id === active)?.label ?? null;
+        this.view.nativeObservedAtMs = this.dependencies.now();
+        await this.refreshSnapshot();
+      }
+      this.view.nextCredentialID = null;
       for (let iteration = 0; iteration < 3; iteration++) {
         const problem = await this.guard(adapter, generation, !observationOnly);
         if (problem) return this.blocked(problem);
@@ -155,6 +178,7 @@ export class SelectorCoordinator {
         const activeCredentialID = await adapter!.activeID();
         if (generation !== this.generation) return this.blocked('checking-cancelled');
         this.view.activeCredentialID = activeCredentialID;
+        this.view.nativeObservedAtMs = this.dependencies.now();
         this.view.activeLabel = connections.find(connection => connection.id === activeCredentialID)?.label ?? null;
         this.view.snapshotAgeMs = this.dependencies.now() - snapshot.snapshot.generatedAtMs;
         const decision = choose({ snapshot: snapshot.snapshot, connections: eligibleConnections(connections), activeCredentialID, cooldowns: this.state.cooldowns,
@@ -192,6 +216,7 @@ export class SelectorCoordinator {
         // Once dispatched, always await readback before the next queued operation.
         const readback = await adapter!.activeID();
         this.view.activeCredentialID = readback;
+        this.view.nativeObservedAtMs = this.dependencies.now();
         if (readback !== target.credentialID) return this.blocked('activation-unconfirmed');
         if (generation !== this.generation || this.baseGuard(adapter)) return this.blocked('checking-cancelled');
         this.view.activeLabel = target.label; this.view.lastSwitch = { atMs: this.dependencies.now(), credentialID: target.credentialID };

@@ -172,7 +172,7 @@ actor SelectorControlClient: SelectorControlling {
         request.setValue("Bearer \(descriptor.bearer)", forHTTPHeaderField: "Authorization")
         request.setValue(descriptor.epoch, forHTTPHeaderField: "X-Selector-Epoch")
         let (data, response) = try await self.request(request)
-        guard data.count <= 65_536, let reply = try? JSONDecoder().decode(Reply.self, from: data) else { throw SelectorControlError.unverified }
+        guard data.count <= 1_048_576, let reply = try? JSONDecoder().decode(Reply.self, from: data) else { throw SelectorControlError.unverified }
         guard reply.protocolVersion == 1 else { throw SelectorControlError.protocolMismatch }
         guard reply.epoch == descriptor.epoch, response.statusCode != 409 else { throw SelectorControlError.ownershipChanged }
         guard response.statusCode == 200 else { throw SelectorControlError.unverified }

@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Account Priority</title>
+  <style>
+    * { box-sizing: border-box; }
+    :root { color-scheme: light dark; font-family: system-ui,sans-serif; font-size: .875rem; }
+    body { margin: 0; background: var(--oc-bg, Canvas); color: var(--oc-fg, CanvasText); }
+    main { padding: 16px; max-width: 760px; margin: auto; }
+    h1,h2,p,dl { margin: 0; } h1 { font-size: 1.15rem; font-weight: 650; } h2 { font-size: .92rem; font-weight: 600; }
+    p { line-height: 1.5; } .muted,dt { color: var(--oc-muted, GrayText); }
+    .heading,.account-heading,.section-heading,.actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .heading,.account-heading,.section-heading { justify-content: space-between; }
+    .intro { margin-top: 7px; } .actions { margin: 16px 0; }
+    .actions > span { display: inline-flex; } .actions button { min-height: 32px; }
+    .notice { padding: 10px 12px; background: var(--oc-muted-surface, ButtonFace); border-radius: var(--oc-radius, 6px); margin: 12px 0; overflow-wrap: anywhere; }
+    .notice[data-tone=warning] { color: var(--oc-warning-text, CanvasText); }
+    .summary { display: grid; grid-template-columns: minmax(80px,auto) minmax(0,1fr); gap: 7px 14px; padding: 2px 0 18px; }
+    dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
+    .section-heading { padding: 14px 0 6px; border-top: 1px solid var(--oc-border, ButtonBorder); }
+    #accounts { list-style: none; padding: 0; margin: 0; }
+    .account { padding: 14px 0; border-bottom: 1px solid var(--oc-border, ButtonBorder); }
+    .account-name { min-width: 0; overflow-wrap: anywhere; font-weight: 600; flex: 1 1 120px; }
+    .tag { font-size: .79rem; padding: 2px 6px; border-radius: 4px; background: var(--oc-muted-surface, ButtonFace); white-space: nowrap; }
+    .tag[data-active=true] { color: var(--oc-primary-text, LinkText); }
+    .expiry { margin-top: 5px; font-variant-numeric: tabular-nums; }
+    .quotas { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 9px; font-variant-numeric: tabular-nums; }
+    .quotas span { display: inline-flex; align-items: baseline; gap: 6px; }
+    .evidence { font-size: .82rem; margin-top: 7px; }
+    .reason { margin-top: 5px; color: var(--oc-warning-text, CanvasText); font-size: .86rem; }
+    .empty { padding: 20px 0; color: var(--oc-muted, GrayText); }
+    .decision { margin: 16px 0; } .decision p { margin-top: 6px; }
+    details { margin-top: 14px; } summary { cursor: pointer; color: var(--oc-muted, GrayText); }
+    #history { padding-left: 20px; font-size: .85rem; } #history li { margin: 7px 0; overflow-wrap: anywhere; }
+    footer { margin-top: 18px; font-size: .82rem; line-height: 1.55; color: var(--oc-muted, GrayText); }
+    footer p + p { margin-top: 8px; }
+    :focus-visible { outline: 2px solid var(--oc-focus, Highlight); outline-offset: 3px; }
+    [hidden] { display: none !important; }
+    @media(max-width: 360px) { main { padding: 12px; } .summary { grid-template-columns: 1fr; gap: 3px; } dd { text-align: left; margin-bottom: 7px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="heading"><h1>Account Priority</h1><span id="mode" class="tag">Connecting</span></div>
+    <p class="intro muted">Use the earliest verified expiry with quota available.</p>
+    <div class="actions" aria-label="Selector controls"><span id="mode-control"></span><span id="recheck-control"></span><span id="retry-control" hidden></span></div>
+    <p id="notice" class="notice" role="status" aria-live="polite">Connecting to the local selector…</p>
+    <dl class="summary"><dt>Native active</dt><dd id="active">Not yet verified</dd><dt>Next eligible</dt><dd id="next">Not yet verified</dd><dt>Evidence</dt><dd id="freshness">Waiting for CodexPlusBar</dd></dl>
+    <section aria-labelledby="accounts-title"><div class="section-heading"><h2 id="accounts-title">Accounts</h2><span id="count" class="muted"></span></div><ul id="accounts"></ul><p id="empty" class="empty">No verified account evidence yet.</p></section>
+    <section class="decision" aria-labelledby="decision-title"><h2 id="decision-title">Last decision</h2><p id="decision" class="muted">Waiting for a verified status.</p></section>
+    <details><summary>Recent activity</summary><ol id="history"></ol></details>
+    <footer><p>Recheck rereads evidence. Refresh CodexPlusBar for new usage and expiry information. Unknown or stale evidence cannot qualify an account.</p><p>Before native <strong>Use</strong>: Pause Auto, wait for acknowledgement, then switch. Native selection is shared across sessions and locations.</p><p id="versions"></p></footer>
+  </main>
+  <script src="./main.js"></script>
+</body>
+</html>
