@@ -1,322 +1,93 @@
 # CodexPlusBar
 
-> Stop checking accounts one by one. See the right Codex or Claude account before you work.
+**Switch Codex accounts without signing in every time.**
 
-CodexPlusBar is a native macOS menu bar app for people who use more than one ChatGPT/Codex or Claude browser account. It keeps every account in its own local Chrome profile and puts live remaining usage, reset times, and sign-in status in one place.
+CodexPlusBar is a **Mac account switcher for ChatGPT / Codex and OpenChamber**. Save your sign-ins, compare remaining quota, and switch to the account you need. Each browser account gets its own Chrome profile.
 
-[Download CodexPlusBar.dmg](https://github.com/withLinda/CodexPlusBar/releases/latest/download/CodexPlusBar.dmg) · [Installation guide](#install-from-the-dmg) · [Release notes and checksum](https://github.com/withLinda/CodexPlusBar/releases/latest) · [View the source](https://github.com/withLinda/CodexPlusBar)
+Hit a limit or need your work account? Switch to a saved sign-in instead of repeating the login flow.
 
-## Why use it?
+**[Download for Mac](https://github.com/withLinda/CodexPlusBar/releases/latest/download/CodexPlusBar.dmg)** · [Quick start](#get-started) · [Release notes & checksums](https://github.com/withLinda/CodexPlusBar/releases/latest)
 
-Opening accounts one at a time is slow and easy to get wrong. CodexPlusBar works like a small control panel: check your limits at a glance, choose an account with enough capacity, and fix a sign-in before it blocks your work.
+macOS 14+ · Apple silicon & Intel · Signed and notarized · [Google Chrome](https://www.google.com/chrome/) required for browser sign-in
 
-- **One glance:** See every saved account from the menu bar.
-- **Better account choice:** Find accounts with usable, high, or full limits before starting a task.
-- **Less account confusion:** Each account has its own named Chrome profile and provider session.
-- **Faster recovery:** Profiles that need login or failed refresh are clearly marked.
-- **No API key setup:** Sign in through Chrome and let the app read the signed-in web session.
+![Choose a saved account in Profile Manager, then Switch and open ChatGPT / Codex or Switch OpenChamber](docs/screenshots/1.6.1/profile-manager.png)
 
-## See it in action
+*Choose an account, check its quota, and switch. Screenshots use sample accounts in 1.6.1; Account Priority uses extension 0.1.0.*
 
-### Menu bar dashboard
+## Switch between your saved accounts
 
-![Compact CodexPlusBar menu bar dashboard](docs/design/compact-20260915/panel-dark.png)
+- **ChatGPT / Codex desktop:** choose **Switch and open** to verify the saved sign-in, change accounts, and reopen the app.
+- **OpenChamber:** choose **Switch** to select the saved OpenAI account in your running local OpenChamber app.
+- **Codex in Chrome:** choose **Open Codex** to open that account's dedicated browser profile.
 
-### Profile Manager
+### Set up app switching
 
-![CodexPlusBar Profile Manager with capacity first and disclosed editing](docs/design/compact-20260915/manager-dark-hard.png)
+1. [Add a profile](#get-started), then sign in to that account in ChatGPT / Codex or OpenChamber.
+2. Choose **Save current sign-in** in that app's CodexPlusBar row. Repeat for each account and app.
+3. Select a saved account, choose **Switch and open** or **Switch**, and wait for confirmation.
 
-Screenshots show the 1.1.0 interface using sample profiles.
+Finish active work before desktop switching: it closes and reopens the app. Browser sessions and app sign-ins are separate.
 
-## What you can do
+## Choose the right account—and keep it ready
 
-### Check usage without account hopping
+### See your capacity at a glance
 
-- Track **Codex (ChatGPT)** and **Claude** profiles together.
-- See remaining **5H** and **7D** usage, live reset countdowns, refresh time, sign-in state, and Codex account expiry when ChatGPT provides it.
-- Refresh all profiles on launch, every five minutes, or on demand; refresh one profile when you only need a quick check.
-- Keep healthy cards visible when another profile fails to refresh.
+- **Compare your Codex accounts:** remaining **5H / 7D** usage, reset countdowns, refresh status, and subscription expiry when available.
+- **Stay up to date:** refresh on launch, every five minutes, or manually.
+- **Find an account quickly:** search by email or phone; filter by status tag or quota; sort by reset time, expiry, or your saved order.
+- **Pin an account:** show its usage in the menu bar. Browse with **↑ / ↓**; zoom with **⌘+ / ⌘− / ⌘0**.
 
-### Find the right profile quickly
+<img src="docs/screenshots/1.6.1/menu-bar.png" alt="Menu bar panel comparing Codex account quota with reset countdowns and quick switching actions" width="440">
 
-- Search by full or partial email address or phone number.
-- Filter by provider (`Codex` or `Claude`), tag (`Active`, `Need action`, `Pending`), or limit (`Usable`, `>35%`, `Full`).
-- Sort by **Next 5H reset**, **Next 7D reset**, account expiry, or saved order; the selected sort is remembered across the menu bar and Profile Manager, with the soonest known dates first and unavailable dates last.
-- See counts in the Filter menu and clear all filters with one action.
-- Copy a profile label, open its saved link, open Profile Manager, or pin a profile from its card.
-- Pin one profile so its label and usage appear in the macOS menu bar status.
-- Adjust panel text size from **More → Larger text / Smaller text**.
+*Check what's available without leaving your work.*
 
-**New in 1.4.0:** Account rows are numbered in their current search, filter, and sort order. Use **↑ / ↓** to move through visible accounts in the active Profile Manager or menu bar panel; navigation stops at the first and last account. Arrow keys keep their normal behavior while editing text or using a native control. In the panel, **Manage profiles** opens the highlighted account. In Profile Manager, moving to another account saves valid changed details first; rapid navigation keeps each account's draft separate.
+### Keep accounts ready to use
 
-Use **⌘+** (or **⌘=**) to zoom in, **⌘−** to zoom out, and **⌘0** for actual size. The zoom preference is shared by Profile Manager and the menu bar panel. Profile Manager also exposes these controls in **More**, grows to fit where the screen allows, and provides horizontal scrolling on smaller screens.
+- **Check and repair:** **Check sign-ins** verifies OpenChamber logins. **Repair both** sets up or renews both app sign-ins through Chrome; install ChatGPT / Codex and keep OpenChamber running.
+- **Sync OpenChamber logins:** align its OpenAI login list with your Codex profiles. Sync is on by default and can remove surplus logins; turn it off in **Settings** for manual control.
+- **Organize the details:** labels, links, notes, phone numbers, status tags, optional passwords, and 2FA secrets with copyable TOTP codes. Private fields stay covered until revealed.
+- **Handle larger collections:** bulk-import email/password/2FA rows through **More → Import from Text…**, group by phone number, and track Gmail dot variations in **Email Tools**.
+- **Make it yours:** light, dark, or system appearance; three contrast levels; adjustable dark canvas depth.
 
-### Keep profile details together
+## Get started
 
-Profile Manager puts remaining capacity first. Expand **Profile details** to edit, or **Connection setup** to change the provider. The **More** menu holds reorder and removal actions. Optional fields include:
+1. **Install.** [Download the DMG](https://github.com/withLinda/CodexPlusBar/releases/latest/download/CodexPlusBar.dmg), drag CodexPlusBar to **Applications**, and open it from there. Look in the menu bar, not the Dock.
+2. **Add an account.** Open **Manage profiles → Add profile**. Set its label in **Profile details** and select **Codex** in **Connection setup**.
+3. **Sign in.** Choose **Open Codex** and sign in in the dedicated Chrome window. No API key is needed for usage tracking.
+4. **Check your capacity.** Return and choose **Check now** if needed. Add your other accounts and pin a favorite.
 
-- profile label and web/email link
-- password and 2FA secret (copy helpers)
-- phone number and private notes
-- status tags
+Ready to change accounts in your apps? [Save their sign-ins and start switching](#set-up-app-switching).
 
-Private fields stay covered until you choose **Show**. A saved 2FA secret can generate a current TOTP code, show its expiry countdown, and copy the code without revealing it first. The phone summary groups shared numbers, one-use numbers, and profiles with no number, then opens a profile directly.
+**Reading the numbers:** percentages mean **remaining**, not used. `5H` and `7D` are quota windows. `—` means unavailable. Subscription expiry is separate from a quota reset. Changes to ChatGPT's website can temporarily affect refreshes.
 
-Empty notes stay behind **Add notes**. Select it to start typing; saved notes open automatically, and clearing a note keeps the editor open while you finish editing. Fields use quiet borders at rest and clearer borders when focused or when macOS **Increase Contrast** is enabled.
+**Updating?** Quit CodexPlusBar, replace it with the latest DMG, reopen, and refresh. Your saved profiles stay in place.
 
-### Sign in through the correct Chrome profile
+## Switch automatically in OpenChamber
 
-- Open Codex or Claude in the profile's dedicated Chrome window.
-- Sign in yourself, then return to CodexPlusBar; the app imports the local session and refreshes usage.
-- Use **Check now**, **Cancel**, or **Clear session** when a sign-in needs attention.
-- Use **Touch ID help** when a Codex passkey needs a fuller Chrome sign-in flow.
-- A ready profile opens its saved provider account page; a profile that needs login opens the repair flow.
+The optional **Account Priority** extension automatically switches to the soonest-expiring eligible OpenAI subscription with usable quota. An account with **17 days left** takes priority over one with **30 days**—use your capacity before it expires.
 
-The app does not type passwords into provider pages for you.
+![Account Priority showing subscription countdowns, the next eligible account, and an account excluded for exhausted five-hour quota](docs/screenshots/1.6.1/account-priority.png)
 
-### OpenChamber account sync
+*See which account is next—and why another account cannot be used.*
 
-**Automatically sync OpenChamber** is on by default in Settings. Your saved Codex profiles determine the local OpenChamber OpenAI OAuth login list, including labels and removals. Sync runs at startup, one second after saved account changes, and every 60 seconds; Profile Manager also has **Sync now** and a compact result.
+1. Use **CodexPlusBar 1.6.1 or later** and refresh your accounts.
+2. [Download Account Priority](https://github.com/withLinda/CodexPlusBar/releases/download/v1.6.1/expiry-selector-0.1.0.zip), extract it, and install the **expiry-selector** folder in **OpenChamber → Settings → Extensions**. Approve its plugin and local-service capabilities.
+3. Open **Account Priority**, check the accounts and expiry countdowns, disable OpenChamber's competing native limit-switch/fallback settings, then choose **Enable Auto**.
 
-To add a login, use OpenChamber's device login code, select the matching CodexPlusBar profile, then choose **Save current sign-in**. Newly observed logins get 15 minutes to complete this step, even across restarts. Existing surplus logins on first enablement are eligible for removal immediately.
+Keep CodexPlusBar running. Unknown, stale, or exhausted accounts cannot qualify; if none qualify, the current account stays selected. Selection is shared across OpenChamber sessions. Pause Auto before native **Use**. CodexPlusBar checks, switches, and repairs leave Auto paused until you resume it.
 
-The visible **Remove** button beside **Refresh** removes the selected profile directly and schedules login synchronization. A retained active account stays selected. Removal of a surplus active account waits until OpenChamber reports no running sessions; unavailable idle status also defers removal.
+Verified with **OpenChamber 2.7.0 / OpenCode 2.2.6**. [Compatibility and recovery guide](Extensions/expiry-selector/README.md#supported-boundary).
 
-Missing logins can be restored from previously saved OAuth sign-ins. A profile with only a browser session shows **OpenChamber sign-in needed** until you sign in and save it, or use **Repair both**. Other providers and API keys are preserved. Automatic sync needs OpenCode's native credential API (verified with OpenChamber 2.6.1 / OpenCode 2.2.5); legacy manual switching remains available on supported older runtimes.
+## Take your setup to another Mac
 
-**New in 1.5.0:** Choose **Check sign-ins** in Profile Manager to verify all saved OpenChamber sign-ins while keeping the same account selected. Expired tokens are refreshed when possible. Accounts confirmed to need sign-in are highlighted; **not checked** means verification could not finish, such as during a network failure. Choose **Cancel** to stop and keep the completed results. Browser usage and desktop sign-ins are checked separately from this action.
+Choose **Settings → Backup & Transfer → Export Backup…**, set a password, and transfer the `.codexplusbarbackup` file. On the new Mac, install CodexPlusBar and choose **Restore Backup…**.
 
-### Automatic subscription-expiry priority in OpenChamber
+Password-encrypted backups include profile details, saved sign-ins, browser data, Email Tools, and preferences. Keep the password. Some browser sessions may need a fresh sign-in.
 
-**New in 1.6.0:** Install both the updated CodexPlusBar app and the optional **Account Priority 0.1.0** extension. CodexPlusBar publishes verified subscription expiry and quota observations; the extension selects the soonest-expiring eligible OpenAI account through native OpenCode controls. An account with **17 days remaining** is preferred over one with **30 days**, provided its 5H and applicable 7D quota are available. The panel shows **Expires in 16d 6h**, freshness, exclusions, and the selected account.
+## Your data stays on your Mac
 
-**Fixed in 1.6.1:** ChatGPT may repeat the same account under its ID and `default`. Identical copies now produce verified expiry evidence; conflicting copies remain ineligible. If 1.6.0 shows **Unknown expiry** for every account, update CodexPlusBar and refresh. The existing 0.1.0 extension remains compatible.
+CodexPlusBar has no profile-sync server. It reads usage directly from OpenAI through your signed-in sessions.
 
-1. Update CodexPlusBar using the [1.6.1 DMG](https://github.com/withLinda/CodexPlusBar/releases/download/v1.6.1/CodexPlusBar.dmg), then open it and refresh your accounts.
-2. Download [expiry-selector-0.1.0.zip](https://github.com/withLinda/CodexPlusBar/releases/download/v1.6.1/expiry-selector-0.1.0.zip) and extract it.
-3. In OpenChamber **Settings → Extensions**, install the extracted **expiry-selector** folder and approve its plugin/local-service capabilities.
-4. Open **Account Priority** and confirm its initial **Paused** state and the expected account evidence. Record your current native account and limit-switch/fallback settings.
-5. Disable competing native limit switching/fallback settings, then choose **Enable Auto**. Before native **Use**, choose **Pause Auto** and wait for acknowledgement; resume explicitly afterward.
+**Local passwords, 2FA secrets, and saved sign-in files are not encrypted by CodexPlusBar.** Covered fields are not a password vault. Keep your Mac account and backups private. Removing a profile also removes its local browser data.
 
-Verified with **OpenChamber 2.7.0 / OpenCode 2.2.6**. Unknown or stale evidence cannot qualify a replacement; if no account qualifies, the current native account remains selected. Activation is global across locations, and requests already in flight may finish on their original account. Native OpenCode owns OAuth refresh. CodexPlusBar's sign-in-changing actions hold Auto paused; background sync defers removals while the selector is present or cannot be verified.
-
-The extension alone is insufficient: use CodexPlusBar **1.6.1 or later** for the corrected expiry publisher. **Blocked** with a native-switching warning means OpenChamber's competing account switching or fallback is enabled; disable those settings before enabling Auto. See the [extension guide](Extensions/expiry-selector/README.md) for supported configurations, maintenance recovery and rollback, and the [acceptance record](Extensions/expiry-selector/docs/acceptance-2026-11-09.md) for isolated test coverage and live-test boundaries.
-
-### Save and switch desktop sign-ins
-
-Select a Codex profile in Profile Manager. The **ChatGPT / Codex** and **OpenChamber** rows each show the action needed for that sign-in: **Save current sign-in** when missing or confirmed to need repair, and **Switch and open** (desktop) or **Switch** (OpenChamber) when saved.
-
-**New in 1.5.0:** **Repair both** updates both app sign-ins for the selected profile. Install ChatGPT / Codex, keep OpenChamber running, and complete the two authorization prompts in the profile’s Chrome window. Saving, account checks, and warning removal happen automatically. The apps receive separate sign-ins so their refresh tokens can rotate independently. If interrupted, choose **Repair both** again to resume. An unrelated account currently selected in either app stays selected; repairing the selected desktop account reopens ChatGPT / Codex.
-
-1. Sign in to the matching account in the desktop app.
-2. Select **Save current sign-in** in its ChatGPT / Codex row.
-3. Later, select **Switch and open** to close the desktop app, verify and install the saved sign-in, and reopen it.
-
-**Since 1.3.1:** Saving supports the current ChatGPT desktop helper's explicit ChatGPT login setting. A rejected saved sign-in shows **Sign-in needs updating** and restores the Save action for that profile. Network failures and malformed server responses keep Switch available for retry; temporary OpenChamber connection-restore failures are retried instead of asking you to sign in again.
-
-Desktop switching uses native Swift, Security, URLSession, and AppKit; `codex-auth` and CodexAuthHelper are no longer required. Existing unambiguous helper snapshots are imported read-only. Browser usage and OpenChamber sign-ins stay independent of desktop switching.
-
-Supported desktop storage is the standard `~/.codex/auth.json`, direct macOS Keychain, or `auto` selection. Custom runtime authentication overrides, administrator-managed configuration, encrypted secret storage, and ephemeral credentials report an unsupported-configuration message. Keychain may ask for access. A failed switch reports credential recovery and app-reopening results separately.
-
-Native desktop sign-in switching is included in the **1.6.1 DMG** (introduced in 1.2.0).
-
-**Since 1.2.3:** Leftover ChatGPT crash-reporting and keyboard-monitor utilities no longer cause a false “could not close” error when switching accounts. CodexPlusBar recognizes only their specific bundle locations; the desktop, Codex app-server, renderers, and unknown helpers still need to exit before the saved sign-in can change.
-
-**Since 1.2.2:** ChatGPT is reopened with quit confirmation disabled, so subsequent switches can quit normally without the scheduled-task dialog. A desktop instance launched elsewhere may still show the dialog on the first switch. If normal quit has not finished after 12 seconds, CodexPlusBar force quits that instance, then waits up to another 12 seconds for processes that could use the sign-in to exit. Force quitting can interrupt active chats and lose unsaved work; if those processes remain, the switch stops with the previous sign-in intact.
-
-This uses ChatGPT's undocumented `CODEX_ELECTRON_DISABLE_QUIT_CONFIRMATION=1` launch setting, which also suppresses manual quit confirmation for that instance; an app update may ignore it. The force fallback still applies.
-
-### Import many profiles at once
-
-Bulk import accepts one profile per line in this format:
-
-```text
-person@example.com|your-password|YOURBASE32SECRET
-2. second@example.com|another-password|ANOTHERBASE32SECRET
-```
-
-Since **1.2.5**, you can also paste three consecutive lines per profile: email, password, then 2FA secret. Numbered email headers are recommended to make profile boundaries clear:
-
-```text
-1. person@example.com
-your-password
-YOURBASE32SECRET
-
-2. second@example.com
-another-password
-ANOTHERBASE32SECRET
-```
-
-You can mix both formats. Blank lines can separate profiles, but not fields within a three-line block. Multiline passwords and 2FA values keep their spaces and literal text. If a credential itself looks like a numbered email header or an email-led pipe row, the preview asks you to fix the ambiguity rather than guessing.
-
-The preview reports the original lines that need fixing and enables import only when every record is valid. Imported rows are Codex profiles; you can change the provider after import. They use `https://2fa.live` as their starting saved link; the app does not send your 2FA key to that link.
-
-### Generate Gmail dot variations
-
-**Email Tools** generates every single-dot variation for a Gmail username, such as `johndoe@gmail.com` → `j.ohndoe@gmail.com`. Save sessions, search long lists, copy one or all unused variations, and mark variations as used so you do not repeat work.
-
-The compact list keeps used addresses readable, supports keyboard checkbox navigation, and groups session removal in a More menu with a native confirmation.
-
-### Make the interface fit your workflow
-
-- Everforest-based interface with **System**, **Dark**, and **Light** appearance.
-- **Hard**, **Medium**, and **Soft** contrast choices.
-- Provider colors, status icons, accessibility labels, and masked email labels for quick scanning.
-
-### Theme depth
-
-**New in 1.4.2:** In **Settings**, choose **Appearance**, **Contrast**, and (for dark appearance) **Canvas: Original, Dim, or Deep**. The default is **Dark / Hard / Deep**. Canvas changes apply immediately to the menu panel and app windows and are included in backups. Existing installations and older backups without a Canvas choice use Deep. Light appearance stays unchanged.
-
-## Quick start
-
-1. Open CodexPlusBar. Its status appears in the macOS menu bar; it does not add a normal Dock icon.
-2. Choose **Manage profiles** from the menu bar panel.
-3. Select **Add profile**, choose **More → Import from Text…** for multiple profiles, or **Restore Backup…** to bring your setup from another Mac.
-4. Edit the label in **Profile details**, save, then choose **Codex** or **Claude** in **Connection setup**.
-5. Choose **Open Codex** or **Open Claude** and sign in in the Chrome window that opens.
-6. Return to CodexPlusBar. If needed, select **Check now**; usage will then refresh automatically.
-7. Pin a profile, or use search, filters, and sorting to choose one for your next task.
-
-## How usage is shown
-
-- Percentages are **remaining** usage, not used usage.
-- `5H` is the provider's five-hour window; `7D` is its seven-day window.
-- `—` or `Unavailable` means the provider did not return that value; the app does not guess.
-- Countdown text uses the provider's reset time, so it stays useful while the app is open.
-- Codex expiry comes from ChatGPT account data. Claude expiry is not fetched.
-
-CodexPlusBar reads the signed-in web services used by ChatGPT and Claude. These are provider website endpoints, not stable public APIs, so a provider website change can temporarily affect refresh or sign-in until the app is updated.
-
-## Install from the DMG
-
-The easiest way to install CodexPlusBar is the signed and notarized GitHub DMG. You do not need Xcode. One download supports both Apple silicon and Intel Macs running macOS 14 or newer.
-
-Version **1.6.1 (build 21)** fixes unknown subscription expiry in the optional [OpenChamber Account Priority extension](#automatic-subscription-expiry-priority-in-openchamber), introduced in 1.6.0. It retains Check sign-ins, Repair both, Canvas depth, keyboard navigation, shared zoom, encrypted backup and restore, automatic account sync, and native desktop switching. You do not need `codex-auth` or CodexAuthHelper. The download link below always downloads the latest published DMG; [the 1.6.1 release](https://github.com/withLinda/CodexPlusBar/releases/tag/v1.6.1) includes both packages, release notes, and checksums.
-
-1. [Download `CodexPlusBar.dmg`](https://github.com/withLinda/CodexPlusBar/releases/latest/download/CodexPlusBar.dmg).
-2. If CodexPlusBar is already running, quit it from its menu bar panel.
-3. Open the DMG and drag `CodexPlusBar.app` onto the **Applications** shortcut. Choose **Replace** if an older copy is already installed.
-4. Eject the DMG, then open CodexPlusBar from **Applications**. Confirm the normal macOS first-open prompt if shown. Its status appears in the menu bar; it does not add a normal Dock icon.
-5. Install [Google Chrome](https://www.google.com/chrome/) if needed. On a new Mac, choose **Restore Backup…** on the empty Profiles screen, select your `.codexplusbarbackup` file, and enter its password. For a fresh setup, follow [Quick start](#quick-start).
-
-The published app and DMG are Developer ID signed and notarized by Apple, so macOS can verify them during a normal first launch.
-
-### Verify the download (optional)
-
-Before opening the DMG, download [`CodexPlusBar.dmg.sha256`](https://github.com/withLinda/CodexPlusBar/releases/latest/download/CodexPlusBar.dmg.sha256) into the same folder. In Terminal, go to that folder (usually `~/Downloads`) and run:
-
-```bash
-cd ~/Downloads
-shasum -a 256 -c CodexPlusBar.dmg.sha256
-```
-
-The expected result is `CodexPlusBar.dmg: OK`. If verification fails, download both files again from the [same release](https://github.com/withLinda/CodexPlusBar/releases/tag/v1.5.0) before installing.
-
-### Update an existing installation
-
-To update from 1.4.2 or an earlier release, download the latest DMG and follow steps 2–4 above. Replacing the app keeps your saved profiles, saved desktop and OpenChamber sign-ins, and Chrome sign-ins in `~/Library/Application Support/CodexPlusBar`; you do not need to import them again. After updating, open Profile Manager and choose **Check sign-ins**. Select a highlighted account and choose **Repair both** to update its desktop and OpenChamber sign-ins, or save a sign-in manually as described above. Before moving to a new Mac, use **Settings → Backup & Transfer → Export Backup…**, install 1.5.0 or newer there, then [restore the backup](#move-to-a-new-mac).
-
-Existing unambiguous CodexAuthHelper snapshots are imported automatically when needed; if no saved desktop sign-in is available, sign in to Codex and choose **Save current sign-in**.
-
-After switching OpenChamber's OpenAI account, wait for **switched and verified**. If OpenChamber's Usage panel still shows an older result, refresh that panel. If the saved sign-in is rejected, use **Repair both**, or sign in to that account again in OpenChamber and use **Save current sign-in** in CodexPlusBar before retrying.
-
-### OpenChamber 2 compatibility
-
-The **1.5.0 DMG** supports OpenChamber 2.6.1 / OpenCode 2.2.5 and retains recovery for missing connections introduced in 1.1.5. Keep OpenChamber running locally, then use **Repair both**, **Save current sign-in**, or switch an already-saved profile in CodexPlusBar; no separate bridge installation is needed.
-
-If a saved connection was removed, CodexPlusBar can restore it from its saved sign-in after checking the account identity and verifying access with OpenAI. An unavailable bridge or unreadable response still reports an error. If the saved sign-in is missing, damaged, or no longer accepted, sign in again in OpenChamber and choose **Save current sign-in** before retrying.
-
-OpenCode 2 uses `/api/info` for instance verification and stores credentials in its database; the old `auth.json` is no longer the live sign-in store. CodexPlusBar checks API capabilities and prefers native stored-credential reads so an expired token can be handled explicitly rather than failing during an implicit refresh. Supported older V2 builds use the bundled, dependency-free bridge plugin in a private location under Application Support. Imports and switches use supported OpenCode APIs, including normal provider-reload notifications; CodexPlusBar does not write the database directly. Existing saved profiles are imported when first selected. OpenCode 1 keeps its existing file-based path.
-
-Compatibility checks:
-
-```bash
-# Real OpenCode 2 server with isolated data and synthetic credentials:
-python3 scripts/test_openchamber_v2_bridge.py
-# Also run the Swift suite and the production Swift client against that server:
-OPENCHAMBER_TEST_SWIFT=1 python3 scripts/test_openchamber_v2_bridge.py
-# Separately check discovery and credential reads against the installed app:
-TEST_RUNNER_OPENCHAMBER_RUNTIME_PROBE=1 TEST_RUNNER_OPENCHAMBER_V2_BRIDGE_PROBE=1 make test
-```
-
-The isolated checks cover importing, switching back, deleting a native connection and recovering its saved sign-in, cross-location provider reloads, concurrent changes, and preserving the legacy file and other providers. The Swift tests also cover expired stored credentials, bulk checks, active and inactive repairs, interrupted repair recovery, and callback-port reuse. The installed-app probes read connections without switching accounts; the native stored-credential path does not refresh on read, while older bridge-based runtimes may do so.
-
-## Requirements
-
-- macOS 14 or newer
-- Google Chrome
-- Internet access
-- One ChatGPT or Claude account for each profile you want to track
-
-## Build from source
-
-Developers can build the current macOS project with Xcode 26 or newer:
-
-```bash
-git clone https://github.com/withLinda/CodexPlusBar.git
-cd CodexPlusBar
-make build-and-run
-```
-
-Useful checks:
-
-```bash
-make test
-make agent-verify
-make dmg
-```
-
-`make dmg` writes a local developer DMG to `build/dist/CodexPlusBar.dmg`. It does not perform Developer ID signing or Apple notarization; use the published GitHub DMG for normal installation.
-
-### Native design checks
-
-```bash
-bash scripts/render_design.sh --build --output /tmp/codexplusbar-preview.png
-bash scripts/render_design.sh --compact --light --output /tmp/codexplusbar-compact.png
-bash scripts/render_design.sh --panel --large-text --output /tmp/codexplusbar-panel.png
-# Interactive, isolated fixture window:
-bash scripts/render_design.sh --details
-# In another terminal:
-osascript scripts/inspect_design.applescript
-# Email utility preview and interaction check:
-bash scripts/render_design.sh --email-tools --compact
-osascript scripts/inspect_email_tools.applescript
-# Native theme-transition regression (Pillow required):
-bash scripts/render_design.sh --missing-expiry --cycle-theme --output /tmp/theme.png
-bash scripts/render_design.sh --missing-expiry --light --output /tmp/theme-fresh-light.png
-bash scripts/render_design.sh --settings --cycle-canvas --output /tmp/canvas-settings.png
-bash scripts/render_design.sh --cycle-canvas --output /tmp/canvas-manager.png
-python3 scripts/verify_theme_transition.py /tmp/theme.png /tmp/theme-fresh-light.png
-```
-
-The preview uses a separate bundle ID, sample profiles, and stub services. Screen capture needs macOS Screen Recording permission; interaction checks need Accessibility permission. Enable Keyboard navigation for the email Tab/Space check and restore your preference afterward. The email check preserves and restores the clipboard. See the [design contract and verification results](docs/design/compact-redesign.md).
-
-## Local data and privacy
-
-### Move to a new Mac
-
-1. On your old Mac, open **Profiles → More → Export Backup…** (also in **Settings → Backup & Transfer**).
-2. Choose a password, save the backup, then use **Share…** to send it with AirDrop or **Show in Finder** to copy it to a drive.
-3. Install CodexPlusBar on the new Mac. Choose **Restore Backup…** on the empty Profiles screen.
-4. Select the `.codexplusbarbackup` file, enter its password, review the profile count/date, and choose **Restore**.
-
-The backup includes profile details (including passwords, 2FA keys, notes and tags), saved desktop/OpenChamber sign-ins and their token-recovery data, Email Tools, app settings, dedicated Chrome profile data, and portable ChatGPT/Claude cookies from the app. Disposable browser caches and machine-specific runtime files are omitted.
-
-Backups use Apple's authenticated, password-encrypted archive format with compression. They are not ordinary ZIP files: restore them in CodexPlusBar. Keep the password; the app cannot recover a forgotten one. Validation finishes before existing data is replaced. If this Mac already has data, an encrypted recovery backup is saved in `~/Library/Application Support/CodexPlusBar Backups` using the same password.
-
-Restored profiles appear automatically and usage sessions are checked. Expired or rejected sessions need sign-in again; a network failure is not reported as a rejected login. Chrome's encrypted passwords, passkeys and cookies can depend on the old Mac's Keychain, so copying its profile does not guarantee that its browser windows remain signed in. Native usage sessions are transferred separately where possible.
-
-**Import from Text…** remains available in More for adding email/password/2FA rows. It is separate from restoring a complete backup.
-
-CodexPlusBar has no profile-sync server of its own. It connects directly to ChatGPT or Claude through the browser sessions created on your Mac.
-
-- Profile data is stored at `~/Library/Application Support/CodexPlusBar/profiles.json`.
-- Saved desktop OAuth credentials and token-rotation recovery snapshots are stored in `~/Library/Application Support/CodexPlusBar/DesktopSignIns` (owner-only directory and files); the profile catalog contains only their account identity. These snapshots are not encrypted by CodexPlusBar.
-- Incomplete **Repair both** authorizations are kept in the owner-only `~/Library/Application Support/CodexPlusBar/AppSignInRepairs` folder so a retry can resume. They contain sign-in secrets and are not encrypted by CodexPlusBar; temporary pending authorizations are not included in backups.
-- Email Tools sessions are stored at `~/Library/Application Support/CodexPlusBar/dot-trick-sessions.json`.
-- Named Chrome profiles are stored at `~/Library/Application Support/CodexPlusBar/ChromeProfiles`.
-- Profile labels, links, passwords, 2FA keys, phone numbers, notes, and tags stay on your Mac.
-- Passwords and 2FA keys are **not** stored in the macOS Keychain and are **not encrypted by CodexPlusBar**.
-- Removing a profile also removes its local browser data.
-
-Use the app only on a Mac user account you trust. Do not share the profile JSON file, Chrome profile folder, screenshots with private values, or real import rows.
+**[Download CodexPlusBar](https://github.com/withLinda/CodexPlusBar/releases/latest/download/CodexPlusBar.dmg)** · [Report a problem or request a feature](https://github.com/withLinda/CodexPlusBar/issues)
