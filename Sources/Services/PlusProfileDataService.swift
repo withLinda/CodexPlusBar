@@ -86,7 +86,10 @@ final class PlusProfileDataService: PlusProfileDataServing {
                 planType: snapshot.planType,
                 accountID: snapshot.accountID
             ),
-            expiryRefresh: expiryRefresh
+            expiryRefresh: expiryRefresh.display,
+            selectorObservation: SelectorObservation.make(context: context, snapshot: snapshot,
+                catalog: expiryRefresh.catalog, entitlementObservedAt: expiryRefresh.observedAt,
+                nativeIdentity: profile.openCodeOpenAIAccount)
         )
     }
 
@@ -278,14 +281,16 @@ final class PlusProfileDataService: PlusProfileDataServing {
     private static func fetchExpiryRefresh(
         accountID: String,
         transport: HTTPTransport
-    ) async -> ProfileExpiryRefresh {
+    ) async -> (display: ProfileExpiryRefresh, catalog: [AccountCatalogItem]?, observedAt: Date?) {
         do {
-            let catalog = try await AccountCatalogService(transport: transport).fetchCatalog()
+            let result = try await AccountCatalogService(transport: transport).fetchCatalogEvidence()
+            let observedAt = Date.now
+            let catalog = result.displayItems
             let expiresAt = catalog.first(where: { $0.matchesAccountID(accountID) })?.expiresAt
                 ?? catalog.first(where: { $0.isDefaultAccount })?.expiresAt
-            return .value(expiresAt)
+            return (.value(expiresAt), result.evidenceItems, observedAt)
         } catch {
-            return .unchanged
+            return (.unchanged, nil, nil)
         }
     }
 }

@@ -30,6 +30,21 @@ struct AccountCatalogService {
     }
 
     static func decodeCatalog(from data: Data) throws -> [AccountCatalogItem] {
+        try decodeCatalogEvidence(from: data).displayItems
+    }
+
+    struct Catalog: Sendable {
+        let displayItems: [AccountCatalogItem]
+        let evidenceItems: [AccountCatalogItem]
+    }
+
+    @MainActor
+    func fetchCatalogEvidence() async throws -> Catalog {
+        let response = try await transport.data(for: Self.makeRequest())
+        return try Self.decodeCatalogEvidence(from: response.data)
+    }
+
+    static func decodeCatalogEvidence(from data: Data) throws -> Catalog {
         switch WorkspacePayloadSupport.inspectPayload(in: data) {
         case .html, .unauthorizedJSON:
             throw ChatGPTAPIError.unauthorized
@@ -46,7 +61,7 @@ struct AccountCatalogService {
         }
     }
 
-    private static func normalizeCatalog(from payload: Any) throws -> [AccountCatalogItem] {
+    private static func normalizeCatalog(from payload: Any) throws -> Catalog {
         let collection = try WorkspacePayloadSupport.extractCollection(from: payload, traceHint: traceHint)
         var items: [AccountCatalogItem] = []
         var encounteredUnrecognizedEntry = false
@@ -67,15 +82,17 @@ struct AccountCatalogService {
         }
 
         let normalizedItems = AccountCatalogNormalizer.normalize(items)
+        let displayItems: [AccountCatalogItem]
 
         switch collection.ordering {
         case let .explicit(ids):
-            return orderedItems(normalizedItems, orderedBy: ids)
+            displayItems = orderedItems(normalizedItems, orderedBy: ids)
         case .preserveInput:
-            return normalizedItems
+            displayItems = normalizedItems
         case .sortByNameThenID:
-            return normalizedItems.sorted(by: itemSort)
+            displayItems = normalizedItems.sorted(by: itemSort)
         }
+        return Catalog(displayItems: displayItems, evidenceItems: items)
     }
 
     private static func parseCatalogItem(from entry: WorkspaceEntry) -> CatalogParseResult {
@@ -109,6 +126,12 @@ struct AccountCatalogService {
             accountObject: accountObject,
             object: object
         )
+        let expiry = entitlementObject["expires_at"] ?? entitlementObject["expiresAt"]
+            ?? object["expires_at"] ?? object["expiresAt"]
+        let active = entitlementObject["has_active_subscription"] ?? entitlementObject["hasActiveSubscription"]
+        let canonicalIDs = Set([accountObject["account_id"], accountObject["accountId"], accountObject["id"],
+                                object["account_id"], object["accountId"], object["id"]]
+            .compactMap { $0 as? String }.filter { !$0.isEmpty })
 
         return .catalogItem(
             AccountCatalogItem(
@@ -136,7 +159,14 @@ struct AccountCatalogService {
                 ) ?? false,
                 isUsableInSession: isUsableInSession,
                 matchAliases: matchAliases,
-                isDefaultAccount: isDefaultAccount(entry.fallbackID)
+                isDefaultAccount: isDefaultAccount(entry.fallbackID),
+                selectorEvidence: SelectorCatalogEvidence(
+                    deactivated: SelectorIdentityEvidence.bool(accountObject["is_deactivated"] ?? accountObject["isDeactivated"]),
+                    usable: SelectorIdentityEvidence.bool(object["can_access_with_session"] ?? object["canAccessWithSession"]),
+                    active: SelectorIdentityEvidence.bool(active),
+                    valid: canonicalIDs.count <= 1
+                        && (expiry == nil || expiry is NSNull || WorkspacePayloadSupport.dateValue(from: expiry) != nil)
+                        && (active == nil || active is NSNull || SelectorIdentityEvidence.bool(active) != nil))
             )
         )
     }

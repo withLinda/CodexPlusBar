@@ -24,4 +24,5 @@ struct WorkspaceLimitSnapshot: Equatable, Sendable {
     let primaryWindow: WorkspaceLimitWindow
     let secondaryWindow: WorkspaceLimitWindow?
     let fetchedAt: Date
+    var selectorEvidence: SelectorUsageEvidence? = nil
 }

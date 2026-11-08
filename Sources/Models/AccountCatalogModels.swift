@@ -11,6 +11,7 @@ struct AccountCatalogItem: Identifiable, Equatable, Sendable {
     let isUsableInSession: Bool
     let matchAliases: Set<String>
     let isDefaultAccount: Bool
+    var selectorEvidence: SelectorCatalogEvidence? = nil
 
     var id: String {
         accountID

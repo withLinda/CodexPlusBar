@@ -6,6 +6,30 @@ import WebKit
 @MainActor
 struct PlusProfileDataServiceTests {
     @Test
+    func selectorUsesOneCatalogFetchAndDoesNotRetimestampFailedEntitlement() async throws {
+        var profile = sampleProfile(label: "selector", sortOrder: 0)
+        profile.openCodeOpenAIAccount = OpenCodeOpenAIIdentity(accountID: "account-a", userID: "user-a", email: "unused@example.test")
+        let transport = makeRefreshTransport(usageAccountID: "account-a", catalogJSON: """
+            {"accounts":{"account-a":{"account":{"account_id":"account-a","is_deactivated":false},
+            "can_access_with_session":true,"entitlement":{"expires_at":"2027-06-01T00:00:00Z","has_active_subscription":true}}}}
+            """, sessionUser: "user-a", failCatalogAfterFirst: true)
+        let runtime = PlusProfileRuntime(dataStore: .nonPersistent(), transport: transport)
+        let service = PlusProfileDataService(runtimeProvider: StubRuntimeProvider(runtimeByProfileID: [profile.id: runtime]), chromeSessionManager: StubChromeSessionManager())
+        let first = try await service.refreshProfile(profile)
+        let observation = try #require(first.selectorObservation)
+        let entitlement = try #require(observation.entitlement)
+        #expect(observation.usage?.observedAt == first.usage.fetchedAt)
+        #expect(entitlement.observedAt >= first.usage.fetchedAt)
+        #expect(transport.requestPaths.filter { $0.contains("accounts/check") }.count == 1)
+        let second = try await service.refreshProfile(profile)
+        #expect(second.selectorObservation?.usage != nil)
+        #expect(second.selectorObservation?.entitlement == nil)
+        #expect(second.selectorObservation?.unavailableReasons.contains("expiry-refresh-failed") == true)
+        #expect(second.expiryRefresh == .unchanged)
+        #expect(first.selectorObservation?.entitlement?.observedAt == entitlement.observedAt)
+    }
+
+    @Test
     func refreshProfileFetchesSessionThenUsageAndExpiryAndBuildsDetectedNote() async throws {
         let profile = sampleProfile(label: "alpha@example.com", sortOrder: 0)
         let transport = MockHTTPTransport { request in
@@ -468,7 +492,8 @@ struct PlusProfileDataServiceTests {
 
     @Test
     func refreshProfileFallsBackToDefaultCatalogExpiryWhenUsageAccountDoesNotMatchAliases() async throws {
-        let profile = sampleProfile(label: "default@example.com", sortOrder: 0)
+        var profile = sampleProfile(label: "default@example.com", sortOrder: 0)
+        profile.openCodeOpenAIAccount = OpenCodeOpenAIIdentity(accountID: "user-not-listed-in-catalog", userID: "user-a", email: "unused@example.test")
         let transport = makeRefreshTransport(
             usageAccountID: "user-not-listed-in-catalog",
             catalogJSON:
@@ -488,7 +513,8 @@ struct PlusProfileDataServiceTests {
                     }
                   }
                 }
-                """
+                """,
+            sessionUser: "user-a"
         )
         let runtime = PlusProfileRuntime(
             dataStore: .nonPersistent(),
@@ -501,6 +527,9 @@ struct PlusProfileDataServiceTests {
 
         #expect(result.usage.accountID == "user-not-listed-in-catalog")
         #expect(result.expiryRefresh == .value(isoDate("2026-05-17T13:42:54+00:00")))
+        #expect(result.selectorObservation?.entitlement == nil)
+        #expect(result.selectorObservation?.usage != nil)
+        #expect(result.selectorObservation?.unavailableReasons.contains("expiry-unknown") == true)
     }
 
     @Test
@@ -1026,9 +1055,12 @@ private func makeClaudeCookie(
 @MainActor
 private func makeRefreshTransport(
     usageAccountID: String,
-    catalogJSON: String
+    catalogJSON: String,
+    sessionUser: String? = nil,
+    failCatalogAfterFirst: Bool = false
 ) -> MockHTTPTransport {
-    MockHTTPTransport { request in
+    let counter = RequestCounter()
+    return MockHTTPTransport { request in
         switch request.url?.path {
         case "/api/auth/session":
             return HTTPResponseData(
@@ -1036,6 +1068,7 @@ private func makeRefreshTransport(
                     """
                     {
                       "accessToken": "token-alpha",
+                      "user": {"id": "\(sessionUser ?? "")"},
                       "account": {
                         "id": "\(usageAccountID)"
                       },
@@ -1116,6 +1149,7 @@ private func makeRefreshTransport(
                 )!
             )
         case "/backend-api/accounts/check/v4-2023-04-27":
+            if failCatalogAfterFirst, await counter.next() > 1 { throw ChatGPTAPIError.invalidResponse }
             return HTTPResponseData(
                 data: Data(catalogJSON.utf8),
                 response: HTTPURLResponse(

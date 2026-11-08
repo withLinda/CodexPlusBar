@@ -151,7 +151,10 @@ struct AuthSessionService {
             expiresAt: session.expires ?? bootstrap?.expiresAt ?? fallback?.expiresAt,
             deviceID: firstNonEmpty(deviceID, fallback?.deviceID),
             clientVersion: firstNonEmpty(bootstrap?.clientVersion, fallback?.clientVersion),
-            language: language
+            language: language,
+            userID: SelectorIdentityEvidence.userID(
+                sessionIDs: [decoded.session?.user?.id, decoded.session?.user?.userID,
+                             decoded.user?.id, decoded.user?.userID], token: accessToken)
         )
     }
 
@@ -190,12 +193,14 @@ private struct AuthSessionEnvelope: Decodable {
     let account: AuthSessionAccount?
     let session: AuthSessionPayload?
     let locale: String?
+    let user: AuthSessionUser?
 
     var asSessionPayload: AuthSessionPayload {
         AuthSessionPayload(
             accessToken: accessToken,
             expires: expires,
-            account: account
+            account: account,
+            user: user
         )
     }
 }
@@ -204,11 +209,26 @@ private struct AuthSessionPayload: Decodable {
     let accessToken: String?
     let expires: Date?
     let account: AuthSessionAccount?
+    let user: AuthSessionUser?
 
     enum CodingKeys: String, CodingKey {
         case accessToken
         case expires
         case account
+        case user
+    }
+}
+
+private struct AuthSessionUser: Decodable {
+    let id: String?
+    let userID: String?
+
+    enum CodingKeys: String, CodingKey { case id; case userID = "user_id" }
+
+    init(from decoder: Decoder) throws {
+        let values = try? decoder.container(keyedBy: CodingKeys.self)
+        id = try? values?.decode(String.self, forKey: .id)
+        userID = try? values?.decode(String.self, forKey: .userID)
     }
 }
 

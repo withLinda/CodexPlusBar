@@ -714,15 +714,18 @@ struct PlusProfileRefreshResult: Equatable, Sendable {
     let usage: PlusProfileUsage
     let detectedNote: String?
     let expiryRefresh: ProfileExpiryRefresh
+    let selectorObservation: SelectorObservation?
 
     init(
         usage: PlusProfileUsage,
         detectedNote: String?,
-        expiryRefresh: ProfileExpiryRefresh = .unchanged
+        expiryRefresh: ProfileExpiryRefresh = .unchanged,
+        selectorObservation: SelectorObservation? = nil
     ) {
         self.usage = usage
         self.detectedNote = detectedNote
         self.expiryRefresh = expiryRefresh
+        self.selectorObservation = selectorObservation
     }
 }
 

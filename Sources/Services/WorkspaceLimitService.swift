@@ -9,7 +9,7 @@ struct WorkspaceLimitService {
         case .html, .unauthorizedJSON:
             throw ChatGPTAPIError.unauthorized
         case let .json(payload):
-            return try normalizeSnapshot(from: payload, rawData: data, workspaceID: workspaceID)
+            return try normalizeSnapshot(from: payload, workspaceID: workspaceID)
         case .empty:
             throw ChatGPTAPIError.unsupported(
                 "ChatGPT returned no limit data for this account. \(traceHint)"
@@ -21,12 +21,8 @@ struct WorkspaceLimitService {
         }
     }
 
-    private static func normalizeSnapshot(from payload: Any, rawData: Data, workspaceID: String) throws -> WorkspaceLimitSnapshot {
+    private static func normalizeSnapshot(from payload: Any, workspaceID: String) throws -> WorkspaceLimitSnapshot {
         if let rootObject = payload as? JSONObject, rootObject["rate_limit"] != nil {
-            if let legacyPayload = try? JSONDecoder.chatGPTAPI.decode(AccountCheckResponse.self, from: rawData) {
-                return try snapshot(from: legacyPayload, workspaceID: workspaceID)
-            }
-
             return try snapshot(
                 from: rootObject,
                 workspaceID: workspaceID,
@@ -50,27 +46,17 @@ struct WorkspaceLimitService {
         return try snapshot(from: matchedEntry, workspaceID: workspaceID)
     }
 
-    private static func snapshot(from payload: AccountCheckResponse, workspaceID: String) throws -> WorkspaceLimitSnapshot {
-        WorkspaceLimitSnapshot(
-            workspaceID: workspaceID,
-            accountID: payload.accountID,
-            planType: payload.planType,
-            primaryWindow: try payload.rateLimit.primaryWindow.requireWindow(),
-            secondaryWindow: try payload.rateLimit.secondaryWindow?.requireWindow(),
-            fetchedAt: .now
-        )
-    }
-
     private static func snapshot(from entry: WorkspaceEntry, workspaceID: String) throws -> WorkspaceLimitSnapshot {
         guard let object = entry.payload as? JSONObject else {
             throw unsupportedAuthenticatedResponse()
         }
 
         let accountID = WorkspacePayloadSupport.resolveWorkspaceID(from: entry) ?? workspaceID
-        return try snapshot(from: object, workspaceID: workspaceID, accountID: accountID)
+        return try snapshot(from: object, workspaceID: workspaceID, accountID: accountID, payloadAccountID: accountID)
     }
 
-    private static func snapshot(from object: JSONObject, workspaceID: String, accountID: String) throws -> WorkspaceLimitSnapshot {
+    private static func snapshot(from object: JSONObject, workspaceID: String, accountID: String,
+                                 payloadAccountID: String? = nil) throws -> WorkspaceLimitSnapshot {
         let accountObject = (object["account"] as? JSONObject) ?? object
         let planType = WorkspacePayloadSupport.firstNonEmptyString(
             from: accountObject["plan_type"],
@@ -84,6 +70,9 @@ struct WorkspaceLimitService {
         }
 
         let rateLimit = try RateLimitContainer(object: rateLimitPayload)
+        let explicitIDs = [accountObject["account_id"], accountObject["id"], object["account_id"], object["id"]]
+            .compactMap { $0 as? String }.filter { !$0.isEmpty }
+        let evidenceAccountID = Set(explicitIDs).count > 1 ? nil : explicitIDs.first ?? payloadAccountID
 
         return WorkspaceLimitSnapshot(
             workspaceID: workspaceID,
@@ -91,7 +80,12 @@ struct WorkspaceLimitService {
             planType: planType,
             primaryWindow: try rateLimit.primaryWindow.requireWindow(),
             secondaryWindow: try rateLimit.secondaryWindow?.requireWindow(),
-            fetchedAt: .now
+            fetchedAt: .now,
+            selectorEvidence: SelectorUsageEvidence(accountID: evidenceAccountID,
+                allowed: SelectorIdentityEvidence.bool(rateLimitPayload["allowed"]),
+                limitReached: SelectorIdentityEvidence.bool(rateLimitPayload["limit_reached"]),
+                fiveHour: rateLimit.primaryWindow.selectorWindow(expectedDuration: 18_000),
+                sevenDay: rateLimit.sevenDay)
         )
     }
 
@@ -156,26 +150,10 @@ struct WorkspaceLimitService {
     }
 }
 
-private struct AccountCheckResponse: Decodable {
-    let accountID: String
-    let planType: String
-    let rateLimit: RateLimitContainer
-
-    enum CodingKeys: String, CodingKey {
-        case accountID = "account_id"
-        case planType = "plan_type"
-        case rateLimit = "rate_limit"
-    }
-}
-
-private struct RateLimitContainer: Decodable {
+private struct RateLimitContainer {
     let primaryWindow: LimitWindowPayload
     let secondaryWindow: LimitWindowPayload?
-
-    enum CodingKeys: String, CodingKey {
-        case primaryWindow = "primary_window"
-        case secondaryWindow = "secondary_window"
-    }
+    let sevenDay: SelectorSevenDay
 
     init(object: JSONObject) throws {
         guard let primaryWindowObject = object["primary_window"] as? JSONObject else {
@@ -185,20 +163,21 @@ private struct RateLimitContainer: Decodable {
         primaryWindow = try LimitWindowPayload(object: primaryWindowObject)
         if let secondaryWindowObject = object["secondary_window"] as? JSONObject {
             secondaryWindow = try LimitWindowPayload(object: secondaryWindowObject)
+            sevenDay = secondaryWindow?.selectorWindow(expectedDuration: 604_800).map(SelectorSevenDay.available) ?? .unknown
         } else {
             secondaryWindow = nil
+            sevenDay = object["secondary_window"] is NSNull ? .notApplicable : .unknown
         }
     }
 }
 
-private struct LimitWindowPayload: Decodable {
+private struct LimitWindowPayload {
     let usedPercent: Int
     let resetAt: Int
-
-    enum CodingKeys: String, CodingKey {
-        case usedPercent = "used_percent"
-        case resetAt = "reset_at"
-    }
+    let rawUsedPercent: Int?
+    let rawResetAt: Int?
+    let duration: Int?
+    let hasDuration: Bool
 
     init(object: JSONObject) throws {
         guard let usedPercent = WorkspacePayloadSupport.intValue(from: object["used_percent"]),
@@ -208,6 +187,17 @@ private struct LimitWindowPayload: Decodable {
 
         self.usedPercent = usedPercent
         self.resetAt = resetAt
+        self.rawUsedPercent = SelectorIdentityEvidence.integer(object["used_percent"])
+        self.rawResetAt = SelectorIdentityEvidence.integer(object["reset_at"])
+        self.duration = SelectorIdentityEvidence.integer(object["limit_window_seconds"])
+        self.hasDuration = object["limit_window_seconds"] != nil
+    }
+
+    func selectorWindow(expectedDuration: Int) -> SelectorQuotaWindow? {
+        guard let percent = rawUsedPercent, (0...100).contains(percent),
+              let reset = rawResetAt, reset > 0, reset <= 9_007_199_254_740,
+              !hasDuration || duration == expectedDuration else { return nil }
+        return SelectorQuotaWindow(remainingPercent: 100 - percent, resetAt: Date(timeIntervalSince1970: TimeInterval(reset)))
     }
 
     func requireWindow() throws -> WorkspaceLimitWindow {
