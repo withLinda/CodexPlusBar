@@ -1,13 +1,13 @@
 # CloudKit account sync for the notarized DMG
 
 Date: 2026-11-09
-Status: Written design for user review
+Status: Approved by the user on 2026-11-09
 
 ## Intent and approved direction
 
 The user uses CodexPlusBar on several Macs and wants automatic account synchronization instead of repeated export/import. Distribution is a Developer ID–signed, notarized DMG. The user cancelled TestFlight preparation and selected syncing saved login sessions as well as profile details, passwords and 2FA secrets.
 
-The in-chat design was approved on 2026-11-09. This document defines the implementation contract; approval of this written document precedes the implementation plan.
+The in-chat design and this written specification were approved on 2026-11-09. This document defines the implementation contract.
 
 Success means changes appear on another Mac signed into the same iCloud Apple Account, offline edits survive, and incoming data never silently replaces a working active login. Saved sessions are transferable snapshots, not a guarantee that providers will accept one OAuth refresh token concurrently on multiple Macs.
 
