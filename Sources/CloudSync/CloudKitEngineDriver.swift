@@ -5,11 +5,23 @@ import Foundation
 actor CloudKitEngineDriver: CloudEngineDriving {
     private var engine: CKSyncEngine?
     private var delegate: CloudKitEngineDelegate?
+    private let availability: CloudSyncAvailability
+    private let makeContainer: @Sendable (String) throws -> CKContainer
+
+    init(availability: CloudSyncAvailability = .init(),
+         makeContainer: @escaping @Sendable (String) throws -> CKContainer = { CKContainer(identifier: $0) }) {
+        self.availability = availability
+        self.makeContainer = makeContainer
+    }
 
     func start(owner: CloudOwner, state: Data?, callbacks: CloudEngineCallbacks) async throws {
+        guard owner.container == CloudSyncAvailability.containerIdentifier else { throw CloudSyncAvailabilityError.unavailable }
+        let container = try availability.withContainer(environment: owner.environment, factory: makeContainer)
+        guard try await container.accountStatus() == .available,
+              try await container.userRecordID().recordName == owner.userRecordName else { throw CloudTransportError.accountChanged }
         let serialization = try state.map { try JSONDecoder().decode(CKSyncEngine.State.Serialization.self, from: $0) }
         let delegate = CloudKitEngineDelegate(callbacks: callbacks)
-        let database = CKContainer(identifier: owner.container).privateCloudDatabase
+        let database = container.privateCloudDatabase
         let configuration = CKSyncEngine.Configuration(database: database, stateSerialization: serialization, delegate: delegate)
         self.delegate = delegate
         engine = CKSyncEngine(configuration)

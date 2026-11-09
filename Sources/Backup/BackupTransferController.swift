@@ -28,13 +28,19 @@ final class BackupTransferController {
     @ObservationIgnored private let email: DotTrickController
     @ObservationIgnored private let service: BackupService
     @ObservationIgnored private let root: URL
+    @ObservationIgnored private let cloudSync: CloudSyncCoordinator?
+    @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private var operation: Task<Void, Never>?
     @ObservationIgnored private let panelPresenter: (@MainActor (NSSavePanel) async -> NSApplication.ModalResponse)?
 
     init(profiles: PlusProfileController, email: DotTrickController,
          root: URL = ProfileCatalogStore.defaultFileURL().deletingLastPathComponent(),
+         cloudSync: CloudSyncCoordinator? = nil,
+         defaults: UserDefaults = .standard,
          panelPresenter: (@MainActor (NSSavePanel) async -> NSApplication.ModalResponse)? = nil) {
         self.profiles = profiles; self.email = email; self.root = root
+        self.cloudSync = cloudSync
+        self.defaults = defaults
         self.panelPresenter = panelPresenter
         service = BackupService(root: root)
     }
@@ -97,9 +103,10 @@ final class BackupTransferController {
             defer { finishOperation() }
             guard await present(panel) == .OK, !Task.isCancelled, let url = panel.url else { return }
             errorMessage = nil; phase = .working("Preparing your data…")
+            var paused = false
             do {
                 try await pause()
-                defer { resume(reload: false) }
+                paused = true
                 let manifest = await captureManifest()
                 try Task.checkCancellation()
                 phase = .working("Compressing and encrypting…")
@@ -107,6 +114,7 @@ final class BackupTransferController {
                 password = ""; confirmation = ""
                 phase = .exported(url)
             } catch { handle(error) }
+            if paused { await resume(reload: false) }
         }
     }
 
@@ -128,6 +136,7 @@ final class BackupTransferController {
         operation = Task { @MainActor in
             var committed = false
             var paused = false
+            var commitAttempted = false
             do {
                 try await pause()
                 paused = true
@@ -138,23 +147,26 @@ final class BackupTransferController {
                     recoveryURL = recovery
                 }
                 try Task.checkCancellation()
+                let restoredProfiles = try ProfileCatalogStore(fileURL: prepared.directory.appendingPathComponent("Data/profiles.json")).loadProfiles()
+                try cloudSync?.markRestoreCommitAttempt(restoredProfiles: restoredProfiles)
+                commitAttempted = true
                 isCommitting = true
                 phase = .working("Restoring your profiles…")
                 try await service.commit(prepared)
                 committed = true
                 self.prepared = nil
-                try await BackupSessionBridge.finishRestore(root: root)
+                try await BackupSessionBridge.finishRestore(root: root, defaults: defaults)
                 password = ""; confirmation = ""
-                resume(reload: true)
+                await resume(reload: true)
                 phase = .restored(prepared.manifest.profileCount)
             } catch {
-                if committed {
+                if committed || commitAttempted {
                     // Keep writers paused; startup can retry the durable receipt safely.
                     phase = .recoveryNeeded
-                    errorMessage = "Your profiles are restored. Reopen CodexPlusBar to finish restoring sessions and settings."
+                    errorMessage = "Restore needs recovery. Reopen CodexPlusBar to finish checking sessions and settings. Cloud sync remains paused."
                     password = ""; confirmation = ""
                 } else {
-                    if paused { resume(reload: false) }
+                    if paused { await resume(reload: false) }
                     handle(error)
                 }
             }
@@ -166,21 +178,23 @@ final class BackupTransferController {
         guard !profiles.isTransferring else { throw BackupError.busy }
         email.isTransferring = true
         do {
+            try await cloudSync?.pauseForTransfer(restoring: mode == .restore)
             try await profiles.pauseForBackup()
             try await Task.detached { [root] in try BackupBrowserGuard.check(root: root) }.value
-        } catch { resume(reload: false); throw error }
+        } catch { await resume(reload: false); throw error }
     }
 
     func captureManifest() async -> BackupManifest {
         let values = profiles.storedProfiles
-        return BackupManifest(profileCount: values.count, preferences: BackupSessionBridge.preferences(),
+        return BackupManifest(profileCount: values.count, preferences: BackupSessionBridge.preferences(in: defaults),
                               cookies: await BackupSessionBridge.collectCookies(profiles: values))
     }
 
-    private func resume(reload: Bool) {
+    private func resume(reload: Bool) async {
         if reload { email.loadFromDisk() }
         email.isTransferring = false
         profiles.resumeAfterBackup(reload: reload)
+        await cloudSync?.resumeAfterTransfer(restored: reload)
     }
 
     func cancel() {

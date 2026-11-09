@@ -7,6 +7,88 @@ import WebKit
 @MainActor
 struct ProfileManagerWindowViewTests {
     @Test
+    func dirtySameFieldWinsOnSaveWhileUntouchedFieldsRefresh() {
+        var original = sampleProfile(label: "original", sortOrder: 0)
+        original.password = "synthetic password"
+        original.notes = "original note"
+        let base = PlusProfileDetailsDraft(profile: original)
+        var draft = base
+        draft.notes = "unsaved local note"
+        draft.password = ""
+        var remote = original
+        remote.label = "remote label"
+        remote.notes = "remote note"
+        remote.password = "different synthetic password"
+        let latest = PlusProfileDetailsDraft(profile: remote)
+        let refreshed = draft.refreshingUneditedFields(from: latest, base: base)
+        #expect(refreshed.label == "remote label")
+        #expect(refreshed.notes == "unsaved local note")
+        #expect(refreshed.password.isEmpty)
+        let saved = refreshed.applying(to: remote, base: latest)
+        #expect(saved.label == "remote label")
+        #expect(saved.notes == "unsaved local note")
+        #expect(saved.password == nil)
+    }
+
+    @Test
+    func draftSaveClearsOnlyEditedPasswordAndPreservesCurrentRemoteNotes() throws {
+        let directory = makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = ProfileCatalogStore(fileURL: directory.appendingPathComponent("profiles.json"))
+        var profile = sampleProfile(label: "synthetic", sortOrder: 0)
+        profile.password = "synthetic password"
+        profile.notes = "original note"
+        try store.saveProfiles([profile])
+        let controller = PlusProfileController(catalogStore: store, dataService: StubProfileViewDataService(), autoStart: false)
+        let base = PlusProfileDetailsDraft(profile: profile)
+        var draft = base
+        draft.password = ""
+        var current = profile
+        current.notes = "remote note"
+        current.phoneNumber = "123"
+        current.lastKnownState = .needsLogin
+        controller.profiles[0] = controller.profiles[0].updating(profile: current)
+        try store.saveProfiles([current])
+
+        #expect(controller.updateDetails(for: profile.id, draft: draft, base: base))
+        let rows = try store.loadProfiles()
+        let saved = try #require(rows.first)
+        #expect(saved.password == nil)
+        #expect(saved.notes == "remote note")
+        #expect(saved.phoneNumber == "123")
+        #expect(saved.webDataStoreID == profile.webDataStoreID)
+        #expect(saved.lastKnownState == .needsLogin)
+    }
+
+    @Test
+    func mountedDraftRefreshesUntouchedRemoteFieldWithoutSavingOldValuesOnNavigation() throws {
+        let directory = makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = ProfileCatalogStore(fileURL: directory.appendingPathComponent("profiles.json"))
+        var first = sampleProfile(label: "first", sortOrder: 0)
+        first.notes = "original note"
+        let second = sampleProfile(label: "second", sortOrder: 1)
+        try store.saveProfiles([first, second])
+        let controller = PlusProfileController(catalogStore: store, dataService: StubProfileViewDataService(), autoStart: false)
+        let host = makeHostingView(controller: controller, initiallyShowsDetails: true)
+        let window = hostInWindow(host)
+        defer { window.orderOut(nil); window.contentView = nil }
+        flushViewHierarchy(for: host)
+        var remote = first
+        remote.notes = "remote note"
+        controller.profiles[0] = controller.profiles[0].updating(profile: remote)
+        try store.saveProfiles([remote, second])
+        flushViewHierarchy(for: host)
+        let mountedEditor = host.allSubviews().compactMap { $0 as? NSTextView }.first(where: \.isEditable)
+        let editor = try #require(mountedEditor)
+        #expect(editor.string == "remote note")
+        let keyboard = try #require(host.allSubviews().compactMap { $0 as? ProfileKeyboardView }.first)
+        #expect(keyboard.handle?(.nextProfile) == true)
+        #expect(controller.selectedProfileID == second.id)
+        #expect(try store.loadProfiles().first?.notes == "remote note")
+    }
+
+    @Test
     func phoneSummaryPresentationAccountsForEveryProfile() {
         let first = sampleProfile(
             label: "alpha@example.com",

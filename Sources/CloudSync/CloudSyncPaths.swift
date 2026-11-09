@@ -34,12 +34,6 @@ struct CloudSyncPaths: Sendable {
     }
 }
 
-struct CloudSyncPreferences: Codable, Equatable, Sendable {
-    var enabled = false
-    var paused = false
-    var includeSavedSessions = true
-}
-
 struct CloudSyncDeviceState: Codable, Equatable, Sendable {
     var schemaVersion = 1
     let deviceID: UUID

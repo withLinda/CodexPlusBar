@@ -464,6 +464,7 @@ actor CloudKitAccountSync: CloudSyncTransport {
         do {
             let state = try await journal.load()
             guard state.transport?.initialized == true, state.transport?.zoneLost != true,
+                  state.transport?.catalogPublicationPaused != true,
                   !state.receipts.values.contains(where: { $0.phase == .applying }), state.restoreIntent == nil else { return nil }
             let now = now()
             guard state.transport?.blockedRecords[""] == nil,
@@ -477,7 +478,8 @@ actor CloudKitAccountSync: CloudSyncTransport {
                 }
                 let name = id.recordName
                 guard id.zoneID == CloudRecordCodec.zoneID, !waitingRecords.contains(name),
-                      state.transport?.blockedRecords[name] == nil,
+                       state.transport?.blockedRecords[name] == nil,
+                       !(name.hasPrefix("session.") && state.transport?.includeSavedSessions == false),
                       (state.transport?.retryAfter[name] ?? .distantPast) <= now,
                       !attempted.contains(name), inFlight[name] == nil, !deleting.contains(name) else { return false }
                 switch change {

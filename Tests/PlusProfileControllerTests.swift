@@ -5,6 +5,80 @@ import WebKit
 
 @MainActor
 struct PlusProfileControllerTests {
+    @Test func cloudCommitHookIncludesInactiveRowsAndDirectRemovalOnlyAfterDiskSuccess() async throws {
+        let directory = makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = ProfileCatalogStore(fileURL: directory.appendingPathComponent("profiles.json"))
+        let active = sampleProfile(label: "synthetic-active", sortOrder: 0)
+        var inactive = sampleProfile(label: "synthetic-inactive", sortOrder: 1)
+        inactive.provider = .init(rawValue: "unknown-provider")
+        try store.saveProfiles([active, inactive])
+        var commits: [CloudCatalogCommit] = []
+        let controller = PlusProfileController(catalogStore: store,
+            dataService: StubPlusProfileDataService(refreshResults: [:]), onCatalogCommit: { change in
+                #expect((try? store.loadProfiles()) == change.after)
+                commits.append(change)
+            }, autoStart: false)
+        #expect(commits.isEmpty)
+        var draft = PlusProfileDetailsDraft(profile: active)
+        draft.label = "edited"
+        #expect(controller.updateDetails(for: active.id, draft: draft))
+        await controller.removeProfile(id: active.id)
+        try #require(commits.count == 2)
+        #expect(commits.map(\.sequence) == [1, 2])
+        #expect(commits[0].before == [active, inactive])
+        #expect(commits[0].after.contains { $0.id == inactive.id && $0.provider.rawValue == "unknown-provider" })
+        #expect(commits[0].explicitDeletedIDs.isEmpty)
+        #expect(commits[1].explicitDeletedIDs == [active.id])
+        #expect(commits[1].after.map(\.id) == [inactive.id])
+        #expect(commits.allSatisfy { $0.trustedPreimage && $0.origin == .local })
+    }
+
+    @Test func cloudCommitHookRejectsUnreadableCatalogWithoutEmittingOrOverwriting() throws {
+        let directory = makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = directory.appendingPathComponent("profiles.json")
+        let store = ProfileCatalogStore(fileURL: file)
+        let profile = sampleProfile(label: "synthetic", sortOrder: 0)
+        try store.saveProfiles([profile])
+        var commits: [CloudCatalogCommit] = []
+        let controller = PlusProfileController(catalogStore: store, dataService: StubPlusProfileDataService(refreshResults: [:]),
+                                              onCatalogCommit: { commits.append($0) }, autoStart: false)
+        let broken = Data("{broken".utf8)
+        try broken.write(to: file)
+        var draft = PlusProfileDetailsDraft(profile: profile)
+        draft.label = "edit"
+        #expect(!controller.updateDetails(for: profile.id, draft: draft))
+        #expect(commits.isEmpty)
+        #expect(try Data(contentsOf: file) == broken)
+        #expect(controller.profiles.first?.profile == profile)
+    }
+
+    @Test func duplicateRepairAndRestoreReloadEmitDistinctNondeletingOrigins() async throws {
+        let directory = makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = directory.appendingPathComponent("profiles.json")
+        let store = ProfileCatalogStore(fileURL: file)
+        let first = sampleProfile(label: "synthetic-first", sortOrder: 0)
+        try store.saveProfiles([first])
+        try JSONEncoder().encode([first, first]).write(to: file)
+        var commits: [CloudCatalogCommit] = []
+        let controller = PlusProfileController(catalogStore: store, dataService: StubPlusProfileDataService(refreshResults: [:]),
+                                              onCatalogCommit: { commits.append($0) }, autoStart: false)
+        try #require(commits.count == 1)
+        #expect(commits[0].origin == .migration)
+        #expect(commits[0].explicitDeletedIDs.isEmpty)
+        try await controller.pauseForBackup()
+        let restored = sampleProfile(label: "synthetic-restored", sortOrder: 0)
+        try store.saveProfiles([restored])
+        controller.resumeAfterBackup(reload: true, startTasks: false)
+        try #require(commits.count == 2)
+        #expect(commits[1].origin == .restore)
+        #expect(commits[1].before == [first])
+        #expect(commits[1].after == [restored])
+        #expect(commits[1].explicitDeletedIDs.isEmpty)
+    }
+
     @Test
     func inactiveLegacyProfilesSurviveCodexEditsAndRemovalWithoutRuntimeWork() async throws {
         let directory = makeTemporaryDirectory()

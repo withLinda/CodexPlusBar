@@ -245,6 +245,15 @@ struct PlusProfile: Identifiable, Codable, Equatable, Sendable {
         return trimmed.isEmpty ? "Untitled profile" : trimmed
     }
 
+    func reidentified(_ id: UUID) -> Self {
+        Self(id: id, provider: provider, label: label, codexAccountKey: codexAccountKey,
+             codexSignIn: codexSignIn, openCodeOpenAIAccount: openCodeOpenAIAccount,
+             openChamberSignInCheck: openChamberSignInCheck, emailLink: emailLink, detectedNote: detectedNote,
+             password: password, twoFactorCode: twoFactorCode, phoneNumber: phoneNumber, notes: notes,
+             expiresAt: expiresAt, tags: tags, webDataStoreID: webDataStoreID, sortOrder: sortOrder,
+             createdAt: createdAt, lastRefreshAt: lastRefreshAt, lastKnownState: lastKnownState)
+    }
+
     var normalizedEmailLink: String? {
         Self.normalizedEmailLink(emailLink)
     }
@@ -532,15 +541,27 @@ struct PlusProfileDetailsDraft: Equatable, Sendable {
         )
     }
 
-    func applying(to profile: PlusProfile) -> PlusProfile {
+    /// A form's base is the row it displayed, not the row at Save time. Only edits
+    /// relative to that base may replace the latest committed values.
+    func applying(to profile: PlusProfile, base: Self? = nil) -> PlusProfile {
         var updated = profile
-        updated.label = label
-        updated.emailLink = PlusProfile.normalizedEmailLink(emailLink)
-        updated.password = normalizedPrivateValue(password)
-        updated.twoFactorCode = normalizedPrivateValue(twoFactorCode)
-        updated.phoneNumber = normalizedTrimmedValue(phoneNumber)
-        updated.notes = normalizedTrimmedValue(notes)
+        if base?.label != label { updated.label = label }
+        if base?.emailLink != emailLink { updated.emailLink = PlusProfile.normalizedEmailLink(emailLink) }
+        if base?.password != password { updated.password = normalizedPrivateValue(password) }
+        if base?.twoFactorCode != twoFactorCode { updated.twoFactorCode = normalizedPrivateValue(twoFactorCode) }
+        if base?.phoneNumber != phoneNumber { updated.phoneNumber = normalizedTrimmedValue(phoneNumber) }
+        if base?.notes != notes { updated.notes = normalizedTrimmedValue(notes) }
         return updated
+    }
+
+    /// Refresh untouched controls while retaining unsaved same-field edits.
+    func refreshingUneditedFields(from latest: Self, base: Self) -> Self {
+        Self(label: label == base.label ? latest.label : label,
+             emailLink: emailLink == base.emailLink ? latest.emailLink : emailLink,
+             password: password == base.password ? latest.password : password,
+             twoFactorCode: twoFactorCode == base.twoFactorCode ? latest.twoFactorCode : twoFactorCode,
+             phoneNumber: phoneNumber == base.phoneNumber ? latest.phoneNumber : phoneNumber,
+             notes: notes == base.notes ? latest.notes : notes)
     }
 
     private func normalizedPrivateValue(_ value: String) -> String? {

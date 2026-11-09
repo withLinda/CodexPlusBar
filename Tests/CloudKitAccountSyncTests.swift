@@ -4,6 +4,32 @@ import Testing
 @testable import CodexPlusBar
 
 struct CloudKitAccountSyncTests {
+    @Test func coordinatorPublicationGateAndSessionOptOutBlockRealEncryptedBatchAdmission() async throws {
+        let f = try await CloudTransportFixture(); defer { f.disk.cleanUp() }
+        let profileName = try await f.localProfile()
+        let profile = try #require(try await f.journal.load().profiles[profileName])
+        let session = CloudSessionDocument(profileID: profile.id, sourceDeviceID: UUID(), sourceName: "synthetic", kind: .desktop,
+            revision: 1, capturedAt: .now, payload: Data([1]))
+        let sessionName = CloudRecordCodec.recordName(for: .session(session))
+        try await f.journal.transaction { state in
+            state.sessions[sessionName] = session
+            try state.markDirty(recordName: sessionName, body: .session(session))
+            state.transport = .init()
+            state.transport?.catalogPublicationPaused = true
+        }
+        try await f.startReady()
+        #expect(await f.driver.batch() == nil)
+        #expect(await f.keys.writers == 0)
+        try await f.journal.transaction {
+            $0.transport?.catalogPublicationPaused = false
+            $0.transport?.includeSavedSessions = false
+        }
+        let batch = try #require(await f.driver.batch())
+        #expect(batch.recordsToSave.map(\.recordID.recordName) == [profileName])
+        #expect(try await f.journal.load().dirtyGenerations[sessionName] != nil)
+        await f.transport.stop()
+    }
+
     @Test func productionPendingAdapterPreservesDeletionPrecedenceAcrossRepeatedReplacements() {
         let id = CloudRecordCodec.recordID("session.synthetic")
         let other = CloudRecordCodec.recordID("profile.synthetic")

@@ -17,10 +17,21 @@ actor CloudSyncJournal {
     }
 
     func load() throws -> CloudJournalState {
+        try catalogState()
+    }
+
+    /// MainActor catalog admission uses these synchronous operations so no local
+    /// edit can interleave with its durable intent/write/receipt window. The same
+    /// root flock serializes them with transport actor transactions and processes.
+    nonisolated func catalogState() throws -> CloudJournalState {
         try withStorage { _, partition, inbox in try readState(partition: partition, inbox: inbox) }
     }
 
     func transaction<T: Sendable>(_ body: @Sendable (inout CloudJournalState) throws -> T) throws -> T {
+        try catalogTransaction(body)
+    }
+
+    nonisolated func catalogTransaction<T>(_ body: (inout CloudJournalState) throws -> T) throws -> T {
         try withStorage { _, partition, inbox in
             let previous = try readState(partition: partition, inbox: inbox)
             var next = previous
@@ -32,7 +43,8 @@ actor CloudSyncJournal {
     }
 
     func deviceState() throws -> CloudSyncDeviceState {
-        try withStorage { root, _, _ in try readDevice(root: root) }
+        guard !owner.container.isEmpty, !owner.userRecordName.isEmpty else { throw CloudJournalError.invalidState }
+        return try CloudSyncPreferencesStore(root: paths.root, io: io).update { _ in }
     }
 
     /// Specialized setup boundary, not a retryable transaction body. `create` inserts an
@@ -51,11 +63,8 @@ actor CloudSyncJournal {
     }
 
     func setPreferences(_ preferences: CloudSyncPreferences) throws {
-        try withStorage { root, _, _ in
-            var device = try readDevice(root: root)
-            device.preferences = preferences
-            try CloudPrivateFiles.replace("device.json", bytes: CloudJournalCoding.encode(device), in: root, io: io)
-        }
+        guard !owner.container.isEmpty, !owner.userRecordName.isEmpty else { throw CloudJournalError.invalidState }
+        try CloudSyncPreferencesStore(root: paths.root, io: io).update { $0 = preferences }
     }
 
     /// The ciphertext is fsynced before its envelope or engine cursor can be published.
@@ -117,7 +126,7 @@ actor CloudSyncJournal {
         }
     }
 
-    private func readState(partition: Int32, inbox: Int32) throws -> CloudJournalState {
+    nonisolated private func readState(partition: Int32, inbox: Int32) throws -> CloudJournalState {
         guard let bytes = try CloudPrivateFiles.read("journal.json", in: partition, limit: Self.maximumJournalBytes) else {
             return CloudJournalState(owner: owner)
         }
@@ -130,7 +139,7 @@ actor CloudSyncJournal {
         return state
     }
 
-    private func writeState(_ state: CloudJournalState, partition: Int32, inbox: Int32) throws {
+    nonisolated private func writeState(_ state: CloudJournalState, partition: Int32, inbox: Int32) throws {
         try state.validate(expectedOwner: owner)
         try validateAssets(state, inbox: inbox)
         for envelope in state.receivedEnvelopes.values {
@@ -139,17 +148,17 @@ actor CloudSyncJournal {
         try CloudPrivateFiles.replace("journal.json", bytes: encodedState(state), in: partition, io: io)
     }
 
-    private func encodedState(_ state: CloudJournalState) throws -> Data {
+    nonisolated private func encodedState(_ state: CloudJournalState) throws -> Data {
         let bytes = try CloudJournalCoding.encode(state)
         guard bytes.count <= Self.maximumJournalBytes else { throw CloudJournalError.tooLarge }
         return bytes
     }
 
-    private func validateAssets(_ state: CloudJournalState, inbox: Int32) throws {
+    nonisolated private func validateAssets(_ state: CloudJournalState, inbox: Int32) throws {
         for envelope in state.receivedEnvelopes.values { _ = try readAsset(envelope.asset, inbox: inbox) }
     }
 
-    private func readAsset(_ reference: CloudCiphertextReference, inbox: Int32) throws -> Data {
+    nonisolated private func readAsset(_ reference: CloudCiphertextReference, inbox: Int32) throws -> Data {
         guard let bytes = try CloudPrivateFiles.read(reference.fileName, in: inbox, limit: Self.maximumAssetBytes) else {
             throw CloudJournalError.missingAsset
         }
@@ -159,25 +168,14 @@ actor CloudSyncJournal {
         return bytes
     }
 
-    private func readDevice(root: Int32) throws -> CloudSyncDeviceState {
-        if let bytes = try CloudPrivateFiles.read("device.json", in: root, limit: 16_384) {
-            let device = try CloudJournalCoding.decode(CloudSyncDeviceState.self, from: bytes)
-            try confirmDurability("device.json", in: root)
-            return device
-        }
-        let device = CloudSyncDeviceState(deviceID: UUID())
-        try CloudPrivateFiles.replace("device.json", bytes: CloudJournalCoding.encode(device), in: root, io: io)
-        return device
-    }
-
-    private func confirmDurability(_ name: String, in directory: Int32) throws {
+    nonisolated private func confirmDurability(_ name: String, in directory: Int32) throws {
         do {
             try io.before(.recoverySync, name)
             try CloudPrivateFiles.synchronize(name, in: directory)
         } catch { throw CloudJournalError.commitUncertain(name) }
     }
 
-    private func validateTransition(from previous: CloudJournalState, to next: CloudJournalState) throws {
+    nonisolated private func validateTransition(from previous: CloudJournalState, to next: CloudJournalState) throws {
         guard next.lamportCounter >= previous.lamportCounter else { throw CloudJournalError.invalidState }
         for (device, keyID) in previous.writerKeyIDs ?? [:] {
             guard next.writerKeyIDs?[device] == keyID else { throw CloudJournalError.invalidTransition }
@@ -206,7 +204,7 @@ actor CloudSyncJournal {
         }
     }
 
-    private func withStorage<T>(_ body: (Int32, Int32, Int32) throws -> T) throws -> T {
+    nonisolated private func withStorage<T>(_ body: (Int32, Int32, Int32) throws -> T) throws -> T {
         guard !owner.container.isEmpty, !owner.userRecordName.isEmpty else { throw CloudJournalError.invalidState }
         let root = try CloudPrivateFiles.openRoot(paths.root, io: io)
         defer { close(root) }

@@ -114,6 +114,82 @@ final class PlusProfileController {
     @ObservationIgnored private var autoRefreshTask: Task<Void, Never>?
     @ObservationIgnored private let selectorPublisher: (any SelectorExportPublishing)?
     @ObservationIgnored private var selectorCatalogTrusted = false
+    @ObservationIgnored var onCatalogCommit: (@MainActor (CloudCatalogCommit) -> Void)?
+    @ObservationIgnored private var catalogCommitSequence: UInt64 = 0
+    @ObservationIgnored private var lastCommittedProfiles: [PlusProfile]?
+    @ObservationIgnored var cloudCatalogWriteAdmission: (@MainActor () throws -> Void)?
+    @ObservationIgnored private var cloudDraftOwner: UUID?
+    @ObservationIgnored var onCloudDraftReleased: (@MainActor () -> Void)?
+
+    func setCloudDraftOwner(_ id: UUID?) {
+        let previous = cloudDraftOwner
+        cloudDraftOwner = id
+        if previous != nil, previous != id { onCloudDraftReleased?() }
+    }
+    var cloudProtectedProfileIDs: Set<UUID> {
+        if activeDataOperations > 0 || isRefreshing || appSignInRepairProgress != nil || isTransferring {
+            return Set(storedProfiles.map(\.id))
+        }
+        return Set([cloudDraftOwner].compactMap { $0 }).union(chromeSignInProfileIDs)
+            .union(switchingProfileIDs).union(openCodeSwitchingProfileIDs)
+    }
+
+    func prepareCloudCatalogApply() async { await syncScheduler.pauseForManualOperation() }
+
+    func finishCloudCatalogApply(removed: [PlusProfile]) async {
+        activeDataOperations += 1
+        defer { activeDataOperations -= 1; syncScheduler.resumeAfterManualOperation() }
+        for profile in removed where profile.provider == .codex {
+            // Browser data only. Native reconciliation retains its existing selected-
+            // credential protection; cloud deletion never invokes a native switch.
+            do { try await dataService.removeProfileData(for: profile) }
+            catch { statusMessage = "A removed profile's browser data could not be cleaned up." }
+        }
+    }
+
+    func cloudCommittedRows() throws -> [PlusProfile] {
+        let result = try catalogStore.loadProfilesWithReport()
+        guard result.sourceExists else { throw CloudJournalError.catalogUnavailable }
+        return result.profiles
+    }
+
+    @discardableResult
+    func applyCloudCatalog(_ projection: CloudCatalogProjection, remap: [UUID: UUID] = [:]) throws -> [PlusProfile] {
+        let current = try cloudCommittedRows()
+        let byID = Dictionary(uniqueKeysWithValues: current.map { row in
+            let mapped = remap[row.id].map { row.reidentified($0) } ?? row
+            return (mapped.id, mapped)
+        })
+        let rows = projection.profiles.enumerated().map { index, row in
+            var profile = byID[row.id] ?? PlusProfile(id: row.id, label: row.values.label, emailLink: nil,
+                detectedNote: nil, webDataStoreID: UUID(), sortOrder: index, createdAt: row.createdAt,
+                lastRefreshAt: nil, lastKnownState: .unknown)
+            profile.provider = .init(rawValue: row.values.provider)
+            profile.label = row.values.label; profile.emailLink = row.values.emailLink
+            profile.password = row.values.password; profile.twoFactorCode = row.values.twoFactorCode
+            profile.phoneNumber = row.values.phoneNumber; profile.notes = row.values.notes
+            profile.tags = row.values.tags.compactMap(PlusProfileTag.init(rawValue:))
+            profile.sortOrder = index
+            return profile
+        }
+        let removed = current.filter { old in remap[old.id] == nil && !rows.contains { $0.id == old.id } }
+        guard cloudProtectedProfileIDs.isDisjoint(with: Set(removed.map(\.id))) else { throw CloudJournalError.applicationPending }
+        try saveCatalog(rows, origin: .remote)
+        let snapshots = Dictionary(uniqueKeysWithValues: profiles.map { ($0.id, $0) })
+        selectorCatalogTrusted = false
+        for id in remap.keys { selectorPublisher?.invalidate(profileID: id) }
+        for row in removed { selectorPublisher?.invalidate(profileID: row.id) }
+        inactiveProfiles = rows.filter { $0.provider != .codex }
+        profiles = rows.filter { $0.provider == .codex }.map { row in
+            snapshots[row.id]?.updating(profile: row) ?? PlusProfileSnapshot(profile: row, state: .idle,
+                usage: nil, statusMessage: nil, isRefreshing: false)
+        }
+        if let selectedProfileID, let mapped = remap[selectedProfileID] { self.selectedProfileID = mapped }
+        if let selectedProfileID, !profiles.contains(where: { $0.id == selectedProfileID }) { self.selectedProfileID = profiles.first?.id }
+        updateCatalogConsumers(trusted: true)
+        updateDashboardStatus()
+        return removed
+    }
 
     init(
         catalogStore: ProfileCatalogStore = ProfileCatalogStore(),
@@ -124,6 +200,7 @@ final class PlusProfileController {
         signInChecker: any OpenChamberSignInChecking = OpenChamberSignInCheckService(),
         repairService: any AppSignInRepairing = AppSignInRepairService(),
         selectorPublisher: (any SelectorExportPublishing)? = nil,
+        onCatalogCommit: (@MainActor (CloudCatalogCommit) -> Void)? = nil,
         syncDefaults: UserDefaults = .standard,
         autoRefreshInterval: TimeInterval = 300,
         maxConcurrentProfileRefreshes: Int = 3,
@@ -139,6 +216,7 @@ final class PlusProfileController {
         self.signInChecker = signInChecker
         self.repairService = repairService
         self.selectorPublisher = selectorPublisher
+        self.onCatalogCommit = onCatalogCommit
         self.syncScheduler = OpenChamberSyncScheduler(service: syncService, defaults: syncDefaults)
         self.autoRefreshIntervalNanoseconds = UInt64(autoRefreshInterval * 1_000_000_000)
         self.maxConcurrentProfileRefreshes = max(1, maxConcurrentProfileRefreshes)
@@ -211,7 +289,7 @@ final class PlusProfileController {
     func resumeAfterBackup(reload: Bool, startTasks: Bool = true) {
         if reload {
             statusMessage = nil
-            loadStoredProfiles()
+            loadStoredProfiles(origin: .restore)
         }
         isTransferring = false
         bootstrapTask = nil; autoRefreshTask = nil
@@ -401,7 +479,7 @@ final class PlusProfileController {
     }
 
     @discardableResult
-    func updateDetails(for profileID: UUID, draft: PlusProfileDetailsDraft) -> Bool {
+    func updateDetails(for profileID: UUID, draft: PlusProfileDetailsDraft, base: PlusProfileDetailsDraft? = nil) -> Bool {
         guard !isTransferring, appSignInRepairProgress?.profileID != profileID else { return false }
         guard let index = indexOfProfile(profileID) else {
             return false
@@ -409,7 +487,7 @@ final class PlusProfileController {
 
         let previousProfiles = profiles
         let snapshot = profiles[index]
-        profiles[index] = snapshot.updating(profile: draft.applying(to: snapshot.profile))
+        profiles[index] = snapshot.updating(profile: draft.applying(to: snapshot.profile, base: base))
 
         guard persistProfiles() else {
             profiles = previousProfiles
@@ -896,7 +974,7 @@ final class PlusProfileController {
                 var profile = snapshot.profile; profile.sortOrder = offset
                 return snapshot.updating(profile: profile)
             }
-            do { try catalogStore.saveProfiles(candidate.map(\.profile) + inactiveProfiles) }
+            do { try saveCatalog(candidate.map(\.profile) + inactiveProfiles, explicitDeletedIDs: [profileID]) }
             catch {
                 updateCatalogConsumers(trusted: false)
                 statusMessage = "The profile list could not be saved locally."
@@ -1090,7 +1168,8 @@ final class PlusProfileController {
         }
     }
 
-    private func loadStoredProfiles() {
+    private func loadStoredProfiles(origin: CloudCatalogCommit.Origin = .migration) {
+        let previousCommitted = lastCommittedProfiles
         for profile in profiles { selectorPublisher?.invalidate(profileID: profile.id) }
         openChamberUncheckedProfileIDs = nil
         openChamberCheckError = nil
@@ -1113,7 +1192,7 @@ final class PlusProfileController {
             storedProfiles = migration.0
             if migration.changed {
                 do {
-                    try catalogStore.saveProfiles(storedProfiles + inactiveProfiles)
+                    try saveCatalog(storedProfiles + inactiveProfiles, origin: origin)
                     repairMessage = "Imported saved desktop sign-ins."
                 } catch {
                     trusted = false
@@ -1123,7 +1202,7 @@ final class PlusProfileController {
 
             if loadResult.removedDuplicateCount > 0 {
                 do {
-                    try catalogStore.saveProfiles(storedProfiles + inactiveProfiles)
+                    try saveCatalog(storedProfiles + inactiveProfiles, origin: origin)
                     repairMessage = loadResult.removedDuplicateCount == 1
                         ? "Fixed 1 duplicate saved profile."
                         : "Fixed \(loadResult.removedDuplicateCount) duplicate saved profiles."
@@ -1147,6 +1226,16 @@ final class PlusProfileController {
             )
         }
         selectedProfileID = profiles.first?.id
+        if trusted {
+            let committed = ProfileCatalogStore.normalizedProfiles(storedProfiles + inactiveProfiles)
+            if origin == .restore, catalogCommitSequence < UInt64.max {
+                emitCatalogCommit(before: previousCommitted ?? [], after: committed, explicitDeletedIDs: [],
+                                  origin: .restore, trustedPreimage: previousCommitted != nil)
+            }
+            lastCommittedProfiles = committed
+        } else {
+            lastCommittedProfiles = nil
+        }
         updateCatalogConsumers(trusted: trusted)
         statusMessage = repairMessage ?? statusMessage
         updateDashboardStatus()
@@ -1363,7 +1452,7 @@ final class PlusProfileController {
         }
 
         do {
-            try catalogStore.saveProfiles(storedProfiles)
+            try saveCatalog(storedProfiles)
             updateCatalogConsumers(trusted: true)
             return true
         } catch {
@@ -1377,5 +1466,40 @@ final class PlusProfileController {
         selectorCatalogTrusted = trusted
         syncScheduler.update(profiles: profiles.map(\.profile), trusted: trusted)
         selectorPublisher?.update(profiles: profiles, observations: [:], trusted: trusted)
+    }
+
+    /// Fresh disk truth, including inactive providers. An absent or unreadable file
+    /// never stands in for an empty catalog at the cloud reconciliation boundary.
+    func cloudCatalogRead() -> CloudCatalogRead {
+        do {
+            let result = try catalogStore.loadProfilesWithReport()
+            guard result.sourceExists else { return .missing }
+            return .trusted(.init(profiles: result.profiles.map {
+                .init(id: $0.id, createdAt: $0.createdAt, values: CloudProfileProjection.values(from: $0))
+            }))
+        } catch { return .unreadable }
+    }
+
+    /// All controller writes converge here. The sink must enqueue synchronously;
+    /// it must not apply remote changes reentrantly from this post-commit callback.
+    private func saveCatalog(_ rows: [PlusProfile], origin: CloudCatalogCommit.Origin = .local,
+                             explicitDeletedIDs: Set<UUID> = []) throws {
+        try cloudCatalogWriteAdmission?()
+        guard catalogCommitSequence < UInt64.max else { throw CloudJournalError.invalidState }
+        let previous = try catalogStore.loadProfilesWithReport()
+        let committed = ProfileCatalogStore.normalizedProfiles(rows)
+        try catalogStore.saveProfiles(committed)
+        let deleted = previous.sourceExists
+            ? explicitDeletedIDs.intersection(Set(previous.profiles.map(\.id))).subtracting(Set(committed.map(\.id))) : []
+        emitCatalogCommit(before: previous.profiles, after: committed, explicitDeletedIDs: deleted,
+                          origin: origin, trustedPreimage: previous.sourceExists)
+    }
+
+    private func emitCatalogCommit(before: [PlusProfile], after: [PlusProfile], explicitDeletedIDs: Set<UUID>,
+                                   origin: CloudCatalogCommit.Origin, trustedPreimage: Bool) {
+        catalogCommitSequence += 1
+        lastCommittedProfiles = after
+        onCatalogCommit?(.init(before: before, after: after, explicitDeletedIDs: explicitDeletedIDs,
+                              sequence: catalogCommitSequence, origin: origin, trustedPreimage: trustedPreimage))
     }
 }

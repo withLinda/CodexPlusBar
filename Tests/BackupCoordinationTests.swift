@@ -5,6 +5,40 @@ import WebKit
 @testable import CodexPlusBar
 
 @MainActor struct BackupCoordinationTests {
+    @Test func encryptedTreeSwapPreservesExternalCloudConsentAndAmbiguousRestorePause() async throws {
+        let base = try backupTestDirectory()
+        defer { try? FileManager.default.removeItem(at: base) }
+        let root = base.appendingPathComponent("CodexPlusBar")
+        let syncRoot = base.appendingPathComponent("CodexPlusBar CloudSync")
+        let owner = CloudOwner(container: "iCloud.com.linda.CodexPlusBar", environment: .development, userRecordName: "synthetic")
+        let preferences = CloudSyncPreferencesStore(root: syncRoot)
+        let identity = try preferences.update { $0.setConsent(enabled: true, for: owner) }.deviceID
+        let catalog = ProfileCatalogStore(fileURL: root.appendingPathComponent("profiles.json"))
+        let original = backupTestProfile()
+        try catalog.saveProfiles([original])
+        let service = BackupService(root: root)
+        let archive = base.appendingPathComponent("cloud-pause.backup")
+        _ = try preferences.update { try $0.beginTransfer(restoring: false) }
+        try await service.export(to: archive, password: "synthetic backup password", manifest: .init(profileCount: 1, preferences: .init(), cookies: [:]))
+        _ = try preferences.update { $0.finishTransfer(restored: false) }
+        #expect(try preferences.read()?.preferences.canResume(for: owner) == true)
+        var edited = original
+        edited.notes = "local after export"
+        try catalog.saveProfiles([edited])
+        let prepared = try await service.prepare(from: archive, password: "synthetic backup password")
+        _ = try preferences.update { try $0.beginTransfer(restoring: true) }
+        _ = try preferences.update { try $0.markRestoreCommitAttempt() }
+        try await service.commit(prepared)
+        let reopened = CloudSyncPreferencesStore(root: syncRoot)
+        let device = try #require(try reopened.read())
+        #expect(device.deviceID == identity)
+        #expect(!device.preferences.canResume(for: owner))
+        #expect(device.preferences.transferPause?.phase == .commitAttempted)
+        #expect(try catalog.loadProfiles().first?.notes == original.notes)
+        let conservative = try reopened.update { $0.finishTransfer(restored: false) }
+        #expect(!conservative.preferences.canResume(for: owner))
+    }
+
     @Test(arguments: [false, true])
     func exportCountsInactiveRecordsButOnlyCollectsCodexSessions(onlyLegacy: Bool) async throws {
         let root = try backupTestDirectory()

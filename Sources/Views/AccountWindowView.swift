@@ -195,9 +195,9 @@ struct ProfileManagerDetailsFormPresentation: Equatable, Sendable {
     let savedDraft: PlusProfileDetailsDraft
     let isSaved: Bool
 
-    init(draft: PlusProfileDetailsDraft, profile: PlusProfile, isSaved: Bool) {
+    init(draft: PlusProfileDetailsDraft, profile: PlusProfile, isSaved: Bool, base: PlusProfileDetailsDraft? = nil) {
         self.draft = draft
-        savedDraft = PlusProfileDetailsDraft(profile: profile)
+        savedDraft = base ?? PlusProfileDetailsDraft(profile: profile)
         self.isSaved = isSaved
     }
 
@@ -362,6 +362,7 @@ struct ProfileManagerWindowView: View {
     @State private var isOneTimePasswordRevealed = false
     @State private var oneTimePasswordCopyFailed = false
     @State private var copyFeedback = TransientValue<ProfileDetailsCopyField>()
+    @State private var detailsDraftBase = PlusProfileDetailsDraft()
     @State private var showsSavedConfirmation = false
     @State private var saveResetTask: Task<Void, Never>?
     @State private var showsBulkImportSheet = false
@@ -465,6 +466,12 @@ struct ProfileManagerWindowView: View {
             resetDetailsFeedback()
             syncDrafts(with: controller.selectedProfile)
         }
+        .onChange(of: controller.selectedProfile?.profile) { _, _ in
+            guard let snapshot = controller.selectedProfile, detailsDraftProfileID == snapshot.id else { return }
+            let latest = PlusProfileDetailsDraft(profile: snapshot.profile)
+            detailsDraft = detailsDraft.refreshingUneditedFields(from: latest, base: detailsDraftBase)
+            detailsDraftBase = latest
+        }
         .onChange(of: controller.profiles.map(\.id)) { _, _ in
             if controller.profiles.isEmpty {
                 closeProfileSearch()
@@ -487,6 +494,7 @@ struct ProfileManagerWindowView: View {
             }
         }
         .onDisappear {
+            controller.setCloudDraftOwner(nil)
             resetDetailsFeedback()
             notesRevealTask?.cancel()
         }
@@ -875,7 +883,8 @@ struct ProfileManagerWindowView: View {
         let formPresentation = ProfileManagerDetailsFormPresentation(
             draft: detailsDraft,
             profile: snapshot.profile,
-            isSaved: showsSavedConfirmation
+            isSaved: showsSavedConfirmation,
+            base: detailsDraftBase
         )
 
         return VStack(alignment: .leading, spacing: 12) {
@@ -1282,7 +1291,9 @@ struct ProfileManagerWindowView: View {
         shouldFocusNotesOnReveal = false
         notesRevealTask?.cancel()
         detailsDraft = snapshot.map { PlusProfileDetailsDraft(profile: $0.profile) } ?? .init()
+        detailsDraftBase = detailsDraft
         detailsDraftProfileID = snapshot?.id
+        controller.setCloudDraftOwner(snapshot?.id)
         isNotesExpanded = !detailsDraft.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
@@ -1291,7 +1302,8 @@ struct ProfileManagerWindowView: View {
         return ProfileManagerDetailsFormPresentation(
             draft: detailsDraft,
             profile: snapshot.profile,
-            isSaved: showsSavedConfirmation
+            isSaved: showsSavedConfirmation,
+            base: detailsDraftBase
         ).isSaveEnabled
     }
 
@@ -1305,7 +1317,7 @@ struct ProfileManagerWindowView: View {
 
     private func saveDetailsDraft(for snapshot: PlusProfileSnapshot) {
         guard detailsDraftProfileID == snapshot.id else { return }
-        let didSave = controller.updateDetails(for: snapshot.id, draft: detailsDraft)
+        let didSave = controller.updateDetails(for: snapshot.id, draft: detailsDraft, base: detailsDraftBase)
         guard didSave else {
             return
         }
@@ -1313,6 +1325,7 @@ struct ProfileManagerWindowView: View {
         detailsDraft = controller.profiles
             .first(where: { $0.id == snapshot.id })
             .map { PlusProfileDetailsDraft(profile: $0.profile) } ?? detailsDraft
+        detailsDraftBase = detailsDraft
         showsSavedConfirmation = true
         scheduleSaveReset()
     }
@@ -1454,7 +1467,7 @@ struct ProfileManagerWindowView: View {
         if isChangingProfile,
            let snapshot = controller.selectedProfile,
            isDetailsSaveEnabled(for: snapshot) {
-            guard controller.updateDetails(for: snapshot.id, draft: detailsDraft) else { return }
+            guard controller.updateDetails(for: snapshot.id, draft: detailsDraft, base: detailsDraftBase) else { return }
         }
         page = .profile
         controller.selectProfile(id: profileID)

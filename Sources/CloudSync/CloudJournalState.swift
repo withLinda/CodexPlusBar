@@ -144,6 +144,9 @@ struct CloudJournalState: Codable, Equatable, Sendable {
     var receipts: [UUID: CloudApplicationReceipt] = [:]
     var lastSuccess: Date?
     var restoreIntent: CloudRestoreIntent?
+    var restoreProfileRemap: [UUID: UUID]?
+    var initialCatalogProjection: CloudCatalogProjection?
+    var initialExplicitDeletedIDs: Set<UUID>?
     var engineState: Data?
     /// Optional for journals written before key setup existed; absence means no writer yet.
     /// References are immutable and contain no key bytes. The journal already scopes owner.
@@ -180,17 +183,19 @@ struct CloudJournalState: Codable, Equatable, Sendable {
         return CloudSentRevision(recordName: recordName, generation: generation, payloadDigest: digest)
     }
 
-    mutating func reconcile(_ catalog: CloudCatalogRead, deviceID: UUID, now: Date = .now) throws {
+    mutating func reconcile(_ catalog: CloudCatalogRead, deviceID: UUID, now: Date = .now,
+                            inferDeletions: Bool = true, explicitDeletedIDs: Set<UUID> = []) throws {
         let projection = try catalog.projection()
         guard !receipts.values.contains(where: { $0.phase == .applying }), restoreIntent == nil else {
             throw CloudJournalError.applicationPending
         }
         var next = self
-        try next.reconcileCommitted(projection, deviceID: deviceID, now: now)
+        try next.reconcileCommitted(projection, deviceID: deviceID, now: now, inferDeletions: inferDeletions, explicitDeletedIDs: explicitDeletedIDs)
         self = next
     }
 
-    private mutating func reconcileCommitted(_ projection: CloudCatalogProjection, deviceID: UUID, now: Date) throws {
+    private mutating func reconcileCommitted(_ projection: CloudCatalogProjection, deviceID: UUID, now: Date,
+                                             inferDeletions: Bool, explicitDeletedIDs: Set<UUID>) throws {
         let previous = Dictionary(uniqueKeysWithValues: committedProjection.profiles.map { ($0.id, $0) })
         let currentIDs = Set(projection.profiles.map(\.id))
         for row in projection.profiles {
@@ -219,6 +224,7 @@ struct CloudJournalState: Codable, Equatable, Sendable {
             try markDirty(recordName: key, body: .profile(replacement))
         }
         for row in committedProjection.profiles where !currentIDs.contains(row.id) {
+            guard inferDeletions || explicitDeletedIDs.contains(row.id) else { continue }
             let key = Self.profileRecordName(row.id)
             guard let document = profiles[key], document.tombstone == nil else { continue }
             let version = try nextVersion(deviceID: deviceID)
@@ -301,6 +307,7 @@ struct CloudJournalState: Codable, Equatable, Sendable {
         guard owner == expectedOwner else { throw CloudJournalError.ownerMismatch }
         guard !owner.container.isEmpty, !owner.userRecordName.isEmpty else { throw CloudJournalError.invalidState }
         try committedProjection.validate()
+        try initialCatalogProjection?.validate()
         guard lamportCounter >= maximumObservedCounter,
               lastSuccess?.timeIntervalSince1970.isFinite ?? true,
               receipts.values.filter({ $0.phase == .applying }).count <= 1 else { throw CloudJournalError.invalidState }

@@ -61,6 +61,9 @@ protocol CloudEngineDriving: Sendable {
 }
 
 struct CloudTransportJournalState: Codable, Equatable, Sendable {
+    // Optional for journals created before coordinator admission existed.
+    var catalogPublicationPaused: Bool?
+    var includeSavedSessions: Bool?
     var initialized = false
     var zoneEstablished = false
     var zoneCreationRequested = false

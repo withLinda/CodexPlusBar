@@ -48,6 +48,7 @@
 		5067C0F581700DB9B8B54730 /* CormorantGaramond.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0B6BFE65AA07E2512FA5D398 /* CormorantGaramond.ttf */; };
 		50A80A4FF1A2A1EEC8C3911B /* LabeledValueText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13932526AB2B41F5203FBF68 /* LabeledValueText.swift */; };
 		514B704F987AF3C6993ED4BC /* AccountCatalogService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59FFC3B05EDF309E09E3DD01 /* AccountCatalogService.swift */; };
+		552032FC5044E00468A5EA2D /* CloudCatalogCommit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60DBCA96928F97820D1173B1 /* CloudCatalogCommit.swift */; };
 		563064CF1C3E48B210149351 /* App.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF773DBE36527C1FEC0FDBB3 /* App.swift */; };
 		577DD9832B8EE84B257838A0 /* MacSystemActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A0441E818BD8B568CBC6AE1 /* MacSystemActions.swift */; };
 		5A5F94563EB75715C9E5FDE3 /* codexplusbar-openchamber-v2.mjs in Resources */ = {isa = PBXBuildFile; fileRef = B5409D4F9DDA63ECA5C8793C /* codexplusbar-openchamber-v2.mjs */; };
@@ -87,6 +88,7 @@
 		9D5213CA95982FACB901C44F /* CodexTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B83C451759354D40D65FAC2 /* CodexTheme.swift */; };
 		9EB1AA96F01BEF5E5ED8A336 /* WebSessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E654F84109D3509039ADB773 /* WebSessionStore.swift */; };
 		9F4BB893794F0163A8A84E66 /* CodexAccountSwitchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF562E09FAC0315C1413120C /* CodexAccountSwitchService.swift */; };
+		A0082AFBEC4DFAEA21FC28BC /* CloudSyncAvailability.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2B9B84ED2D005FEA6F4A01C /* CloudSyncAvailability.swift */; };
 		A138671D146C2050370844D9 /* SelectorIdentityEvidence.swift in Sources */ = {isa = PBXBuildFile; fileRef = 141945054A9AE6F2CB73663E /* SelectorIdentityEvidence.swift */; };
 		A46CCD4FC90E071D45142211 /* Inter-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 1BC15159CBDD759D56C8596E /* Inter-Regular.ttf */; };
 		A899E6D55407F7CD8C0ACA04 /* ChatGPTAPIError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81400FBA3D7B45736A65F770 /* ChatGPTAPIError.swift */; };
@@ -98,6 +100,7 @@
 		B8A6F3C1888090B1C66263C6 /* ChatGPTRequestSigner.swift in Sources */ = {isa = PBXBuildFile; fileRef = D05645796D76886DD5BA1FE3 /* ChatGPTRequestSigner.swift */; };
 		BC003F04CC2311D620A13E4D /* AppRuntimeController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AFFE17432F98288D4A9114B2 /* AppRuntimeController.swift */; };
 		BD15AB63D5FA10031B148DA5 /* OpenCodeOpenAICredentialVerifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47524A60EFC92CD85F147545 /* OpenCodeOpenAICredentialVerifier.swift */; };
+		BDFBEE647F56B663238F9442 /* CloudSyncPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83A3637F5902A8947892FE3C /* CloudSyncPreferences.swift */; };
 		BE69C4616EDF974EA6B65106 /* PlusProfileController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F48206EF19934DC5F3ABC94 /* PlusProfileController.swift */; };
 		BED7D91AACE22CCB6D158D37 /* SingleInstanceCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6EC5BF584B2DCC0B7B9E2B9 /* SingleInstanceCoordinator.swift */; };
 		C094950F063FD50FA5C6D908 /* OpenCodeV2Client.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23B2A82D9B5CCD59C292360B /* OpenCodeV2Client.swift */; };
@@ -124,9 +127,11 @@
 		E8210D9D25369B4E64D82D6D /* CloudPayloadCipher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F1C962CA72543EAA154ABDD /* CloudPayloadCipher.swift */; };
 		E9ED184D46E4887A5C17454D /* JSONDecoder+ChatGPT.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80F5D0C3B1F4F079A0CF0221 /* JSONDecoder+ChatGPT.swift */; };
 		EC47C03BACD857D0E175667F /* CloudSyncTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29BF6E2A808E2EA81D1DFEB7 /* CloudSyncTransport.swift */; };
+		EC9DF7C761456BFA0070A4F6 /* CloudSyncCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DDB0B241962FB44269B1197 /* CloudSyncCoordinator.swift */; };
 		ED097249F4FCE6C0C0893BF8 /* DisplayFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF11C163E2745CE7277AF9DE /* DisplayFormatter.swift */; };
 		EF1F0FFB25BAAE2ECF131F33 /* CookieBackedTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DB2AA3A3AF7C0E47B6DF5CE /* CookieBackedTransport.swift */; };
 		EF220468E18F70E23DBE1256 /* MenuBarStatusItemController.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEEC302F552BC386137C7A03 /* MenuBarStatusItemController.swift */; };
+		EF29E26AC48A4592E64B4101 /* CloudCatalogBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = EABC3E1C42A5FABA8D7C5C29 /* CloudCatalogBridge.swift */; };
 		F26962AE918A238AE55B6AA7 /* CloudRecordCodec.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB89411F04B918FA3AAC1FC4 /* CloudRecordCodec.swift */; };
 		F75ADD4591D74B77C5BC03D6 /* ProfilePhoneNumberCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 534B523C2B9C7E021F4C3316 /* ProfilePhoneNumberCatalog.swift */; };
 		F8992BA5B63F2FDB24A07C77 /* ChromeDevToolsClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0943E3401A421B19D7C9FE6C /* ChromeDevToolsClient.swift */; };
@@ -163,6 +168,7 @@
 		163E83213FAB46565EBD1730 /* ArrayChunking.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArrayChunking.swift; sourceTree = "<group>"; };
 		1BAB88AED342C0D907A72DB5 /* ChromeSessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChromeSessionManager.swift; sourceTree = "<group>"; };
 		1BC15159CBDD759D56C8596E /* Inter-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Inter-Regular.ttf"; sourceTree = "<group>"; };
+		1DDB0B241962FB44269B1197 /* CloudSyncCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudSyncCoordinator.swift; sourceTree = "<group>"; };
 		1F0C740A5ED0A2BB15A75554 /* PlusProfileDataService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlusProfileDataService.swift; sourceTree = "<group>"; };
 		1F7E2DD6CBE079DBD3BF91B5 /* BackupTransferPresenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupTransferPresenter.swift; sourceTree = "<group>"; };
 		21DF02CC5E50936F42A54924 /* BackupManifest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupManifest.swift; sourceTree = "<group>"; };
@@ -204,6 +210,7 @@
 		5ADC9A58E39E55458BD610F6 /* PlusProfileModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlusProfileModels.swift; sourceTree = "<group>"; };
 		5CA83EE4A24F4C71DD746CEE /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		5F1C962CA72543EAA154ABDD /* CloudPayloadCipher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudPayloadCipher.swift; sourceTree = "<group>"; };
+		60DBCA96928F97820D1173B1 /* CloudCatalogCommit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudCatalogCommit.swift; sourceTree = "<group>"; };
 		61B4EA1729DE901852DAB94B /* WebBootstrapService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebBootstrapService.swift; sourceTree = "<group>"; };
 		632A895FCE893F0DABA5EB65 /* ChromeLauncher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChromeLauncher.swift; sourceTree = "<group>"; };
 		6624649A965E920ACCCF0293 /* AppIcon.icon */ = {isa = PBXFileReference; path = AppIcon.icon; sourceTree = "<group>"; };
@@ -223,6 +230,7 @@
 		813D8011E6C10F6047DB9AAB /* AppSignInRepairService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSignInRepairService.swift; sourceTree = "<group>"; };
 		81400FBA3D7B45736A65F770 /* ChatGPTAPIError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatGPTAPIError.swift; sourceTree = "<group>"; };
 		82984AC505E159F9A21AD9A5 /* SelectorExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectorExport.swift; sourceTree = "<group>"; };
+		83A3637F5902A8947892FE3C /* CloudSyncPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudSyncPreferences.swift; sourceTree = "<group>"; };
 		8416D8C433CC85EDA06BDC61 /* CodexLegacySignInImporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexLegacySignInImporter.swift; sourceTree = "<group>"; };
 		86072FAE5F9387399D5310A1 /* CloudProfileDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudProfileDocument.swift; sourceTree = "<group>"; };
 		864277862C546E5920AB3163 /* EmailToolsWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmailToolsWindowView.swift; sourceTree = "<group>"; };
@@ -266,8 +274,10 @@
 		E654F84109D3509039ADB773 /* WebSessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSessionStore.swift; sourceTree = "<group>"; };
 		E7491AD60A2C37B5BE8C9C1B /* CormorantGaramond-Italic.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "CormorantGaramond-Italic.ttf"; sourceTree = "<group>"; };
 		E87B2FBC33700D1110851644 /* CloudSyncPaths.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudSyncPaths.swift; sourceTree = "<group>"; };
+		EABC3E1C42A5FABA8D7C5C29 /* CloudCatalogBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudCatalogBridge.swift; sourceTree = "<group>"; };
 		EB89411F04B918FA3AAC1FC4 /* CloudRecordCodec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudRecordCodec.swift; sourceTree = "<group>"; };
 		F1BEAF53ABFC366F0F8B9DD2 /* SelectorObservation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectorObservation.swift; sourceTree = "<group>"; };
+		F2B9B84ED2D005FEA6F4A01C /* CloudSyncAvailability.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudSyncAvailability.swift; sourceTree = "<group>"; };
 		F369067FAFB972FD6B6E3E08 /* ProfilePhoneNumberComboBox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfilePhoneNumberComboBox.swift; sourceTree = "<group>"; };
 		F55FBE20C4C7CB8781822ED0 /* BackupBrowserGuard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupBrowserGuard.swift; sourceTree = "<group>"; };
 		FA93438B8CFDA14DDC4B2D65 /* ProfileCatalogStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileCatalogStore.swift; sourceTree = "<group>"; };
@@ -293,6 +303,8 @@
 			isa = PBXGroup;
 			children = (
 				443FBB5A6737C257DADB37DA /* CloudAssetStore.swift */,
+				EABC3E1C42A5FABA8D7C5C29 /* CloudCatalogBridge.swift */,
+				60DBCA96928F97820D1173B1 /* CloudCatalogCommit.swift */,
 				9BFB4EEAF2E037DEC8D516C7 /* CloudJournalState.swift */,
 				68D62DC94E703C5BFDEBA587 /* CloudKeyStore.swift */,
 				05F77E8446611B3ADF5678BC /* CloudKitAccountSync.swift */,
@@ -302,8 +314,11 @@
 				91C089C12C69CBCA2AB2ACC0 /* CloudProfileMerge.swift */,
 				28CD5AC4DBA75A9C12FCE6FC /* CloudProfileProjection.swift */,
 				EB89411F04B918FA3AAC1FC4 /* CloudRecordCodec.swift */,
+				F2B9B84ED2D005FEA6F4A01C /* CloudSyncAvailability.swift */,
+				1DDB0B241962FB44269B1197 /* CloudSyncCoordinator.swift */,
 				A04DFF9FF8F36E7C8721F726 /* CloudSyncJournal.swift */,
 				E87B2FBC33700D1110851644 /* CloudSyncPaths.swift */,
+				83A3637F5902A8947892FE3C /* CloudSyncPreferences.swift */,
 				29BF6E2A808E2EA81D1DFEB7 /* CloudSyncTransport.swift */,
 				22CF680CD2ED2A777915E75B /* CloudSyncTypes.swift */,
 			);
@@ -661,6 +676,8 @@
 				64FA25D57C1F29959BB5115B /* ChromeProfileStore.swift in Sources */,
 				2ECE03F2044A2EB02194E7B5 /* ChromeSessionManager.swift in Sources */,
 				D1C1C3B743F5CE732F8F3EBA /* CloudAssetStore.swift in Sources */,
+				EF29E26AC48A4592E64B4101 /* CloudCatalogBridge.swift in Sources */,
+				552032FC5044E00468A5EA2D /* CloudCatalogCommit.swift in Sources */,
 				97F196F0B1A8065C5B1CF4FD /* CloudJournalState.swift in Sources */,
 				8B3A38D788C8A9D80967D5F0 /* CloudKeyStore.swift in Sources */,
 				914822A9E170A6544108DA64 /* CloudKitAccountSync.swift in Sources */,
@@ -670,8 +687,11 @@
 				0C712377CAF05F9051AFE289 /* CloudProfileMerge.swift in Sources */,
 				4FE08D41A463CF57AD36D2F3 /* CloudProfileProjection.swift in Sources */,
 				F26962AE918A238AE55B6AA7 /* CloudRecordCodec.swift in Sources */,
+				A0082AFBEC4DFAEA21FC28BC /* CloudSyncAvailability.swift in Sources */,
+				EC9DF7C761456BFA0070A4F6 /* CloudSyncCoordinator.swift in Sources */,
 				8EE9AA7D4F275B5EC2F36BA1 /* CloudSyncJournal.swift in Sources */,
 				1DACB8A1A57CC61D700AA4E3 /* CloudSyncPaths.swift in Sources */,
+				BDFBEE647F56B663238F9442 /* CloudSyncPreferences.swift in Sources */,
 				EC47C03BACD857D0E175667F /* CloudSyncTransport.swift in Sources */,
 				0CF362DE39C05BCEBB814C55 /* CloudSyncTypes.swift in Sources */,
 				9F4BB893794F0163A8A84E66 /* CodexAccountSwitchService.swift in Sources */,

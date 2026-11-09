@@ -11,6 +11,7 @@ final class AppRuntimeController {
 
     let controller: PlusProfileController
     let clock: AppMinuteClock
+    let cloudSync: CloudSyncCoordinator
 
     private let chromeProfileStore: ChromeProfileStore
     private let profileManagerWindowPresenter: ProfileManagerWindowPresenter
@@ -31,6 +32,7 @@ final class AppRuntimeController {
     private var hasStarted = false
     private var localReopenObserver: Any?
     private var terminationObserver: Any?
+    private var cloudObservers: [NSObjectProtocol] = []
 
     init(singleInstanceCoordinator: SingleInstanceCoordinator = SingleInstanceCoordinator()) {
         let chromeProfileStore = ChromeProfileStore()
@@ -52,7 +54,9 @@ final class AppRuntimeController {
         self.controller = controller
         self.clock = clock
         self.emailController = dotTrickController
-        let transfer = BackupTransferController(profiles: controller, email: dotTrickController)
+        let cloudSync = CloudSyncCoordinator(profiles: controller)
+        self.cloudSync = cloudSync
+        let transfer = BackupTransferController(profiles: controller, email: dotTrickController, cloudSync: cloudSync)
         self.backupPresenter = BackupTransferPresenter(controller: transfer)
         self.chromeProfileStore = chromeProfileStore
         self.profileManagerWindowPresenter = ProfileManagerWindowPresenter(
@@ -72,7 +76,10 @@ final class AppRuntimeController {
         hasStarted = true
         terminationObserver = NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification,
             object: nil, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated { self?.controller.stopBackgroundTasks() }
+                MainActor.assumeIsolated {
+                    self?.controller.stopBackgroundTasks()
+                    Task { @MainActor in await self?.cloudSync.stop() }
+                }
             }
 
         localReopenObserver = NotificationCenter.default.addObserver(
@@ -92,6 +99,11 @@ final class AppRuntimeController {
         if launchAction == .terminate {
             NSApplication.shared.terminate(nil)
             return
+        }
+
+        CodexCloudLifecycle.shutdown = { [weak self] in
+            self?.controller.stopBackgroundTasks()
+            await self?.cloudSync.stop()
         }
 
         Task { @MainActor in await finishStartup() }
@@ -128,6 +140,21 @@ final class AppRuntimeController {
             Self.logger.error("Chrome storage preparation failed: \(String(describing: error), privacy: .public)")
         }
 
+        await cloudSync.start()
+        for name in [NSApplication.didBecomeActiveNotification, CodexCloudNotifications.received, CodexCloudNotifications.accountChanged] {
+            cloudObservers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                Task { @MainActor in await self?.cloudSync.syncNow() }
+            })
+        }
+        cloudObservers.append(NotificationCenter.default.addObserver(forName: CodexCloudNotifications.registrationFailed, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.cloudSync.notificationRegistrationFailed() }
+        })
+        cloudObservers.append(NotificationCenter.default.addObserver(forName: CodexCloudNotifications.registered, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.cloudSync.notificationRegistrationSucceeded() }
+        })
+        if CloudSyncAvailability().environment != nil {
+            NSApplication.shared.registerForRemoteNotifications(matching: [])
+        }
         controller.startBackgroundTasks()
         menuBarStatusItemController.start()
         clock.start()

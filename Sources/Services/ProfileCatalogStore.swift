@@ -65,7 +65,7 @@ struct ProfileCatalogStore {
         )
     }
 
-    private static func normalizedProfiles(_ profiles: [PlusProfile]) -> [PlusProfile] {
+    static func normalizedProfiles(_ profiles: [PlusProfile]) -> [PlusProfile] {
         let orderedProfiles = profiles.enumerated().sorted { lhs, rhs in
             if lhs.element.sortOrder != rhs.element.sortOrder {
                 return lhs.element.sortOrder < rhs.element.sortOrder
