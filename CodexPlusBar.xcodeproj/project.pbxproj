@@ -20,6 +20,7 @@
 		177E39EDA3111E142BC4F794 /* MenuBarRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2865CCBFF7FF69A9A1449352 /* MenuBarRootView.swift */; };
 		183BED074053630F30DCA01B /* ChromeCookieImporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05F6D1A01173879911B4E355 /* ChromeCookieImporter.swift */; };
 		1CC950CFB0E4FC260FC0F66E /* CodexBrowserAuthorization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 016B95B308851AA63C6088B6 /* CodexBrowserAuthorization.swift */; };
+		1DACB8A1A57CC61D700AA4E3 /* CloudSyncPaths.swift in Sources */ = {isa = PBXBuildFile; fileRef = E87B2FBC33700D1110851644 /* CloudSyncPaths.swift */; };
 		21284C4342EE9DBC5B114877 /* ProfileSignInSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91700F5F32C34F01643AE183 /* ProfileSignInSection.swift */; };
 		22BEC6AF178AF0F21F382E18 /* OpenChamberSignInCheckService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52247492C355D2EFB16E98B0 /* OpenChamberSignInCheckService.swift */; };
 		2742347C89158A8A05B2CF97 /* AppSignInRepair.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE7E6AC2D9C64EF6BB961BAE /* AppSignInRepair.swift */; };
@@ -76,6 +77,8 @@
 		8491E254498B90904C946B1F /* ProfilePhoneNumberComboBox.swift in Sources */ = {isa = PBXBuildFile; fileRef = F369067FAFB972FD6B6E3E08 /* ProfilePhoneNumberComboBox.swift */; };
 		89BE04B8E01A11995B81279C /* Manrope.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 1180E836FF1F527C13A405F6 /* Manrope.ttf */; };
 		8EBBC44056F2C7852B8BF3CB /* ChatGPTAuthContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49259342335BED6B1E4F0C9D /* ChatGPTAuthContext.swift */; };
+		8EE9AA7D4F275B5EC2F36BA1 /* CloudSyncJournal.swift in Sources */ = {isa = PBXBuildFile; fileRef = A04DFF9FF8F36E7C8721F726 /* CloudSyncJournal.swift */; };
+		97F196F0B1A8065C5B1CF4FD /* CloudJournalState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BFB4EEAF2E037DEC8D516C7 /* CloudJournalState.swift */; };
 		985DCE74337A9763632F6FDB /* ProfileListInteraction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F1A794B3FC1ECD6CF5F3AC4 /* ProfileListInteraction.swift */; };
 		9926C4922CF7D033DCF17CEE /* EmailToolsWindowPresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7755A62F2846FD0B38D5D005 /* EmailToolsWindowPresenter.swift */; };
 		9D5213CA95982FACB901C44F /* CodexTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B83C451759354D40D65FAC2 /* CodexTheme.swift */; };
@@ -218,6 +221,8 @@
 		9436E943E02911A56E969EE6 /* AccountCatalogNormalizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountCatalogNormalizer.swift; sourceTree = "<group>"; };
 		98D3E3E241F3226CD7AA400E /* CodexSignInVerifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexSignInVerifier.swift; sourceTree = "<group>"; };
 		9AD32F42F517EFCA76D09BFC /* SelectorExportStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectorExportStore.swift; sourceTree = "<group>"; };
+		9BFB4EEAF2E037DEC8D516C7 /* CloudJournalState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudJournalState.swift; sourceTree = "<group>"; };
+		A04DFF9FF8F36E7C8721F726 /* CloudSyncJournal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudSyncJournal.swift; sourceTree = "<group>"; };
 		A358996D3CFA906F7755E4E8 /* OpenChamberSyncPlanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenChamberSyncPlanner.swift; sourceTree = "<group>"; };
 		A86489B28B4EEE86C87A88E9 /* ProfileSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileSearch.swift; sourceTree = "<group>"; };
 		A872BFC23B2CCCBF513E45E1 /* PhoneSummaryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneSummaryView.swift; sourceTree = "<group>"; };
@@ -248,6 +253,7 @@
 		E61CD774A9F9F92C7F47948A /* OpenChamberSyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenChamberSyncService.swift; sourceTree = "<group>"; };
 		E654F84109D3509039ADB773 /* WebSessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSessionStore.swift; sourceTree = "<group>"; };
 		E7491AD60A2C37B5BE8C9C1B /* CormorantGaramond-Italic.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "CormorantGaramond-Italic.ttf"; sourceTree = "<group>"; };
+		E87B2FBC33700D1110851644 /* CloudSyncPaths.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudSyncPaths.swift; sourceTree = "<group>"; };
 		F1BEAF53ABFC366F0F8B9DD2 /* SelectorObservation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectorObservation.swift; sourceTree = "<group>"; };
 		F369067FAFB972FD6B6E3E08 /* ProfilePhoneNumberComboBox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfilePhoneNumberComboBox.swift; sourceTree = "<group>"; };
 		F55FBE20C4C7CB8781822ED0 /* BackupBrowserGuard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupBrowserGuard.swift; sourceTree = "<group>"; };
@@ -272,9 +278,12 @@
 		14297F8A0E70820EDFFCC219 /* CloudSync */ = {
 			isa = PBXGroup;
 			children = (
+				9BFB4EEAF2E037DEC8D516C7 /* CloudJournalState.swift */,
 				86072FAE5F9387399D5310A1 /* CloudProfileDocument.swift */,
 				91C089C12C69CBCA2AB2ACC0 /* CloudProfileMerge.swift */,
 				28CD5AC4DBA75A9C12FCE6FC /* CloudProfileProjection.swift */,
+				A04DFF9FF8F36E7C8721F726 /* CloudSyncJournal.swift */,
+				E87B2FBC33700D1110851644 /* CloudSyncPaths.swift */,
 				22CF680CD2ED2A777915E75B /* CloudSyncTypes.swift */,
 			);
 			path = CloudSync;
@@ -630,9 +639,12 @@
 				66B9F1CD41EAB57A4E9B5275 /* ChromeLauncher.swift in Sources */,
 				64FA25D57C1F29959BB5115B /* ChromeProfileStore.swift in Sources */,
 				2ECE03F2044A2EB02194E7B5 /* ChromeSessionManager.swift in Sources */,
+				97F196F0B1A8065C5B1CF4FD /* CloudJournalState.swift in Sources */,
 				F95875C1D8C72999ECDF0CB1 /* CloudProfileDocument.swift in Sources */,
 				0C712377CAF05F9051AFE289 /* CloudProfileMerge.swift in Sources */,
 				4FE08D41A463CF57AD36D2F3 /* CloudProfileProjection.swift in Sources */,
+				8EE9AA7D4F275B5EC2F36BA1 /* CloudSyncJournal.swift in Sources */,
+				1DACB8A1A57CC61D700AA4E3 /* CloudSyncPaths.swift in Sources */,
 				0CF362DE39C05BCEBB814C55 /* CloudSyncTypes.swift in Sources */,
 				9F4BB893794F0163A8A84E66 /* CodexAccountSwitchService.swift in Sources */,
 				27CDE503346F4D51A31A9AE3 /* CodexAppDelegate.swift in Sources */,
