@@ -145,6 +145,9 @@ struct CloudJournalState: Codable, Equatable, Sendable {
     var lastSuccess: Date?
     var restoreIntent: CloudRestoreIntent?
     var engineState: Data?
+    /// Optional for journals written before key setup existed; absence means no writer yet.
+    /// References are immutable and contain no key bytes. The journal already scopes owner.
+    var writerKeyIDs: [UUID: UUID]?
 
     static let orderRecordName = "order.v1"
     static func profileRecordName(_ id: UUID) -> String { "profile." + id.uuidString.lowercased() }

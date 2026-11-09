@@ -63,7 +63,7 @@ enum CloudPrivateFiles {
                    userInfo: [NSLocalizedFailureReasonErrorKey: "Cloud sync storage: \(operation), line \(line)"])
     }
 
-    static func openRoot(_ root: URL, io: CloudJournalIO) throws -> Int32 {
+    static func openRoot(_ root: URL, io: CloudJournalIO, create: Bool = true, requirePrivate: Bool = true) throws -> Int32 {
         guard root.isFileURL, root.path.hasPrefix("/"), !root.path.contains("\0"),
               !root.pathComponents.contains(where: { $0.caseInsensitiveCompare("CodexPlusBar") == .orderedSame }),
               root.pathComponents.count > 1 else {
@@ -74,7 +74,8 @@ enum CloudPrivateFiles {
         do {
             let components = root.pathComponents.dropFirst()
             for (index, component) in components.enumerated() {
-                let next = try directory(component, in: descriptor, requirePrivate: index == components.count - 1, io: io)
+                let next = try directory(component, in: descriptor,
+                                         requirePrivate: requirePrivate && index == components.count - 1, io: io, create: create)
                 close(descriptor)
                 descriptor = next
             }
@@ -82,10 +83,11 @@ enum CloudPrivateFiles {
         } catch { close(descriptor); throw error }
     }
 
-    static func directory(_ name: String, in parent: Int32, requirePrivate: Bool = true, io: CloudJournalIO) throws -> Int32 {
+    static func directory(_ name: String, in parent: Int32, requirePrivate: Bool = true,
+                          io: CloudJournalIO, create: Bool = true) throws -> Int32 {
         try validateName(name)
         var descriptor = openat(parent, name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)
-        if descriptor < 0, errno == ENOENT {
+        if descriptor < 0, errno == ENOENT, create {
             if mkdirat(parent, name, 0o700) != 0, errno != EEXIST { throw systemError() }
             descriptor = openat(parent, name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)
         }
@@ -101,8 +103,10 @@ enum CloudPrivateFiles {
             // earlier process. Confirm every link on every walk, including ancestors,
             // before any journal operation can report success. Syncing only this
             // directory would not persist its name in its parent.
-            try io.before(.directoryLinkSync, name)
-            guard fsync(parent) == 0 else { throw systemError() }
+            if create {
+                try io.before(.directoryLinkSync, name)
+                guard fsync(parent) == 0 else { throw systemError() }
+            }
             return descriptor
         } catch { close(descriptor); throw error }
     }
@@ -126,13 +130,21 @@ enum CloudPrivateFiles {
         } catch { close(descriptor); throw error }
     }
 
-    static func read(_ name: String, in directory: Int32, limit: Int) throws -> Data? {
+    static func openFile(_ name: String, in directory: Int32, requirePrivate: Bool = true) throws -> Int32? {
         try validateName(name)
         let descriptor = openat(directory, name, O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)
         if descriptor < 0, errno == ENOENT { return nil }
         guard descriptor >= 0 else { throw systemError() }
+        do {
+            _ = try validateFile(descriptor, requirePrivate: requirePrivate)
+            return descriptor
+        } catch { close(descriptor); throw error }
+    }
+
+    static func read(_ name: String, in directory: Int32, limit: Int, requirePrivate: Bool = true) throws -> Data? {
+        guard let descriptor = try openFile(name, in: directory, requirePrivate: requirePrivate) else { return nil }
         defer { close(descriptor) }
-        let info = try validateFile(descriptor)
+        let info = try validateFile(descriptor, requirePrivate: requirePrivate)
         guard info.st_size >= 0, info.st_size <= limit else { throw CloudJournalError.tooLarge }
         var bytes = Data()
         var buffer = [UInt8](repeating: 0, count: 65_536)
@@ -196,16 +208,16 @@ enum CloudPrivateFiles {
         }
     }
 
-    private static func validateFile(_ descriptor: Int32) throws -> stat {
+    private static func validateFile(_ descriptor: Int32, requirePrivate: Bool = true) throws -> stat {
         var info = stat()
         guard fstat(descriptor, &info) == 0 else { throw systemError() }
-        try validate(info)
+        try validate(info, requirePrivate: requirePrivate)
         return info
     }
 
-    private static func validate(_ info: stat) throws {
+    private static func validate(_ info: stat, requirePrivate: Bool = true) throws {
         guard info.st_mode & S_IFMT == S_IFREG, info.st_nlink == 1,
-              info.st_uid == geteuid(), info.st_mode & 0o7777 == 0o600 else { throw CloudJournalError.unsafePath }
+              info.st_uid == geteuid(), !requirePrivate || info.st_mode & 0o7777 == 0o600 else { throw CloudJournalError.unsafePath }
     }
 
     private static func validateTarget(_ name: String, in directory: Int32) throws {

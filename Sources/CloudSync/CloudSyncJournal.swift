@@ -35,6 +35,21 @@ actor CloudSyncJournal {
         try withStorage { root, _, _ in try readDevice(root: root) }
     }
 
+    /// Specialized setup boundary, not a retryable transaction body. `create` inserts an
+    /// immutable Keychain item while the cross-process journal lock is held. Only its UUID
+    /// is journaled. Orphans after a pre-commit failure are harmless and never published.
+    func writerKeyID(deviceID: UUID, create: @Sendable () throws -> UUID) throws -> UUID {
+        try withStorage { _, partition, inbox in
+            var state = try readState(partition: partition, inbox: inbox)
+            if let existing = state.writerKeyIDs?[deviceID] { return existing }
+            let id = try create()
+            if state.writerKeyIDs == nil { state.writerKeyIDs = [:] }
+            state.writerKeyIDs?[deviceID] = id
+            try writeState(state, partition: partition, inbox: inbox)
+            return id
+        }
+    }
+
     func setPreferences(_ preferences: CloudSyncPreferences) throws {
         try withStorage { root, _, _ in
             var device = try readDevice(root: root)
@@ -160,6 +175,9 @@ actor CloudSyncJournal {
 
     private func validateTransition(from previous: CloudJournalState, to next: CloudJournalState) throws {
         guard next.lamportCounter >= previous.lamportCounter else { throw CloudJournalError.invalidState }
+        for (device, keyID) in previous.writerKeyIDs ?? [:] {
+            guard next.writerKeyIDs?[device] == keyID else { throw CloudJournalError.invalidTransition }
+        }
         for (name, generation) in previous.recordGenerations {
             guard (next.recordGenerations[name] ?? 0) >= generation else { throw CloudJournalError.invalidState }
         }
