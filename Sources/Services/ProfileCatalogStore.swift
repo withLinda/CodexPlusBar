@@ -18,36 +18,89 @@ struct NativeSelectionProtection: Codable, Equatable, Sendable {
 
 struct ProfileCatalogStore {
     private let storage: JSONFileStorage
+    private let nativeSelectionIO: CloudJournalIO
     var directory: URL { storage.fileURL.deletingLastPathComponent() }
     // Local origin policy lives outside the backup-swapped account tree.
-    var nativeSelectionFile: URL { directory.appendingPathExtension("native-selection.json") }
+    var nativeSelectionDirectory: URL { CloudSyncPaths(root: directory.appendingPathExtension("native-selection")).root }
+    var nativeSelectionFile: URL { nativeSelectionDirectory.appendingPathComponent("policy.json") }
 
-    func nativeSelectionProtection() throws -> NativeSelectionProtection {
-        try JSONFileStorage(fileURL: nativeSelectionFile).load(NativeSelectionProtection.self) ?? .init()
+    private func migrateLegacyNativeSelectionIfNeeded() throws {
+        let legacyName = directory.appendingPathExtension("native-selection.json").lastPathComponent
+        var info = stat()
+        if lstat(directory.appendingPathExtension("native-selection.json").path, &info) != 0 {
+            guard errno == ENOENT else { throw CloudPrivateFiles.systemError() }
+            return
+        }
+        // Existing policy must pass the same private-file validation as new data.
+        // Never chmod an unsafe source or drop its saved explicit removal intent.
+        let root = try CloudPrivateFiles.openRoot(nativeSelectionDirectory, io: nativeSelectionIO)
+        defer { close(root) }
+        let lock = try CloudPrivateFiles.lock(in: root)
+        defer { flock(lock, LOCK_UN); close(lock) }
+        // The legacy source is a sibling of this verified private root. Access its
+        // parent by descriptor, not by reopening a potentially redirected path.
+        let parent = openat(root, "..", O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
+        guard parent >= 0 else { throw CloudPrivateFiles.systemError() }
+        defer { close(parent) }
+        guard fstat(parent, &info) == 0, info.st_uid == geteuid(), info.st_mode & 0o022 == 0 else {
+            throw CloudJournalError.unsafePath
+        }
+        guard let bytes = try CloudPrivateFiles.read(legacyName, in: parent, limit: CloudSyncJournal.maximumJournalBytes) else { return }
+        let legacy = try JSONDecoder().decode(NativeSelectionProtection.self, from: bytes)
+        if let current = try readNativeSelection(in: root) {
+            guard current == legacy else { throw OpenChamberSyncError.stateUnavailable }
+        } else {
+            try CloudPrivateFiles.replace("policy.json", bytes: bytes, in: root, io: nativeSelectionIO)
+        }
+        // Also safe after an uncertain destination commit: its read confirmed
+        // durability above. A failed unlink can be retried without resetting policy.
+        try CloudPrivateFiles.remove(legacyName, in: parent)
     }
 
-    func updateNativeProtection(cloudRemoved: Bool = false, explicitlyRemoved: [OpenCodeOpenAIIdentity] = []) throws {
-        let previous = try nativeSelectionProtection()
+    func nativeSelectionProtection() throws -> NativeSelectionProtection {
+        try migrateLegacyNativeSelectionIfNeeded()
+        let root: Int32
+        do { root = try CloudPrivateFiles.openRoot(nativeSelectionDirectory, io: nativeSelectionIO, create: false) }
+        catch let error as POSIXError where error.code == .ENOENT { return .init() }
+        defer { close(root) }
+        return try readNativeSelection(in: root) ?? .init()
+    }
+
+    func updateNativeProtection(cloudRemoved: Bool = false, cloudRemovedIdentities: [OpenCodeOpenAIIdentity] = [],
+                                explicitlyRemoved: [OpenCodeOpenAIIdentity] = []) throws {
+        try migrateLegacyNativeSelectionIfNeeded()
+        guard cloudRemoved || !explicitlyRemoved.isEmpty else { _ = try nativeSelectionProtection(); return }
+        let root = try CloudPrivateFiles.openRoot(nativeSelectionDirectory, io: nativeSelectionIO)
+        defer { close(root) }
+        let lock = try CloudPrivateFiles.lock(in: root)
+        defer { flock(lock, LOCK_UN); close(lock) }
+        let previous = try readNativeSelection(in: root) ?? .init()
         var next = previous
         if cloudRemoved {
             next.cloudRemovalObserved = true
-            next.explicitlyRemoved = []
+            // A relinked identity removed remotely is protected again. Unrelated
+            // deferred local removals retain their explicit authorization.
+            next.explicitlyRemoved.removeAll { old in cloudRemovedIdentities.contains { $0.matches(old) } }
         }
-        if next.cloudRemovalObserved {
-            for identity in explicitlyRemoved where !next.explicitlyRemoved.contains(where: { $0.matches(identity) }) {
-                next.explicitlyRemoved.append(identity)
-            }
+        for identity in explicitlyRemoved where !next.explicitlyRemoved.contains(where: { $0.matches(identity) }) {
+            next.explicitlyRemoved.append(identity)
         }
-        if next != previous { try JSONFileStorage(fileURL: nativeSelectionFile).save(next) }
-        guard FileManager.default.fileExists(atPath: nativeSelectionFile.path) else { return }
-        // Retry durability even if a prior replacement became visible before fsync failed.
-        let file = try FileHandle(forWritingTo: nativeSelectionFile)
-        defer { try? file.close() }
-        try file.synchronize()
-        let parent = open(directory.deletingLastPathComponent().path, O_RDONLY | O_DIRECTORY)
-        guard parent >= 0 else { throw POSIXError(.EIO) }
-        defer { close(parent) }
-        guard fsync(parent) == 0 else { throw POSIXError(.EIO) }
+        if next != previous {
+            let bytes = try JSONEncoder().encode(next)
+            guard bytes.count <= CloudSyncJournal.maximumJournalBytes else { throw CloudJournalError.tooLarge }
+            try CloudPrivateFiles.replace("policy.json", bytes: bytes, in: root, io: nativeSelectionIO)
+        }
+    }
+
+    private func readNativeSelection(in root: Int32) throws -> NativeSelectionProtection? {
+        guard let bytes = try CloudPrivateFiles.read("policy.json", in: root, limit: CloudSyncJournal.maximumJournalBytes) else { return nil }
+        let policy = try JSONDecoder().decode(NativeSelectionProtection.self, from: bytes)
+        // A visible rename is not proof that the previous commit was durable.
+        do {
+            try nativeSelectionIO.before(.recoverySync, "policy.json")
+            try CloudPrivateFiles.synchronize("policy.json", in: root)
+        } catch { throw CloudJournalError.commitUncertain("policy.json") }
+        return policy
     }
 
     func initializeFreshCatalog() throws {
@@ -63,7 +116,8 @@ struct ProfileCatalogStore {
             guard values.isDirectory == true, values.isSymbolicLink != true else { return false }
             return try FileManager.default.contentsOfDirectory(atPath: child.path).isEmpty
         }
-        guard onlyStartupScaffold, !FileManager.default.fileExists(atPath: nativeSelectionFile.path) else {
+        try migrateLegacyNativeSelectionIfNeeded()
+        guard onlyStartupScaffold, !FileManager.default.fileExists(atPath: nativeSelectionDirectory.path) else {
             throw CloudJournalError.catalogUnavailable
         }
         try saveProfiles([])
@@ -71,9 +125,11 @@ struct ProfileCatalogStore {
 
     init(
         fileURL: URL = Self.defaultFileURL(),
-        fileManager: FileManager = .default
+        fileManager: FileManager = .default,
+        nativeSelectionIO: CloudJournalIO = .init()
     ) {
         self.storage = JSONFileStorage(fileURL: fileURL, fileManager: fileManager)
+        self.nativeSelectionIO = nativeSelectionIO
     }
 
     func loadProfiles() throws -> [PlusProfile] {

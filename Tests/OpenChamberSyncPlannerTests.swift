@@ -5,6 +5,15 @@ import Testing
 struct OpenChamberSyncPlannerTests {
     let now = Date(timeIntervalSince1970: 1_800_000_000)
 
+    @Test func activeProtectionMessageDoesNotClaimSessionsAreRunning() {
+        var result = OpenChamberSyncResult(matchedCount: 0, totalCount: 0, needsSignInProfileIDs: [],
+            pendingCredentialCount: 0, deferredActiveRemoval: true, protectedActiveRemoval: true)
+        #expect(result.message.contains("kept after a cloud removal"))
+        #expect(!result.message.contains("running sessions"))
+        result.protectedActiveRemoval = false
+        #expect(result.message.contains("running sessions"))
+    }
+
     @Test func retainsActiveDuplicateThenBoundThenStableID() throws {
         let entry = try nativeCredential("alpha")
         let profile = try syncProfile(entry)

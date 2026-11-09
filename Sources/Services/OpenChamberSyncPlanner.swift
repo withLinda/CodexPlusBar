@@ -85,8 +85,10 @@ struct OpenChamberSyncResult: Equatable, Sendable {
     let deferredActiveRemoval: Bool
     var deferredRestoreProfileIDs: Set<UUID> = []
     var deferredSelectorMutation = false
+    var protectedActiveRemoval = false
     var message: String {
         if deferredSelectorMutation { return "OpenChamber bindings synced; account changes are deferred while the expiry selector owns selection or cannot be verified." }
+        if protectedActiveRemoval { return "The active OpenChamber login is kept after a cloud removal. Switch or remove it locally to change it." }
         if deferredActiveRemoval { return "Waiting for OpenChamber’s running sessions before removing its active login." }
         if pendingCredentialCount > 0 { return "Waiting for Save current sign-in (\(pendingCredentialCount) new login\(pendingCredentialCount == 1 ? "" : "s"))." }
         if !needsSignInProfileIDs.isEmpty { return "\(matchedCount) of \(totalCount) profiles linked; \(needsSignInProfileIDs.count) need sign-in." }

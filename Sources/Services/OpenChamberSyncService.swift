@@ -130,6 +130,7 @@ actor OpenChamberSyncService: OpenChamberSyncServing {
         }
 
         var deferred = false
+        var protectedActive = false
         // Inactive extras first. Active removal is handled last and only after an idle check.
         let removalOrder = intended.removeIDs.sorted { a, b in
             let aActive = inventory.openAI.contains { $0.id == a && $0.active }
@@ -146,7 +147,7 @@ actor OpenChamberSyncService: OpenChamberSyncServing {
             if target.active {
                 let identity = try target.openAIIdentity()
                 if catalog.nativeSelectionProtection.protects(identity) {
-                    deferred = true; continue
+                    deferred = true; protectedActive = true; continue
                 }
                 guard (try? await client.hasRunningSessions()) == false else { deferred = true; continue }
                 try await check(catalog, isCurrent)
@@ -187,7 +188,7 @@ actor OpenChamberSyncService: OpenChamberSyncServing {
         return OpenChamberSyncResult(matchedCount: finalPlan.bindings.count, totalCount: catalog.profiles.filter { $0.provider == .codex }.count,
                                     needsSignInProfileIDs: missing, pendingCredentialCount: finalPlan.pendingCredentialIDs.count,
                                     deferredActiveRemoval: deferred, deferredRestoreProfileIDs: deferredRestore,
-                                    deferredSelectorMutation: deferredSelector)
+                                    deferredSelectorMutation: deferredSelector, protectedActiveRemoval: protectedActive)
     }
 
     private func selectorIsAbsent() async -> Bool { (try? await selector.status().state) == .unavailable }

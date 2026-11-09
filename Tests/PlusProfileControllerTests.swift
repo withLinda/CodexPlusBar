@@ -5,6 +5,116 @@ import WebKit
 
 @MainActor
 struct PlusProfileControllerTests {
+    @Test(arguments: [CloudJournalIO.Operation.rename, .directorySync])
+    func nativeSelectionPolicyRecoversUncertainWritesWithoutLosingRemovalIntent(operation: CloudJournalIO.Operation) throws {
+        let home = makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: home) }
+        let file = home.appendingPathComponent("accounts/profiles.json")
+        let store = ProfileCatalogStore(fileURL: file)
+        try store.updateNativeProtection(cloudRemoved: true)
+        let identity = try nativeCredential("pending-remove").openAIIdentity()
+        let failing = ProfileCatalogStore(fileURL: file, nativeSelectionIO: .init { event, name in
+            if event == operation, name == "policy.json" { throw POSIXError(.EIO) }
+        })
+        #expect(throws: (any Error).self) { try failing.updateNativeProtection(explicitlyRemoved: [identity]) }
+        let reopened = ProfileCatalogStore(fileURL: file)
+        #expect(try reopened.nativeSelectionProtection().explicitlyRemoved == (operation == .directorySync ? [identity] : []))
+        let recoveryFailure = ProfileCatalogStore(fileURL: file, nativeSelectionIO: .init { event, name in
+            if event == .recoverySync, name == "policy.json" { throw POSIXError(.EIO) }
+        })
+        #expect(throws: CloudJournalError.commitUncertain("policy.json")) { try recoveryFailure.nativeSelectionProtection() }
+        #expect(throws: CloudJournalError.commitUncertain("policy.json")) { try recoveryFailure.updateNativeProtection(cloudRemoved: true) }
+        try reopened.updateNativeProtection(explicitlyRemoved: [identity])
+        try reopened.updateNativeProtection(cloudRemoved: true)
+        let recovered = try ProfileCatalogStore(fileURL: file).nativeSelectionProtection()
+        #expect(recovered.cloudRemovalObserved)
+        #expect(recovered.explicitlyRemoved == [identity])
+        #expect((try FileManager.default.attributesOfItem(atPath: reopened.nativeSelectionFile.path)[.posixPermissions] as? NSNumber)?.intValue == 0o600)
+    }
+
+    @Test func nativeSelectionPolicyRejectsSymlinkedPrivateRoot() throws {
+        let home = makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: home) }
+        let store = ProfileCatalogStore(fileURL: home.appendingPathComponent("accounts/profiles.json"))
+        let outside = home.appendingPathComponent("elsewhere")
+        try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        try FileManager.default.createSymbolicLink(at: store.nativeSelectionDirectory, withDestinationURL: outside)
+        #expect(throws: (any Error).self) { try store.nativeSelectionProtection() }
+        #expect(throws: (any Error).self) { try store.updateNativeProtection(cloudRemoved: true) }
+        #expect(try FileManager.default.contentsOfDirectory(atPath: outside.path).isEmpty)
+    }
+
+    @Test func legacyNativeSelectionPolicyRequiresPrivateSourceAndMigratesWithoutLosingIntent() throws {
+        let home = makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: home) }
+        try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
+        let store = ProfileCatalogStore(fileURL: home.appendingPathComponent("accounts/profiles.json"))
+        let old = store.directory.appendingPathExtension("native-selection.json")
+        let bytes = try JSONEncoder().encode(NativeSelectionProtection(cloudRemovalObserved: true,
+            explicitlyRemoved: [try nativeCredential("legacy-policy").openAIIdentity()]))
+        try bytes.write(to: old)
+        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: old.path)
+        #expect(throws: CloudJournalError.unsafePath) { try store.nativeSelectionProtection() }
+        #expect(throws: CloudJournalError.unsafePath) { try store.updateNativeProtection(cloudRemoved: true) }
+        #expect(try Data(contentsOf: old) == bytes)
+        #expect(!FileManager.default.fileExists(atPath: store.nativeSelectionFile.path))
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: old.path)
+        let failing = ProfileCatalogStore(fileURL: home.appendingPathComponent("accounts/profiles.json"), nativeSelectionIO: .init { event, name in
+            if event == .directorySync, name == "policy.json" { throw POSIXError(.EIO) }
+        })
+        #expect(throws: CloudJournalError.commitUncertain("policy.json")) { try failing.nativeSelectionProtection() }
+        #expect(try Data(contentsOf: old) == bytes)
+        #expect(try store.nativeSelectionProtection() == JSONDecoder().decode(NativeSelectionProtection.self, from: bytes))
+        #expect(try Data(contentsOf: store.nativeSelectionFile) == bytes)
+        #expect(!FileManager.default.fileExists(atPath: old.path))
+    }
+
+    @Test func nativeSelectionPolicyUsesPrivateFileAndDirectoryAndRejectsBroadenedModes() throws {
+        let home = makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: home) }
+        try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: home.path)
+        let store = ProfileCatalogStore(fileURL: home.appendingPathComponent("accounts/profiles.json"))
+        let identity = try nativeCredential("private-policy").openAIIdentity()
+        try store.updateNativeProtection(cloudRemoved: true, explicitlyRemoved: [identity])
+        let file = store.nativeSelectionFile
+        let parent = file.deletingLastPathComponent()
+        #expect((try FileManager.default.attributesOfItem(atPath: file.path)[.posixPermissions] as? NSNumber)?.intValue == 0o600)
+        #expect((try FileManager.default.attributesOfItem(atPath: parent.path)[.posixPermissions] as? NSNumber)?.intValue == 0o700)
+        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: file.path)
+        #expect(throws: (any Error).self) { try store.nativeSelectionProtection() }
+        #expect(throws: (any Error).self) { try store.updateNativeProtection(cloudRemoved: true) }
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: parent.path)
+        #expect(throws: (any Error).self) { try store.nativeSelectionProtection() }
+        #expect(throws: (any Error).self) { try store.updateNativeProtection(cloudRemoved: true) }
+    }
+
+    @Test(arguments: [false, true]) func nativeSelectionPolicyRejectsFileAndAncestorSymlinks(ancestor: Bool) throws {
+        let home = makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: home) }
+        let store = ProfileCatalogStore(fileURL: home.appendingPathComponent("real/accounts/profiles.json"))
+        try store.updateNativeProtection(cloudRemoved: true)
+        let original = try Data(contentsOf: store.nativeSelectionFile)
+        if ancestor {
+            let alias = home.appendingPathComponent("alias")
+            try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: home.appendingPathComponent("real"))
+            let redirected = ProfileCatalogStore(fileURL: alias.appendingPathComponent("accounts/profiles.json"))
+            #expect(throws: (any Error).self) { try redirected.nativeSelectionProtection() }
+            #expect(throws: (any Error).self) { try redirected.updateNativeProtection(cloudRemoved: true) }
+            #expect(try Data(contentsOf: store.nativeSelectionFile) == original)
+        } else {
+            let target = home.appendingPathComponent("outside.json")
+            try original.write(to: target)
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: target.path)
+            try FileManager.default.removeItem(at: store.nativeSelectionFile)
+            try FileManager.default.createSymbolicLink(at: store.nativeSelectionFile, withDestinationURL: target)
+            #expect(throws: (any Error).self) { try store.nativeSelectionProtection() }
+            #expect(throws: (any Error).self) { try store.updateNativeProtection(cloudRemoved: true) }
+            #expect(try Data(contentsOf: target) == original)
+        }
+    }
+
     @Test func cloudCommitHookIncludesInactiveRowsAndDirectRemovalOnlyAfterDiskSuccess() async throws {
         let directory = makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }

@@ -40,7 +40,8 @@ final class OpenChamberSyncScheduler {
                            pendingCredentialCount: previous.pendingCredentialCount,
                            deferredActiveRemoval: previous.deferredActiveRemoval,
                            deferredRestoreProfileIDs: previous.deferredRestoreProfileIDs.subtracting([profileID]),
-                           deferredSelectorMutation: previous.deferredSelectorMutation)
+                           deferredSelectorMutation: previous.deferredSelectorMutation,
+                           protectedActiveRemoval: previous.protectedActiveRemoval)
             message = "OpenChamber sync pending…"
         }
     }

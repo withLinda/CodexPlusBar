@@ -4,6 +4,120 @@ import WebKit
 @testable import CodexPlusBar
 
 @MainActor struct CloudSyncCoordinatorTests {
+    @Test(arguments: [false, true])
+    func freshControllerOffOrPausedStartupProtectsDurableRemap(disabled: Bool) async throws {
+        let f = try CloudCoordinatorFixture(); defer { f.clean() }
+        let local = try #require(try f.store.loadProfiles().first)
+        let coordinator = f.coordinator()
+        await coordinator.start(); await coordinator.setEnabled(true)
+        try await coordinator.pauseForTransfer(restoring: true)
+        try coordinator.markRestoreCommitAttempt()
+        await coordinator.resumeAfterTransfer(restored: true)
+        f.profiles.setCloudDraftOwner(local.id)
+        f.transport.fetch = { journal in
+            try await f.stage(.init(id: local.id, createdAt: local.createdAt,
+                tombstone: .init(version: .init(counter: 100, deviceID: UUID()), deletedAt: .now)), journal: journal)
+        }
+        await coordinator.setEnabled(true)
+        let mapped = try #require(try f.journal.catalogState().restoreProfileRemap?[local.id])
+        if disabled { await coordinator.setEnabled(false) }
+        await coordinator.stop()
+
+        // Entirely new controller, defaults instance, preferences, transport and coordinator.
+        // No old controller admission closure survives this simulated launch.
+        let rows = PlusProfileController(catalogStore: .init(fileURL: f.root.appendingPathComponent("profiles.json")),
+            dataService: CoordinatorDataService(), accountSwitchService: CoordinatorAccountSwitch(),
+            syncDefaults: try #require(UserDefaults(suiteName: f.suite)), autoStart: false)
+        defer { rows.stopBackgroundTasks() }
+        let preferences = CloudSyncPreferencesStore(root: f.cloud)
+        let transport = CoordinatorTransport()
+        var identityReads = 0
+        let restarted = CloudSyncCoordinator(profiles: rows, preferences: preferences, availability: { .development },
+            identity: { _ in identityReads += 1; return CloudCoordinatorFixture.ownerA },
+            makeTransport: { journal in transport.journal = journal; return transport })
+        await restarted.start()
+        #expect(restarted.status == (disabled ? .off : .paused))
+        #expect(identityReads == 0)
+        #expect(transport.starts == 0)
+        var draft = PlusProfileDetailsDraft(profile: local); draft.notes = "must not change saved preimage"
+        #expect(!rows.updateDetails(for: local.id, draft: draft, base: .init(profile: local)))
+        #expect(try f.store.loadProfiles().first?.notes == local.notes)
+        await restarted.setEnabled(true)
+        #expect(restarted.isEnabled)
+        #expect(restarted.status != .failed)
+        #expect(try f.store.loadProfiles().first?.id == mapped)
+        #expect(try f.journal.catalogState().restoreIntent == nil)
+        #expect(try preferences.read()?.preferences.paused == false)
+        await restarted.stop()
+    }
+
+    @Test func offStartupWithSavedOwnerDoesNotCreateAbsentJournalOnEdit() async throws {
+        let f = try CloudCoordinatorFixture(); defer { f.clean() }
+        try f.preferences.update { $0.setConsent(enabled: true, for: f.owner); $0.enabled = false }
+        let coordinator = f.coordinator()
+        await coordinator.start()
+        let local = try #require(try f.store.loadProfiles().first)
+        var draft = PlusProfileDetailsDraft(profile: local); draft.notes = "ordinary offline edit"
+        #expect(f.profiles.updateDetails(for: local.id, draft: draft, base: .init(profile: local)))
+        #expect(!FileManager.default.fileExists(atPath: f.cloud.appendingPathComponent("owners").path))
+        #expect(f.identityReads == 0)
+        #expect(f.transport.starts == 0)
+        await coordinator.stop()
+    }
+
+    @Test func cloudRemovalOfRelinkedIdentityDoesNotReuseOldExplicitAuthorization() async throws {
+        let f = try CloudCoordinatorFixture(); defer { f.clean() }
+        let active = try nativeCredential("relinked-active", active: true)
+        let row = try syncProfile(active)
+        let client = SyncTestClient([active], running: true)
+        let service = OpenChamberSyncService(resolveClient: { client }, gate: .init(), snapshots: .init(homeDirectory: f.root),
+            stateStore: .init(fileURL: f.root.appendingPathComponent("native-state.json")), verifier: SyncTestVerifier(),
+            selector: SelectorControlClient(homeDirectory: f.root, connectionRefused: { true }))
+        try f.store.saveProfiles([row])
+        f.defaults.set(true, forKey: OpenChamberSyncPreference.enabledKey)
+        f.reload(syncService: service)
+        await f.profiles.removeProfile(id: row.id)
+        await f.profiles.syncOpenChamberNow()
+        #expect(await client.inventory().openAI.count == 1)
+        try f.store.saveProfiles([row]); f.reload(syncService: service)
+        await f.profiles.prepareCloudCatalogApply()
+        let removed = try f.profiles.applyCloudCatalog(.init(profiles: []))
+        await f.profiles.finishCloudCatalogApply(removed: removed)
+        await client.setRunning(false)
+        await f.profiles.syncOpenChamberNow()
+        #expect(await client.inventory().openAI.first?.id == active.id)
+        #expect(f.profiles.openChamberSyncResult?.protectedActiveRemoval == true)
+    }
+
+    @Test(arguments: [false, true])
+    func unrelatedCloudRemovalPreservesDeferredExplicitNativeRemoval(priorCloudRemoval: Bool) async throws {
+        let f = try CloudCoordinatorFixture(); defer { f.clean() }
+        let a = try nativeCredential("explicit-a", active: true), b = try nativeCredential("remote-b")
+        let client = SyncTestClient([a, b], running: true)
+        let first = try syncProfile(a), second = try syncProfile(b)
+        try f.store.saveProfiles([first, second])
+        if priorCloudRemoval { try f.store.updateNativeProtection(cloudRemoved: true) }
+        func service() -> OpenChamberSyncService {
+            .init(resolveClient: { client }, gate: .init(), snapshots: .init(homeDirectory: f.root),
+                stateStore: .init(fileURL: f.root.appendingPathComponent("native-state.json")), verifier: SyncTestVerifier(),
+                selector: SelectorControlClient(homeDirectory: f.root, connectionRefused: { true }))
+        }
+        f.defaults.set(true, forKey: OpenChamberSyncPreference.enabledKey)
+        f.reload(syncService: service())
+        await f.profiles.removeProfile(id: first.id)
+        await f.profiles.syncOpenChamberNow()
+        #expect(await client.inventory().openAI.contains { $0.id == a.id && $0.active })
+        #expect(f.profiles.openChamberSyncResult?.deferredActiveRemoval == true)
+        await f.profiles.prepareCloudCatalogApply()
+        let removed = try f.profiles.applyCloudCatalog(.init(profiles: []))
+        await f.profiles.finishCloudCatalogApply(removed: removed)
+        f.reload(syncService: service())
+        await client.setRunning(false)
+        await f.profiles.syncOpenChamberNow()
+        #expect(await client.inventory().openAI.isEmpty)
+        #expect(await client.operations.contains("remove:" + a.id))
+    }
+
     @Test func failedDeletionAdmissionRetriesBeforeAdvancingBaseline() async throws {
         let f = try CloudCoordinatorFixture(); defer { f.clean() }
         let local = try #require(try f.store.loadProfiles().first)
@@ -170,6 +284,7 @@ import WebKit
         await f.profiles.syncOpenChamberNow()
         #expect(await client.inventory().openAI.first(where: \.active)?.id == active.id)
         #expect(await client.operations.allSatisfy { !$0.hasPrefix("activate:") && !$0.hasPrefix("remove:") })
+        #expect(f.profiles.openChamberSyncMessage?.contains("running sessions") == false)
         if !onlyActive {
             // Explicit native selection still permits subsequent inactive cleanup.
             await client.activate(id: other.id)
@@ -564,7 +679,7 @@ import WebKit
     func clean() {
         profiles.stopBackgroundTasks(); defaults.removePersistentDomain(forName: suite)
         try? FileManager.default.removeItem(at: root); try? FileManager.default.removeItem(at: cloud)
-        try? FileManager.default.removeItem(at: store.nativeSelectionFile)
+        try? FileManager.default.removeItem(at: store.nativeSelectionDirectory)
     }
     func stage(_ document: CloudProfileDocument, journal: CloudSyncJournal) async throws {
         let name = CloudJournalState.profileRecordName(document.id)

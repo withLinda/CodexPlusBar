@@ -52,8 +52,20 @@ struct CloudSessionAdmission: Sendable {
     func start() async {
         guard !started else { return }
         started = true
+        // Fail closed on an unreadable local recovery binding, even while off.
+        profiles.cloudCatalogWriteAdmission = { throw CloudJournalError.applicationPending }
         do {
-            guard let saved = try preferences.read(), saved.preferences.enabled else { status = .off; return }
+            let saved = try preferences.read()
+            if let owner = saved?.preferences.previousActiveOwner {
+                let journal = CloudSyncJournal(root: preferences.paths.root, owner: owner)
+                profiles.cloudCatalogWriteAdmission = {
+                    guard let state = try journal.existingCatalogState() else { return }
+                    guard state.restoreIntent == nil, !state.receipts.values.contains(where: { $0.phase == .applying }) else {
+                        throw CloudJournalError.applicationPending
+                    }
+                }
+            } else { profiles.cloudCatalogWriteAdmission = nil }
+            guard let saved, saved.preferences.enabled else { status = .off; return }
             guard !saved.preferences.paused, saved.preferences.transferPause == nil else { status = .paused; return }
             await activate(explicit: false)
         } catch { status = .failed }

@@ -298,7 +298,8 @@ struct SyncTestVerifier: OpenCodeOpenAICredentialVerifying {
 actor SyncTestClient: OpenCodeCredentialServing {
     var entries: [OpenCodeStoredCredential]
     var operations: [String] = []
-    let running: Bool
+    var running: Bool
+    func setRunning(_ value: Bool) { running = value }
     var loseCreateResponse: Bool
     var loseDeleteResponse: Bool
     let removalBarrier: SyncBarrier?

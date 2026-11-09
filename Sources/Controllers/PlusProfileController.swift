@@ -185,7 +185,9 @@ final class PlusProfileController {
         guard cloudProtectedProfileIDs.isDisjoint(with: Set(removed.map(\.id))) else { throw CloudJournalError.applicationPending }
         // Persist before removing rows. A crash or later automatic pass must not
         // reinterpret a cloud deletion as permission to replace the native login.
-        if !removed.isEmpty { try catalogStore.updateNativeProtection(cloudRemoved: true) }
+        if !removed.isEmpty {
+            try catalogStore.updateNativeProtection(cloudRemoved: true, cloudRemovedIdentities: removed.compactMap(\.openCodeOpenAIAccount))
+        }
         try saveCatalog(rows, origin: .remote)
         let snapshots = Dictionary(uniqueKeysWithValues: profiles.map { ($0.id, $0) })
         selectorCatalogTrusted = false

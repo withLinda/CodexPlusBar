@@ -27,6 +27,28 @@ actor CloudSyncJournal {
         try withStorage { _, partition, inbox in try readState(partition: partition, inbox: inbox) }
     }
 
+    /// Offline admission probes existing disk state only. Never create a partition,
+    /// lock, device identity or engine just because a previous owner is remembered.
+    nonisolated func existingCatalogState() throws -> CloudJournalState? {
+        func existingDirectory(_ open: () throws -> Int32) throws -> Int32? {
+            do { return try open() }
+            catch let error as POSIXError where error.code == .ENOENT { return nil }
+        }
+        guard let root = try existingDirectory({ try CloudPrivateFiles.openRoot(paths.root, io: io, create: false) }) else { return nil }
+        defer { close(root) }
+        guard let owners = try existingDirectory({ try CloudPrivateFiles.directory("owners", in: root, io: io, create: false) }) else { return nil }
+        defer { close(owners) }
+        guard let partition = try existingDirectory({ try CloudPrivateFiles.directory(CloudSyncPaths.ownerDigest(owner), in: owners, io: io, create: false) }) else { return nil }
+        defer { close(partition) }
+        guard let lock = try CloudPrivateFiles.openFile(".lock", in: root) else { throw CloudJournalError.invalidState }
+        defer { flock(lock, LOCK_UN); close(lock) }
+        while flock(lock, LOCK_SH) != 0 { if errno != EINTR { throw CloudPrivateFiles.systemError() } }
+        guard let bytes = try CloudPrivateFiles.read("journal.json", in: partition, limit: Self.maximumJournalBytes) else { return nil }
+        let state = try CloudJournalCoding.decode(CloudJournalState.self, from: bytes)
+        try state.validate(expectedOwner: owner)
+        return state
+    }
+
     func transaction<T: Sendable>(_ body: @Sendable (inout CloudJournalState) throws -> T) throws -> T {
         try catalogTransaction(body)
     }
