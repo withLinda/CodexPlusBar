@@ -48,7 +48,7 @@ struct CloudSyncDeviceState: Codable, Equatable, Sendable {
 
 /// Fault injection at real disk operation boundaries. Production always uses the default no-op hook.
 struct CloudJournalIO: Sendable {
-    enum Operation: Sendable { case write, fileSync, rename, directorySync, recoverySync }
+    enum Operation: Sendable { case write, fileSync, rename, directorySync, recoverySync, directoryLinkSync }
     let before: @Sendable (Operation, String) throws -> Void
 
     init(before: @escaping @Sendable (Operation, String) throws -> Void = { _, _ in }) {
@@ -63,7 +63,7 @@ enum CloudPrivateFiles {
                    userInfo: [NSLocalizedFailureReasonErrorKey: "Cloud sync storage: \(operation), line \(line)"])
     }
 
-    static func openRoot(_ root: URL) throws -> Int32 {
+    static func openRoot(_ root: URL, io: CloudJournalIO) throws -> Int32 {
         guard root.isFileURL, root.path.hasPrefix("/"), !root.path.contains("\0"),
               !root.pathComponents.contains(where: { $0.caseInsensitiveCompare("CodexPlusBar") == .orderedSame }),
               root.pathComponents.count > 1 else {
@@ -74,7 +74,7 @@ enum CloudPrivateFiles {
         do {
             let components = root.pathComponents.dropFirst()
             for (index, component) in components.enumerated() {
-                let next = try directory(component, in: descriptor, requirePrivate: index == components.count - 1)
+                let next = try directory(component, in: descriptor, requirePrivate: index == components.count - 1, io: io)
                 close(descriptor)
                 descriptor = next
             }
@@ -82,12 +82,11 @@ enum CloudPrivateFiles {
         } catch { close(descriptor); throw error }
     }
 
-    static func directory(_ name: String, in parent: Int32, requirePrivate: Bool = true) throws -> Int32 {
+    static func directory(_ name: String, in parent: Int32, requirePrivate: Bool = true, io: CloudJournalIO) throws -> Int32 {
         try validateName(name)
         var descriptor = openat(parent, name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)
         if descriptor < 0, errno == ENOENT {
             if mkdirat(parent, name, 0o700) != 0, errno != EEXIST { throw systemError() }
-            guard fsync(parent) == 0 else { throw systemError() }
             descriptor = openat(parent, name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)
         }
         guard descriptor >= 0 else { throw systemError() }
@@ -98,6 +97,12 @@ enum CloudPrivateFiles {
             if requirePrivate {
                 guard info.st_uid == geteuid(), info.st_mode & 0o7777 == 0o700 else { throw CloudJournalError.unsafePath }
             }
+            // A visible directory may survive a failed mkdir-parent fsync from an
+            // earlier process. Confirm every link on every walk, including ancestors,
+            // before any journal operation can report success. Syncing only this
+            // directory would not persist its name in its parent.
+            try io.before(.directoryLinkSync, name)
+            guard fsync(parent) == 0 else { throw systemError() }
             return descriptor
         } catch { close(descriptor); throw error }
     }

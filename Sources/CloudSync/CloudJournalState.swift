@@ -146,8 +146,8 @@ struct CloudJournalState: Codable, Equatable, Sendable {
     var restoreIntent: CloudRestoreIntent?
     var engineState: Data?
 
-    static let orderRecordName = "order"
-    static func profileRecordName(_ id: UUID) -> String { "profile-" + id.uuidString.lowercased() }
+    static let orderRecordName = "order.v1"
+    static func profileRecordName(_ id: UUID) -> String { "profile." + id.uuidString.lowercased() }
 
     func sentRevision(for recordName: String) -> CloudSentRevision? {
         guard let generation = dirtyGenerations[recordName], let digest = payloadDigests[recordName] else { return nil }
@@ -353,7 +353,7 @@ struct CloudJournalState: Codable, Equatable, Sendable {
         case .order(let order):
             guard name == orderRecordName, Set(order.ids).count == order.ids.count else { throw CloudJournalError.invalidState }
         case .session(let session):
-            guard !name.isEmpty, name != orderRecordName, !name.hasPrefix("profile-"),
+            guard !name.isEmpty, name != orderRecordName, !name.hasPrefix("profile."),
                   session.capturedAt.timeIntervalSince1970.isFinite else { throw CloudJournalError.invalidState }
         }
     }

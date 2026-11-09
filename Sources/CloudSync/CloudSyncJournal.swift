@@ -186,15 +186,15 @@ actor CloudSyncJournal {
 
     private func withStorage<T>(_ body: (Int32, Int32, Int32) throws -> T) throws -> T {
         guard !owner.container.isEmpty, !owner.userRecordName.isEmpty else { throw CloudJournalError.invalidState }
-        let root = try CloudPrivateFiles.openRoot(paths.root)
+        let root = try CloudPrivateFiles.openRoot(paths.root, io: io)
         defer { close(root) }
         let lock = try CloudPrivateFiles.lock(in: root)
         defer { flock(lock, LOCK_UN); close(lock) }
-        let owners = try CloudPrivateFiles.directory("owners", in: root)
+        let owners = try CloudPrivateFiles.directory("owners", in: root, io: io)
         defer { close(owners) }
-        let partition = try CloudPrivateFiles.directory(CloudSyncPaths.ownerDigest(owner), in: owners)
+        let partition = try CloudPrivateFiles.directory(CloudSyncPaths.ownerDigest(owner), in: owners, io: io)
         defer { close(partition) }
-        let inbox = try CloudPrivateFiles.directory("inbox", in: partition)
+        let inbox = try CloudPrivateFiles.directory("inbox", in: partition, io: io)
         defer { close(inbox) }
         return try body(root, partition, inbox)
     }

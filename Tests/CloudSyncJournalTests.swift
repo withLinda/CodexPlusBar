@@ -392,6 +392,75 @@ struct CloudSyncJournalTests {
         #expect(try await journal.load().engineState == Data([8]))
     }
 
+    @Test(arguments: ["ancestor", "root", "owners", "partition", "inbox"])
+    func failedDirectoryLinkSyncBlocksSameInstanceAndRestartedRetries(level: String) async throws {
+        let f = try JournalFixture(); defer { f.cleanUp() }
+        let ancestor = f.base.appendingPathComponent("new-ancestor")
+        let root = ancestor.appendingPathComponent("CodexPlusBar CloudSync")
+        let partition = CloudSyncPaths(root: root).partition(for: Self.owner)
+        let targets = ["ancestor": ancestor, "root": root, "owners": root.appendingPathComponent("owners"),
+                       "partition": partition, "inbox": partition.appendingPathComponent("inbox")]
+        let target = try #require(targets[level])
+        let journalFile = partition.appendingPathComponent("journal.json")
+        let io = CloudJournalIO { event, name in
+            if event == .directoryLinkSync, name == target.lastPathComponent { throw POSIXError(.EIO) }
+        }
+        let original = CloudSyncJournal(root: root, owner: Self.owner, io: io)
+        // mkdir succeeds, but persistence of the new name in its parent fails.
+        await #expect(throws: (any Error).self) {
+            try await original.transaction { $0.engineState = Data([1]) }
+        }
+        var isDirectory: ObjCBool = false
+        #expect(FileManager.default.fileExists(atPath: target.path, isDirectory: &isDirectory))
+        #expect(isDirectory.boolValue)
+        #expect(!FileManager.default.fileExists(atPath: journalFile.path))
+
+        // A visible directory cannot bypass the failed sync, even with no in-memory history.
+        let restarted = CloudSyncJournal(root: root, owner: Self.owner, io: io)
+        for retry in [original, restarted] {
+            await #expect(throws: (any Error).self) {
+                try await retry.transaction { $0.engineState = Data([2]) }
+            }
+            #expect(!FileManager.default.fileExists(atPath: journalFile.path))
+        }
+
+        let recovered = CloudSyncJournal(root: root, owner: Self.owner)
+        try await recovered.transaction { $0.engineState = Data([3]) }
+        #expect(try await CloudSyncJournal(root: root, owner: Self.owner).load().engineState == Data([3]))
+        let committed = try Data(contentsOf: journalFile)
+        await #expect(throws: (any Error).self) { try await restarted.load() }
+        await #expect(throws: (any Error).self) {
+            try await restarted.transaction { $0.engineState = Data([4]) }
+        }
+        #expect(try Data(contentsOf: journalFile) == committed)
+    }
+
+    @Test func approvedRecordNamesPersistReconcileAndRejectSessionNamespaceCollisions() async throws {
+        let f = try JournalFixture(); defer { f.cleanUp() }
+        let journal = CloudSyncJournal(root: f.root, owner: Self.owner)
+        let profileName = "profile.10000000-0000-0000-0000-000000000001"
+        try await journal.transaction { try $0.reconcile(.trusted(Self.catalog(label: "approved")), deviceID: Self.device) }
+        let reopened = try await CloudSyncJournal(root: f.root, owner: Self.owner).load()
+        #expect(Set(reopened.profiles.keys) == [profileName])
+        #expect(reopened.dirtyGenerations == [profileName: 1, "order.v1": 1])
+        #expect(reopened.sentRevision(for: profileName)?.recordName == profileName)
+        #expect(reopened.sentRevision(for: "order.v1")?.recordName == "order.v1")
+        let before = try Data(contentsOf: f.journal)
+        let session = CloudSyncTestSupport.session()
+        for name in [profileName, "order.v1"] {
+            await #expect(throws: CloudJournalError.invalidState) {
+                try await journal.transaction { $0.sessions[name] = session }
+            }
+        }
+        #expect(try Data(contentsOf: f.journal) == before)
+        let envelope = try await journal.receive(recordName: profileName, ciphertext: Data([1]))
+        try await journal.transaction { state in
+            try state.beginApplying(envelope.id, postProjection: state.committedProjection,
+                                    documents: ["order.v1": .order(try #require(state.order))])
+        }
+        #expect(try await journal.load().receipts[envelope.id]?.plan?.documents["order.v1"] != nil)
+    }
+
     @Test func explicitClearAndSendGenerationOverflowPreserveUnchangedFields() async throws {
         let f = try JournalFixture(); defer { f.cleanUp() }
         let journal = CloudSyncJournal(root: f.root, owner: Self.owner)
