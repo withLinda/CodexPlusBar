@@ -45,13 +45,18 @@ struct CloudAssetStore: Sendable {
     /// owned by this user. Walk every parent without following symlinks or creating paths.
     /// The shared reader preflights size, then caps every streaming read at limit + 1.
     func copyBounded(from source: URL) throws -> URL {
+        try stage(encryptedBytes(from: source))
+    }
+
+    /// Same bounded, no-follow read for the codec before committing an inbox envelope.
+    func encryptedBytes(from source: URL) throws -> Data {
         let source = CloudSyncPaths(root: source).root
         guard source.isFileURL else { throw CloudJournalError.unsafePath }
         let parent = try CloudPrivateFiles.openRoot(source.deletingLastPathComponent(), io: io, create: false, requirePrivate: false)
         defer { close(parent) }
         guard let bytes = try CloudPrivateFiles.read(source.lastPathComponent, in: parent,
                 limit: CloudPayloadCipher.maximumAssetBytes, requirePrivate: false) else { throw CloudJournalError.missingAsset }
-        return try stage(bytes)
+        return bytes
     }
 
     /// Caller supplies only completed or durably established orphan assets. A live send

@@ -62,7 +62,7 @@ actor CloudSyncJournal {
     /// A failed journal commit deliberately leaves the copied asset for recovery.
     @discardableResult
     func receive(id: UUID = UUID(), recordName: String, metadata: Data = Data(), systemFields: Data = Data(),
-                 ciphertext: Data, engineState: Data? = nil) throws -> CloudReceivedEnvelope {
+                 ciphertext: Data, engineState: Data? = nil, transportManaged: Bool = false) throws -> CloudReceivedEnvelope {
         guard !ciphertext.isEmpty, ciphertext.count <= Self.maximumAssetBytes else { throw CloudJournalError.tooLarge }
         guard !recordName.isEmpty else { throw CloudJournalError.invalidState }
         let asset = CloudCiphertextReference(fileName: id.uuidString.lowercased() + ".asset", byteCount: ciphertext.count,
@@ -78,6 +78,10 @@ actor CloudSyncJournal {
                 state.receipts[id] = .init(phase: .received)
             }
             if let engineState { state.engineState = engineState }
+            if transportManaged {
+                if state.transport == nil { state.transport = .init() }
+                if state.transport?.inboxOrder.contains(id) == false { state.transport?.inboxOrder.append(id) }
+            }
             // Validate everything and bound the encoded state before mutating the inbox.
             try state.validate(expectedOwner: owner)
             _ = try encodedState(state)

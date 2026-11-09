@@ -148,6 +148,8 @@ struct CloudJournalState: Codable, Equatable, Sendable {
     /// Optional for journals written before key setup existed; absence means no writer yet.
     /// References are immutable and contain no key bytes. The journal already scopes owner.
     var writerKeyIDs: [UUID: UUID]?
+    /// Optional so pre-transport schema-1 journals retain their existing contents.
+    var transport: CloudTransportJournalState?
 
     static let orderRecordName = "order.v1"
     static func profileRecordName(_ id: UUID) -> String { "profile." + id.uuidString.lowercased() }
@@ -338,9 +340,10 @@ struct CloudJournalState: Codable, Equatable, Sendable {
             guard intent.expectedPreDigest.count == 32,
                   intent.expectedPostDigest == (try intent.postProjection.digest()) else { throw CloudJournalError.invalidState }
         }
+        try transport?.validate(in: self)
     }
 
-    private func body(for name: String) -> CloudRecordBody? {
+    func body(for name: String) -> CloudRecordBody? {
         if let profile = profiles[name] { return .profile(profile) }
         if name == Self.orderRecordName, let order { return .order(order) }
         if let session = sessions[name] { return .session(session) }

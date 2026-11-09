@@ -4,6 +4,38 @@ import Testing
 @testable import CodexPlusBar
 
 struct CloudKeyStoreTests {
+    @Test func populatedSchemaOneWithoutWriterReferencesAddsKeyAndPreservesOrdinaryTransactions() async throws {
+        let f = try CloudCryptoFixture(); defer { f.cleanUp() }
+        let owner = CloudCryptoFixture.owner
+        let journal = CloudSyncJournal(root: f.root, owner: owner)
+        let device = UUID(), id = UUID()
+        try await journal.transaction { state in
+            let document = CloudProfileDocument(id: id, createdAt: .distantPast)
+            let name = CloudJournalState.profileRecordName(id)
+            state.profiles[name] = document
+            try state.markDirty(recordName: name, body: .profile(document))
+            state.engineState = Data([1, 2, 3])
+        }
+        let inbox = try await journal.receive(recordName: "synthetic", metadata: Data([4]), ciphertext: Data([5, 6]))
+        let before = try await journal.load()
+        let path = CloudSyncPaths(root: f.root).partition(for: owner).appendingPathComponent("journal.json")
+        let object = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: path)) as? [String: Any])
+        #expect(object["writerKeyIDs"] == nil)
+        let security = CloudFakeSecurity()
+        let key = try await CloudKeyStore(journal: journal, security: security).writerKey(owner: owner, deviceID: device)
+        try await journal.transaction { $0.lastSuccess = .distantPast }
+        let reopened = try await CloudSyncJournal(root: f.root, owner: owner).load()
+        #expect(reopened.writerKeyIDs?[device] == key.id)
+        #expect(reopened.dirtyGenerations == before.dirtyGenerations)
+        #expect(reopened.payloadDigests == before.payloadDigests)
+        #expect(reopened.profiles == before.profiles)
+        #expect(reopened.receivedEnvelopes[inbox.id] == inbox)
+        #expect(reopened.receipts == before.receipts)
+        #expect(reopened.engineState == before.engineState)
+        #expect(try await journal.ciphertext(for: inbox.id) == Data([5, 6]))
+        #expect(try await CloudKeyStore(journal: journal, security: security).writerKey(owner: owner, deviceID: device) == key)
+    }
+
     @Test func securityQueriesAreAppScopedSynchronizableAndNeverTouchNativeCredentials() async throws {
         let f = try CloudCryptoFixture(); defer { f.cleanUp() }
         let security = CloudFakeSecurity()
