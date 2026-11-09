@@ -42,7 +42,7 @@ struct CloudSyncDeviceState: Codable, Equatable, Sendable {
 
 /// Fault injection at real disk operation boundaries. Production always uses the default no-op hook.
 struct CloudJournalIO: Sendable {
-    enum Operation: Sendable { case write, fileSync, rename, directorySync, recoverySync, directoryLinkSync }
+    enum Operation: Sendable { case write, fileSync, rename, directorySync, recoverySync, directoryLinkSync, cleanupUnlink }
     let before: @Sendable (Operation, String) throws -> Void
 
     init(before: @escaping @Sendable (Operation, String) throws -> Void = { _, _ in }) {

@@ -4,6 +4,187 @@ import WebKit
 @testable import CodexPlusBar
 
 @MainActor struct CloudSyncCoordinatorTests {
+    @Test func failedDeletionAdmissionRetriesBeforeAdvancingBaseline() async throws {
+        let f = try CloudCoordinatorFixture(); defer { f.clean() }
+        let local = try #require(try f.store.loadProfiles().first)
+        let fault = CoordinatorJournalFault()
+        let journal = CloudSyncJournal(root: f.cloud, owner: f.owner, io: .init { event, name in
+            if name == "journal.json", event == .rename, fault.enabled { throw POSIXError(.EIO) }
+        })
+        let bridge = CloudCatalogBridge(profiles: f.profiles, journal: journal, deviceID: UUID(), epoch: UUID())
+        try bridge.reconcileLocal(inferDeletions: false); bridge.attach()
+        fault.enabled = true
+        await f.profiles.removeProfile(id: local.id)
+        #expect(try f.store.loadProfiles().isEmpty)
+        #expect(bridge.failure != nil)
+        fault.enabled = false
+        try bridge.reconcileLocal(inferDeletions: false)
+        #expect(try journal.catalogState().profiles[CloudJournalState.profileRecordName(local.id)]?.tombstone != nil)
+        #expect(bridge.failure == nil)
+        bridge.stop()
+    }
+
+    @Test func syncNowRecoversFailedCatalogWriteWithoutRestart() async throws {
+        let f = try CloudCoordinatorFixture(); defer { f.clean() }
+        let local = try #require(try f.store.loadProfiles().first)
+        let coordinator = f.coordinator()
+        await coordinator.start(); await coordinator.setEnabled(true)
+        try await f.stage(.init(id: local.id, createdAt: local.createdAt,
+            fields: .init(label: .init(value: "retry remote", version: .init(counter: 100, deviceID: UUID())))), journal: f.journal)
+        try FileManager.default.setAttributes([.posixPermissions: 0o500], ofItemAtPath: f.root.path)
+        await coordinator.syncNow()
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: f.root.path)
+        #expect(try f.journal.catalogState().receipts.values.contains { $0.phase == .applying })
+        await coordinator.syncNow()
+        #expect(try f.store.loadProfiles().first?.label == "retry remote")
+        #expect(try f.journal.catalogState().receipts.values.allSatisfy { $0.phase == .applied })
+        await coordinator.stop()
+    }
+
+    @Test func draftDeferredRestoreBlocksEditsAndRetriesSameRemap() async throws {
+        let f = try CloudCoordinatorFixture(); defer { f.clean() }
+        let local = try #require(try f.store.loadProfiles().first)
+        let coordinator = f.coordinator()
+        await coordinator.start(); await coordinator.setEnabled(true)
+        try await coordinator.pauseForTransfer(restoring: true)
+        try coordinator.markRestoreCommitAttempt()
+        await coordinator.resumeAfterTransfer(restored: true)
+        f.profiles.setCloudDraftOwner(local.id)
+        f.transport.fetch = { journal in
+            try await f.stage(.init(id: local.id, createdAt: local.createdAt,
+                tombstone: .init(version: .init(counter: 100, deviceID: UUID()), deletedAt: .now)), journal: journal)
+        }
+        await coordinator.setEnabled(true)
+        let mapped = try #require(try f.journal.catalogState().restoreProfileRemap?[local.id])
+        var draft = PlusProfileDetailsDraft(profile: local); draft.notes = "must wait"
+        #expect(!f.profiles.updateDetails(for: local.id, draft: draft, base: .init(profile: local)))
+        f.profiles.setCloudDraftOwner(nil)
+        await coordinator.syncNow()
+        #expect(try f.store.loadProfiles().first?.id == mapped)
+        #expect(try f.journal.catalogState().restoreIntent == nil)
+        #expect(try f.preferences.read()?.preferences.paused == false)
+        await coordinator.stop()
+    }
+
+    @Test func restoredRemapStillRetriesAfterRestartAndStoppedBridgeRejectsEdits() async throws {
+        let f = try CloudCoordinatorFixture(); defer { f.clean() }
+        let local = try #require(try f.store.loadProfiles().first)
+        let coordinator = f.coordinator()
+        await coordinator.start(); await coordinator.setEnabled(true)
+        try await coordinator.pauseForTransfer(restoring: true)
+        try coordinator.markRestoreCommitAttempt()
+        await coordinator.resumeAfterTransfer(restored: true)
+        f.profiles.setCloudDraftOwner(local.id)
+        f.transport.fetch = { journal in
+            try await f.stage(.init(id: local.id, createdAt: local.createdAt,
+                tombstone: .init(version: .init(counter: 100, deviceID: UUID()), deletedAt: .now)), journal: journal)
+        }
+        await coordinator.setEnabled(true)
+        let mapped = try #require(try f.journal.catalogState().restoreProfileRemap?[local.id])
+        await coordinator.stop()
+        var draft = PlusProfileDetailsDraft(profile: local); draft.notes = "blocked after stop"
+        #expect(!f.profiles.updateDetails(for: local.id, draft: draft, base: .init(profile: local)))
+        let restarted = f.coordinator()
+        await restarted.start(); await restarted.setEnabled(true)
+        #expect(restarted.isEnabled)
+        #expect(restarted.status == .pending)
+        f.profiles.setCloudDraftOwner(nil)
+        await restarted.syncNow()
+        #expect(try f.store.loadProfiles().first?.id == mapped)
+        #expect(try f.journal.catalogState().restoreIntent == nil)
+        await restarted.stop()
+    }
+
+    @Test(arguments: [false, true])
+    func freshMissingCatalogDownloadsButMissingCommittedCatalogFailsClosed(startupChromeScaffold: Bool) async throws {
+        let f = try CloudCoordinatorFixture(fresh: true); defer { f.clean() }
+        if startupChromeScaffold {
+            _ = try ChromeProfileStore(rootDirectory: f.root.appendingPathComponent("ChromeProfiles")).migrateAndPrune(profiles: [])
+        }
+        let remote = backupTestProfile()
+        let coordinator = f.coordinator()
+        f.transport.fetch = { journal in
+            try await f.stage(.init(id: remote.id, createdAt: remote.createdAt,
+                fields: .init(values: CloudProfileProjection.values(from: remote), version: .init(counter: 1, deviceID: UUID()))), journal: journal)
+        }
+        await coordinator.start(); await coordinator.setEnabled(true)
+        try #require(try f.store.loadProfiles().map(\.id) == [remote.id])
+        await coordinator.stop()
+        try FileManager.default.removeItem(at: f.root.appendingPathComponent("profiles.json"))
+        f.reload()
+        let restarted = f.coordinator()
+        await restarted.start()
+        #expect(restarted.status == .failed)
+        #expect(!FileManager.default.fileExists(atPath: f.root.appendingPathComponent("profiles.json").path))
+        await restarted.stop()
+    }
+
+    @Test func repeatedCatalogRevisionsRetainOnlyCurrentRecoveryPayload() async throws {
+        let f = try CloudCoordinatorFixture(); defer { f.clean() }
+        let local = try #require(try f.store.loadProfiles().first)
+        let coordinator = f.coordinator()
+        await coordinator.start(); await coordinator.setEnabled(true)
+        let pending = try await f.journal.receive(recordName: "profile.pending", ciphertext: Data([7]), transportManaged: true)
+        let session = try await f.journal.receive(recordName: "session.pending", ciphertext: Data([8]), transportManaged: true)
+        for counter in 100...115 {
+            try await f.stage(.init(id: local.id, createdAt: local.createdAt,
+                fields: .init(notes: .init(value: String(repeating: "x", count: 2048) + "\(counter)",
+                    version: .init(counter: UInt64(counter), deviceID: UUID())))), journal: f.journal)
+            await coordinator.syncNow()
+        }
+        let state = try f.journal.catalogState()
+        #expect(state.receipts.count <= 3)
+        #expect(state.receipts.values.compactMap(\.plan).isEmpty)
+        #expect(state.receivedEnvelopes.count == 2)
+        #expect(state.transport?.inboxOrder.count == 2)
+        #expect(state.completedCatalogReceipts?.count == 1)
+        #expect(try CloudJournalCoding.encode(state).count < 20_000)
+        #expect(try await f.journal.ciphertext(for: pending.id) == Data([7]))
+        #expect(try await f.journal.ciphertext(for: session.id) == Data([8]))
+        let assets = try FileManager.default.contentsOfDirectory(at: CloudSyncPaths(root: f.cloud).partition(for: f.owner).appendingPathComponent("inbox"), includingPropertiesForKeys: nil)
+        #expect(assets.filter { $0.pathExtension == "asset" }.count == 2)
+        await coordinator.stop()
+    }
+
+    @Test(arguments: [false, true], [false, true])
+    func cloudRemovalKeepsNativeActiveAcrossAutomaticPassesAndRestart(onlyActive: Bool, bound: Bool) async throws {
+        let f = try CloudCoordinatorFixture(); defer { f.clean() }
+        let active = try nativeCredential("cloud-active", active: true), other = try nativeCredential("cloud-other")
+        let client = SyncTestClient(onlyActive ? [active] : [active, other])
+        func service() -> OpenChamberSyncService {
+            .init(resolveClient: { client }, gate: .init(), snapshots: .init(homeDirectory: f.root),
+                stateStore: .init(fileURL: f.root.appendingPathComponent("native-state.json")), verifier: SyncTestVerifier(),
+                selector: SelectorControlClient(homeDirectory: f.root, connectionRefused: { true }))
+        }
+        var original = try syncProfile(active)
+        if !bound { original.openCodeOpenAIAccount = nil }
+        let retained = try syncProfile(other)
+        try f.store.saveProfiles(onlyActive ? [original] : [original, retained])
+        f.defaults.set(true, forKey: OpenChamberSyncPreference.enabledKey)
+        f.reload(syncService: service())
+        await f.profiles.prepareCloudCatalogApply()
+        let removed = try f.profiles.applyCloudCatalog(CloudCatalogBridge.projection(onlyActive ? [] : [retained]))
+        await f.profiles.finishCloudCatalogApply(removed: removed)
+        await f.profiles.syncOpenChamberNow()
+        f.reload(syncService: service())
+        await f.profiles.syncOpenChamberNow()
+        #expect(await client.inventory().openAI.first(where: \.active)?.id == active.id)
+        #expect(await client.operations.allSatisfy { !$0.hasPrefix("activate:") && !$0.hasPrefix("remove:") })
+        if !onlyActive {
+            // Explicit native selection still permits subsequent inactive cleanup.
+            await client.activate(id: other.id)
+            await f.profiles.syncOpenChamberNow()
+            #expect(await client.inventory().openAI.map(\.id) == [other.id])
+        } else {
+            // Re-linking and explicitly removing the native account is still allowed.
+            let linked = try syncProfile(active)
+            try f.store.saveProfiles([linked]); f.reload(syncService: service())
+            await f.profiles.removeProfile(id: linked.id)
+            await f.profiles.syncOpenChamberNow()
+            #expect(await client.inventory().openAI.isEmpty)
+        }
+    }
+
     @Test func restoreUnionWaitsForUnknownCatalogCiphertextBeforeReusingUUIDs() async throws {
         let f = try CloudCoordinatorFixture(); defer { f.clean() }
         let local = try #require(try f.store.loadProfiles().first)
@@ -107,6 +288,12 @@ import WebKit
             manifest: .init(profileCount: 1, preferences: BackupSessionBridge.preferences(in: f.defaults), cookies: [:]))
         let coordinator = f.coordinator()
         await coordinator.start(); await coordinator.setEnabled(true)
+        try await f.stage(.init(id: original.id, createdAt: original.createdAt,
+            fields: .init(label: .init(value: "outstanding before restore", version: .init(counter: 100, deviceID: UUID())))), journal: f.journal)
+        let recovery = CloudCatalogBridge(profiles: f.profiles, journal: f.journal,
+            deviceID: try #require(try f.preferences.read()).deviceID, epoch: UUID())
+        try recovery.prepareNextReceipt()
+        #expect(try f.journal.catalogState().receipts.values.contains { $0.phase == .applying })
         let transfer = BackupTransferController(profiles: f.profiles,
             email: DotTrickController(store: .init(fileURL: f.root.appendingPathComponent("dot-trick-sessions.json"))),
             root: f.root, cloudSync: coordinator, defaults: f.defaults)
@@ -124,6 +311,10 @@ import WebKit
         let restored = try #require(try f.store.loadProfiles().first)
         #expect(restored.id == original.id)
         #expect(restored.webDataStoreID != original.webDataStoreID)
+        #expect(try f.journal.catalogState().receipts.values.allSatisfy { $0.phase == .applied })
+        await coordinator.setEnabled(true)
+        #expect(coordinator.status != .failed)
+        #expect(try f.journal.catalogState().restoreIntent == nil)
         await coordinator.stop()
         f.profiles.stopBackgroundTasks()
         _ = BackupSessionBridge.takeRestoredStore(for: restored.webDataStoreID)
@@ -348,19 +539,23 @@ import WebKit
     let transport = CoordinatorTransport()
     let defaults: UserDefaults
     let suite = "CloudCoordinator.\(UUID())"
-    init() throws {
+    init(fresh: Bool = false) throws {
         root = FileManager.default.temporaryDirectory.appendingPathComponent("coordinator-\(UUID())")
         cloud = root.deletingLastPathComponent().appendingPathComponent("cloud-coordinator-\(UUID())")
         store = .init(fileURL: root.appendingPathComponent("profiles.json"))
-        try store.saveProfiles([backupTestProfile()])
+        if !fresh { try store.saveProfiles([backupTestProfile()]) }
         preferences = .init(root: cloud)
         journal = .init(root: cloud, owner: Self.ownerA)
         defaults = UserDefaults(suiteName: suite)!
         defaults.set(false, forKey: OpenChamberSyncPreference.enabledKey)
-        profiles = .init(catalogStore: store, dataService: CoordinatorDataService(), syncDefaults: defaults, autoStart: false)
+        profiles = .init(catalogStore: store, dataService: CoordinatorDataService(), accountSwitchService: CoordinatorAccountSwitch(), syncDefaults: defaults, autoStart: false)
         transport.journal = journal
     }
-    func reload() { profiles = .init(catalogStore: store, dataService: CoordinatorDataService(), syncDefaults: defaults, autoStart: false) }
+    func reload(syncService: any OpenChamberSyncServing = OpenChamberSyncService()) {
+        profiles.stopBackgroundTasks()
+        profiles = .init(catalogStore: store, dataService: CoordinatorDataService(), accountSwitchService: CoordinatorAccountSwitch(),
+            syncService: syncService, syncDefaults: defaults, autoStart: false)
+    }
     func coordinator(available: Bool = true) -> CloudSyncCoordinator {
         .init(profiles: profiles, preferences: preferences, availability: { available ? .development : nil },
               identity: { [self] _ in identityReads += 1; return owner },
@@ -369,6 +564,7 @@ import WebKit
     func clean() {
         profiles.stopBackgroundTasks(); defaults.removePersistentDomain(forName: suite)
         try? FileManager.default.removeItem(at: root); try? FileManager.default.removeItem(at: cloud)
+        try? FileManager.default.removeItem(at: store.nativeSelectionFile)
     }
     func stage(_ document: CloudProfileDocument, journal: CloudSyncJournal) async throws {
         let name = CloudJournalState.profileRecordName(document.id)
@@ -379,6 +575,20 @@ import WebKit
             if $0.dirtyGenerations[name] != nil { try $0.markDirty(recordName: name, body: .profile($0.profiles[name]!)) }
             $0.transport?.processedInbox.insert(envelope.id)
         }
+    }
+}
+
+private struct CoordinatorAccountSwitch: CodexAccountSwitchServing {
+    func saveCurrent(for profile: PlusProfile) async throws -> CodexSignInIdentity { throw CocoaError(.featureUnsupported) }
+    func switchAndOpen(profile: PlusProfile) async throws { throw CocoaError(.featureUnsupported) }
+}
+
+private final class CoordinatorJournalFault: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = false
+    var enabled: Bool {
+        get { lock.withLock { value } }
+        set { lock.withLock { value = newValue } }
     }
 }
 

@@ -96,21 +96,26 @@ struct CloudSessionAdmission: Sendable {
             let newEpoch = UUID()
             let bridge = CloudCatalogBridge(profiles: profiles, journal: journal, deviceID: saved.deviceID, epoch: newEpoch)
             let startingState = try journal.catalogState()
+            try profiles.initializeFreshCloudCatalog(state: startingState)
             let firstUnion = startingState.profiles.isEmpty || startingState.initialCatalogProjection != nil
+            self.bridge = bridge
+            bridge.attach()
             if restoringUnion {
                 // Device restore pause remains durable while transport obtains the
                 // initial union; publication stays closed until remap/application.
                 try journal.catalogTransaction { state in
                     if state.restoreProfileRemap == nil { state.restoreIntent = nil }
                 }
-                if try journal.catalogState().restoreProfileRemap != nil { try bridge.restoreUnion() }
             }
             // Startup receipt recovery precedes local reconciliation/native startup.
-            _ = try bridge.replayPending()
+            var recoveryDeferred = false
+            do { try await bridge.recoverPending() }
+            catch CloudJournalError.applicationPending { recoveryDeferred = true }
+            guard intent == admission, started else { return }
             if firstUnion {
                 _ = try profiles.cloudCatalogRead().projection()
                 try bridge.pauseLocalAdmission()
-            } else { try bridge.reconcileLocal(inferDeletions: !explicit && !restoringUnion) }
+            } else if !recoveryDeferred { try bridge.reconcileLocal(inferDeletions: !explicit && !restoringUnion) }
             try journal.catalogTransaction {
                 if $0.transport == nil { $0.transport = .init() }
                 $0.transport?.catalogPublicationPaused = true
@@ -170,6 +175,8 @@ struct CloudSessionAdmission: Sendable {
                 let current = try await identity(owner.environment)
                 guard self.epoch == epoch, isEnabled else { return }
                 guard current == owner else { await accountChanged(current); return }
+                try await bridge.recoverPending()
+                guard self.epoch == epoch, isEnabled else { return }
                 try bridge.reconcileLocal(inferDeletions: false)
                 verifiedPass = false
                 status = .syncing
@@ -248,9 +255,23 @@ struct CloudSessionAdmission: Sendable {
     func pauseForTransfer(restoring: Bool) async throws {
         // Off and never-used startup/backup does not create a sync identity.
         if try preferences.read() != nil { try preferences.update { try $0.beginTransfer(restoring: restoring) } }
-        pausedJournal = bridge?.journal
+        let previousBridge = bridge
+        let saved = try preferences.read()
+        pausedJournal = bridge?.journal ?? saved?.preferences.previousActiveOwner.map { CloudSyncJournal(root: preferences.paths.root, owner: $0) }
         status = .paused
-        await stopEngine()
+        await stopEngine(holdCatalogForTransfer: true)
+        if let journal = pausedJournal, let saved {
+            let recovery = previousBridge ?? CloudCatalogBridge(profiles: profiles, journal: journal, deviceID: saved.deviceID, epoch: UUID())
+            // Reattach only for synchronous write admission during recovery.
+            let recoveryWriter = CloudCatalogBridge(profiles: profiles, journal: journal, deviceID: saved.deviceID, epoch: UUID())
+            recoveryWriter.attach()
+            defer {
+                recoveryWriter.stop()
+                profiles.cloudCatalogWriteAdmission = { throw CloudJournalError.applicationPending }
+            }
+            try await recoveryWriter.recoverPending()
+            try recovery.reconcileLocal(inferDeletions: false)
+        }
     }
 
     func markRestoreCommitAttempt(restoredProfiles: [PlusProfile]? = nil) throws {
@@ -259,6 +280,9 @@ struct CloudSessionAdmission: Sendable {
             let current = try profiles.cloudCatalogRead().projection()
             let target = CloudCatalogBridge.projection(restoredProfiles)
             try journal.catalogTransaction {
+                guard !$0.receipts.values.contains(where: { $0.phase == .applying }), $0.restoreIntent == nil else {
+                    throw CloudJournalError.applicationPending
+                }
                 $0.restoreIntent = .init(id: UUID(), expectedPreDigest: try current.digest(), expectedPostDigest: try target.digest(), postProjection: target)
             }
         }
@@ -266,6 +290,14 @@ struct CloudSessionAdmission: Sendable {
 
     func resumeAfterTransfer(restored: Bool) async {
         do {
+            if let journal = pausedJournal {
+                profiles.cloudCatalogWriteAdmission = {
+                    let state = try journal.catalogState()
+                    guard state.restoreIntent == nil, !state.receipts.values.contains(where: { $0.phase == .applying }) else {
+                        throw CloudJournalError.applicationPending
+                    }
+                }
+            } else { profiles.cloudCatalogWriteAdmission = nil }
             guard try preferences.read() != nil else { status = .off; return }
             let saved = try preferences.update { $0.finishTransfer(restored: restored) }
             if saved.preferences.paused { status = .paused }
@@ -306,14 +338,17 @@ struct CloudSessionAdmission: Sendable {
 
     func stop() async { started = false; await stopEngine() }
 
-    private func stopEngine(requestedIntent: UUID = UUID()) async {
+    private func stopEngine(requestedIntent: UUID = UUID(), holdCatalogForTransfer: Bool = false) async {
         intent = requestedIntent; epoch = nil; isEnabled = false
         verifiedPass = false
+        let previousBridge = bridge
         bridge?.stop(); bridge = nil
+        if holdCatalogForTransfer { profiles.cloudCatalogWriteAdmission = { throw CloudJournalError.applicationPending } }
         listener?.cancel(); listener = nil
         let engine = transport; transport = nil
         let pending = pass; pass = nil; pending?.cancel()
         await engine?.stop()
+        await previousBridge?.drainApplications()
         // Never await our own sync pass (account change is detected inside it).
     }
 }

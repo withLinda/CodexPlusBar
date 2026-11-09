@@ -324,7 +324,7 @@ actor CloudKitAccountSync: CloudSyncTransport {
         // An applied receipt may have had its ciphertext cleaned. A duplicate fetch must
         // not recreate that receipt or infer another local edit.
         let state = try await journal.load()
-        if state.receipts[envelope.id]?.phase == .applied { return }
+        if state.receipts[envelope.id]?.phase == .applied || state.completedCatalogReceipts?[envelope.recordName] == envelope.id { return }
         try await journal.receive(id: envelope.id, recordName: envelope.recordName,
             metadata: CloudJournalCoding.encode(envelope.routing), systemFields: envelope.systemFields,
             ciphertext: envelope.ciphertext, transportManaged: true)
@@ -335,10 +335,10 @@ actor CloudKitAccountSync: CloudSyncTransport {
         var waiting: Set<String> = []
         for id in state.transport?.inboxOrder ?? [] {
             try check(expected)
-            guard let stored = state.receivedEnvelopes[id], state.receipts[id]?.phase != .applied else { continue }
+            guard let (state, stored, ciphertext) = try await journal.pendingInboxItem(id) else { continue }
             let routing = try JSONDecoder().decode(CloudRecordRouting.self, from: stored.metadata)
             let envelope = CloudRecordEnvelope(id: id, recordName: stored.recordName, routing: routing,
-                ciphertext: try await journal.ciphertext(for: id), systemFields: stored.systemFields)
+                ciphertext: ciphertext, systemFields: stored.systemFields)
             if state.receipts.values.contains(where: { $0.phase == .applying }) || state.restoreIntent != nil {
                 waiting.insert(stored.recordName); continue
             }
@@ -381,6 +381,7 @@ actor CloudKitAccountSync: CloudSyncTransport {
     }
 
     private static func mergeReceived(_ remote: CloudRecordBody, envelope: CloudRecordEnvelope, into state: inout CloudJournalState) throws -> Bool {
+        guard let receipt = state.receipts[envelope.id], receipt.phase != .applied else { return false }
         guard !state.receipts.values.contains(where: { $0.phase == .applying }), state.restoreIntent == nil else {
             throw CloudJournalError.applicationPending
         }

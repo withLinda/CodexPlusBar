@@ -26,7 +26,7 @@ import Foundation
         profiles.cloudCatalogWriteAdmission = { [weak self] in
             guard let self, self.active, !self.applying else { return }
             let state = try self.journal.catalogState()
-            guard !state.receipts.values.contains(where: { $0.phase == .applying }) else { throw CloudJournalError.applicationPending }
+            guard !state.receipts.values.contains(where: { $0.phase == .applying }), state.restoreIntent == nil else { throw CloudJournalError.applicationPending }
         }
     }
 
@@ -38,15 +38,16 @@ import Foundation
         // A failed/uncertain catalog receipt remains authoritative even after the
         // user disables sync. Do not let a new edit create an unreplayable third
         // digest; the next enabled bridge can finish recovery before admitting it.
-        if (try? journal.catalogState().receipts.values.contains { $0.phase == .applying }) == true {
-            let journal = journal
-            profiles.cloudCatalogWriteAdmission = {
-                guard try !journal.catalogState().receipts.values.contains(where: { $0.phase == .applying }) else {
-                    throw CloudJournalError.applicationPending
-                }
+        let journal = journal
+        profiles.cloudCatalogWriteAdmission = {
+            let state = try journal.catalogState()
+            guard !state.receipts.values.contains(where: { $0.phase == .applying }), state.restoreIntent == nil else {
+                throw CloudJournalError.applicationPending
             }
         }
     }
+
+    func drainApplications() async { _ = try? await applyPass?.value }
 
     func committed(_ change: CloudCatalogCommit) {
         guard active, change.origin != .remote else { return }
@@ -62,6 +63,12 @@ import Foundation
             return
         }
         do {
+            try drainCommits(); onCommit?()
+        } catch { failure = error }
+    }
+
+    private func drainCommits() throws {
+        do {
             while let next = queued.first {
                 try journal.catalogTransaction { state in
                     try state.reconcile(.trusted(Self.projection(next.after)), deviceID: deviceID,
@@ -69,16 +76,17 @@ import Foundation
                 }
                 queued.removeFirst()
             }
-            failure = nil; onCommit?()
-        } catch { failure = error }
+            failure = nil
+        } catch { failure = error; throw error }
     }
 
     func reconcileLocal(inferDeletions: Bool) throws {
         guard !localAdmissionPaused else { return }
+        try drainCommits()
         try journal.catalogTransaction { state in
             try state.reconcile(profiles.cloudCatalogRead(), deviceID: deviceID, inferDeletions: inferDeletions)
         }
-        queued.removeAll(); failure = nil
+        failure = nil
     }
 
     func pauseLocalAdmission() throws {
@@ -98,8 +106,9 @@ import Foundation
         try journal.catalogTransaction { state in
             guard let baseline = state.initialCatalogProjection else { throw CloudJournalError.invalidState }
             state.committedProjection = baseline
+            let queuedDeletes = queued.filter { $0.origin == .local }.reduce(into: Set<UUID>()) { $0.formUnion($1.explicitDeletedIDs) }
             try state.reconcile(.trusted(current), deviceID: deviceID, inferDeletions: false,
-                                explicitDeletedIDs: state.initialExplicitDeletedIDs ?? [])
+                                explicitDeletedIDs: (state.initialExplicitDeletedIDs ?? []).union(queuedDeletes))
             if state.order == nil, !current.profiles.isEmpty {
                 let version = try CloudVersion.next(after: state.lamportCounter, observing: [], deviceID: deviceID)
                 state.lamportCounter = version.counter
@@ -208,6 +217,7 @@ import Foundation
                 _ = try journal.catalogTransaction { try $0.replay(id, catalog: committed) }
             }
         }
+        try journal.compactCompletedCatalog()
         return removed
     }
 
@@ -220,6 +230,23 @@ import Foundation
         applyPass = task
         defer { applyPass = nil }
         try await task.value
+    }
+
+    /// Recover saved pre/post images before any baseline reconciliation or fetch.
+    /// This also runs while stopping for backup, after the transport has drained.
+    func recoverPending() async throws {
+        if let applyPass { try await applyPass.value }
+        await profiles.prepareCloudCatalogApply()
+        var removed: [PlusProfile] = []
+        do {
+            guard active, !Task.isCancelled else { throw CloudTransportError.notStarted }
+            removed = try replayPending()
+            if try journal.catalogState().restoreProfileRemap != nil { try restoreUnion() }
+            await profiles.finishCloudCatalogApply(removed: removed)
+        } catch {
+            await profiles.finishCloudCatalogApply(removed: removed)
+            throw error
+        }
     }
 
     private func applyRemoteIsolated(epoch: UUID) async throws {

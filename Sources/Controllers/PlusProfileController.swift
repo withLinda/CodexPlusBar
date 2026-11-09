@@ -140,8 +140,7 @@ final class PlusProfileController {
         activeDataOperations += 1
         defer { activeDataOperations -= 1; syncScheduler.resumeAfterManualOperation() }
         for profile in removed where profile.provider == .codex {
-            // Browser data only. Native reconciliation retains its existing selected-
-            // credential protection; cloud deletion never invokes a native switch.
+            // Browser data only; durable origin protection also gates native sync.
             do { try await dataService.removeProfileData(for: profile) }
             catch { statusMessage = "A removed profile's browser data could not be cleaned up." }
         }
@@ -151,6 +150,16 @@ final class PlusProfileController {
         let result = try catalogStore.loadProfilesWithReport()
         guard result.sourceExists else { throw CloudJournalError.catalogUnavailable }
         return result.profiles
+    }
+
+    func initializeFreshCloudCatalog(state: CloudJournalState) throws {
+        guard case .missing = cloudCatalogRead() else { return }
+        guard lastCommittedProfiles == nil, state.committedProjection.profiles.isEmpty,
+              state.profiles.isEmpty, state.order == nil, state.recordGenerations.isEmpty,
+              state.receipts.isEmpty, state.initialCatalogProjection == nil, state.restoreIntent == nil,
+              state.transport?.initialized != true else { throw CloudJournalError.catalogUnavailable }
+        try catalogStore.initializeFreshCatalog()
+        loadStoredProfiles()
     }
 
     @discardableResult
@@ -174,6 +183,9 @@ final class PlusProfileController {
         }
         let removed = current.filter { old in remap[old.id] == nil && !rows.contains { $0.id == old.id } }
         guard cloudProtectedProfileIDs.isDisjoint(with: Set(removed.map(\.id))) else { throw CloudJournalError.applicationPending }
+        // Persist before removing rows. A crash or later automatic pass must not
+        // reinterpret a cloud deletion as permission to replace the native login.
+        if !removed.isEmpty { try catalogStore.updateNativeProtection(cloudRemoved: true) }
         try saveCatalog(rows, origin: .remote)
         let snapshots = Dictionary(uniqueKeysWithValues: profiles.map { ($0.id, $0) })
         selectorCatalogTrusted = false
@@ -1464,7 +1476,10 @@ final class PlusProfileController {
 
     private func updateCatalogConsumers(trusted: Bool) {
         selectorCatalogTrusted = trusted
-        syncScheduler.update(profiles: profiles.map(\.profile), trusted: trusted)
+        do {
+            syncScheduler.update(profiles: profiles.map(\.profile), trusted: trusted,
+                                 nativeSelectionProtection: try catalogStore.nativeSelectionProtection())
+        } catch { syncScheduler.update(profiles: profiles.map(\.profile), trusted: false) }
         selectorPublisher?.update(profiles: profiles, observations: [:], trusted: trusted)
     }
 
@@ -1488,6 +1503,9 @@ final class PlusProfileController {
         guard catalogCommitSequence < UInt64.max else { throw CloudJournalError.invalidState }
         let previous = try catalogStore.loadProfilesWithReport()
         let committed = ProfileCatalogStore.normalizedProfiles(rows)
+        if origin == .local, !explicitDeletedIDs.isEmpty {
+            try catalogStore.updateNativeProtection(explicitlyRemoved: previous.profiles.filter { explicitDeletedIDs.contains($0.id) }.compactMap(\.openCodeOpenAIAccount))
+        }
         try catalogStore.saveProfiles(committed)
         let deleted = previous.sourceExists
             ? explicitDeletedIDs.intersection(Set(previous.profiles.map(\.id))).subtracting(Set(committed.map(\.id))) : []

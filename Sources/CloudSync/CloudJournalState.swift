@@ -142,6 +142,11 @@ struct CloudJournalState: Codable, Equatable, Sendable {
     var systemFields: [String: Data] = [:]
     var receivedEnvelopes: [UUID: CloudReceivedEnvelope] = [:]
     var receipts: [UUID: CloudApplicationReceipt] = [:]
+    /// One duplicate-fetch shortcut per catalog record. Older duplicates still
+    /// merge against retained field clocks/tombstones; they cannot resurrect data.
+    var completedCatalogReceipts: [String: UUID]?
+    /// Durable unlink work, containing only assets detached after catalog completion.
+    var catalogAssetCleanup: Set<String>?
     var lastSuccess: Date?
     var restoreIntent: CloudRestoreIntent?
     var restoreProfileRemap: [UUID: UUID]?
@@ -308,6 +313,11 @@ struct CloudJournalState: Codable, Equatable, Sendable {
         guard !owner.container.isEmpty, !owner.userRecordName.isEmpty else { throw CloudJournalError.invalidState }
         try committedProjection.validate()
         try initialCatalogProjection?.validate()
+        guard completedCatalogReceipts?.keys.allSatisfy({ $0.hasPrefix("profile.") || $0 == Self.orderRecordName }) != false,
+              catalogAssetCleanup?.allSatisfy({ name in
+                  name.hasSuffix(".asset") && UUID(uuidString: String(name.dropLast(6))) != nil &&
+                      !receivedEnvelopes.values.contains { $0.asset.fileName == name }
+              }) != false else { throw CloudJournalError.invalidState }
         guard lamportCounter >= maximumObservedCounter,
               lastSuccess?.timeIntervalSince1970.isFinite ?? true,
               receipts.values.filter({ $0.phase == .applying }).count <= 1 else { throw CloudJournalError.invalidState }

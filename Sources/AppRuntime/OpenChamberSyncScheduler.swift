@@ -45,9 +45,11 @@ final class OpenChamberSyncScheduler {
         }
     }
 
-    func update(profiles: [PlusProfile], trusted: Bool) {
-        let changed = catalog.isTrusted != trusted || keys(catalog.profiles) != keys(profiles)
-        catalog = .init(generation: catalog.generation &+ (changed ? 1 : 0), profiles: profiles, isTrusted: trusted)
+    func update(profiles: [PlusProfile], trusted: Bool, nativeSelectionProtection: NativeSelectionProtection = .init()) {
+        let changed = catalog.isTrusted != trusted || keys(catalog.profiles) != keys(profiles) ||
+            catalog.nativeSelectionProtection != nativeSelectionProtection
+        catalog = .init(generation: catalog.generation &+ (changed ? 1 : 0), profiles: profiles, isTrusted: trusted,
+                        nativeSelectionProtection: nativeSelectionProtection)
         signInRepairProfileIDs.formIntersection(profiles.map(\.id))
         if changed {
             operation?.cancel(); result = nil
@@ -138,7 +140,8 @@ final class OpenChamberSyncScheduler {
     private func isCurrent(_ generation: UInt64) -> Bool {
         enabled && OpenChamberSyncPreference.enabled(in: defaults) && !manual && catalog.isTrusted && catalog.generation == generation
     }
-    private func invalidate() { catalog = .init(generation: catalog.generation &+ 1, profiles: catalog.profiles, isTrusted: catalog.isTrusted) }
+    private func invalidate() { catalog = .init(generation: catalog.generation &+ 1, profiles: catalog.profiles, isTrusted: catalog.isTrusted,
+                                              nativeSelectionProtection: catalog.nativeSelectionProtection) }
     private func schedule(immediate: Bool = false) {
         guard started, enabled, !manual else { return }
         debounce?.cancel()

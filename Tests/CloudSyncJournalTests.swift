@@ -5,6 +5,67 @@ import Testing
 @testable import CodexPlusBar
 
 struct CloudSyncJournalTests {
+    @Test func compactionRestartsAfterUnlinkButBeforeCleanupListClears() async throws {
+        let f = try JournalFixture(); defer { f.cleanUp() }
+        let journal = CloudSyncJournal(root: f.root, owner: Self.owner)
+        let envelope = try await journal.receive(recordName: Self.record, ciphertext: Data([4]), transportManaged: true)
+        try await journal.transaction { try $0.beginApplying(envelope.id, postProjection: .init(profiles: []), documents: [:]) }
+        try await journal.transaction { _ = try $0.replay(envelope.id, catalog: .trusted(.init(profiles: []))) }
+        let counter = CompactionRenameCounter()
+        let failing = CloudSyncJournal(root: f.root, owner: Self.owner, io: .init { event, name in
+            if name == "journal.json", event == .rename, counter.next() == 2 { throw POSIXError(.EIO) }
+        })
+        #expect(throws: (any Error).self) { try failing.compactCompletedCatalog() }
+        #expect(!FileManager.default.fileExists(atPath: f.asset(envelope).path))
+        let reopened = CloudSyncJournal(root: f.root, owner: Self.owner)
+        #expect(try await reopened.load().catalogAssetCleanup == [envelope.asset.fileName])
+        try reopened.compactCompletedCatalog()
+        #expect(try await reopened.load().catalogAssetCleanup == nil)
+        #expect(try await reopened.load().completedCatalogReceipts?[Self.record] == envelope.id)
+    }
+
+    @Test(arguments: [CloudJournalIO.Operation.rename, .directorySync, .cleanupUnlink])
+    func interruptedCatalogCompactionRetriesWithoutTouchingPendingOrSessionAssets(operation: CloudJournalIO.Operation) async throws {
+        let f = try JournalFixture(); defer { f.cleanUp() }
+        let journal = CloudSyncJournal(root: f.root, owner: Self.owner)
+        try await journal.transaction { try $0.reconcile(.trusted(Self.catalog(label: "kept")), deviceID: Self.device) }
+        try await journal.transaction { try $0.reconcile(.trusted(.init(profiles: [])), deviceID: Self.device) }
+        let envelope = try await journal.receive(recordName: Self.record, ciphertext: Data([1]), transportManaged: true)
+        let pending = try await journal.receive(recordName: "profile.pending", ciphertext: Data([2]), transportManaged: true)
+        let session = try await journal.receive(recordName: "session.kept", ciphertext: Data([3]), transportManaged: true)
+        try await journal.transaction { state in
+            state.transport?.processedInbox.formUnion([envelope.id, session.id])
+            state.transport?.sessionReceipts[session.recordName] = session.id
+            state.transport?.sessionProfiles[session.recordName] = Self.id
+            state.transport?.sessionDigests[session.recordName] = Data(repeating: 7, count: 32)
+            try state.beginApplying(envelope.id, postProjection: state.committedProjection, documents: [:])
+        }
+        try await journal.transaction { state in _ = try state.replay(envelope.id, catalog: .trusted(state.committedProjection)) }
+        let before = try await journal.load()
+        let failing = CloudSyncJournal(root: f.root, owner: Self.owner, io: .init { event, name in
+            if event == operation, name == "journal.json" || event == .cleanupUnlink { throw POSIXError(.EIO) }
+        })
+        #expect(throws: (any Error).self) { try failing.compactCompletedCatalog() }
+        #expect(FileManager.default.fileExists(atPath: f.asset(envelope).path))
+        let restarted = CloudSyncJournal(root: f.root, owner: Self.owner)
+        try restarted.compactCompletedCatalog()
+        try restarted.compactCompletedCatalog()
+        let after = try await restarted.load()
+        #expect(after.profiles == before.profiles)
+        #expect(after.recordGenerations == before.recordGenerations)
+        #expect(after.dirtyGenerations == before.dirtyGenerations)
+        #expect(after.completedCatalogReceipts?[Self.record] == envelope.id)
+        #expect(after.receipts[envelope.id] == nil)
+        #expect(after.catalogAssetCleanup == nil)
+        #expect(after.transport?.inboxOrder == [pending.id, session.id])
+        #expect(after.transport?.sessionReceipts == before.transport?.sessionReceipts)
+        #expect(after.transport?.sessionDigests == before.transport?.sessionDigests)
+        #expect(try await restarted.pendingInboxItem(envelope.id) == nil)
+        #expect(try await restarted.ciphertext(for: pending.id) == Data([2]))
+        #expect(try await restarted.ciphertext(for: session.id) == Data([3]))
+        #expect(!FileManager.default.fileExists(atPath: f.asset(envelope).path))
+    }
+
     private static let owner = CloudOwner(container: "iCloud.com.linda.CodexPlusBar", environment: .development,
                                           userRecordName: "synthetic-owner")
     private static let id = CloudSyncTestSupport.profileID
@@ -571,4 +632,10 @@ struct CloudSyncJournalTests {
         func asset(_ envelope: CloudReceivedEnvelope) -> URL { inbox.appendingPathComponent(envelope.asset.fileName) }
         func cleanUp() { try? FileManager.default.removeItem(at: base) }
     }
+}
+
+private final class CompactionRenameCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+    func next() -> Int { lock.withLock { count += 1; return count } }
 }

@@ -144,6 +144,10 @@ actor OpenChamberSyncService: OpenChamberSyncServing {
             inventory = latest
             guard let target = inventory.oauth.first(where: { $0.id == id }) else { continue }
             if target.active {
+                let identity = try target.openAIIdentity()
+                if catalog.nativeSelectionProtection.protects(identity) {
+                    deferred = true; continue
+                }
                 guard (try? await client.hasRunningSessions()) == false else { deferred = true; continue }
                 try await check(catalog, isCurrent)
                 // Idle lookup is an await too: do not override a selection made during it.

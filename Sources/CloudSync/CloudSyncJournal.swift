@@ -114,6 +114,52 @@ actor CloudSyncJournal {
         }
     }
 
+    /// Snapshot and bytes share the lock with compaction. A stale transport order
+    /// snapshot can safely skip a receipt completed in the meantime.
+    func pendingInboxItem(_ id: UUID) throws -> (CloudJournalState, CloudReceivedEnvelope, Data)? {
+        try withStorage { _, partition, inbox in
+            let state = try readState(partition: partition, inbox: inbox)
+            guard let envelope = state.receivedEnvelopes[id], state.receipts[id]?.phase != .applied else { return nil }
+            return (state, envelope, try readAsset(envelope.asset, inbox: inbox))
+        }
+    }
+
+    /// Only completed catalog recovery history is disposable. Keep documents,
+    /// tombstones, clocks, generation high-water marks and every session/pending item.
+    /// Persist reference removal + retry list before unlink, then clear the list.
+    nonisolated func compactCompletedCatalog() throws {
+        try withStorage { _, partition, inbox in
+            var state = try readState(partition: partition, inbox: inbox)
+            let ordered = state.transport?.inboxOrder ?? []
+            let ids = ordered + state.receipts.keys.filter { !ordered.contains($0) }.sorted { $0.uuidString < $1.uuidString }
+            var removed: Set<UUID> = []
+            for id in ids {
+                guard state.receipts[id]?.phase == .applied, let envelope = state.receivedEnvelopes[id],
+                      envelope.recordName.hasPrefix("profile.") || envelope.recordName == CloudJournalState.orderRecordName,
+                      state.transport?.sessionReceipts.values.contains(id) != true else { continue }
+                if state.completedCatalogReceipts == nil { state.completedCatalogReceipts = [:] }
+                state.completedCatalogReceipts?[envelope.recordName] = id
+                if state.catalogAssetCleanup == nil { state.catalogAssetCleanup = [] }
+                state.catalogAssetCleanup?.insert(envelope.asset.fileName)
+                state.receipts.removeValue(forKey: id)
+                state.receivedEnvelopes.removeValue(forKey: id)
+                removed.insert(id)
+            }
+            if !removed.isEmpty {
+                state.transport?.inboxOrder.removeAll { removed.contains($0) }
+                state.transport?.processedInbox.subtract(removed)
+                try writeState(state, partition: partition, inbox: inbox)
+            }
+            guard let cleanup = state.catalogAssetCleanup, !cleanup.isEmpty else { return }
+            for name in cleanup.sorted() {
+                try io.before(.cleanupUnlink, name)
+                try CloudPrivateFiles.remove(name, in: inbox)
+            }
+            state.catalogAssetCleanup = nil
+            try writeState(state, partition: partition, inbox: inbox)
+        }
+    }
+
     /// Unlink only after durable removal of the reference and a durable applied receipt.
     /// If replacement is uncertain, keep the bytes. Unreferenced crash leftovers are not auto-deleted.
     func removeAppliedEnvelope(_ id: UUID) throws {

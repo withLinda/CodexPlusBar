@@ -4,6 +4,37 @@ import Testing
 @testable import CodexPlusBar
 
 struct CloudKitAccountSyncTests {
+    @Test func compactedCatalogDuplicatesPreserveTombstonesAndGenerationHistory() async throws {
+        let f = try await CloudTransportFixture(); defer { f.disk.cleanUp() }
+        let name = try await f.localProfile()
+        let original = try #require(try await f.journal.load().profiles[name])
+        let old = try f.record(.profile(original))
+        let deleted = try f.record(.profile(.init(id: original.id, createdAt: original.createdAt, fields: original.fields,
+            tombstone: .init(version: .init(counter: 100, deviceID: UUID()), deletedAt: .now))))
+        try await f.startReady()
+        await f.driver.emit(.fetched(records: [old.record, deleted.record], deletions: []))
+        let order = try #require(try await f.journal.load().transport?.inboxOrder)
+        for id in order {
+            try await f.journal.transaction { state in
+                try state.beginApplying(id, postProjection: .init(profiles: []), documents: state.profiles.mapValues { .profile($0) })
+            }
+            try await f.journal.transaction { _ = try $0.replay(id, catalog: .trusted(.init(profiles: []))) }
+        }
+        try f.journal.compactCompletedCatalog()
+        let before = try await f.journal.load()
+        // Latest duplicate short-circuits; an older compacted ID must merge safely.
+        await f.driver.emit(.fetched(records: [deleted.record, old.record], deletions: []))
+        try await f.transport.syncNow()
+        let after = try await f.journal.load()
+        #expect(after.profiles == before.profiles)
+        #expect(after.recordGenerations == before.recordGenerations)
+        #expect(after.dirtyGenerations == before.dirtyGenerations)
+        #expect(after.receivedEnvelopes.count == 1)
+        #expect(after.transport?.processedInbox.count == 1)
+        #expect(await f.driver.batch() != nil)
+        await f.transport.stop()
+    }
+
     @Test func coordinatorPublicationGateAndSessionOptOutBlockRealEncryptedBatchAdmission() async throws {
         let f = try await CloudTransportFixture(); defer { f.disk.cleanUp() }
         let profileName = try await f.localProfile()

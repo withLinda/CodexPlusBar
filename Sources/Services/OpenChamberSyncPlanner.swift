@@ -15,6 +15,7 @@ struct OpenChamberSyncCatalog: Sendable {
     let generation: UInt64
     let profiles: [PlusProfile]
     let isTrusted: Bool
+    var nativeSelectionProtection = NativeSelectionProtection()
 }
 
 struct OpenChamberSyncAccount: Equatable, Sendable {
