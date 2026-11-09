@@ -4,10 +4,14 @@ import Observation
 
 enum CloudSyncStatus: Equatable { case off, unavailable, needsConsent, syncing, upToDate, paused, pending, failed }
 
-struct CloudSessionAdmission: Sendable {
+struct CloudSessionAdmission: Equatable, Sendable {
     let owner: CloudOwner
     let epoch: UUID
     let profileID: UUID
+    let webDataStoreID: UUID
+    let desktopIdentity: CodexSignInIdentity?
+    let openChamberIdentity: OpenCodeOpenAIIdentity?
+    let credentialRevision: UInt64
 }
 
 @Observable @MainActor final class CloudSyncCoordinator {
@@ -32,6 +36,13 @@ struct CloudSessionAdmission: Sendable {
     @ObservationIgnored private var verifiedPass = false
     @ObservationIgnored private var restoringUnion = false
     @ObservationIgnored private var pausedJournal: CloudSyncJournal?
+    @ObservationIgnored private let snapshots: CloudSessionSnapshotService
+    @ObservationIgnored private let makeSessionInbox: @MainActor (CloudSyncJournal) -> CloudSessionInbox
+    @ObservationIgnored private var sessionInbox: CloudSessionInbox?
+    @ObservationIgnored private var sessionObserver: CloudSessionChangeObserver?
+    @ObservationIgnored private var sessionChangeTask: Task<Void, Never>?
+    @ObservationIgnored private var sessionChangeCounter: UInt64 = 0
+    @ObservationIgnored private var capturing = false
 
     init(profiles: PlusProfileController, preferences: CloudSyncPreferencesStore = .init(),
          availability: @escaping @MainActor () -> CloudEnvironment? = { CloudSyncAvailability().environment },
@@ -41,17 +52,26 @@ struct CloudSessionAdmission: Sendable {
              let id = try await container.userRecordID()
              return .init(container: CloudSyncAvailability.containerIdentifier, environment: environment, userRecordName: id.recordName)
          },
+         snapshots: CloudSessionSnapshotService? = nil,
+         makeSessionInbox: @escaping @MainActor (CloudSyncJournal) -> CloudSessionInbox = { journal in
+             .init(journal: journal, keys: CloudKeyStore(journal: journal))
+         },
          makeTransport: @escaping @MainActor (CloudSyncJournal) -> any CloudSyncTransport = { journal in
              CloudKitAccountSync(journal: journal, keys: CloudKeyStore(journal: journal),
                  assets: .init(root: journal.paths.partition(for: journal.owner).appendingPathComponent("outgoing")))
          }) {
         self.profiles = profiles; self.preferences = preferences; self.availability = availability
         self.identity = identity; self.makeTransport = makeTransport
+        self.snapshots = snapshots ?? profiles.cloudSessionSnapshotService()
+        self.makeSessionInbox = makeSessionInbox
     }
 
     func start() async {
         guard !started else { return }
         started = true
+        sessionObserver = CloudSessionChangeObserver { [weak self] in
+            Task { @MainActor [weak self] in self?.requestSessionCapture() }
+        }
         // Fail closed on an unreadable local recovery binding, even while off.
         profiles.cloudCatalogWriteAdmission = { throw CloudJournalError.applicationPending }
         do {
@@ -132,11 +152,13 @@ struct CloudSessionAdmission: Sendable {
                 if $0.transport == nil { $0.transport = .init() }
                 $0.transport?.catalogPublicationPaused = true
                 $0.transport?.includeSavedSessions = saved.preferences.includesSessions(for: current)
+                $0.transport?.validatedSessionRecords = []
                 $0.transport?.initialized = false
                 $0.engineState = nil
             }
             owner = current; epoch = newEpoch; self.bridge = bridge; bridge.attach()
             includesSessions = saved.preferences.includesSessions(for: current)
+            sessionInbox = makeSessionInbox(journal)
             let engine = makeTransport(journal); transport = engine
             isEnabled = true; needsInitialUnion = true; status = .syncing
             bridge.onCommit = { [weak self] in
@@ -190,6 +212,8 @@ struct CloudSessionAdmission: Sendable {
                 try await bridge.recoverPending()
                 guard self.epoch == epoch, isEnabled else { return }
                 try bridge.reconcileLocal(inferDeletions: false)
+                await captureSavedSessions()
+                guard self.epoch == epoch, isEnabled else { return }
                 verifiedPass = false
                 status = .syncing
                 try await engine.syncNow()
@@ -209,6 +233,8 @@ struct CloudSessionAdmission: Sendable {
                         state.transport?.catalogPublicationPaused = false
                     }
                     needsInitialUnion = false
+                    await captureSavedSessions()
+                    guard self.epoch == epoch, isEnabled else { return }
                     try await engine.syncNow()
                     guard self.epoch == epoch, isEnabled else { return }
                     try await bridge.applyRemote(profiles: [], order: nil, epoch: epoch)
@@ -323,8 +349,11 @@ struct CloudSessionAdmission: Sendable {
 
     func sessionAdmission(for profileID: UUID) -> CloudSessionAdmission? {
         guard isEnabled, includesSessions, !needsInitialUnion, let owner, let epoch,
-              (try? profiles.cloudCommittedRows().contains { $0.id == profileID }) == true else { return nil }
-        return .init(owner: owner, epoch: epoch, profileID: profileID)
+              profiles.cloudSessionCaptureAllowed(for: profileID),
+              let row = try? profiles.cloudCommittedRows().first(where: { $0.id == profileID }), row.provider == .codex else { return nil }
+        return .init(owner: owner, epoch: epoch, profileID: profileID, webDataStoreID: row.webDataStoreID,
+            desktopIdentity: row.codexSignIn, openChamberIdentity: row.openCodeOpenAIAccount,
+            credentialRevision: snapshots.revision)
     }
 
     /// Capture/adoption services use this narrow final admission after their awaits.
@@ -332,26 +361,146 @@ struct CloudSessionAdmission: Sendable {
     func commitCapturedSession(_ document: CloudSessionDocument, admission: CloudSessionAdmission) throws {
         guard isEnabled, includesSessions, !needsInitialUnion, admission.owner == owner, admission.epoch == epoch,
               document.profileID == admission.profileID, let bridge,
-              try profiles.cloudCommittedRows().contains(where: { $0.id == document.profileID }) else { throw CloudTransportError.notStarted }
+              document.sourceDeviceID == (try preferences.read()?.deviceID),
+              admission.credentialRevision == snapshots.revision,
+              profiles.cloudSessionCaptureAllowed(for: admission.profileID),
+              let row = try profiles.cloudCommittedRows().first(where: { $0.id == document.profileID }), row.provider == .codex,
+              row.webDataStoreID == admission.webDataStoreID, row.codexSignIn == admission.desktopIdentity,
+              row.openCodeOpenAIAccount == admission.openChamberIdentity else { throw CloudTransportError.notStarted }
+        let payload = try JSONDecoder().decode(CloudSessionPayload.self, from: document.payload).validated()
+        guard payload.kind == document.kind, document.revision > 0 else { throw CloudSessionError.invalidPayload }
+        try payload.identity.validateBindings(of: row)
+        let digest = try payload.digest()
+        guard try CloudJournalCoding.encode(CloudRecordBody.session(document)).count <= CloudPayloadCipher.maximumPlaintextBytes else {
+            throw CloudPayloadError.tooLarge
+        }
         try bridge.journal.catalogTransaction { state in
-            guard state.restoreIntent == nil,
+            guard state.restoreIntent == nil, !state.receipts.values.contains(where: { $0.phase == .applying }),
                   let profile = state.profiles[CloudJournalState.profileRecordName(document.profileID)],
                   profile.tombstone == nil else { throw CloudJournalError.invalidTransition }
             let name = CloudRecordCodec.recordName(for: .session(document))
+            let previous = state.sessions.values.filter { $0.profileID == document.profileID && $0.sourceDeviceID == document.sourceDeviceID && $0.kind == document.kind }
+                .max { $0.revision < $1.revision }
+            if let previous, let saved = try? JSONDecoder().decode(CloudSessionPayload.self, from: previous.payload), try saved.digest() == digest {
+                state.transport?.validatedSessionRecords?.insert(CloudRecordCodec.recordName(for: .session(previous)))
+                return
+            }
+            if state.adoptedSessionDigests?[Self.sessionOriginKey(document.profileID, document.kind)] == digest { return }
             if let existing = state.sessions[name] {
                 guard existing == document else { throw CloudSyncModelError.conflictingVersion }
                 return
             }
+            guard document.revision > (previous?.revision ?? 0) else { throw CloudSyncModelError.conflictingVersion }
             state.sessions[name] = document
             try state.markDirty(recordName: name, body: .session(document))
+            state.transport?.validatedSessionRecords?.insert(name)
+            for (oldName, old) in state.sessions where oldName != name && old.profileID == document.profileID && old.kind == document.kind {
+                if old.sourceDeviceID == document.sourceDeviceID && old.revision < document.revision {
+                    state.dirtyGenerations.removeValue(forKey: oldName)
+                    state.transport?.validatedSessionRecords?.remove(oldName)
+                } else if let oldPayload = try? JSONDecoder().decode(CloudSessionPayload.self, from: old.payload),
+                          let fingerprint = try? oldPayload.generationFingerprint, payload.consumed.contains(fingerprint) {
+                    state.dirtyGenerations.removeValue(forKey: oldName)
+                }
+            }
         }
         status = .pending
     }
 
-    func stop() async { started = false; await stopEngine() }
+    private static func sessionOriginKey(_ id: UUID, _ kind: CloudSessionKind) -> String { "\(id.uuidString).\(kind.rawValue)" }
+
+    private func requestSessionCapture() {
+        guard isEnabled, includesSessions, let epoch else { return }
+        sessionChangeCounter &+= 1
+        guard sessionChangeTask == nil else { return }
+        sessionChangeTask = Task { [weak self] in
+            guard let self else { return }
+            defer { if self.epoch == epoch { sessionChangeTask = nil } }
+            repeat {
+                let counter = sessionChangeCounter
+                await Task.yield()
+                guard self.epoch == epoch, !Task.isCancelled else { return }
+                if let pass { await pass.value }
+                guard self.epoch == epoch, !Task.isCancelled else { return }
+                if await captureSavedSessions() { await syncNow() }
+                if counter == sessionChangeCounter { return }
+            } while self.epoch == epoch && !Task.isCancelled
+        }
+    }
+
+    @discardableResult func captureSavedSessions() async -> Bool {
+        guard isEnabled, includesSessions, !needsInitialUnion,
+              !capturing, let rows = try? profiles.cloudCommittedRows() else { return false }
+        capturing = true
+        let captureEpoch = epoch
+        defer {
+            capturing = false
+            if epoch != captureEpoch, isEnabled { requestSessionCapture() }
+        }
+        var published = false
+        for row in rows {
+            guard let admission = sessionAdmission(for: row.id) else { continue }
+            do {
+                for payload in try await snapshots.capture(for: row) {
+                    guard let bridge, admission.epoch == epoch,
+                          let device = try preferences.read()?.deviceID else { continue }
+                    let state = try bridge.journal.catalogState()
+                    let previous = state.sessions.values.filter { $0.profileID == row.id && $0.sourceDeviceID == device && $0.kind == payload.kind }
+                        .map(\.revision).max() ?? 0
+                    let (revision, overflow) = previous.addingReportingOverflow(1)
+                    guard !overflow else { throw CloudSyncModelError.counterOverflow }
+                    let document = CloudSessionDocument(profileID: row.id, sourceDeviceID: device, sourceName: "Mac",
+                        kind: payload.kind, revision: revision, capturedAt: .now, payload: try payload.encoded())
+                    try commitCapturedSession(document, admission: admission)
+                    let after = try bridge.journal.catalogState()
+                    let newlyApproved = (after.transport?.validatedSessionRecords ?? []).subtracting(state.transport?.validatedSessionRecords ?? [])
+                    let changed = after.sessions.count > state.sessions.count || newlyApproved.contains { after.dirtyGenerations[$0] != nil }
+                    published = published || changed
+                }
+            } catch { continue }
+        }
+        return published
+    }
+
+    func sessionSummaries(for profileID: UUID) async throws -> [CloudSessionSummary] {
+        guard let admission = sessionAdmission(for: profileID), let sessionInbox,
+              let profile = try profiles.cloudCommittedRows().first(where: { $0.id == profileID }) else { return [] }
+        let summaries = try await sessionInbox.summaries(for: profile)
+        guard sessionAdmission(for: profileID) == admission else { return [] }
+        return summaries
+    }
+
+    func sessionCandidate(recordName: String, for profileID: UUID) async throws -> CloudSessionCandidate {
+        guard let admission = sessionAdmission(for: profileID), let sessionInbox,
+              let profile = try profiles.cloudCommittedRows().first(where: { $0.id == profileID }) else { throw CloudSessionError.unavailable }
+        let candidate = try await sessionInbox.candidate(recordName: recordName, for: profile)
+        guard sessionAdmission(for: profileID) == admission else { throw CloudSessionError.unavailable }
+        return candidate
+    }
+
+    /// Task 7/8 call only after their durable adoption. This records provenance;
+    /// it neither writes native credentials nor creates a local source revision.
+    func recordAdoptedSession(_ candidate: CloudSessionCandidate, admission: CloudSessionAdmission) throws {
+        guard admission.epoch == epoch, admission.owner == owner,
+              candidate.summary.profileID == admission.profileID,
+              sessionAdmission(for: admission.profileID) != nil, let bridge else { throw CloudSessionError.unavailable }
+        let digest = try candidate.payload.digest()
+        try bridge.journal.catalogTransaction {
+            guard $0.profiles[CloudJournalState.profileRecordName(admission.profileID)]?.tombstone == nil else { throw CloudSessionError.unavailable }
+            if $0.adoptedSessionDigests == nil { $0.adoptedSessionDigests = [:] }
+            $0.adoptedSessionDigests?[Self.sessionOriginKey(admission.profileID, candidate.payload.kind)] = digest
+        }
+    }
+
+    func stop() async {
+        started = false
+        sessionObserver = nil
+        await stopEngine()
+    }
 
     private func stopEngine(requestedIntent: UUID = UUID(), holdCatalogForTransfer: Bool = false) async {
         intent = requestedIntent; epoch = nil; isEnabled = false
+        sessionChangeTask?.cancel(); sessionChangeTask = nil; sessionInbox = nil
         verifiedPass = false
         let previousBridge = bridge
         bridge?.stop(); bridge = nil

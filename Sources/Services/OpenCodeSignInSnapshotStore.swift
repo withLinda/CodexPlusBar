@@ -32,6 +32,7 @@ struct OpenCodeSignInSnapshotStore: Sendable {
         try prepare()
         try OpenCodePrivateFile.write(JSONEncoder().encode(value.replacingTokens(auth)), to: url(identity, ".native.json"))
         try OpenCodePrivateFile.write(JSONEncoder().encode(auth), to: url(identity, ".json"))
+        CloudSavedSessionChange.committed()
     }
     func binding(identity: OpenCodeOpenAIIdentity) throws -> String? {
         let file = url(identity, ".v2.json")
@@ -53,6 +54,7 @@ struct OpenCodeSignInSnapshotStore: Sendable {
         if auth != previous { replacements[generationKey(previous)] = auth }
         try prepare()
         try OpenCodePrivateFile.write(JSONEncoder().encode(replacements), to: url(identity, ".rotations.json"))
+        if auth != previous { CloudSavedSessionChange.consumed(generationKey(previous), kind: .openChamber) }
         let value = try loadNativeValue(identity: identity) ?? .legacy(auth)
         try saveValue(value.replacingTokens(auth), identity: identity)
     }
@@ -67,6 +69,14 @@ struct OpenCodeSignInSnapshotStore: Sendable {
             current = next
         }
         return current
+    }
+
+    func capture(_ identity: OpenCodeOpenAIIdentity) throws -> CloudSessionPayload? {
+        guard let stored = try loadNativeValue(identity: identity) else { return nil }
+        // Native IDs, labels, selection and arbitrary metadata stay on this Mac.
+        var portable = OpenCodeCredentialValue.legacy(try stored.auth())
+        portable.fields["methodID"] = stored.fields["methodID"]
+        return try CloudSessionPayload.openChamber(value: portable, consumed: Array(rotations(identity).keys)).validated()
     }
 
     private func rotations(_ identity: OpenCodeOpenAIIdentity) throws -> [String: OpenCodeOpenAIAuth] {

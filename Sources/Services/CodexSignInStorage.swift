@@ -225,6 +225,7 @@ struct CodexSignInVault: Sendable {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
             try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path)
             try OpenCodePrivateFile.write(signIn.data, to: url(for: signIn.identity))
+            CloudSavedSessionChange.committed()
         } catch { throw CodexSignInError.storageFailed }
     }
 
@@ -235,6 +236,7 @@ struct CodexSignInVault: Sendable {
             do {
                 try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
                 try OpenCodePrivateFile.write(refreshed.data, to: rotationURL(for: previous))
+                CloudSavedSessionChange.consumed(CloudSessionPayload.fingerprint(previous.refreshToken), kind: .desktop)
             } catch { throw CodexSignInError.storageFailed }
         }
         try save(refreshed)
@@ -268,6 +270,15 @@ struct CodexSignInVault: Sendable {
         let signIn = try CodexSignIn(data: data)
         guard identity.matches(signIn.identity) else { throw CodexSignInError.identityMismatch }
         return try latestGeneration(of: signIn)
+    }
+
+    func capture(_ identity: CodexSignInIdentity) throws -> CloudSessionPayload {
+        let signIn = try load(identity)
+        let prefix = identity.storageKey + ".consumed-"
+        let names = try FileManager.default.contentsOfDirectory(atPath: directory.path)
+        let consumed = names.filter { $0.hasPrefix(prefix) && $0.hasSuffix(".json") }
+            .map { String($0.dropFirst(prefix.count).dropLast(5)) }
+        return try CloudSessionPayload.desktop(signIn: signIn, consumed: consumed).validated()
     }
 }
 

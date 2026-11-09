@@ -140,7 +140,7 @@ struct OpenCodeOpenAISwitchError: LocalizedError {
     var errorDescription: String? { "Switch not completed. \(reason) \(recovery.message)" }
 }
 
-protocol OpenCodeOpenAIAuthServing: Sendable {
+protocol OpenCodeOpenAIAuthServing: CloudSavedSessionCapturing {
     func saveCurrent(for profile: PlusProfile) async throws -> OpenCodeOpenAIIdentity
     func switchTo(profile: PlusProfile) async throws
 }
@@ -175,7 +175,16 @@ actor OpenCodeOpenAIAuthService: OpenCodeOpenAIAuthServing {
     }
 
     func saveCurrent(for profile: PlusProfile) async throws -> OpenCodeOpenAIIdentity {
-        try await operationGate.withOperation { try await self.saveCurrentUnlocked(for: profile) }
+        defer { CloudSavedSessionChange.released() }
+        return try await operationGate.withOperation { try await self.saveCurrentUnlocked(for: profile) }
+    }
+
+    func captureSavedSession(for profile: PlusProfile) async throws -> CloudSessionPayload? {
+        guard profile.provider == .codex, let identity = profile.openCodeOpenAIAccount else { return nil }
+        let snapshots = snapshots
+        // Read the saved vault only. Native maintenance intentionally ends in
+        // Paused, so entering it for background export would disable Auto.
+        return try await operationGate.withOperation { try snapshots.capture(identity) }
     }
 
     private func saveCurrentUnlocked(for profile: PlusProfile) async throws -> OpenCodeOpenAIIdentity {
@@ -217,6 +226,7 @@ actor OpenCodeOpenAIAuthService: OpenCodeOpenAIAuthServing {
     }
 
     func switchTo(profile: PlusProfile) async throws {
+        defer { CloudSavedSessionChange.released() }
         try await selector.withMaintenance(reason: .manualAccountChange) {
             try await self.operationGate.withOperation { try await self.switchToUnlocked(profile: profile) }
         }
@@ -410,6 +420,7 @@ actor OpenCodeOpenAIAuthService: OpenCodeOpenAIAuthServing {
                 try FileManager.default.createDirectory(at: storeDirectory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
                 try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: storeDirectory.path)
                 try OpenCodePrivateFile.write(JSONEncoder().encode(snapshots.resolved(auth)), to: storeURL(for: identity))
+                CloudSavedSessionChange.committed()
             }
         } catch { throw OpenCodeOpenAIAuthError.writeFailed }
     }

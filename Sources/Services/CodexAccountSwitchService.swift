@@ -1,6 +1,6 @@
 import Foundation
 
-protocol CodexAccountSwitchServing: Sendable {
+protocol CodexAccountSwitchServing: CloudSavedSessionCapturing {
     func saveCurrent(for profile: PlusProfile) async throws -> CodexSignInIdentity
     func switchAndOpen(profile: PlusProfile) async throws
     func migrate(_ profiles: [PlusProfile]) -> ([PlusProfile], changed: Bool)
@@ -8,6 +8,18 @@ protocol CodexAccountSwitchServing: Sendable {
 
 extension CodexAccountSwitchServing {
     func migrate(_ profiles: [PlusProfile]) -> ([PlusProfile], changed: Bool) { (profiles, false) }
+}
+
+/// Repair and switching may be owned by different service instances.
+actor CodexOperationGate {
+    static let shared = CodexOperationGate()
+    private var busy: Set<URL> = []
+    func withOperation<T: Sendable>(home: URL, _ operation: @Sendable () async throws -> T) async throws -> T {
+        let key = home.resolvingSymlinksInPath()
+        guard busy.insert(key).inserted else { throw CodexSignInError.busy }
+        defer { busy.remove(key) }
+        return try await operation()
+    }
 }
 
 struct CodexSignInSwitchError: LocalizedError {
@@ -54,17 +66,19 @@ actor CodexAccountSwitchService: CodexAccountSwitchServing {
     private let resolveStore: @Sendable () throws -> CodexLiveAuthStore
     private let now: @Sendable () -> Date
     private var isWorking = false
+    private let operationGate: CodexOperationGate
 
     init(homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
          app: any CodexDesktopAppManaging = CodexDesktopApp(),
          verifier: any CodexSignInVerifying = CodexSignInVerifier(),
          resolveStore: (@Sendable () throws -> CodexLiveAuthStore)? = nil,
-         now: @escaping @Sendable () -> Date = { .now }) {
+         now: @escaping @Sendable () -> Date = { .now }, operationGate: CodexOperationGate = .shared) {
         self.homeDirectory = homeDirectory
         vault = CodexSignInVault(homeDirectory: homeDirectory)
         self.app = app
         self.verifier = verifier
         self.now = now
+        self.operationGate = operationGate
         self.resolveStore = resolveStore ?? {
             let environment = ProcessInfo.processInfo.environment
             // A GUI switch must target the desktop's standard store, not this process's overrides.
@@ -82,6 +96,21 @@ actor CodexAccountSwitchService: CodexAccountSwitchServing {
     }
 
     func saveCurrent(for profile: PlusProfile) async throws -> CodexSignInIdentity {
+        defer { CloudSavedSessionChange.released() }
+        return try await operationGate.withOperation(home: homeDirectory) { try await self.saveCurrentUnlocked(for: profile) }
+    }
+
+    func captureSavedSession(for profile: PlusProfile) async throws -> CloudSessionPayload? {
+        guard profile.provider == .codex, let identity = profile.codexSignIn else { return nil }
+        return try await operationGate.withOperation(home: homeDirectory) { try await self.captureUnlocked(identity) }
+    }
+
+    private func captureUnlocked(_ identity: CodexSignInIdentity) throws -> CloudSessionPayload {
+        guard !isWorking else { throw CodexSignInError.busy }
+        return try vault.capture(identity)
+    }
+
+    private func saveCurrentUnlocked(for profile: PlusProfile) async throws -> CodexSignInIdentity {
         guard !isWorking else { throw CodexSignInError.busy }
         isWorking = true
         defer { isWorking = false }
@@ -99,6 +128,11 @@ actor CodexAccountSwitchService: CodexAccountSwitchServing {
 
     /// Repair the saved account without switching an unrelated live desktop account.
     func installRepaired(_ received: CodexSignIn, for profile: PlusProfile) async throws {
+        defer { CloudSavedSessionChange.released() }
+        try await operationGate.withOperation(home: homeDirectory) { try await self.installRepairedUnlocked(received, for: profile) }
+    }
+
+    private func installRepairedUnlocked(_ received: CodexSignIn, for profile: PlusProfile) async throws {
         guard !isWorking else { throw CodexSignInError.busy }
         isWorking = true; defer { isWorking = false }
         try received.validateRepair(for: profile)
@@ -164,6 +198,11 @@ actor CodexAccountSwitchService: CodexAccountSwitchServing {
     }
 
     func switchAndOpen(profile: PlusProfile) async throws {
+        defer { CloudSavedSessionChange.released() }
+        try await operationGate.withOperation(home: homeDirectory) { try await self.switchAndOpenUnlocked(profile: profile) }
+    }
+
+    private func switchAndOpenUnlocked(profile: PlusProfile) async throws {
         guard !isWorking else { throw CodexSignInError.busy }
         isWorking = true
         defer { isWorking = false }

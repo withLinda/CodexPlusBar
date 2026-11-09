@@ -487,7 +487,7 @@ actor CloudKitAccountSync: CloudSyncTransport {
                 case .saveRecord:
                     guard state.dirtyGenerations[name] != nil else { return false }
                     if case .session(let session)? = state.body(for: name) {
-                        return state.profiles[CloudJournalState.profileRecordName(session.profileID)]?.tombstone == nil
+                        return state.canPublishSession(session)
                     }
                     return true
                 case .deleteRecord: return state.transport?.pendingSessionDeletes.contains(name) == true
@@ -516,6 +516,13 @@ actor CloudKitAccountSync: CloudSyncTransport {
             let device = try await journal.deviceState().deviceID
             let key = try await keys.writerKey(owner: state.owner, deviceID: device)
             try check(expected)
+            if case .session(let session) = body {
+                let current = try await journal.load()
+                try check(expected)
+                guard current.sentRevision(for: name) == revision, current.canPublishSession(session),
+                      current.transport?.includeSavedSessions != false,
+                      current.transport?.catalogPublicationPaused != true else { return nil }
+            }
             // Snapshot was captured before the key await. Its revision and body travel
             // together even when the coordinator commits a newer local edit meanwhile.
             let encoded = try codec.encode(body, owner: state.owner, key: key, systemFields: state.systemFields[name])

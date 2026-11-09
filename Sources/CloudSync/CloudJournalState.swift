@@ -135,6 +135,8 @@ struct CloudJournalState: Codable, Equatable, Sendable {
     var profiles: [String: CloudProfileDocument] = [:]
     var order: CloudOrderDocument?
     var sessions: [String: CloudSessionDocument] = [:]
+    /// Written only after explicit adoption has durably stored these exact bytes.
+    var adoptedSessionDigests: [String: Data]?
     var dirtyGenerations: [String: UInt64] = [:]
     /// High-water marks survive acknowledgements, independent of field clocks.
     var recordGenerations: [String: UInt64] = [:]
@@ -312,6 +314,7 @@ struct CloudJournalState: Codable, Equatable, Sendable {
         guard owner == expectedOwner else { throw CloudJournalError.ownerMismatch }
         guard !owner.container.isEmpty, !owner.userRecordName.isEmpty else { throw CloudJournalError.invalidState }
         try committedProjection.validate()
+        guard adoptedSessionDigests?.values.allSatisfy({ $0.count == 32 }) != false else { throw CloudJournalError.invalidState }
         try initialCatalogProjection?.validate()
         guard completedCatalogReceipts?.keys.allSatisfy({ $0.hasPrefix("profile.") || $0 == Self.orderRecordName }) != false,
               catalogAssetCleanup?.allSatisfy({ name in

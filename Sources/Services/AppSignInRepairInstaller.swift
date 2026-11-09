@@ -26,6 +26,7 @@ actor OpenChamberRepairInstaller {
         self.selector = selector ?? SelectorControlClient(homeDirectory: snapshots.homeDirectory)
     }
     func install(_ signIn: CodexSignIn, for profile: PlusProfile) async throws {
+        defer { CloudSavedSessionChange.released() }
         try await selector.withMaintenance(reason: .signInRepair) {
             try await self.gate.withOperation { try await self.perform(signIn, profile: profile) }
         }

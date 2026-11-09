@@ -34,6 +34,7 @@ import WebKit
         var identityReads = 0
         let restarted = CloudSyncCoordinator(profiles: rows, preferences: preferences, availability: { .development },
             identity: { _ in identityReads += 1; return CloudCoordinatorFixture.ownerA },
+            snapshots: .init(providers: [], revision: { 0 }),
             makeTransport: { journal in transport.journal = journal; return transport })
         await restarted.start()
         #expect(restarted.status == (disabled ? .off : .paused))
@@ -509,8 +510,9 @@ import WebKit
         let coordinator = f.coordinator()
         await coordinator.start(); await coordinator.setEnabled(true)
         let admission = try #require(coordinator.sessionAdmission(for: local.id))
-        let session = CloudSessionDocument(profileID: local.id, sourceDeviceID: UUID(), sourceName: "synthetic",
-            kind: .desktop, revision: 1, capturedAt: .now, payload: Data([4, 5]))
+        let session = CloudSessionDocument(profileID: local.id, sourceDeviceID: try #require(try f.preferences.read()?.deviceID), sourceName: "synthetic",
+            kind: .desktop, revision: 1, capturedAt: .now, payload: try CloudSessionPayload.desktop(
+                signIn: CodexSignIn(data: CodexSignInFixture.data(account: "synthetic-account", user: "synthetic-user")), consumed: []).encoded())
         try coordinator.commitCapturedSession(session, admission: admission)
         try await coordinator.pauseForTransfer(restoring: true)
         try coordinator.markRestoreCommitAttempt()
@@ -674,6 +676,7 @@ import WebKit
     func coordinator(available: Bool = true) -> CloudSyncCoordinator {
         .init(profiles: profiles, preferences: preferences, availability: { available ? .development : nil },
               identity: { [self] _ in identityReads += 1; return owner },
+              snapshots: .init(providers: [], revision: { 0 }),
               makeTransport: { [self] _ in transport })
     }
     func clean() {

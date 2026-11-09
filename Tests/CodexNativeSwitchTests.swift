@@ -56,6 +56,10 @@ struct CodexNativeSwitchTests {
 
         #expect(try fixture.vault.load(identity).data == original)
         #expect(try Data(contentsOf: fixture.authURL) == original)
+        var linked = fixture.profile; linked.codexSignIn = identity
+        let captured = try #require(try await service.captureSavedSession(for: linked))
+        if case .desktop(let signIn, _) = captured { #expect(signIn.data == original) }
+        else { Issue.record("Expected saved desktop snapshot") }
     }
 
     @Test(arguments: [
@@ -115,6 +119,10 @@ struct CodexNativeSwitchTests {
             let original = try Data(contentsOf: fixture.authURL)
             let task = Task { try await fixture.service.switchAndOpen(profile: profile) }
             await verifier.waitForStart()
+            // Another instance (repair owns one) must share the same home gate.
+            let exporter = CodexAccountSwitchService(homeDirectory: fixture.home,
+                resolveStore: { throw CodexSignInError.unsupportedConfiguration })
+            await #expect(throws: CodexSignInError.busy) { try await exporter.captureSavedSession(for: profile) }
             task.cancel()
             await verifier.finish()
             await #expect(throws: CodexSignInSwitchError.self) { try await task.value }
@@ -122,6 +130,11 @@ struct CodexNativeSwitchTests {
             #expect(try Data(contentsOf: fixture.authURL) == (sameAccount ? fresh.data : original))
             #expect(await verifier.returnedWhileCancelled)
             #expect(await fixture.app.events == ["close", "open"])
+            let captured = try #require(try await exporter.captureSavedSession(for: profile))
+            if case .desktop(let signIn, let consumed) = captured {
+                #expect(signIn == fresh)
+                #expect(!consumed.isEmpty)
+            } else { Issue.record("Expected resolved desktop snapshot") }
         }
     }
 

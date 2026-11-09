@@ -24,6 +24,7 @@ actor OpenChamberSignInCheckService: OpenChamberSignInChecking {
     }
 
     func check(profiles: [PlusProfile], didCheck: @escaping @Sendable (OpenChamberSignInCheckUpdate) async -> Void) async throws {
+        defer { CloudSavedSessionChange.released() }
         try await selector.withMaintenance(reason: .signInRepair) {
             try await self.gate.withOperation { try await self.perform(profiles: profiles, didCheck: didCheck) }
         }

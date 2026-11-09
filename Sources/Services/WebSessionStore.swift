@@ -31,6 +31,10 @@ final class WebSessionStore {
         return cookies.first(where: { $0.name == name })?.value
     }
 
+    func portableChatGPTCookies() async -> [BackupCookie] {
+        await dataStore.httpCookieStore.allCookies().map(BackupCookie.init).filter { $0.isValid(for: .codex) }
+    }
+
     func currentAccountCookieValue() async -> String? {
         await cookieValue(named: Self.currentAccountCookieName)
     }

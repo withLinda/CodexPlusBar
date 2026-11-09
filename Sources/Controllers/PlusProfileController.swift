@@ -75,9 +75,13 @@ final class PlusProfileController {
     /// Backups and catalog writes include inactive records, unlike the live profile list.
     var storedProfiles: [PlusProfile] { profiles.map(\.profile) + inactiveProfiles }
     var statusMessage: String?
-    var isRefreshing = false
+    var isRefreshing = false {
+        didSet { if oldValue, !isRefreshing { CloudSavedSessionChange.released() } }
+    }
     private(set) var isTransferring = false
-    @ObservationIgnored private var activeDataOperations = 0
+    @ObservationIgnored private var activeDataOperations = 0 {
+        didSet { if oldValue > 0, activeDataOperations == 0 { CloudSavedSessionChange.released() } }
+    }
     var dashboardStatus: PlusDashboardStatus = .empty
     var chromeSignInProfileIDs: Set<UUID> = []
     var switchingProfileIDs: Set<UUID> = []
@@ -91,7 +95,9 @@ final class PlusProfileController {
     private var openChamberUncheckedProfileIDs: Set<UUID>?
     @ObservationIgnored private var openChamberCheckTask: Task<Void, Never>?
     @ObservationIgnored private let signInChecker: any OpenChamberSignInChecking
-    private(set) var appSignInRepairProgress: AppSignInRepairProgress?
+    private(set) var appSignInRepairProgress: AppSignInRepairProgress? {
+        didSet { if oldValue != nil, appSignInRepairProgress == nil { CloudSavedSessionChange.released() } }
+    }
     private(set) var appSignInRepairStatus: OpenChamberActionStatus?
     @ObservationIgnored private var appSignInRepairTask: Task<Void, Never>?
     @ObservationIgnored private var repairExpectedProfile: PlusProfile?
@@ -137,6 +143,7 @@ final class PlusProfileController {
     func prepareCloudCatalogApply() async { await syncScheduler.pauseForManualOperation() }
 
     func finishCloudCatalogApply(removed: [PlusProfile]) async {
+        guard !removed.isEmpty else { syncScheduler.resumeAfterManualOperation(); return }
         activeDataOperations += 1
         defer { activeDataOperations -= 1; syncScheduler.resumeAfterManualOperation() }
         for profile in removed where profile.provider == .codex {
@@ -150,6 +157,19 @@ final class PlusProfileController {
         let result = try catalogStore.loadProfilesWithReport()
         guard result.sourceExists else { throw CloudJournalError.catalogUnavailable }
         return result.profiles
+    }
+
+    func cloudSessionSnapshotService() -> CloudSessionSnapshotService {
+        .init(providers: [
+            { [dataService] in try await dataService.captureSavedSession(for: $0) },
+            { [accountSwitchService] in try await accountSwitchService.captureSavedSession(for: $0) },
+            { [openCodeAuthService] in try await openCodeAuthService.captureSavedSession(for: $0) }
+        ])
+    }
+
+    func cloudSessionCaptureAllowed(for id: UUID) -> Bool {
+        !isTransferring && activeDataOperations == 0 && !isRefreshing && appSignInRepairProgress == nil &&
+            !chromeSignInProfileIDs.contains(id) && switchingProfileIDs.isEmpty && openCodeSwitchingProfileIDs.isEmpty
     }
 
     func initializeFreshCloudCatalog(state: CloudJournalState) throws {

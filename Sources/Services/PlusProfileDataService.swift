@@ -21,16 +21,20 @@ protocol PlusProfileDataServing: AnyObject {
     func closeChromeSignIn(for profile: PlusProfile) async
     func clearSession(for profile: PlusProfile) async throws
     func removeProfileData(for profile: PlusProfile) async throws
+    func captureSavedSession(for profile: PlusProfile) async throws -> CloudSessionPayload?
 }
 
 extension PlusProfileDataServing {
     func openAppAuthorization(_ url: URL, for profile: PlusProfile) async throws { throw AppSignInRepairError.helperUnavailable }
+    func captureSavedSession(for profile: PlusProfile) async throws -> CloudSessionPayload? { nil }
 }
 
 @MainActor
 final class PlusProfileDataService: PlusProfileDataServing {
     private let runtimeProvider: PlusProfileRuntimeProviding
     private let chromeSessionManager: ChromeSessionManaging
+    private var operating: Set<UUID> = []
+    private var browserProof: [UUID: (store: UUID, payload: CloudSessionPayload)] = [:]
 
     init(
         runtimeProvider: PlusProfileRuntimeProviding = ProfileRuntimeRegistry(),
@@ -45,6 +49,8 @@ final class PlusProfileDataService: PlusProfileDataServing {
     }
 
     func refreshProfile(_ profile: PlusProfile) async throws -> PlusProfileRefreshResult {
+        guard operating.insert(profile.id).inserted else { throw CloudSessionError.unavailable }
+        defer { operating.remove(profile.id); CloudSavedSessionChange.committed(); CloudSavedSessionChange.released() }
         guard profile.provider == .codex else {
             throw ChatGPTAPIError.unsupported("This saved provider is inactive.")
         }
@@ -68,6 +74,8 @@ final class PlusProfileDataService: PlusProfileDataServing {
             transport: runtime.transport
         )
 
+        await rememberBrowser(profile, context: context, runtime: runtime)
+
         return PlusProfileRefreshResult(
             usage: PlusProfileUsage(
                 accountID: snapshot.accountID,
@@ -88,6 +96,9 @@ final class PlusProfileDataService: PlusProfileDataServing {
     }
 
     func clearSession(for profile: PlusProfile) async throws {
+        guard operating.insert(profile.id).inserted else { throw CloudSessionError.unavailable }
+        defer { operating.remove(profile.id) }
+        browserProof.removeValue(forKey: profile.id)
         let runtime = runtimeProvider.runtime(for: profile)
         runtime.updateAuthContext(nil)
         await runtimeProvider.clearSession(for: profile)
@@ -95,6 +106,9 @@ final class PlusProfileDataService: PlusProfileDataServing {
     }
 
     func removeProfileData(for profile: PlusProfile) async throws {
+        guard operating.insert(profile.id).inserted else { throw CloudSessionError.unavailable }
+        defer { operating.remove(profile.id) }
+        browserProof.removeValue(forKey: profile.id)
         let runtime = runtimeProvider.runtime(for: profile)
         runtime.updateAuthContext(nil)
         try await runtimeProvider.removeProfileData(for: profile)
@@ -114,6 +128,9 @@ final class PlusProfileDataService: PlusProfileDataServing {
     }
 
     func syncChromeSession(for profile: PlusProfile) async throws {
+        guard operating.insert(profile.id).inserted else { throw CloudSessionError.unavailable }
+        defer { operating.remove(profile.id); CloudSavedSessionChange.committed(); CloudSavedSessionChange.released() }
+        browserProof.removeValue(forKey: profile.id)
         guard profile.provider == .codex else {
             throw ChatGPTAPIError.unsupported("This saved provider is inactive.")
         }
@@ -133,6 +150,8 @@ final class PlusProfileDataService: PlusProfileDataServing {
             )
             runtime.updateAuthContext(context)
 
+            await rememberBrowser(profile, context: context, runtime: runtime)
+
             await chromeSessionManager.closeSignIn(for: profile)
         } catch {
             if ChatGPTAPIError.map(error) == .unauthorized {
@@ -149,6 +168,29 @@ final class PlusProfileDataService: PlusProfileDataServing {
 
     func closeChromeSignIn(for profile: PlusProfile) async {
         await chromeSessionManager.closeSignIn(for: profile)
+    }
+
+    private func rememberBrowser(_ profile: PlusProfile, context: ChatGPTAuthContext, runtime: PlusProfileRuntime) async {
+        guard let userID = context.userID else { browserProof.removeValue(forKey: profile.id); return }
+        let cookies = await runtime.sessionStore.portableChatGPTCookies()
+        let payload = CloudSessionPayload.browser(cookies: cookies,
+            identity: .init(accountID: context.accountID, userID: userID), accessToken: context.accessToken)
+        guard let validated = try? payload.validated(), runtime.authContext == context else {
+            browserProof.removeValue(forKey: profile.id); return
+        }
+        browserProof[profile.id] = (profile.webDataStoreID, validated)
+    }
+
+    func captureSavedSession(for profile: PlusProfile) async throws -> CloudSessionPayload? {
+        guard profile.provider == .codex, let proof = browserProof[profile.id], proof.store == profile.webDataStoreID else { return nil }
+        guard operating.insert(profile.id).inserted else { throw CloudSessionError.unavailable }
+        defer { operating.remove(profile.id) }
+        guard case .browser(_, let identity, let token) = proof.payload else { return nil }
+        let runtime = runtimeProvider.runtime(for: profile)
+        let cookies = await runtime.sessionStore.portableChatGPTCookies()
+        let current = try CloudSessionPayload.browser(cookies: cookies, identity: identity, accessToken: token).validated()
+        guard current == proof.payload else { return nil }
+        return current
     }
 
     private static func makeUsageRequest(accountID: String) -> URLRequest {

@@ -64,6 +64,9 @@ struct CloudTransportJournalState: Codable, Equatable, Sendable {
     // Optional for journals created before coordinator admission existed.
     var catalogPublicationPaused: Bool?
     var includeSavedSessions: Bool?
+    /// Coordinator clears this on every owner run. Retained snapshots become
+    /// sendable only after saved-store recovery has resolved them in that run.
+    var validatedSessionRecords: Set<String>?
     var initialized = false
     var zoneEstablished = false
     var zoneCreationRequested = false
@@ -81,6 +84,7 @@ struct CloudTransportJournalState: Codable, Equatable, Sendable {
 
     func validate(in state: CloudJournalState) throws {
         guard Set(inboxOrder).count == inboxOrder.count,
+              validatedSessionRecords?.allSatisfy({ state.sessions[$0] != nil }) != false,
               inboxOrder.allSatisfy({ state.receipts[$0] != nil }),
               processedInbox.isSubset(of: Set(inboxOrder)),
               pendingSessionDeletes.allSatisfy({ sessionProfiles[$0] != nil }),

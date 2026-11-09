@@ -5,6 +5,33 @@ import WebKit
 
 @MainActor
 struct PlusProfileDataServiceTests {
+    @Test func browserCaptureRequiresAuthenticatedProofAndDoesNotRefreshOrWriteCookies() async throws {
+        let profile = sampleProfile(label: "arbitrary label", sortOrder: 0)
+        let signIn = try CodexSignIn(data: CodexSignInFixture.data())
+        let transport = makeRefreshTransport(usageAccountID: "workspace", catalogJSON: "{\"accounts\":{}}",
+            sessionUser: "user", accessToken: signIn.accessToken)
+        let runtime = PlusProfileRuntime(dataStore: .nonPersistent(), transport: transport)
+        let service = PlusProfileDataService(runtimeProvider: StubRuntimeProvider(runtimeByProfileID: [profile.id: runtime]),
+            chromeSessionManager: StubChromeSessionManager())
+        let cookie = try #require(HTTPCookie(properties: [.name: "__Secure-next-auth.session-token.0", .value: "synthetic-browser",
+            .domain: "chatgpt.com", .path: "/api", .secure: "TRUE"]))
+        await runtime.sessionStore.storeCookies([cookie])
+        #expect(try await service.captureSavedSession(for: profile) == nil)
+        _ = try await service.refreshProfile(profile)
+        let before = await runtime.sessionStore.portableChatGPTCookies()
+        let requests = transport.requestPaths
+        let payload = try #require(try await service.captureSavedSession(for: profile))
+        #expect(payload.kind == .browser)
+        #expect(try payload.identity == .init(accountID: "workspace", userID: "user"))
+        #expect(await runtime.sessionStore.portableChatGPTCookies() == before)
+        #expect(transport.requestPaths == requests)
+        let changed = try #require(HTTPCookie(properties: [.name: cookie.name, .value: "unverified-change",
+            .domain: cookie.domain, .path: cookie.path, .secure: "TRUE"]))
+        await runtime.sessionStore.storeCookies([changed])
+        #expect(try await service.captureSavedSession(for: profile) == nil)
+        #expect(transport.requestPaths == requests)
+    }
+
     @Test
     func selectorUsesOneCatalogFetchAndDoesNotRetimestampFailedEntitlement() async throws {
         var profile = sampleProfile(label: "selector", sortOrder: 0)
@@ -627,7 +654,8 @@ private func makeRefreshTransport(
     usageAccountID: String,
     catalogJSON: String,
     sessionUser: String? = nil,
-    failCatalogAfterFirst: Bool = false
+    failCatalogAfterFirst: Bool = false,
+    accessToken: String = "token-alpha"
 ) -> MockHTTPTransport {
     let counter = RequestCounter()
     return MockHTTPTransport { request in
@@ -637,7 +665,7 @@ private func makeRefreshTransport(
                 data: Data(
                     """
                     {
-                      "accessToken": "token-alpha",
+                      "accessToken": "\(accessToken)",
                       "user": {"id": "\(sessionUser ?? "")"},
                       "account": {
                         "id": "\(usageAccountID)"
@@ -664,7 +692,7 @@ private func makeRefreshTransport(
                           {
                             "authStatus": "logged_in",
                             "session": {
-                              "accessToken": "token-alpha",
+                              "accessToken": "\(accessToken)",
                               "expires": "2026-05-01T10:00:00Z",
                               "account": {
                                 "id": "\(usageAccountID)"

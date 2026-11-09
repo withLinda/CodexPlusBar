@@ -26,7 +26,8 @@ actor OpenChamberSyncService: OpenChamberSyncServing {
     }
 
     func reconcile(catalog: OpenChamberSyncCatalog, isCurrent: @escaping @Sendable (UInt64) async -> Bool) async throws -> OpenChamberSyncResult {
-        try await gate.withOperation { try await self.perform(catalog: catalog, isCurrent: isCurrent) }
+        defer { CloudSavedSessionChange.released() }
+        return try await gate.withOperation { try await self.perform(catalog: catalog, isCurrent: isCurrent) }
     }
 
     private func perform(catalog: OpenChamberSyncCatalog, isCurrent: @escaping @Sendable (UInt64) async -> Bool) async throws -> OpenChamberSyncResult {

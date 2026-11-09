@@ -22,6 +22,7 @@
 		1CC950CFB0E4FC260FC0F66E /* CodexBrowserAuthorization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 016B95B308851AA63C6088B6 /* CodexBrowserAuthorization.swift */; };
 		1DACB8A1A57CC61D700AA4E3 /* CloudSyncPaths.swift in Sources */ = {isa = PBXBuildFile; fileRef = E87B2FBC33700D1110851644 /* CloudSyncPaths.swift */; };
 		21284C4342EE9DBC5B114877 /* ProfileSignInSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91700F5F32C34F01643AE183 /* ProfileSignInSection.swift */; };
+		21BA6CB05364F97BB85BB788 /* CloudSessionPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A32E03BA762409FB2099F5A /* CloudSessionPayload.swift */; };
 		22BEC6AF178AF0F21F382E18 /* OpenChamberSignInCheckService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52247492C355D2EFB16E98B0 /* OpenChamberSignInCheckService.swift */; };
 		2742347C89158A8A05B2CF97 /* AppSignInRepair.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE7E6AC2D9C64EF6BB961BAE /* AppSignInRepair.swift */; };
 		27CDE503346F4D51A31A9AE3 /* CodexAppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25E2086F686897E104CED98A /* CodexAppDelegate.swift */; };
@@ -68,6 +69,7 @@
 		69D7B2EE7C28081914B8726E /* WebBootstrapService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61B4EA1729DE901852DAB94B /* WebBootstrapService.swift */; };
 		6ADDCE751FD6C31E1759C80C /* ProfileSummaryRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D71430D5A24E98E43ED2A14 /* ProfileSummaryRow.swift */; };
 		6E5FDEE47EFD3F385F90F3EA /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDB2F727B33B769B1AD9836D /* SettingsView.swift */; };
+		70169B2413A072973150BBB3 /* CloudSessionInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCADDE490C6F98DB63A5786A /* CloudSessionInbox.swift */; };
 		725C797EC57E4E9996CEAC6C /* OpenChamberSignInCheck.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF6939812FFC583F68E28929 /* OpenChamberSignInCheck.swift */; };
 		73BB12CD8E133AA0E131CC9F /* PhoneSummaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A872BFC23B2CCCBF513E45E1 /* PhoneSummaryView.swift */; };
 		75DFB4C19F6056DBAE57A1F3 /* MenuBarProfilePreference.swift in Sources */ = {isa = PBXBuildFile; fileRef = 400D81A1F70064BA2F950787 /* MenuBarProfilePreference.swift */; };
@@ -96,6 +98,7 @@
 		AEAB7F867EAA417C39CA40EA /* PlusProfileDataService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F0C740A5ED0A2BB15A75554 /* PlusProfileDataService.swift */; };
 		B0D9DEA1A710685A443CABDE /* MenuBarPanelTextScalePreference.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D6E8D24A2C7E16B085B2581 /* MenuBarPanelTextScalePreference.swift */; };
 		B609098339F75B5CE31A0340 /* SelectorObservation.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1BEAF53ABFC366F0F8B9DD2 /* SelectorObservation.swift */; };
+		B693F39FFBC205652F115EC1 /* CloudSessionSnapshotService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 901AA1B5C060C906BA39502A /* CloudSessionSnapshotService.swift */; };
 		B6A6F9029D8E5C186AD37DCB /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 6624649A965E920ACCCF0293 /* AppIcon.icon */; };
 		B8A6F3C1888090B1C66263C6 /* ChatGPTRequestSigner.swift in Sources */ = {isa = PBXBuildFile; fileRef = D05645796D76886DD5BA1FE3 /* ChatGPTRequestSigner.swift */; };
 		BC003F04CC2311D620A13E4D /* AppRuntimeController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AFFE17432F98288D4A9114B2 /* AppRuntimeController.swift */; };
@@ -207,6 +210,7 @@
 		58AE54A19ADBA050F96F0AF6 /* AppMinuteClock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppMinuteClock.swift; sourceTree = "<group>"; };
 		593821B61D542EC1B0B5D40E /* CodexPlusBar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CodexPlusBar.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		59FFC3B05EDF309E09E3DD01 /* AccountCatalogService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountCatalogService.swift; sourceTree = "<group>"; };
+		5A32E03BA762409FB2099F5A /* CloudSessionPayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudSessionPayload.swift; sourceTree = "<group>"; };
 		5ADC9A58E39E55458BD610F6 /* PlusProfileModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlusProfileModels.swift; sourceTree = "<group>"; };
 		5CA83EE4A24F4C71DD746CEE /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		5F1C962CA72543EAA154ABDD /* CloudPayloadCipher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudPayloadCipher.swift; sourceTree = "<group>"; };
@@ -236,6 +240,7 @@
 		864277862C546E5920AB3163 /* EmailToolsWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmailToolsWindowView.swift; sourceTree = "<group>"; };
 		8DB2AA3A3AF7C0E47B6DF5CE /* CookieBackedTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CookieBackedTransport.swift; sourceTree = "<group>"; };
 		8F39863D2B64EA5F98248247 /* OpenCodeSignInSnapshotStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodeSignInSnapshotStore.swift; sourceTree = "<group>"; };
+		901AA1B5C060C906BA39502A /* CloudSessionSnapshotService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudSessionSnapshotService.swift; sourceTree = "<group>"; };
 		91700F5F32C34F01643AE183 /* ProfileSignInSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileSignInSection.swift; sourceTree = "<group>"; };
 		91C089C12C69CBCA2AB2ACC0 /* CloudProfileMerge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudProfileMerge.swift; sourceTree = "<group>"; };
 		9436E943E02911A56E969EE6 /* AccountCatalogNormalizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountCatalogNormalizer.swift; sourceTree = "<group>"; };
@@ -282,6 +287,7 @@
 		F55FBE20C4C7CB8781822ED0 /* BackupBrowserGuard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupBrowserGuard.swift; sourceTree = "<group>"; };
 		FA93438B8CFDA14DDC4B2D65 /* ProfileCatalogStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileCatalogStore.swift; sourceTree = "<group>"; };
 		FB2F4489D4633C4EEC111474 /* CloudKitEngineDriver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudKitEngineDriver.swift; sourceTree = "<group>"; };
+		FCADDE490C6F98DB63A5786A /* CloudSessionInbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudSessionInbox.swift; sourceTree = "<group>"; };
 		FE7E6AC2D9C64EF6BB961BAE /* AppSignInRepair.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSignInRepair.swift; sourceTree = "<group>"; };
 		FF11C163E2745CE7277AF9DE /* DisplayFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayFormatter.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -314,6 +320,9 @@
 				91C089C12C69CBCA2AB2ACC0 /* CloudProfileMerge.swift */,
 				28CD5AC4DBA75A9C12FCE6FC /* CloudProfileProjection.swift */,
 				EB89411F04B918FA3AAC1FC4 /* CloudRecordCodec.swift */,
+				FCADDE490C6F98DB63A5786A /* CloudSessionInbox.swift */,
+				5A32E03BA762409FB2099F5A /* CloudSessionPayload.swift */,
+				901AA1B5C060C906BA39502A /* CloudSessionSnapshotService.swift */,
 				F2B9B84ED2D005FEA6F4A01C /* CloudSyncAvailability.swift */,
 				1DDB0B241962FB44269B1197 /* CloudSyncCoordinator.swift */,
 				A04DFF9FF8F36E7C8721F726 /* CloudSyncJournal.swift */,
@@ -687,6 +696,9 @@
 				0C712377CAF05F9051AFE289 /* CloudProfileMerge.swift in Sources */,
 				4FE08D41A463CF57AD36D2F3 /* CloudProfileProjection.swift in Sources */,
 				F26962AE918A238AE55B6AA7 /* CloudRecordCodec.swift in Sources */,
+				70169B2413A072973150BBB3 /* CloudSessionInbox.swift in Sources */,
+				21BA6CB05364F97BB85BB788 /* CloudSessionPayload.swift in Sources */,
+				B693F39FFBC205652F115EC1 /* CloudSessionSnapshotService.swift in Sources */,
 				A0082AFBEC4DFAEA21FC28BC /* CloudSyncAvailability.swift in Sources */,
 				EC9DF7C761456BFA0070A4F6 /* CloudSyncCoordinator.swift in Sources */,
 				8EE9AA7D4F275B5EC2F36BA1 /* CloudSyncJournal.swift in Sources */,

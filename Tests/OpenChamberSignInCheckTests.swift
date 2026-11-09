@@ -118,6 +118,15 @@ struct OpenChamberSignInCheckTests {
         #expect(inventory.openAI.first(where: \.active) == original)
         #expect(try inventory.oauth.contains { try $0.value.auth() == fresh })
         #expect(!inventory.entries.contains { $0.id == entry.id })
+        let exporter = OpenCodeOpenAIAuthService(homeDirectory: fixture.home,
+            resolveRuntime: { throw OpenCodeOpenAIAuthError.runtimeUnavailable }, operationGate: .init(), selector: MaintenanceTestControl(state: .paused))
+        let captured = try #require(try await exporter.captureSavedSession(for: syncProfile(entry)))
+        if case .openChamber(let portable, let consumed) = captured {
+            #expect(try portable.auth() == fresh)
+            #expect(!consumed.isEmpty)
+            #expect(portable.fields["extra"] == nil)
+        } else { Issue.record("Expected bulk-check snapshot") }
+        #expect(await client.inventory().entries == inventory.entries)
     }
 
     @Test func duplicateProfilesShareOneRefreshAndCancellationKeepsRotation() async throws {

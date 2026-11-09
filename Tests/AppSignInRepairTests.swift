@@ -82,6 +82,11 @@ struct AppSignInRepairTests {
         try await restarted.service.installRepaired(first, for: profile)
         #expect(try Data(contentsOf: f.authURL) == rotated.data)
         #expect(try f.vault.load(first.identity) == rotated)
+        let captured = try #require(try await restarted.service.captureSavedSession(for: profile))
+        if case .desktop(let signIn, let consumed) = captured {
+            #expect(signIn == rotated)
+            #expect(consumed.contains(CloudSessionPayload.fingerprint(first.refreshToken)))
+        } else { Issue.record("Expected repaired desktop snapshot") }
     }
 
     @Test func desktopCancellationAfterRefreshPreservesInstalledReplacement() async throws {
