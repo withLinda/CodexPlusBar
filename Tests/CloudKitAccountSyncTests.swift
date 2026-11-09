@@ -4,6 +4,214 @@ import Testing
 @testable import CodexPlusBar
 
 struct CloudKitAccountSyncTests {
+    @Test func productionPendingAdapterPreservesDeletionPrecedenceAcrossRepeatedReplacements() {
+        let id = CloudRecordCodec.recordID("session.synthetic")
+        let other = CloudRecordCodec.recordID("profile.synthetic")
+        let state = CloudSyntheticPendingState()
+        state.add(pendingRecordZoneChanges: [.saveRecord(id), .deleteRecord(id)])
+        #expect(state.pendingRecordZoneChanges == [.deleteRecord(id)])
+        for desired: [CKSyncEngine.PendingRecordZoneChange] in [[.saveRecord(id), .deleteRecord(id)], [.deleteRecord(id), .saveRecord(id)]] {
+            CloudEnginePendingChanges.replace(in: state, with: desired)
+            #expect(state.pendingRecordZoneChanges == [.deleteRecord(id)])
+        }
+        CloudEnginePendingChanges.replace(in: state, with: [.saveRecord(other)])
+        #expect(state.pendingRecordZoneChanges == [.saveRecord(other)])
+        CloudEnginePendingChanges.replace(in: state, with: [])
+        #expect(state.pendingRecordZoneChanges.isEmpty)
+    }
+
+    @Test func affirmativeAutomaticAndExplicitFetchEvidenceCanReportSuccessButIsNotReused() async throws {
+        let f = try await CloudTransportFixture(); defer { f.disk.cleanUp() }
+        try await f.startReady()
+        await f.driver.emit(.fetchStarted)
+        await f.driver.emit(.zoneFetched(error: nil))
+        await f.driver.emit(.fetchFinished)
+        let automatic = try #require(try await f.journal.load().lastSuccess)
+        await f.driver.emit(.fetchStarted)
+        await f.driver.emit(.fetchFinished)
+        #expect(try await f.journal.load().lastSuccess == automatic)
+        try await f.journal.transaction { $0.lastSuccess = .distantPast }
+        try await f.transport.syncNow()
+        #expect(try await f.journal.load().lastSuccess != .distantPast)
+        await f.transport.stop()
+    }
+
+    @Test func stopDuringPreviousEngineDrainInvalidatesSuspendedStartIntent() async throws {
+        let f = try await CloudTransportFixture(); defer { f.disk.cleanUp() }
+        let name = try await f.localProfile()
+        try await f.startReady()
+        await f.driver.holdCancellation()
+        let restarting = Task { try await f.start() }
+        await f.driver.waitForCancellation()
+        let startingIntent = await f.transport.lifecycleIntent
+        let stopping = Task { await f.transport.stop() }
+        while await f.transport.lifecycleIntent == startingIntent { await Task.yield() }
+        await f.driver.finishCancellation()
+        await #expect(throws: CloudTransportError.notStarted) { try await restarting.value }
+        await stopping.value
+        #expect(await f.driver.starts == 1)
+        #expect(await f.driver.batch() == nil)
+        #expect(try await f.journal.load().dirtyGenerations[name] != nil)
+    }
+
+    @Test func stopDuringDriverStartupDoesNotOpenBatchAdmission() async throws {
+        let f = try await CloudTransportFixture(); defer { f.disk.cleanUp() }
+        let name = try await f.localProfile()
+        await f.driver.holdStartup()
+        let starting = Task { try await f.start() }
+        await f.driver.waitForStartup()
+        let intent = await f.transport.lifecycleIntent
+        let stopping = Task { await f.transport.stop() }
+        while await f.transport.lifecycleIntent == intent { await Task.yield() }
+        await f.driver.emit(.zoneFetched(error: nil))
+        #expect(await f.driver.batch() == nil)
+        await f.driver.finishStartup()
+        await #expect(throws: CloudTransportError.notStarted) { try await starting.value }
+        await stopping.value
+        #expect(try await f.journal.load().dirtyGenerations[name] != nil)
+    }
+
+    @Test func downloadedAssetReadFailureStopsEpochWithoutClassifyingServerRecordAsInvalid() async throws {
+        for missingParent in [false, true] {
+            let f = try await CloudTransportFixture(); defer { f.disk.cleanUp() }
+            let name = try await f.localProfile()
+            try await f.journal.transaction { $0.engineState = Data([11]) }
+            let remote = try f.record(.profile(try #require(try await f.journal.load().profiles[name])))
+            let originalAsset = remote.record["payload"]
+            let missing = missingParent ? f.disk.base.appendingPathComponent("missing-parent/payload.asset") : f.disk.base.appendingPathComponent("missing.asset")
+            remote.record["payload"] = CKAsset(fileURL: missing)
+            try await f.startReady()
+            await f.driver.emit(.fetched(records: [remote.record], deletions: []))
+            await f.driver.emit(.state(Data([12])))
+            let failed = try await f.journal.load()
+            #expect(failed.engineState == Data([11]))
+            #expect(failed.receivedEnvelopes.isEmpty)
+            #expect(failed.transport?.blockedRecords[name] == nil)
+            #expect(await f.driver.batch() == nil)
+            await f.transport.stop()
+            remote.record["payload"] = originalAsset
+            try await f.startReady()
+            #expect(await f.driver.loadedState == Data([11]))
+            await f.driver.emit(.fetched(records: [remote.record], deletions: []))
+            await f.driver.emit(.state(Data([13])))
+            #expect(try await f.journal.load().receivedEnvelopes.count == 1)
+            #expect(try await f.journal.load().engineState == Data([13]))
+            await f.transport.stop()
+        }
+    }
+
+    @Test func malformedServerRecordRemainsItemSpecificAndDoesNotStopUnrelatedSends() async throws {
+        let f = try await CloudTransportFixture(); defer { f.disk.cleanUp() }
+        let invalid = try await f.localProfile(), valid = try await f.localProfile()
+        let record = try f.record(.profile(try #require(try await f.journal.load().profiles[invalid])))
+        record.record["schemaVersion"] = "bad" as CKRecordValue
+        try await f.startReady()
+        await f.driver.emit(.fetched(records: [record.record], deletions: []))
+        await f.driver.emit(.state(Data([9])))
+        #expect(try await f.journal.load().transport?.blockedRecords[invalid] == .invalid)
+        #expect(try await f.journal.load().engineState == Data([9]))
+        #expect(await f.driver.batch()?.recordsToSave.map(\.recordID.recordName) == [valid])
+        await f.transport.stop()
+    }
+
+    @Test func automaticDatabaseFetchCompletionWithoutZoneSuccessCannotAdvanceLastSuccess() async throws {
+        let f = try await CloudTransportFixture(); defer { f.disk.cleanUp() }
+        try await f.startReady()
+        try await f.journal.transaction { $0.lastSuccess = .distantPast }
+        // This is also the SDK event sequence for a database-level failure: there is
+        // no per-zone error, and DidFetchChanges exposes no result/error property.
+        await f.driver.emit(.fetchStarted)
+        await f.driver.emit(.fetchFinished)
+        await f.driver.emit(.sendFinished)
+        #expect(try await f.journal.load().lastSuccess == .distantPast)
+        await f.driver.emit(.accountChanged)
+        var events = f.transport.events.makeAsyncIterator()
+        while let event = await events.next() {
+            if case .accountChanged = event.value { break }
+            if case .status(.upToDate) = event.value { Issue.record("Completion alone published success") }
+        }
+        await f.transport.stop()
+    }
+
+    @Test func manualDatabaseFetchErrorAfterDelegateCompletionCannotPublishSuccess() async throws {
+        for withZoneSuccess in [false, true] {
+            let f = try await CloudTransportFixture(); defer { f.disk.cleanUp() }
+            try await f.startReady()
+            try await f.journal.transaction { $0.lastSuccess = .distantPast }
+            await f.driver.setFetchInspector { try await f.journal.load().lastSuccess }
+            await f.driver.failFetchAfterDelegateCompletion(withZoneSuccess: withZoneSuccess)
+            await #expect(throws: CKError.self) { try await f.transport.syncNow() }
+            #expect(try await f.journal.load().lastSuccess == .distantPast)
+            #expect(await f.driver.lastSuccessBeforeFetchThrow == .distantPast)
+            await f.driver.emit(.accountChanged)
+            var events = f.transport.events.makeAsyncIterator()
+            while let event = await events.next() {
+                if case .accountChanged = event.value { break }
+                if case .status(.upToDate) = event.value { Issue.record("Failed fetch published success") }
+            }
+            await f.transport.stop()
+        }
+    }
+
+    @Test func repeatedPendingRefreshCannotReplaceTombstoneSessionDeleteWithDirtySave() async throws {
+        let f = try await CloudTransportFixture(); defer { f.disk.cleanUp() }
+        let profileID = UUID()
+        let session = CloudSessionDocument(profileID: profileID, sourceDeviceID: UUID(), sourceName: "synthetic", kind: .desktop, revision: 1, capturedAt: .distantPast, payload: Data([1]))
+        let name = CloudRecordCodec.recordName(for: .session(session))
+        try await f.journal.transaction { state in
+            state.sessions[name] = session
+            try state.markDirty(recordName: name, body: .session(session))
+            let tombstone = CloudProfileDocument(id: profileID, createdAt: .distantPast,
+                tombstone: .init(version: .init(counter: 1, deviceID: UUID()), deletedAt: .distantPast))
+            state.profiles[CloudJournalState.profileRecordName(profileID)] = tombstone
+            state.lamportCounter = 1
+            state.transport = .init()
+            state.transport?.sessionProfiles[name] = profileID
+            state.transport?.acknowledgedTombstones.insert(profileID)
+            state.transport?.pendingSessionDeletes.insert(name)
+        }
+        try await f.startReady()
+        for _ in 0..<3 { await f.driver.emit(.fetched(records: [], deletions: [])) }
+        #expect(await f.driver.pending == [.deleteRecord(CloudRecordCodec.recordID(name))])
+        #expect(await f.driver.lastSubmittedPending == [.deleteRecord(CloudRecordCodec.recordID(name))])
+        #expect(await f.driver.batch()?.recordIDsToDelete == [CloudRecordCodec.recordID(name)])
+        await f.transport.stop()
+    }
+
+    @Test func fetchedSessionAbsenceSettlesDirtyRetryAndBlockedStateWithoutErasingLocalSnapshot() async throws {
+        for indexed in [false, true] {
+            let f = try await CloudTransportFixture(); defer { f.disk.cleanUp() }
+            let session = CloudSessionDocument(profileID: UUID(), sourceDeviceID: UUID(), sourceName: "synthetic", kind: .desktop, revision: 1, capturedAt: .distantPast, payload: Data([1]))
+            let name = CloudRecordCodec.recordName(for: .session(session))
+            try await f.journal.transaction { state in
+                state.sessions[name] = session
+                try state.markDirty(recordName: name, body: .session(session))
+                state.transport = .init()
+                if indexed {
+                    state.transport?.sessionProfiles[name] = session.profileID
+                    state.transport?.pendingSessionDeletes.insert(name)
+                }
+                state.transport?.blockedRecords[name] = .quota
+                state.transport?.retryAfter[name] = .distantFuture
+            }
+            try await f.startReady()
+            let before = try await f.journal.load()
+            await f.driver.emit(.fetched(records: [], deletions: [CloudRecordCodec.recordID(name)]))
+            await f.driver.emit(.fetched(records: [], deletions: [CloudRecordCodec.recordID(name)]))
+            let state = try await f.journal.load()
+            #expect(state.dirtyGenerations[name] == nil)
+            #expect(state.transport?.retryAfter[name] == nil)
+            #expect(state.transport?.blockedRecords[name] == nil)
+            #expect(state.transport?.pendingSessionDeletes.contains(name) == false)
+            #expect(state.transport?.deletedSessions.contains(name) == true)
+            #expect(state.sessions[name] == session)
+            #expect(state.recordGenerations == before.recordGenerations)
+            #expect(state.payloadDigests == before.payloadDigests)
+            #expect(await f.driver.pending.isEmpty)
+            await f.transport.stop()
+        }
+    }
+
     @Test func storageRecoveryRecreatesDriverFromLastDurableStateAfterBackoff() async throws {
         let fault = CloudTransportFault(), sleeper = CloudTransportSleeper()
         let f = try await CloudTransportFixture(io: .init { op, name in try fault.check(op, name) },
@@ -545,26 +753,54 @@ struct CloudKitAccountSyncTests {
 actor CloudFakeEngineDriver: CloudEngineDriving {
     var callbacks: CloudEngineCallbacks?
     var loadedState: Data?
-    var pending: [CKSyncEngine.PendingRecordZoneChange] = []
+    private let pendingState = CloudSyntheticPendingState()
+    var pending: [CKSyncEngine.PendingRecordZoneChange] { pendingState.pendingRecordZoneChanges }
+    var lastSubmittedPending: [CKSyncEngine.PendingRecordZoneChange] = []
+    var inspectFetchCompletion: (@Sendable () async throws -> Date?)?
+    var lastSuccessBeforeFetchThrow: Date?
+    private var failedFetchZoneSuccess: Bool?
     var zoneCreations = 0
     var fetchCalls = 0, sendCalls = 0
-    private var starts = 0
+    private(set) var starts = 0
     private var startWaiter: (Int, CheckedContinuation<Void, Never>)?
     private var held = false
     private var cancellation: CheckedContinuation<Void, Never>?
     private var cancellationWaiter: CheckedContinuation<Void, Never>?
     private var operations = CloudEngineOperationDrain()
+    private var holdStart = false
+    private var startup: CheckedContinuation<Void, Never>?
+    private var startupWaiter: CheckedContinuation<Void, Never>?
     func start(owner: CloudOwner, state: Data?, callbacks: CloudEngineCallbacks) async throws {
         self.loadedState = state; self.callbacks = callbacks; starts += 1
         operations = CloudEngineOperationDrain()
         if let waiter = startWaiter, starts >= waiter.0 { startWaiter = nil; waiter.1.resume() }
+        if holdStart {
+            await withCheckedContinuation { startup = $0; startupWaiter?.resume(); startupWaiter = nil }
+        }
     }
+    func holdStartup() { holdStart = true }
+    func waitForStartup() async { if startup == nil { await withCheckedContinuation { startupWaiter = $0 } } }
+    func finishStartup() { holdStart = false; startup?.resume(); startup = nil }
     func waitForStarts(_ count: Int) async {
         if starts < count { await withCheckedContinuation { startWaiter = (count, $0) } }
     }
-    func setPending(_ changes: [CKSyncEngine.PendingRecordZoneChange]) { pending = changes }
+    func setPending(_ changes: [CKSyncEngine.PendingRecordZoneChange]) {
+        lastSubmittedPending = changes
+        CloudEnginePendingChanges.replace(in: pendingState, with: changes)
+    }
     func createZone() { zoneCreations += 1 }
-    func fetchChanges() async throws { fetchCalls += 1 }
+    func failFetchAfterDelegateCompletion(withZoneSuccess: Bool) { failedFetchZoneSuccess = withZoneSuccess }
+    func setFetchInspector(_ inspect: @escaping @Sendable () async throws -> Date?) { inspectFetchCompletion = inspect }
+    func fetchChanges() async throws {
+        fetchCalls += 1
+        if let withZoneSuccess = failedFetchZoneSuccess {
+            await callbacks?.event(.fetchStarted)
+            if withZoneSuccess { await callbacks?.event(.zoneFetched(error: nil)) }
+            await callbacks?.event(.fetchFinished)
+            lastSuccessBeforeFetchThrow = try await inspectFetchCompletion?()
+            throw CKError(.networkFailure)
+        }
+    }
     func sendChanges() async throws { sendCalls += 1 }
     func cancelOperations() async {
         guard held else { return }
@@ -583,6 +819,31 @@ actor CloudFakeEngineDriver: CloudEngineDriving {
     func emit(_ event: CloudEngineEvent) async { await callbacks?.event(event) }
     func batch(scope: CKSyncEngine.SendChangesOptions.Scope = .all) async -> CKSyncEngine.RecordZoneChangeBatch? {
         await callbacks?.nextBatch(scope, pending)
+    }
+}
+
+/// Models the documented State.add last-operation-wins contract, not a second copy of
+/// the production reconciliation algorithm. No CKContainer or CKSyncEngine is constructed.
+final class CloudSyntheticPendingState: CloudEnginePendingState, @unchecked Sendable {
+    private let lock = NSLock()
+    private var changes: [CKSyncEngine.PendingRecordZoneChange] = []
+    var pendingRecordZoneChanges: [CKSyncEngine.PendingRecordZoneChange] { lock.withLock { changes } }
+    func remove(pendingRecordZoneChanges removals: [CKSyncEngine.PendingRecordZoneChange]) {
+        lock.withLock { changes.removeAll { removals.contains($0) } }
+    }
+    func add(pendingRecordZoneChanges additions: [CKSyncEngine.PendingRecordZoneChange]) {
+        lock.withLock {
+            for addition in additions {
+                changes.removeAll { Self.id($0) == Self.id(addition) }
+                changes.append(addition)
+            }
+        }
+    }
+    private static func id(_ change: CKSyncEngine.PendingRecordZoneChange) -> CKRecord.ID? {
+        switch change {
+        case .saveRecord(let id), .deleteRecord(let id): id
+        @unknown default: nil
+        }
     }
 }
 

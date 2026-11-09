@@ -16,12 +16,17 @@ actor CloudKitAccountSync: CloudSyncTransport {
     /// A new internal token for each engine, including a change-token-expiration restart.
     private var token: UUID?
     private var desiredRun: UUID?
+    private(set) var lifecycleIntent = UUID()
     private var drain: Task<Void, Never>?
     private var inFlight: [String: Flight] = [:]
     private var deleting: Set<String> = []
     private var waitingRecords: Set<String> = []
     private var attempted: Set<String> = []
     private var ready = false
+    private var explicitFetches: Set<UUID> = []
+    private var fetchIsActive = false
+    private var fetchedZoneSuccessfully = false
+    private var verifiedFetch = false
     private var retryTask: Task<Void, Never>?
     private(set) var recoveryTask: Task<Void, Never>?
     private let now: @Sendable () -> Date
@@ -52,24 +57,33 @@ actor CloudKitAccountSync: CloudSyncTransport {
     deinit { retryTask?.cancel(); recoveryTask?.cancel(); continuation.finish() }
 
     func start(owner: CloudOwner, epoch: UUID) async throws {
-        try await lifecycle.run { try await self.startIsolated(owner: owner, epoch: epoch) }
+        let intent = UUID()
+        lifecycleIntent = intent
+        try await lifecycle.run { try await self.startIsolated(owner: owner, epoch: epoch, intent: intent) }
     }
 
-    private func startIsolated(owner: CloudOwner, epoch: UUID) async throws {
+    private func startIsolated(owner: CloudOwner, epoch: UUID, intent: UUID) async throws {
+        try checkIntent(intent)
         recoveryTask?.cancel(); recoveryTask = nil
         desiredRun = nil
         await beginDrain().value
+        try checkIntent(intent)
         drain = nil
         guard owner == journal.owner else { throw CloudJournalError.ownerMismatch }
         self.owner = owner; self.epoch = epoch; desiredRun = UUID()
-        try await openEngine()
+        try await openEngine(intent: intent)
     }
 
-    private func openEngine() async throws {
+    private func openEngine(intent: UUID) async throws {
         let state = try await journal.load()
+        try checkIntent(intent)
         guard state.transport?.zoneLost != true else { throw CloudTransportError.zoneLost }
         let newToken = UUID()
         ready = false
+        explicitFetches.removeAll()
+        fetchIsActive = false
+        fetchedZoneSuccessfully = false
+        verifiedFetch = false
         token = newToken
         let engine = makeDriver()
         driver = engine
@@ -82,11 +96,15 @@ actor CloudKitAccountSync: CloudSyncTransport {
         })
         do {
             try await engine.start(owner: state.owner, state: state.engineState, callbacks: callbacks)
+            try checkIntent(intent)
             try await work.run { try await self.replayInbox(token: newToken) }
+            try checkIntent(intent)
             guard token == newToken else { throw CloudTransportError.notStarted }
             ready = true
             try await updatePending(token: newToken)
+            try checkIntent(intent)
             if state.transport?.zoneCreationRequested == true { await engine.createZone() }
+            try checkIntent(intent)
             emit(.status(.syncing))
         } catch {
             _ = beginDrain()
@@ -95,6 +113,7 @@ actor CloudKitAccountSync: CloudSyncTransport {
     }
 
     func stop() async {
+        lifecycleIntent = UUID()
         // Close admission immediately, even if start is currently awaiting key delivery.
         desiredRun = nil; token = nil; ready = false
         recoveryTask?.cancel(); recoveryTask = nil
@@ -137,7 +156,7 @@ actor CloudKitAccountSync: CloudSyncTransport {
                 try await self.replayInbox(token: token)
                 try await self.updatePending(token: token)
             }
-            try await driver.fetchChanges()
+            try await fetchChanges(using: driver, token: token)
             try check(token)
             try await driver.sendChanges()
             try check(token)
@@ -169,6 +188,10 @@ actor CloudKitAccountSync: CloudSyncTransport {
         guard token == expected else { throw CloudTransportError.notStarted }
     }
 
+    private func checkIntent(_ expected: UUID) throws {
+        guard lifecycleIntent == expected else { throw CloudTransportError.notStarted }
+    }
+
     private func emit(_ value: CloudTransportEvent.Value) {
         if let owner, let epoch { continuation.yield(.init(owner: owner, epoch: epoch, value: value)) }
     }
@@ -188,19 +211,24 @@ actor CloudKitAccountSync: CloudSyncTransport {
                 }
                 for id in deletions where id.zoneID == CloudRecordCodec.zoneID {
                     try await journal.transaction { state in
-                        var transport = state.transport ?? .init()
-                        if transport.sessionProfiles[id.recordName] != nil {
-                            transport.pendingSessionDeletes.remove(id.recordName)
-                            transport.deletedSessions.insert(id.recordName)
-                        } else { transport.blockedRecords[id.recordName] = .deleted }
-                        state.transport = transport
+                        if !Self.confirmSessionAbsence(id.recordName, in: &state) {
+                            if state.transport == nil { state.transport = .init() }
+                            state.transport?.blockedRecords[id.recordName] = .deleted
+                        }
                     }
+                    deleting.remove(id.recordName)
+                    attempted.remove(id.recordName)
                 }
                 try await replayInbox(token: expected)
                 try await updatePending(token: expected)
             case .zoneFetched(let error):
-                if let error { await processNetworkError(error, recordName: "", token: expected) }
+                if let error {
+                    fetchedZoneSuccessfully = false
+                    verifiedFetch = false
+                    await processNetworkError(error, recordName: "", token: expected)
+                }
                 else {
+                    fetchedZoneSuccessfully = true
                     try await journal.transaction { state in
                         var transport = state.transport ?? .init()
                         transport.initialized = true; transport.zoneEstablished = true
@@ -222,10 +250,20 @@ actor CloudKitAccountSync: CloudSyncTransport {
                 try await loseZone()
             case .accountChanged:
                 emit(.accountChanged); emit(.status(.paused(.accountChanged)))
+                lifecycleIntent = UUID()
                 desiredRun = nil; _ = beginDrain()
             case .fetchStarted:
+                fetchIsActive = true
+                fetchedZoneSuccessfully = false
+                verifiedFetch = false
                 emit(.status(.syncing))
             case .fetchFinished:
+                fetchIsActive = false
+                // DidFetchChanges carries no success/error result. An automatic pass
+                // needs affirmative zone success in this pass. Explicit requests wait
+                // for fetchChanges() to return, after all delegate callbacks, or throw.
+                verifiedFetch = fetchedZoneSuccessfully && explicitFetches.isEmpty
+                fetchedZoneSuccessfully = false
                 try await reportSuccessIfSettled(token: expected)
             case .sendFinished:
                 // SDK completion is the other valid lease release boundary (including a
@@ -248,22 +286,12 @@ actor CloudKitAccountSync: CloudSyncTransport {
                     try check(expected)
                 }
                 for id in deleted where deleting.contains(id.recordName) {
-                    try await journal.transaction {
-                        $0.transport?.pendingSessionDeletes.remove(id.recordName)
-                        $0.transport?.deletedSessions.insert(id.recordName)
-                        $0.transport?.retryAfter.removeValue(forKey: id.recordName)
-                        $0.dirtyGenerations.removeValue(forKey: id.recordName)
-                    }
+                    _ = try await journal.transaction { Self.confirmSessionAbsence(id.recordName, in: &$0) }
                     deleting.remove(id.recordName)
                 }
                 for (id, error) in failedDeletes where deleting.contains(id.recordName) {
                     if error.code == .unknownItem {
-                        try await journal.transaction {
-                            $0.transport?.pendingSessionDeletes.remove(id.recordName)
-                            $0.transport?.deletedSessions.insert(id.recordName)
-                            $0.transport?.retryAfter.removeValue(forKey: id.recordName)
-                            $0.dirtyGenerations.removeValue(forKey: id.recordName)
-                        }
+                        _ = try await journal.transaction { Self.confirmSessionAbsence(id.recordName, in: &$0) }
                     } else { await processNetworkError(error, recordName: id.recordName, token: expected) }
                     deleting.remove(id.recordName)
                 }
@@ -279,6 +307,9 @@ actor CloudKitAccountSync: CloudSyncTransport {
         let envelope: CloudRecordEnvelope
         do { envelope = try codec.envelope(from: record) }
         catch {
+            // A vanished/unreadable downloaded file is a local durability failure, not
+            // malformed server content. Keep the previous cursor so it can be fetched again.
+            guard error is CloudRecordCodecError || (error as? CloudJournalError) == .tooLarge else { throw error }
             // Invalid/oversized server data is item-specific. Retain a durable write block
             // before allowing the cursor past it; do not allocate an unbounded payload.
             let name = record.recordID.recordName
@@ -407,9 +438,25 @@ actor CloudKitAccountSync: CloudSyncTransport {
         try check(expected)
         let state = try await journal.load()
         try check(expected)
-        let saves = state.dirtyGenerations.keys.sorted().map { CKSyncEngine.PendingRecordZoneChange.saveRecord(CloudRecordCodec.recordID($0)) }
-        let deletes = (state.transport?.pendingSessionDeletes ?? []).sorted().map { CKSyncEngine.PendingRecordZoneChange.deleteRecord(CloudRecordCodec.recordID($0)) }
+        let deleting = state.transport?.pendingSessionDeletes ?? []
+        let saves = state.dirtyGenerations.keys.filter { !deleting.contains($0) }.sorted()
+            .map { CKSyncEngine.PendingRecordZoneChange.saveRecord(CloudRecordCodec.recordID($0)) }
+        let deletes = deleting.sorted().map { CKSyncEngine.PendingRecordZoneChange.deleteRecord(CloudRecordCodec.recordID($0)) }
         await driver?.setPending(saves + deletes)
+    }
+
+    /// A fetched deletion, successful delete and unknown-item response are the same
+    /// authoritative absence. Preserve local snapshots and generation high-water marks.
+    private static func confirmSessionAbsence(_ name: String, in state: inout CloudJournalState) -> Bool {
+        guard let profileID = state.transport?.sessionProfiles[name] ?? state.sessions[name]?.profileID else { return false }
+        if state.transport == nil { state.transport = .init() }
+        state.transport?.sessionProfiles[name] = profileID
+        state.transport?.pendingSessionDeletes.remove(name)
+        state.transport?.deletedSessions.insert(name)
+        state.transport?.retryAfter.removeValue(forKey: name)
+        state.transport?.blockedRecords.removeValue(forKey: name)
+        state.dirtyGenerations.removeValue(forKey: name)
+        return true
     }
 
     private func batch(scope: CKSyncEngine.SendChangesOptions.Scope, pending: [CKSyncEngine.PendingRecordZoneChange], token expected: UUID) async -> CKSyncEngine.RecordZoneChangeBatch? {
@@ -532,6 +579,7 @@ actor CloudKitAccountSync: CloudSyncTransport {
             if state.transport == nil { state.transport = .init() }
             state.transport?.zoneLost = true; state.transport?.initialized = false
         }
+        lifecycleIntent = UUID()
         emit(.status(.paused(.zoneLost))); _ = beginDrain()
     }
 
@@ -614,7 +662,7 @@ actor CloudKitAccountSync: CloudSyncTransport {
                 scheduleRetry(after: deadline.timeIntervalSince(now()), token: expected)
                 return
             }
-            try await driver.fetchChanges()
+            try await fetchChanges(using: driver, token: expected)
             try check(expected)
             try await driver.sendChanges()
             let state = try await journal.load()
@@ -650,14 +698,45 @@ actor CloudKitAccountSync: CloudSyncTransport {
 
     private func restartIfDesired(_ wanted: UUID?) async throws {
         guard wanted != nil, desiredRun == wanted else { return }
+        let intent = lifecycleIntent
         drain = nil
-        try await openEngine()
-        try await driver?.fetchChanges()
+        try await openEngine(intent: intent)
+        try checkIntent(intent)
+        if let driver, let token { try await fetchChanges(using: driver, token: token) }
+    }
+
+    private func fetchChanges(using driver: any CloudEngineDriving, token expected: UUID) async throws {
+        let request = UUID()
+        try await work.run { try await self.beginExplicitFetch(request, token: expected) }
+        do {
+            try await driver.fetchChanges()
+            try await work.run { try await self.finishExplicitFetch(request, succeeded: true, token: expected) }
+        } catch {
+            _ = try? await work.run { try await self.finishExplicitFetch(request, succeeded: false, token: expected) }
+            throw error
+        }
+    }
+
+    private func beginExplicitFetch(_ request: UUID, token expected: UUID) throws {
+        try check(expected)
+        explicitFetches.insert(request)
+        verifiedFetch = false
+    }
+
+    private func finishExplicitFetch(_ request: UUID, succeeded: Bool, token expected: UUID) async throws {
+        try check(expected)
+        explicitFetches.remove(request)
+        verifiedFetch = succeeded && explicitFetches.isEmpty && !fetchIsActive
+        if verifiedFetch {
+            _ = try await journal.transaction { $0.transport?.retryAfter.removeValue(forKey: "") }
+            try await reportSuccessIfSettled(token: expected)
+        }
     }
 
     private func reportSuccessIfSettled(token expected: UUID) async throws {
         try check(expected)
-        guard inFlight.isEmpty, deleting.isEmpty, waitingRecords.isEmpty else { return }
+        guard verifiedFetch, !fetchIsActive, explicitFetches.isEmpty,
+              inFlight.isEmpty, deleting.isEmpty, waitingRecords.isEmpty else { return }
         let updated = try await journal.transaction { state -> Bool in
             guard let transport = state.transport, transport.initialized, !transport.zoneLost,
                   transport.blockedRecords.isEmpty, transport.pendingSessionDeletes.isEmpty,
@@ -665,89 +744,5 @@ actor CloudKitAccountSync: CloudSyncTransport {
             state.lastSuccess = .now; return true
         }
         if updated { emit(.status(.upToDate)) }
-    }
-}
-
-/// The only real network adapter. CKContainer and CKSyncEngine are created only by start.
-private actor CloudKitEngineDriver: CloudEngineDriving {
-    private var engine: CKSyncEngine?
-    private var delegate: CloudKitEngineDelegate?
-
-    func start(owner: CloudOwner, state: Data?, callbacks: CloudEngineCallbacks) async throws {
-        let serialization = try state.map { try JSONDecoder().decode(CKSyncEngine.State.Serialization.self, from: $0) }
-        let delegate = CloudKitEngineDelegate(callbacks: callbacks)
-        let database = CKContainer(identifier: owner.container).privateCloudDatabase
-        let configuration = CKSyncEngine.Configuration(database: database, stateSerialization: serialization, delegate: delegate)
-        self.delegate = delegate
-        engine = CKSyncEngine(configuration)
-    }
-
-    func setPending(_ changes: [CKSyncEngine.PendingRecordZoneChange]) {
-        guard let engine else { return }
-        let old = Set(engine.state.pendingRecordZoneChanges), desired = Set(changes)
-        engine.state.remove(pendingRecordZoneChanges: Array(old.subtracting(desired)))
-        engine.state.add(pendingRecordZoneChanges: Array(desired.subtracting(old)))
-    }
-
-    func createZone() { engine?.state.add(pendingDatabaseChanges: [.saveZone(CKRecordZone(zoneID: CloudRecordCodec.zoneID))]) }
-    func fetchChanges() async throws { try await engine?.fetchChanges(.init(scope: .zoneIDs([CloudRecordCodec.zoneID]))) }
-    func sendChanges() async throws { try await engine?.sendChanges(.init(scope: .zoneIDs([CloudRecordCodec.zoneID]))) }
-    func cancelOperations() async {
-        await delegate?.operations.close()
-        await engine?.cancelOperations()
-        // Apple's async cancellation return is not an operation completion barrier.
-        await delegate?.operations.waitForCompletion()
-        engine = nil; delegate = nil
-    }
-}
-
-private final class CloudKitEngineDelegate: CKSyncEngineDelegate {
-    let callbacks: CloudEngineCallbacks
-    let operations = CloudEngineOperationDrain()
-    init(callbacks: CloudEngineCallbacks) { self.callbacks = callbacks }
-
-    func handleEvent(_ event: CKSyncEngine.Event, syncEngine: CKSyncEngine) async {
-        switch event {
-        case .stateUpdate(let update):
-            do { await callbacks.event(.state(try JSONEncoder().encode(update.stateSerialization))) }
-            catch { await callbacks.event(.engineStateFailure) }
-        case .accountChange: await callbacks.event(.accountChanged)
-        case .fetchedDatabaseChanges(let changes):
-            if changes.deletions.contains(where: { $0.zoneID == CloudRecordCodec.zoneID }) { await callbacks.event(.zoneLost) }
-        case .fetchedRecordZoneChanges(let changes):
-            await callbacks.event(.fetched(records: changes.modifications.map(\.record), deletions: changes.deletions.map(\.recordID)))
-        case .sentDatabaseChanges(let changes):
-            for zone in changes.savedZones where zone.zoneID == CloudRecordCodec.zoneID { await callbacks.event(.zoneSaved(error: nil)) }
-            for failure in changes.failedZoneSaves where failure.zone.zoneID == CloudRecordCodec.zoneID { await callbacks.event(.zoneSaved(error: failure.error)) }
-        case .sentRecordZoneChanges(let changes):
-            await callbacks.event(.sent(saved: changes.savedRecords,
-                failed: changes.failedRecordSaves.map { .init(record: $0.record, error: $0.error) },
-                deleted: changes.deletedRecordIDs, failedDeletes: changes.failedRecordDeletes))
-        case .willFetchChanges:
-            await operations.beginOperation()
-            await callbacks.event(.fetchStarted)
-        case .didFetchRecordZoneChanges(let changes):
-            if changes.zoneID == CloudRecordCodec.zoneID { await callbacks.event(.zoneFetched(error: changes.error)) }
-        case .didFetchChanges:
-            await callbacks.event(.fetchFinished)
-            await operations.endOperation()
-        case .didSendChanges:
-            await callbacks.event(.sendFinished)
-            await operations.endOperation()
-        case .willSendChanges: await operations.beginOperation()
-        case .willFetchRecordZoneChanges: break
-        @unknown default: break
-        }
-    }
-
-    func nextRecordZoneChangeBatch(_ context: CKSyncEngine.SendChangesContext, syncEngine: CKSyncEngine) async -> CKSyncEngine.RecordZoneChangeBatch? {
-        guard await operations.canProvideBatch() else { return nil }
-        return await callbacks.nextBatch(context.options.scope, syncEngine.state.pendingRecordZoneChanges)
-    }
-
-    func nextFetchChangesOptions(_ context: CKSyncEngine.FetchChangesContext, syncEngine: CKSyncEngine) async -> CKSyncEngine.FetchChangesOptions {
-        var options = context.options
-        options.scope = .zoneIDs(context.options.scope.contains(CloudRecordCodec.zoneID) ? [CloudRecordCodec.zoneID] : [])
-        return options
     }
 }
