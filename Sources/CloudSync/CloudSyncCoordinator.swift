@@ -43,6 +43,7 @@ struct CloudSessionAdmission: Equatable, Sendable {
     @ObservationIgnored private var sessionChangeTask: Task<Void, Never>?
     @ObservationIgnored private var sessionChangeCounter: UInt64 = 0
     @ObservationIgnored private var capturing = false
+    @ObservationIgnored private let nativeAdoption: @MainActor (CloudSessionAdoptionAuthorization) -> CloudNativeSessionAdoption
 
     init(profiles: PlusProfileController, preferences: CloudSyncPreferencesStore = .init(),
          availability: @escaping @MainActor () -> CloudEnvironment? = { CloudSyncAvailability().environment },
@@ -53,6 +54,7 @@ struct CloudSessionAdmission: Equatable, Sendable {
              return .init(container: CloudSyncAvailability.containerIdentifier, environment: environment, userRecordName: id.recordName)
          },
          snapshots: CloudSessionSnapshotService? = nil,
+         nativeAdoption: @escaping @MainActor (CloudSessionAdoptionAuthorization) -> CloudNativeSessionAdoption = { .init(authorization: $0) },
          makeSessionInbox: @escaping @MainActor (CloudSyncJournal) -> CloudSessionInbox = { journal in
              .init(journal: journal, keys: CloudKeyStore(journal: journal))
          },
@@ -64,6 +66,11 @@ struct CloudSessionAdmission: Equatable, Sendable {
         self.identity = identity; self.makeTransport = makeTransport
         self.snapshots = snapshots ?? profiles.cloudSessionSnapshotService()
         self.makeSessionInbox = makeSessionInbox
+        self.nativeAdoption = nativeAdoption
+        self.snapshots.adoption = { [weak self] request in
+            guard let self else { throw CloudSessionError.unavailable }
+            try await self.adoptSession(request)
+        }
     }
 
     func start() async {
@@ -474,15 +481,66 @@ struct CloudSessionAdmission: Equatable, Sendable {
         return summaries
     }
 
-    func sessionCandidate(recordName: String, for profileID: UUID) async throws -> CloudSessionCandidate {
+    func sessionCandidate(recordName: String, for profileID: UUID, recovering: Bool = false) async throws -> CloudSessionCandidate {
         guard let admission = sessionAdmission(for: profileID), let sessionInbox,
               let profile = try profiles.cloudCommittedRows().first(where: { $0.id == profileID }) else { throw CloudSessionError.unavailable }
-        let candidate = try await sessionInbox.candidate(recordName: recordName, for: profile)
+        let candidate = try await sessionInbox.candidate(recordName: recordName, for: profile, recovering: recovering)
         guard sessionAdmission(for: profileID) == admission, let bridge,
               try candidate.validationStamp == bridge.journal.catalogState().sessionInboxStamp(for: profileID) else {
             throw CloudSessionError.unavailable
         }
         return candidate
+    }
+
+    /// An explicit request resolves an exact authenticated inbox revision. Its
+    /// stamp is checked again inside every destination write, not used as a lease.
+    func adoptSession(_ request: CloudSessionAdoptionRequest) async throws {
+        guard let admission = sessionAdmission(for: request.profileID),
+              let profile = try profiles.cloudCommittedRows().first(where: { $0.id == request.profileID }) else { throw CloudSessionError.unavailable }
+        let candidate = try await sessionCandidate(recordName: request.recordName, for: request.profileID, recovering: true)
+        guard candidate.summary.revision == request.sourceRevision, candidate.summary.profileID == request.profileID,
+              candidate.payload.kind != .browser, sessionAdmission(for: request.profileID) == admission else { throw CloudSessionError.unavailable }
+        try profiles.beginCloudSessionAdoption(for: request.profileID)
+        defer { profiles.finishCloudSessionAdoption() }
+        let authorization = CloudSessionAdoptionAuthorization(owner: admission.owner, request: request,
+            validate: { [weak self] in
+                guard let self else { throw CloudSessionError.unavailable }
+                try self.validateAdoption(candidate, admission: admission)
+            }, completed: { [weak self] identity, kind, remote in
+                guard let self else { throw CloudSessionError.unavailable }
+                try self.validateAdoption(candidate, admission: admission)
+                if remote { try self.recordAdoptedDigest(candidate, admission: admission) }
+                try self.profiles.completeCloudSessionAdoption(identity: identity, kind: kind, profileID: request.profileID)
+            }, validateGeneration: { [weak self] payload in
+                guard let self, let bridge = self.bridge else { throw CloudSessionError.unavailable }
+                try payload.identity.validateBindings(of: profile)
+                let consumed = try bridge.journal.catalogState().consumedSessionFingerprints(profileID: profile.id, payload: payload)
+                if let fingerprint = try payload.generationFingerprint,
+                   consumed.contains(fingerprint) || candidate.consumedFingerprints.contains(fingerprint) { throw CloudSessionError.unavailable }
+            }, sourceConsumed: candidate.sourceConsumed)
+        await profiles.prepareCloudCatalogApply()
+        try authorization.validate()
+        let adapter = nativeAdoption(authorization)
+        switch candidate.payload.kind {
+        case .desktop: _ = try await adapter.adoptDesktop(candidate.payload, for: profile)
+        case .openChamber: _ = try await adapter.adoptOpenChamber(candidate.payload, for: profile)
+        case .browser: throw CloudSessionError.unavailable
+        }
+    }
+
+    private func validateAdoption(_ candidate: CloudSessionCandidate, admission: CloudSessionAdmission) throws {
+        guard isEnabled, includesSessions, !needsInitialUnion, owner == admission.owner, epoch == admission.epoch,
+              profiles.cloudSessionAdoptionAllowed(for: admission.profileID), let bridge,
+              let row = try profiles.cloudCommittedRows().first(where: { $0.id == admission.profileID }), row.provider == .codex,
+              row.webDataStoreID == admission.webDataStoreID, row.codexSignIn == admission.desktopIdentity,
+              row.openCodeOpenAIAccount == admission.openChamberIdentity,
+              let settings = try preferences.read()?.preferences, settings.canResume(for: admission.owner),
+              settings.transferPause == nil else { throw CloudSessionError.unavailable }
+        let state = try bridge.journal.catalogState()
+        guard state.restoreIntent == nil, !state.receipts.values.contains(where: { $0.phase == .applying }),
+              candidate.validationStamp != nil, try candidate.validationStamp == state.sessionInboxStamp(for: admission.profileID) else {
+            throw CloudSessionError.unavailable
+        }
     }
 
     /// Task 7/8 call only after their durable adoption. This records provenance;
@@ -491,6 +549,12 @@ struct CloudSessionAdmission: Equatable, Sendable {
         guard admission.epoch == epoch, admission.owner == owner,
               candidate.summary.profileID == admission.profileID,
               sessionAdmission(for: admission.profileID) != nil, let bridge else { throw CloudSessionError.unavailable }
+        _ = bridge
+        try recordAdoptedDigest(candidate, admission: admission)
+    }
+
+    private func recordAdoptedDigest(_ candidate: CloudSessionCandidate, admission: CloudSessionAdmission) throws {
+        guard let bridge else { throw CloudSessionError.unavailable }
         let digest = try candidate.payload.digest()
         try bridge.journal.catalogTransaction {
             guard $0.profiles[CloudJournalState.profileRecordName(admission.profileID)]?.tombstone == nil else { throw CloudSessionError.unavailable }

@@ -16,6 +16,8 @@ struct CloudSessionCandidate: Sendable {
     let summary: CloudSessionSummary
     let payload: CloudSessionPayload
     var validationStamp: Data? = nil
+    var consumedFingerprints: Set<String> = []
+    var sourceConsumed = false
 }
 
 extension CloudJournalState {
@@ -54,14 +56,14 @@ actor CloudSessionInbox {
         try await candidates(for: profile).map(\.summary)
     }
 
-    func candidate(recordName: String, for profile: PlusProfile) async throws -> CloudSessionCandidate {
-        guard let value = try await candidates(for: profile).first(where: { $0.summary.recordName == recordName }) else {
+    func candidate(recordName: String, for profile: PlusProfile, recovering: Bool = false) async throws -> CloudSessionCandidate {
+        guard let value = try await candidates(for: profile, recovering: recovering).first(where: { $0.summary.recordName == recordName }) else {
             throw CloudSessionError.unavailable
         }
         return value
     }
 
-    private func candidates(for profile: PlusProfile) async throws -> [CloudSessionCandidate] {
+    private func candidates(for profile: PlusProfile, recovering: Bool = false) async throws -> [CloudSessionCandidate] {
         guard profile.provider == .codex else { return [] }
         let state = try await journal.load()
         guard Self.available(profile.id, in: state) else { return [] }
@@ -117,8 +119,11 @@ actor CloudSessionInbox {
                 if let payload = try? JSONDecoder().decode(CloudSessionPayload.self, from: local.payload).validated(),
                    try payload.identity == item.summary.identity { consumed.formUnion(payload.consumed) }
             }
-            if let fingerprint = try item.payload.generationFingerprint,
-               consumed.contains(fingerprint) || CloudSavedSessionChange.isConsumed(fingerprint, kind: item.summary.kind) { continue }
+            if let fingerprint = try item.payload.generationFingerprint {
+                item.sourceConsumed = consumed.contains(fingerprint) || CloudSavedSessionChange.isConsumed(fingerprint, kind: item.summary.kind)
+                if item.sourceConsumed, !recovering { continue }
+            }
+            item.consumedFingerprints = consumed
             guard current.transport?.deletedSessions.contains(item.summary.recordName) != true else { continue }
             item.validationStamp = stamp
             result.append(item)

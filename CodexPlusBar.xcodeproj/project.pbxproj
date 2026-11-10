@@ -140,6 +140,7 @@
 		F8992BA5B63F2FDB24A07C77 /* ChromeDevToolsClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0943E3401A421B19D7C9FE6C /* ChromeDevToolsClient.swift */; };
 		F95875C1D8C72999ECDF0CB1 /* CloudProfileDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86072FAE5F9387399D5310A1 /* CloudProfileDocument.swift */; };
 		FDD57D8D0B1E62F657EC4249 /* ProfileSearchField.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC22ABE1C29F922515DAC181 /* ProfileSearchField.swift */; };
+		FDEB8416A5A23DB8615A2189 /* CloudNativeSessionAdoption.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31786A9A535A437620F0C8DD /* CloudNativeSessionAdoption.swift */; };
 		FE5F12E4CBEA5B9B32EE96C8 /* JSONFileStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 252004FBE714815D978A9765 /* JSONFileStorage.swift */; };
 /* End PBXBuildFile section */
 
@@ -184,6 +185,7 @@
 		28CD5AC4DBA75A9C12FCE6FC /* CloudProfileProjection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudProfileProjection.swift; sourceTree = "<group>"; };
 		29BF6E2A808E2EA81D1DFEB7 /* CloudSyncTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudSyncTransport.swift; sourceTree = "<group>"; };
 		2B4671C024513861FD71CACC /* AppSignInRepairInstaller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSignInRepairInstaller.swift; sourceTree = "<group>"; };
+		31786A9A535A437620F0C8DD /* CloudNativeSessionAdoption.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudNativeSessionAdoption.swift; sourceTree = "<group>"; };
 		33360E8618EAD73760FD014F /* Inter-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Inter-Medium.ttf"; sourceTree = "<group>"; };
 		38D97AFB21D00935D66A3DE2 /* WorkspaceLimitService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceLimitService.swift; sourceTree = "<group>"; };
 		39C5A0B333E8C1A19467704E /* AccountWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountWindowView.swift; sourceTree = "<group>"; };
@@ -315,6 +317,7 @@
 				68D62DC94E703C5BFDEBA587 /* CloudKeyStore.swift */,
 				05F77E8446611B3ADF5678BC /* CloudKitAccountSync.swift */,
 				FB2F4489D4633C4EEC111474 /* CloudKitEngineDriver.swift */,
+				31786A9A535A437620F0C8DD /* CloudNativeSessionAdoption.swift */,
 				5F1C962CA72543EAA154ABDD /* CloudPayloadCipher.swift */,
 				86072FAE5F9387399D5310A1 /* CloudProfileDocument.swift */,
 				91C089C12C69CBCA2AB2ACC0 /* CloudProfileMerge.swift */,
@@ -691,6 +694,7 @@
 				8B3A38D788C8A9D80967D5F0 /* CloudKeyStore.swift in Sources */,
 				914822A9E170A6544108DA64 /* CloudKitAccountSync.swift in Sources */,
 				64C6B400D8B2DE3D58C7D6C1 /* CloudKitEngineDriver.swift in Sources */,
+				FDEB8416A5A23DB8615A2189 /* CloudNativeSessionAdoption.swift in Sources */,
 				E8210D9D25369B4E64D82D6D /* CloudPayloadCipher.swift in Sources */,
 				F95875C1D8C72999ECDF0CB1 /* CloudProfileDocument.swift in Sources */,
 				0C712377CAF05F9051AFE289 /* CloudProfileMerge.swift in Sources */,

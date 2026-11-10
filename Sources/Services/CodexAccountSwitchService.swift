@@ -127,6 +127,87 @@ actor CodexAccountSwitchService: CodexAccountSwitchServing {
     }
 
     /// Repair the saved account without switching an unrelated live desktop account.
+    func installCloudSession(_ received: CodexSignIn, for profile: PlusProfile, policy: CloudSessionInstallationPolicy,
+                             authorization: CloudSessionAdoptionAuthorization) async throws -> CodexSignInIdentity {
+        defer { CloudSavedSessionChange.released() }
+        return try await operationGate.withOperation(home: homeDirectory) {
+            try await self.installCloudSessionUnlocked(received, authorization: authorization)
+        }
+    }
+
+    private func installCloudSessionUnlocked(_ received: CodexSignIn, authorization: CloudSessionAdoptionAuthorization) async throws -> CodexSignInIdentity {
+        guard !isWorking else { throw CodexSignInError.busy }
+        isWorking = true; defer { isWorking = false }
+        try Task.checkCancellation()
+        try await authorization.check()
+        let vault = self.vault
+        let receiptStore = try CloudSessionAdoptionReceiptStore(directory: vault.directory, key: authorization.receiptKey)
+        let url = vault.url(for: received.identity)
+        let previous = FileManager.default.fileExists(atPath: url.path) ? try Data(contentsOf: url) : nil
+        let receipt = try receiptStore.load()
+        let target = try vault.latestGeneration(of: received)
+        try await authorization.checkSource(.desktop(signIn: received, consumed: []),
+            resolved: .desktop(signIn: target, consumed: []), receipt: receipt)
+        if let receipt, !receipt.committed {
+            let current = previous.map(CloudSessionAdoptionReceipt.fingerprint)
+            guard current == receipt.previousFingerprint || current == receipt.targetFingerprint ||
+                (receipt.recoveryStarted == true && target != received && previous == target.data) else { throw CloudSessionAdoptionError.changed }
+        }
+        let intent = CloudSessionAdoptionReceipt(sourceFingerprint: CloudSessionPayload.fingerprint(received.refreshToken),
+            previousFingerprint: previous.map(CloudSessionAdoptionReceipt.fingerprint),
+            targetFingerprint: CloudSessionAdoptionReceipt.fingerprint(target.data), nativeID: nil, committed: false, recoveryStarted: true)
+        var local: CodexSignIn?
+        do { local = try vault.load(received.identity) }
+        catch CodexSignInError.missingSavedSignIn { }
+        catch CodexSignInError.invalidCredential { }
+        if let local {
+            do {
+                if receipt == nil, local.refreshToken == received.refreshToken {
+                    try await authorization.write { try receiptStore.save(intent) }
+                }
+                let prepared = try await prepareCloud(local, authorization: authorization)
+                try Task.checkCancellation()
+                try await authorization.write {
+                    try authorization.check(.desktop(signIn: prepared, consumed: []))
+                    try authorization.completed(prepared.identity, .desktop, receipt != nil)
+                }
+                return prepared.identity
+            } catch CodexSignInError.unauthorized { /* Confirmed rejected; remote may repair. */ }
+        }
+        if receipt == nil { try await authorization.write { try receiptStore.save(intent) } }
+        let prepared = try await prepareCloud(target, authorization: authorization)
+        try Task.checkCancellation()
+        // Refresh recovery may already have replaced the saved snapshot. Compare
+        // the resolved generation too; no live store is opened by this policy.
+        return try await authorization.write {
+            try authorization.check(.desktop(signIn: prepared, consumed: []))
+            let current = FileManager.default.fileExists(atPath: url.path) ? try Data(contentsOf: url) : nil
+            guard current == previous || current == prepared.data else { throw CloudSessionAdoptionError.changed }
+            var receipt = CloudSessionAdoptionReceipt(sourceFingerprint: CloudSessionPayload.fingerprint(received.refreshToken),
+                previousFingerprint: current.map(CloudSessionAdoptionReceipt.fingerprint),
+                targetFingerprint: CloudSessionAdoptionReceipt.fingerprint(prepared.data), nativeID: nil, committed: false, recoveryStarted: true)
+            try receiptStore.save(receipt)
+            try vault.save(prepared)
+            receipt.committed = true
+            try receiptStore.save(receipt)
+            try authorization.completed(prepared.identity, .desktop, true)
+            return prepared.identity
+        }
+    }
+
+    private func prepareCloud(_ signIn: CodexSignIn, authorization: CloudSessionAdoptionAuthorization) async throws -> CodexSignIn {
+        try await authorization.check(.desktop(signIn: signIn, consumed: []))
+        return try await prepare(signIn, beforeRefresh: {
+            try await authorization.check(.desktop(signIn: signIn, consumed: []))
+        }, beforeVerification: { candidate in
+            try await authorization.check(.desktop(signIn: candidate, consumed: []))
+        }) { fresh in
+            // A consumed pair is recovery, not installation permission. Persist
+            // before cancellation, cloud admission checks or further network work.
+            try self.vault.saveRefreshed(fresh, replacing: signIn)
+        }
+    }
+
     func installRepaired(_ received: CodexSignIn, for profile: PlusProfile) async throws {
         defer { CloudSavedSessionChange.released() }
         try await operationGate.withOperation(home: homeDirectory) { try await self.installRepairedUnlocked(received, for: profile) }
@@ -309,16 +390,21 @@ actor CodexAccountSwitchService: CodexAccountSwitchServing {
     }
 
     private func prepare(_ signIn: CodexSignIn,
+                         beforeRefresh: () async throws -> Void = {},
+                         beforeVerification: (CodexSignIn) async throws -> Void = { _ in },
                          didRefresh: (CodexSignIn) throws -> Void) async throws -> CodexSignIn {
         if !signIn.needsRefresh(at: now()) {
+            try await beforeVerification(signIn)
             do { try await verifier.verify(signIn); return signIn }
             catch CodexSignInError.unauthorized { /* Refresh exactly once. */ }
         }
         try Task.checkCancellation()
+        try await beforeRefresh()
         let refreshed = try await verifier.refresh(signIn)
         guard signIn.identity.matches(refreshed.identity) else { throw CodexSignInError.identityMismatch }
         try didRefresh(refreshed)
         try Task.checkCancellation()
+        try await beforeVerification(refreshed)
         try await verifier.verify(refreshed)
         return refreshed
     }

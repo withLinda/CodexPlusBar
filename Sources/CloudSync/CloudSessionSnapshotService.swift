@@ -14,9 +14,15 @@ extension CloudSavedSessionCapturing {
     typealias Provider = @MainActor (PlusProfile) async throws -> CloudSessionPayload?
     private let providers: [Provider]
     private let readRevision: @MainActor () -> UInt64
+    var adoption: (@MainActor (CloudSessionAdoptionRequest) async throws -> Void)?
     var revision: UInt64 { readRevision() }
     init(providers: [Provider], revision: @escaping @MainActor () -> UInt64 = { CloudSavedSessionChange.revision }) {
         self.providers = providers; readRevision = revision
+    }
+
+    func adopt(_ request: CloudSessionAdoptionRequest) async throws {
+        guard let adoption else { throw CloudSessionError.unavailable }
+        try await adoption(request)
     }
 
     func capture(for profile: PlusProfile) async throws -> [CloudSessionPayload] {

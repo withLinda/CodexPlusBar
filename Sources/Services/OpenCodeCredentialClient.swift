@@ -153,6 +153,7 @@ actor OpenCodeCredentialClient: OpenCodeCredentialServing {
 
     func create(id: String, label: String, value: OpenCodeCredentialValue, activate: Bool) async throws -> OpenCodeStoredCredential {
         try await SelectorMaintenanceContext.check()
+        try await CloudSessionAdoptionContext.check(.openChamber(value: value, consumed: []))
         try Self.validate(id)
         _ = try value.auth()
         let data = try await send("api/credential", method: "POST", body: JSONEncoder().encode(Create(id: id, label: label, value: value, activate: activate)), status: 200)

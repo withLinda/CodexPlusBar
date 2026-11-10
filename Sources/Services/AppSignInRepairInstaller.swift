@@ -31,6 +31,163 @@ actor OpenChamberRepairInstaller {
             try await self.gate.withOperation { try await self.perform(signIn, profile: profile) }
         }
     }
+
+    func installCloudSession(_ value: OpenCodeCredentialValue, for profile: PlusProfile, policy: CloudSessionInstallationPolicy,
+                             authorization: CloudSessionAdoptionAuthorization) async throws -> OpenCodeOpenAIIdentity {
+        defer { CloudSavedSessionChange.released() }
+        return try await selector.withMaintenance(reason: .signInRepair) {
+            try await self.gate.withOperation {
+                try await self.performCloud(value, profile: profile, authorization: authorization)
+            }
+        }
+    }
+
+    private func performCloud(_ value: OpenCodeCredentialValue, profile: PlusProfile,
+                              authorization: CloudSessionAdoptionAuthorization) async throws -> OpenCodeOpenAIIdentity {
+        try Task.checkCancellation()
+        try await authorization.check()
+        let client = try await resolveClient()
+        let before = try await client.inventory()
+        try await authorization.check()
+        let source = try value.auth(), identity = try source.identity()
+        let receipts = try CloudSessionAdoptionReceiptStore(directory: snapshots.directory, key: authorization.receiptKey)
+        let receipt = try receipts.load()
+        var candidate = try snapshots.resolved(source)
+        try await authorization.checkSource(.openChamber(value: .legacy(source), consumed: []),
+            resolved: .openChamber(value: .legacy(candidate), consumed: []), receipt: receipt)
+        let binding = try snapshots.binding(identity: identity)
+        let matching = before.oauth.filter { (try? $0.openAIIdentity().matches(identity)) == true }
+        let installed = receipt?.adoptedRemote == false ? nil : receipt?.nativeID.flatMap { id in matching.first { $0.id == id } }
+        if let receipt, let installed {
+            let fingerprint = try CloudSessionAdoptionReceipt.fingerprint(CloudJournalCoding.encode(installed.value))
+            guard receipt.committed || fingerprint == receipt.targetFingerprint else { throw CloudSessionAdoptionError.changed }
+        }
+        let original = installed ?? matching.first(where: { $0.id == binding }) ?? matching.first(where: \.active) ?? matching.first
+        let saved: OpenCodeCredentialValue?
+        do { saved = try snapshots.loadNativeValue(identity: identity) }
+        catch OpenCodeOpenAIAuthError.invalidCredential { throw OpenCodeOpenAIAuthError.invalidCredential }
+        if let installed {
+            let native = try snapshots.resolved(installed.value.auth())
+            if native != candidate {
+                let previous = candidate, snapshots = self.snapshots
+                try await authorization.write {
+                    try authorization.check(.openChamber(value: .legacy(native), consumed: []))
+                    try snapshots.saveRefreshed(native, replacing: previous)
+                }
+                candidate = native
+            }
+        }
+        if receipt == nil {
+            let intent = CloudSessionAdoptionReceipt(sourceFingerprint: try CloudSessionPayload.openChamber(value: .legacy(source), consumed: []).generationFingerprint!,
+                previousFingerprint: try original.map { CloudSessionAdoptionReceipt.fingerprint(try CloudJournalCoding.encode($0.value)) },
+                targetFingerprint: try CloudSessionAdoptionReceipt.fingerprint(CloudJournalCoding.encode(value)),
+                nativeID: nil, committed: false, recoveryStarted: true)
+            try await authorization.write { try receipts.save(intent) }
+        }
+        // Prefer a working destination generation. Transport errors are never
+        // evidence that this login can be overwritten by a remote snapshot.
+        var localValues = [original?.value, saved].compactMap { $0 }
+        if localValues.count == 2, localValues[0] == localValues[1] { localValues.removeLast() }
+        for localValue in localValues {
+            let local = try snapshots.resolved(localValue.auth())
+            do {
+                let selected = before.oauth.contains { $0.active && (try? $0.value.auth()) == local }
+                let prepared = try await prepareCloud(local, selected: selected, before: before,
+                    client: client, authorization: authorization)
+                return try await publishCloud(prepared, source: source, template: localValue, original: original,
+                    before: before, client: client, profile: profile, receipts: receipts,
+                    authorization: authorization, remote: installed != nil || local == candidate)
+            } catch OpenCodeOpenAIVerificationError.reauthenticationRequired { }
+            catch OpenCodeOpenAIVerificationError.unauthorized { }
+        }
+        let prepared = try await prepareCloud(candidate, selected: false, before: before, client: client, authorization: authorization)
+        return try await publishCloud(prepared, source: source, template: original?.value ?? saved ?? value, original: original,
+            before: before, client: client, profile: profile, receipts: receipts, authorization: authorization, remote: true)
+    }
+
+    private func prepareCloud(_ auth: OpenCodeOpenAIAuth, selected: Bool, before: OpenCodeCredentialInventory,
+                              client: any OpenCodeCredentialServing, authorization: CloudSessionAdoptionAuthorization) async throws -> OpenCodeOpenAIAuth {
+        try await authorization.check(.openChamber(value: .legacy(auth), consumed: []))
+        if !auth.needsRefresh(at: .now) {
+            do { try await verifier.verify(auth); return auth }
+            catch OpenCodeOpenAIVerificationError.unauthorized { }
+        }
+        // Native replacement requires activation to keep a selected consumed
+        // connection usable. That belongs to explicit Switch, not saved-only.
+        guard !selected else { throw CloudSessionAdoptionError.requiresSwitch }
+        guard before.openAI.contains(where: \.active) else { throw CloudSessionAdoptionError.requiresSwitch }
+        try Task.checkCancellation()
+        try await checkCloudInventory(before, client: client, authorization: authorization)
+        try await authorization.check(.openChamber(value: .legacy(auth), consumed: []))
+        let fresh = try await verifier.refresh(auth)
+        guard try fresh.identity().matches(auth.identity()) else { throw CloudSessionError.identityMismatch }
+        try snapshots.saveRefreshed(fresh, replacing: auth)
+        try Task.checkCancellation()
+        try await authorization.check(.openChamber(value: .legacy(fresh), consumed: []))
+        try await verifier.verify(fresh)
+        return fresh
+    }
+
+    private func checkCloudInventory(_ before: OpenCodeCredentialInventory, client: any OpenCodeCredentialServing,
+                                     authorization: CloudSessionAdoptionAuthorization) async throws {
+        try await SelectorMaintenanceContext.check()
+        let current = try await client.inventory()
+        try await authorization.check()
+        guard current.entries == before.entries, current.connectionIDs == before.connectionIDs else { throw CloudSessionAdoptionError.changed }
+    }
+
+    private func publishCloud(_ auth: OpenCodeOpenAIAuth, source: OpenCodeOpenAIAuth, template: OpenCodeCredentialValue,
+                              original: OpenCodeStoredCredential?, before: OpenCodeCredentialInventory,
+                              client: any OpenCodeCredentialServing, profile: PlusProfile, receipts: CloudSessionAdoptionReceiptStore,
+                              authorization: CloudSessionAdoptionAuthorization, remote: Bool) async throws -> OpenCodeOpenAIIdentity {
+        try Task.checkCancellation()
+        let identity = try auth.identity(), value = template.replacingTokens(auth)
+        let selected = before.openAI.first(where: \.active)
+        let existing = before.oauth.first { $0.value == value }
+        // The installed native API selects its first connection even when POST
+        // says activate:false. Keep the inbox until the user explicitly switches.
+        guard existing != nil || selected != nil else { throw CloudSessionAdoptionError.requiresSwitch }
+        // Native route parameters have a length limit even though POST accepts
+        // longer IDs. One digest stays addressable for later Switch/Remove.
+        let id = try existing?.id ?? "cred_cloud_" + CloudSessionPayload.fingerprint(authorization.receiptKey + ":" + auth.refresh)
+        var receipt = CloudSessionAdoptionReceipt(sourceFingerprint: try CloudSessionPayload.openChamber(value: .legacy(source), consumed: []).generationFingerprint!,
+            previousFingerprint: try original.map { CloudSessionAdoptionReceipt.fingerprint(try CloudJournalCoding.encode($0.value)) },
+            targetFingerprint: try CloudSessionAdoptionReceipt.fingerprint(CloudJournalCoding.encode(value)), nativeID: id,
+            committed: false, recoveryStarted: remote, adoptedRemote: remote)
+        try await checkCloudInventory(before, client: client, authorization: authorization)
+        let intent = receipt
+        try await authorization.write {
+            try authorization.check(.openChamber(value: .legacy(auth), consumed: []))
+            try receipts.save(intent)
+        }
+        if existing == nil {
+            try await checkCloudInventory(before, client: client, authorization: authorization)
+            do { _ = try await client.create(id: id, label: profile.label, value: value, activate: false) }
+            catch {
+                // A lost response is not permission to create another ID. Recover
+                // the exact intent without cancellation, never activate or delete.
+                let recovered = try await SelectorMaintenanceContext.settle { try await client.inventory() }
+                guard recovered.entries.contains(where: { $0.id == id && $0.value == value }) else { throw error }
+            }
+        }
+        let after = try await SelectorMaintenanceContext.settle { try await client.inventory() }
+        guard let installed = after.entries.first(where: { $0.id == id }), installed.value == value,
+              after.openAI.first(where: \.active)?.id == selected?.id,
+              before.entries.allSatisfy({ old in after.entries.contains(old) }) else { throw CloudSessionAdoptionError.changed }
+        receipt.committed = true
+        // Readback has established the exact native commit. Retain that fact even
+        // if cancellation or consent changes now prevent local binding/catalog work.
+        try receipts.save(receipt)
+        let snapshots = self.snapshots
+        try Task.checkCancellation()
+        return try await authorization.write {
+            try authorization.check(.openChamber(value: .legacy(auth), consumed: []))
+            try snapshots.saveNative(installed, identity: identity)
+            try authorization.completed(.init(accountID: identity.accountID, userID: identity.userID, email: identity.email), .openChamber, remote)
+            return identity
+        }
+    }
+
     private func perform(_ signIn: CodexSignIn, profile: PlusProfile) async throws {
         try signIn.validateRepair(for: profile)
         let client = try await resolveClient()

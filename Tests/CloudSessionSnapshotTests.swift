@@ -464,7 +464,7 @@ func stageProfile(_ profile: PlusProfile, in journal: CloudSyncJournal, deleted:
     }
 }
 
-@MainActor private final class SessionFixture {
+@MainActor final class SessionFixture {
     let root: URL
     let profile: PlusProfile
     var device: UUID { get throws { try #require(try preferences.read()?.deviceID) } }
@@ -479,8 +479,10 @@ func stageProfile(_ profile: PlusProfile, in journal: CloudSyncJournal, deleted:
     let suite = "CloudSessionTests.\(UUID())"
     let owner = CloudOwner(container: "iCloud.com.linda.CodexPlusBar", environment: .development, userRecordName: "synthetic-session-owner")
     var currentOwner: CloudOwner?
+    var nativeAdoption: @MainActor (CloudSessionAdoptionAuthorization) -> CloudNativeSessionAdoption = { .init(authorization: $0) }
     lazy var coordinator = CloudSyncCoordinator(profiles: profiles, preferences: preferences,
         availability: { .development }, identity: { [self] _ in currentOwner ?? owner }, snapshots: snapshots,
+        nativeAdoption: { [self] in nativeAdoption($0) },
         makeSessionInbox: { [self] journal in .init(journal: journal, keys: inboxKeys ?? CloudKeyStore(journal: journal)) },
         makeTransport: { [self] journal in transport.journal = journal; return transport })
     init(snapshots: CloudSessionSnapshotService? = nil, inboxKeys: (any CloudKeyStoring)? = nil) throws {
@@ -550,7 +552,7 @@ private struct SessionDesktop: CodexAccountSwitchServing {
     func removeProfileData(for profile: PlusProfile) async throws {}
 }
 
-@MainActor private final class SessionTransport: CloudSyncTransport {
+@MainActor final class SessionTransport: CloudSyncTransport {
     nonisolated let events = AsyncStream<CloudTransportEvent> { _ in }
     var journal: CloudSyncJournal!
     var didSync: (@MainActor () async -> Void)?

@@ -133,8 +133,14 @@ def main():
                     # xcodebuild can hang during test-host shutdown on this Mac;
                     # preserve the complete log for its Swift Testing summary.
                     project = Path(__file__).resolve().parents[1]
+                    focus = os.environ.get("OPENCHAMBER_TEST_SUITE")
+                    command = ["make", "test", "AGENT_NAME=openchamber-sync"]
+                    if focus:
+                        command = ["xcodebuild", "test", "-project", "CodexPlusBar.xcodeproj", "-scheme", "CodexPlusBar",
+                                   "-destination", "platform=macOS,arch=arm64", "-derivedDataPath", "build/DerivedData/cloud-sync",
+                                   "-only-testing:CodexPlusBarTests/" + focus]
                     with (root / "swift-tests.log").open("wb") as test_log:
-                        tests = subprocess.Popen(["make", "test", "AGENT_NAME=openchamber-sync"], env=test_env,
+                        tests = subprocess.Popen(command, env=test_env,
                                                  cwd=project, stdout=test_log, stderr=test_log, start_new_session=True)
                         try:
                             result = tests.wait(timeout=120)
@@ -143,6 +149,9 @@ def main():
                             tests.wait(timeout=10)
                             result = None
                     output = (root / "swift-tests.log").read_text(errors="replace")
+                    evidence = project / "build/logs/openchamber-sync"
+                    evidence.mkdir(parents=True, exist_ok=True)
+                    (evidence / "isolated-swift-tests.log").write_text(output)
                     native_passed = "Test isolatedServerSwitchesThroughProductionClient() passed" in output
                     sync_passed = "Test isolatedNativeReconciliationThroughProductionClient() passed" in output
                     expired_passed = "Test isolatedExpiredSignInsUseControlledRefresh() passed" in output
@@ -150,14 +159,21 @@ def main():
                     repair_passed = "Test isolatedRepairReplacesActiveAndInactiveCredentials() passed" in output
                     helper_passed = "Test installedOfficialHelperStartsAndCancelsWithoutSigningIn() passed" in output
                     summary = [line for line in output.splitlines() if "Test run with" in line]
-                    if (not all((native_passed, sync_passed, expired_passed, bulk_passed, repair_passed, helper_passed))
+                    required_passed = all((native_passed, sync_passed, expired_passed, bulk_passed, repair_passed, helper_passed))
+                    if focus:
+                        expected = os.environ.get("OPENCHAMBER_TEST_EXPECTED", "")
+                        required_passed = bool(expected) and "Test " + expected + "() passed" in output
+                    if (not required_passed
                             or not summary or any("failed" in line for line in summary)
                             or "passed" not in summary[-1] or result not in (0, None)
                             or "Restarting after unexpected exit" in output):
                         print(output[-12000:])
                         raise AssertionError("Swift integration suite did not pass")
                     print(summary[-1])
-                    print("PASS: production native client/service restoration, pruning, capture grace, metadata, idempotence, cross-location inventory, empty OAuth list and API-key/provider preservation")
+                    if focus:
+                        print("PASS: focused isolated production-client test: " + expected)
+                    else:
+                        print("PASS: production native client/service restoration, pruning, capture grace, metadata, idempotence, cross-location inventory, empty OAuth list and API-key/provider preservation")
                     if result is None:
                         print("Swift Testing passed; xcodebuild shutdown timed out (see build/logs/openchamber-sync/test.log).")
             except Exception as error:
