@@ -15,6 +15,28 @@ struct CloudSessionSummary: Equatable, Sendable {
 struct CloudSessionCandidate: Sendable {
     let summary: CloudSessionSummary
     let payload: CloudSessionPayload
+    var validationStamp: Data? = nil
+}
+
+extension CloudJournalState {
+    /// Conservative fence: even an unreadable new envelope invalidates a read.
+    /// Unauthenticated routing cannot hide an arrival from final admission.
+    func sessionInboxStamp(for profileID: UUID) throws -> Data {
+        // Sets and UUID-keyed dictionaries have no canonical JSON order. Encode
+        // sorted arrays instead through an ordinary string-keyed representation.
+        var object: [String: Data] = [:]
+        for (id, envelope) in receivedEnvelopes where envelope.recordName.hasPrefix("session.") {
+            object["envelope." + id.uuidString] = try CloudJournalCoding.encode(envelope)
+        }
+        object["digests"] = try CloudJournalCoding.encode(transport?.sessionDigests ?? [:])
+        object["deleted"] = try CloudJournalCoding.encode((transport?.deletedSessions ?? []).sorted())
+        object["local"] = try CloudJournalCoding.encode(sessions.filter { $0.value.profileID == profileID })
+        object["profile"] = try CloudJournalCoding.encode(profiles[Self.profileRecordName(profileID)])
+        object["includes"] = try CloudJournalCoding.encode(transport?.includeSavedSessions != false)
+        object["restore"] = try CloudJournalCoding.encode(restoreIntent)
+        object["consumed"] = try CloudJournalCoding.encode((consumedSessionGenerations ?? [:]).mapValues { $0.sorted() })
+        return CloudJournalCoding.digest(try CloudJournalCoding.encode(object))
+    }
 }
 
 actor CloudSessionInbox {
@@ -43,6 +65,7 @@ actor CloudSessionInbox {
         guard profile.provider == .codex else { return [] }
         let state = try await journal.load()
         guard Self.available(profile.id, in: state) else { return [] }
+        let stamp = try state.sessionInboxStamp(for: profile.id)
         var decoded: [CloudSessionCandidate] = []
         var highest: [String: UInt64] = [:]
         for stored in state.receivedEnvelopes.values where stored.recordName.hasPrefix("session.") {
@@ -60,6 +83,8 @@ actor CloudSessionInbox {
                 highest[source] = max(highest[source] ?? 0, document.revision)
                 if let expected = fresh.transport?.sessionDigests[envelope.recordName],
                    expected != CloudJournalCoding.digest(try CloudJournalCoding.encode(document)) { continue }
+                if let expected = fresh.payloadDigests[envelope.recordName],
+                   expected != CloudJournalCoding.digest(try CloudJournalCoding.encode(CloudRecordBody.session(document))) { continue }
                 let payload = try JSONDecoder().decode(CloudSessionPayload.self, from: document.payload).validated()
                 guard payload.kind == document.kind else { continue }
                 let identity = try payload.identity
@@ -73,16 +98,18 @@ actor CloudSessionInbox {
         // Arrival order and wall clocks never establish freshness. Every retained
         // source contributes consumed-generation evidence, including older revisions.
         let latest = Dictionary(grouping: decoded) { "\($0.summary.sourceDeviceID).\($0.summary.kind.rawValue)" }
-        let current = try await journal.load()
-        guard Self.available(profile.id, in: current) else { return [] }
+        // Synchronous flock-backed reload is the linearization point. Do not
+        // retry indefinitely under arrivals; a caller may request a fresh read.
+        let current = try journal.catalogState()
+        guard Self.available(profile.id, in: current), try current.sessionInboxStamp(for: profile.id) == stamp else { return [] }
         var result: [CloudSessionCandidate] = []
         for (source, values) in latest {
             guard let revision = values.map(\.summary.revision).max() else { continue }
             guard revision == highest[source] else { continue }
             let newest = values.filter { $0.summary.revision == revision }
-            guard let item = newest.first,
+            guard var item = newest.first,
                   try newest.allSatisfy({ try $0.payload.digest() == item.payload.digest() }) else { continue }
-            var consumed = Set<String>()
+            var consumed = try current.consumedSessionFingerprints(profileID: profile.id, payload: item.payload)
             for other in decoded where other.summary.kind == item.summary.kind && other.summary.identity == item.summary.identity {
                 consumed.formUnion(other.payload.consumed)
             }
@@ -93,6 +120,7 @@ actor CloudSessionInbox {
             if let fingerprint = try item.payload.generationFingerprint,
                consumed.contains(fingerprint) || CloudSavedSessionChange.isConsumed(fingerprint, kind: item.summary.kind) { continue }
             guard current.transport?.deletedSessions.contains(item.summary.recordName) != true else { continue }
+            item.validationStamp = stamp
             result.append(item)
         }
         return result.sorted { $0.summary.recordName < $1.summary.recordName }

@@ -135,6 +135,11 @@ struct CloudJournalState: Codable, Equatable, Sendable {
     var profiles: [String: CloudProfileDocument] = [:]
     var order: CloudOrderDocument?
     var sessions: [String: CloudSessionDocument] = [:]
+    /// Cumulative validated evidence, scoped by profile/kind/account/user. Never
+    /// removed with superseded local bodies, deleted cloud records or inbox reads.
+    var consumedSessionGenerations: [String: Set<String>]?
+    /// Source revision allocation is independent of retained full payloads.
+    var sessionRevisionHighWater: [String: UInt64]?
     /// Written only after explicit adoption has durably stored these exact bytes.
     var adoptedSessionDigests: [String: Data]?
     var dirtyGenerations: [String: UInt64] = [:]
@@ -315,6 +320,10 @@ struct CloudJournalState: Codable, Equatable, Sendable {
         guard !owner.container.isEmpty, !owner.userRecordName.isEmpty else { throw CloudJournalError.invalidState }
         try committedProjection.validate()
         guard adoptedSessionDigests?.values.allSatisfy({ $0.count == 32 }) != false else { throw CloudJournalError.invalidState }
+        guard consumedSessionGenerations?.allSatisfy({ scope, values in
+            scope.count == 64 && values.allSatisfy { $0.count == 64 && $0.allSatisfy { "0123456789abcdef".contains($0) } }
+        }) != false else { throw CloudJournalError.invalidState }
+        guard sessionRevisionHighWater?.values.allSatisfy({ $0 > 0 }) != false else { throw CloudJournalError.invalidState }
         try initialCatalogProjection?.validate()
         guard completedCatalogReceipts?.keys.allSatisfy({ $0.hasPrefix("profile.") || $0 == Self.orderRecordName }) != false,
               catalogAssetCleanup?.allSatisfy({ name in

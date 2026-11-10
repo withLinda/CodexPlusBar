@@ -4,6 +4,148 @@ import Testing
 @testable import CodexPlusBar
 
 struct CloudKitAccountSyncTests {
+    @Test func compactedLocalRecordStillRejectsConflictingRemoteReplay() async throws {
+        let f = try await CloudTransportFixture(); defer { f.disk.cleanUp() }
+        let profile = CodexSignInFixture.profile(), source = UUID()
+        let old = try CodexSignIn(data: CodexSignInFixture.data(refresh: UUID().uuidString))
+        let next = try CodexSignIn(data: CodexSignInFixture.data(refresh: UUID().uuidString))
+        let first = try sessionDocument(profile: profile, payload: .desktop(signIn: old, consumed: []), source: source)
+        let second = try sessionDocument(profile: profile, payload: .desktop(signIn: next, consumed: []), source: source, revision: 2)
+        try await stageProfile(profile, in: f.journal)
+        for document in [first, second] { try await queueSession(document, in: f.journal) }
+        try await f.journal.transaction { $0.compactLocalSessions() }
+        try await f.startReady()
+        // Reuses a compacted source revision with new authenticated consumption.
+        let conflicting = try f.record(.session(sessionDocument(profile: profile,
+            payload: .desktop(signIn: old, consumed: [CloudSessionPayload.fingerprint(next.refreshToken)]), source: source)))
+        defer { conflicting.lease.release() }
+        await f.driver.emit(.fetched(records: [conflicting.record], deletions: []))
+        let state = try await f.journal.load()
+        #expect(state.transport?.processedInbox.isEmpty == true)
+        #expect(state.canPublishSession(second))
+        let batch = try #require(await f.driver.batch())
+        #expect(batch.recordsToSave.map(\.recordID.recordName) == [CloudRecordCodec.recordName(for: .session(second))])
+        let valid = try f.record(.session(second)); defer { valid.lease.release() }
+        await f.driver.emit(.fetched(records: [valid.record], deletions: []))
+        #expect(try await CloudSessionInbox(journal: f.journal, keys: f.keys).summaries(for: profile).map(\.revision) == [2])
+        await f.transport.stop()
+    }
+
+    @Test func legacyProcessedSessionAcquiresDurableConsumptionOnRestart() async throws {
+        let f = try await CloudTransportFixture(); defer { f.disk.cleanUp() }
+        let profile = CodexSignInFixture.profile()
+        let old = try CodexSignIn(data: CodexSignInFixture.data(refresh: UUID().uuidString))
+        let next = try CodexSignIn(data: CodexSignInFixture.data(refresh: UUID().uuidString))
+        try await stageProfile(profile, in: f.journal)
+        try await queueSession(sessionDocument(profile: profile, payload: .desktop(signIn: old, consumed: [])), in: f.journal)
+        let document = try sessionDocument(profile: profile,
+            payload: .desktop(signIn: next, consumed: [CloudSessionPayload.fingerprint(old.refreshToken)]))
+        let encoded = try f.record(.session(document)); defer { encoded.lease.release() }
+        let envelope = try f.codec.envelope(from: encoded.record)
+        try await f.journal.receive(id: envelope.id, recordName: envelope.recordName,
+            metadata: CloudJournalCoding.encode(envelope.routing), systemFields: envelope.systemFields,
+            ciphertext: envelope.ciphertext, transportManaged: true)
+        try await f.journal.transaction {
+            $0.transport?.processedInbox.insert(envelope.id)
+            $0.transport?.sessionReceipts[envelope.recordName] = envelope.id
+            $0.transport?.sessionDigests[envelope.recordName] = CloudJournalCoding.digest(try CloudJournalCoding.encode(document))
+        }
+        try await f.startReady()
+        #expect(await f.driver.batch() == nil)
+        #expect(await f.keys.writers == 0)
+        #expect(try await f.journal.load().consumedSessionGenerations?.isEmpty == false)
+        await f.transport.stop()
+    }
+
+    @Test(arguments: [false, true])
+    func receivedConsumptionBlocksPublicationWithoutOpeningInboxAndSurvivesRestart(delayedKey: Bool) async throws {
+        let f = try await CloudTransportFixture(); defer { f.disk.cleanUp() }
+        let profile = CodexSignInFixture.profile()
+        let old = try CodexSignIn(data: CodexSignInFixture.data(refresh: UUID().uuidString))
+        let local = try sessionDocument(profile: profile, payload: .desktop(signIn: old, consumed: []))
+        try await stageProfile(profile, in: f.journal)
+        try await queueSession(local, in: f.journal)
+        try await f.startReady()
+        let next = try CodexSignIn(data: CodexSignInFixture.data(refresh: UUID().uuidString))
+        let key = delayedKey ? try CloudCryptoFixture.key() : f.key
+        let remote = try f.record(.session(sessionDocument(profile: profile,
+            payload: .desktop(signIn: next, consumed: [CloudSessionPayload.fingerprint(old.refreshToken)]))), key: key)
+        defer { remote.lease.release() }
+        await f.driver.emit(.fetched(records: [remote.record], deletions: []))
+        if delayedKey {
+            #expect(try await f.journal.load().canPublishSession(local))
+            await f.keys.deliver(key)
+            try await f.transport.syncNow()
+        }
+        #expect(await f.driver.batch() == nil)
+        #expect(await f.keys.writers == 0)
+        await f.transport.stop()
+        let reopened = CloudSyncJournal(root: f.disk.root, owner: CloudCryptoFixture.owner)
+        #expect(try await !reopened.load().canPublishSession(local))
+        let driver = CloudFakeEngineDriver()
+        let restarted = CloudKitAccountSync(journal: reopened, keys: f.keys, assets: f.assets, makeDriver: { driver })
+        try await restarted.start(owner: CloudCryptoFixture.owner, epoch: UUID())
+        await driver.emit(.zoneFetched(error: nil))
+        #expect(await driver.batch() == nil)
+        await restarted.stop()
+    }
+
+    @Test func receivedConsumptionDuringWriterKeyAwaitBlocksPreparedRecord() async throws {
+        let f = try await CloudTransportFixture(); defer { f.disk.cleanUp() }
+        let profile = CodexSignInFixture.profile()
+        let old = try CodexSignIn(data: CodexSignInFixture.data(refresh: UUID().uuidString))
+        try await stageProfile(profile, in: f.journal)
+        try await queueSession(sessionDocument(profile: profile, payload: .desktop(signIn: old, consumed: [])), in: f.journal)
+        try await f.startReady()
+        await f.keys.holdWriter()
+        let sending = Task { await f.driver.batch() }
+        await f.keys.waitForWriter()
+        // A second transport instance shares the durable owner partition. The
+        // first instance's serial callback queue is intentionally held by batch.
+        let receiver = CloudFakeEngineDriver()
+        let transport = CloudKitAccountSync(journal: f.journal, keys: f.keys, assets: f.assets, makeDriver: { receiver })
+        try await transport.start(owner: CloudCryptoFixture.owner, epoch: UUID())
+        let next = try CodexSignIn(data: CodexSignInFixture.data(refresh: UUID().uuidString))
+        let remote = try f.record(.session(sessionDocument(profile: profile,
+            payload: .desktop(signIn: next, consumed: [CloudSessionPayload.fingerprint(old.refreshToken)]))))
+        defer { remote.lease.release() }
+        await receiver.emit(.fetched(records: [remote.record], deletions: []))
+        await f.keys.releaseWriter()
+        #expect(await sending.value == nil)
+        await transport.stop(); await f.transport.stop()
+    }
+
+    @Test(arguments: ["account", "user", "profile", "kind", "invalid", "future", "routing", "missing"])
+    func unrelatedOrUnvalidatedConsumptionCannotPoisonPublication(boundary: String) async throws {
+        let f = try await CloudTransportFixture(); defer { f.disk.cleanUp() }
+        let profile = CodexSignInFixture.profile()
+        let old = try CodexSignIn(data: CodexSignInFixture.data(refresh: UUID().uuidString))
+        let local = try sessionDocument(profile: profile, payload: .desktop(signIn: old, consumed: []))
+        try await stageProfile(profile, in: f.journal)
+        try await queueSession(local, in: f.journal)
+        try await f.startReady()
+        let next = try CodexSignIn(data: CodexSignInFixture.data(account: boundary == "account" ? "other" : old.identity.accountID,
+            user: boundary == "user" ? "other" : old.identity.userID, refresh: UUID().uuidString))
+        let consumed = [CloudSessionPayload.fingerprint(old.refreshToken)]
+        let payload: CloudSessionPayload = boundary == "kind" ? .openChamber(value: .legacy(try next.openChamberAuth()), consumed: consumed)
+            : .desktop(signIn: next, consumed: consumed)
+        let valid = try sessionDocument(profile: boundary == "profile" ? CodexSignInFixture.profile() : profile, payload: payload)
+        let document = CloudSessionDocument(profileID: valid.profileID, sourceDeviceID: valid.sourceDeviceID, sourceName: valid.sourceName,
+            kind: valid.kind, revision: valid.revision, capturedAt: valid.capturedAt,
+            payload: boundary == "invalid" ? Data("{\"desktop\":{\"consumed\":[\"\(consumed[0])\"]}}".utf8) : valid.payload)
+        let remote = try f.record(.session(document), key: boundary == "missing" ? CloudCryptoFixture.key() : f.key)
+        defer { remote.lease.release() }
+        if boundary == "future" { remote.record["schemaVersion"] = Int64(99) as CKRecordValue }
+        if boundary == "routing" { remote.record["profileID"] = UUID().uuidString.lowercased() as CKRecordValue }
+        await f.driver.emit(.fetched(records: [remote.record], deletions: []))
+        let batch = try #require(await f.driver.batch())
+        #expect(batch.recordsToSave.map(\.recordID.recordName) == [CloudRecordCodec.recordName(for: .session(local))])
+        if ["invalid", "future", "routing", "missing"].contains(boundary) {
+            #expect(try await CloudSessionInbox(journal: f.journal, keys: f.keys).summaries(for: profile).isEmpty)
+        }
+        await f.transport.stop()
+    }
+
     @Test func compactedCatalogDuplicatesPreserveTombstonesAndGenerationHistory() async throws {
         let f = try await CloudTransportFixture(); defer { f.disk.cleanUp() }
         let name = try await f.localProfile()
@@ -911,8 +1053,18 @@ actor CloudTransportKeys: CloudKeyStoring {
     private var hold = false
     private var held: CheckedContinuation<Void, Never>?
     private var waiter: CheckedContinuation<Void, Never>?
+    private var writerHeld = false
+    private var writerContinuation: CheckedContinuation<Void, Never>?
+    private var writerWaiter: CheckedContinuation<Void, Never>?
     init(_ key: CloudEncryptionKey) { writer = key; delivered = [key.id: key] }
-    func writerKey(owner: CloudOwner, deviceID: UUID) async throws -> CloudEncryptionKey { writers += 1; return writer }
+    func writerKey(owner: CloudOwner, deviceID: UUID) async throws -> CloudEncryptionKey {
+        writers += 1
+        if writerHeld { await withCheckedContinuation { writerContinuation = $0; writerWaiter?.resume(); writerWaiter = nil } }
+        return writer
+    }
+    func holdWriter() { writerHeld = true }
+    func waitForWriter() async { if writerContinuation == nil { await withCheckedContinuation { writerWaiter = $0 } } }
+    func releaseWriter() { writerHeld = false; writerContinuation?.resume(); writerContinuation = nil }
     func key(id: UUID, owner: CloudOwner) async throws -> CloudEncryptionKey? {
         lookups += 1
         if hold { await withCheckedContinuation { held = $0; waiter?.resume(); waiter = nil } }
@@ -922,6 +1074,14 @@ actor CloudTransportKeys: CloudKeyStoring {
     func waitForLookup() async { if held == nil { await withCheckedContinuation { waiter = $0 } } }
     func releaseLookups() { hold = false; held?.resume(); held = nil }
     func deliver(_ key: CloudEncryptionKey) { delivered[key.id] = key }
+}
+
+func queueSession(_ document: CloudSessionDocument, in journal: CloudSyncJournal) async throws {
+    try await journal.transaction {
+        let name = CloudRecordCodec.recordName(for: .session(document))
+        $0.sessions[name] = document
+        try $0.markDirty(recordName: name, body: .session(document))
+    }
 }
 
 struct CloudTransportFixture {

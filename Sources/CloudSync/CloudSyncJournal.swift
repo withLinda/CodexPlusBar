@@ -251,6 +251,12 @@ actor CloudSyncJournal {
         for (name, generation) in previous.recordGenerations {
             guard (next.recordGenerations[name] ?? 0) >= generation else { throw CloudJournalError.invalidState }
         }
+        for (scope, values) in previous.consumedSessionGenerations ?? [:] {
+            guard values.isSubset(of: next.consumedSessionGenerations?[scope] ?? []) else { throw CloudJournalError.invalidTransition }
+        }
+        for (source, revision) in previous.sessionRevisionHighWater ?? [:] {
+            guard (next.sessionRevisionHighWater?[source] ?? 0) >= revision else { throw CloudJournalError.invalidTransition }
+        }
         for (id, receipt) in previous.receipts {
             guard let replacement = next.receipts[id] else { throw CloudJournalError.invalidTransition }
             switch receipt.phase {

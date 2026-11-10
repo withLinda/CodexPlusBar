@@ -3,6 +3,134 @@ import Testing
 @testable import CodexPlusBar
 
 @MainActor struct CloudSessionSnapshotTests {
+    @Test func repeatedCapturesExceedHistoricalJournalCapacityButKeepCurrentBodySmall() async throws {
+        let f = try SessionFixture(); defer { f.clean() }
+        await f.coordinator.start(); await f.coordinator.setEnabled(true)
+        let admission = try #require(f.coordinator.sessionAdmission(for: f.profile.id))
+        let source = try f.device
+        let old = try CodexSignIn(data: CodexSignInFixture.data(refresh: UUID().uuidString))
+        var cumulativeBytes = 0
+        for revision in 1...48 {
+            var object = try #require(JSONSerialization.jsonObject(with: CodexSignInFixture.data(refresh: UUID().uuidString)) as? [String: Any])
+            object["syntheticPadding"] = String(repeating: "x", count: 900 * 1_024)
+            let signIn = try CodexSignIn(data: JSONSerialization.data(withJSONObject: object))
+            let payload = CloudSessionPayload.desktop(signIn: signIn,
+                consumed: revision == 1 ? [CloudSessionPayload.fingerprint(old.refreshToken)] : [])
+            let document = try sessionDocument(profile: f.profile, payload: payload, source: source, revision: UInt64(revision))
+            cumulativeBytes += try CloudJournalCoding.encode(document).count
+            try f.coordinator.commitCapturedSession(document, admission: admission)
+            try #require(try f.journal.catalogState().sessions.count == 1)
+        }
+        #expect(cumulativeBytes > CloudSyncJournal.maximumJournalBytes)
+        await f.coordinator.stop()
+        let restarted = CloudSyncJournal(root: f.root.appendingPathComponent("cloud"), owner: f.owner)
+        let state = try await restarted.load()
+        #expect(state.sessions.count == 1)
+        #expect(state.sessions.values.first?.revision == 48)
+        #expect(try CloudJournalCoding.encode(state).count < 12 * 1_024 * 1_024)
+        let stale = try sessionDocument(profile: f.profile, payload: .desktop(signIn: old, consumed: []), source: UUID())
+        // Publication approval is independent of the evidence being checked here.
+        var approved = state; approved.transport?.validatedSessionRecords = nil
+        #expect(!approved.canPublishSession(stale))
+        await f.coordinator.start()
+        let resumed = try #require(f.coordinator.sessionAdmission(for: f.profile.id))
+        #expect(throws: CloudSyncModelError.conflictingVersion) {
+            try f.coordinator.commitCapturedSession(sessionDocument(profile: f.profile,
+                payload: .desktop(signIn: old, consumed: []), source: source, revision: 1), admission: resumed)
+        }
+        await f.coordinator.stop()
+    }
+
+    @Test func compactedCaptureKeepsExactInFlightBodyAndOldAckCannotClearNewSend() async throws {
+        let f = try SessionFixture(); defer { f.clean() }
+        await f.coordinator.start(); await f.coordinator.setEnabled(true)
+        let admission = try #require(f.coordinator.sessionAdmission(for: f.profile.id)), source = try f.device
+        let old = try CodexSignIn(data: CodexSignInFixture.data(refresh: UUID().uuidString))
+        let next = try CodexSignIn(data: CodexSignInFixture.data(refresh: UUID().uuidString))
+        let first = try sessionDocument(profile: f.profile, payload: .desktop(signIn: old, consumed: []), source: source)
+        let second = try sessionDocument(profile: f.profile, payload: .desktop(signIn: next, consumed: []), source: source, revision: 2)
+        try f.coordinator.commitCapturedSession(first, admission: admission)
+        let driver = CloudFakeEngineDriver(), keys = CloudTransportKeys(try CloudCryptoFixture.key())
+        let assets = CloudAssetStore(root: f.root.appendingPathComponent("staging"))
+        let transport = CloudKitAccountSync(journal: f.journal, keys: keys, assets: assets, makeDriver: { driver })
+        try await transport.start(owner: f.owner, epoch: UUID())
+        await driver.emit(.zoneFetched(error: nil))
+        let batch = try #require(await driver.batch())
+        let sent = try #require(batch.recordsToSave.first { $0.recordID.recordName == CloudRecordCodec.recordName(for: .session(first)) })
+        let codec = CloudRecordCodec(assets: assets)
+        try f.coordinator.commitCapturedSession(second, admission: admission)
+        #expect(try f.journal.catalogState().sessions.count == 1)
+        let encrypted = try codec.envelope(from: sent)
+        #expect(try codec.decode(encrypted, owner: f.owner, key: keys.writer) == .session(first))
+        await driver.emit(.sent(saved: batch.recordsToSave, failed: [], deleted: [], failedDeletes: [:]))
+        let name = CloudRecordCodec.recordName(for: .session(second))
+        #expect(try f.journal.catalogState().dirtyGenerations[name] != nil)
+        await driver.emit(.sendFinished)
+        let nextBatch = try #require(await driver.batch())
+        #expect(nextBatch.recordsToSave.map(\.recordID.recordName) == [name])
+        await transport.stop(); await f.coordinator.stop()
+        #expect(try await CloudSyncJournal(root: f.root.appendingPathComponent("cloud"), owner: f.owner).load().sessions.values.first == second)
+    }
+
+    @Test(arguments: [false, true])
+    func inboxRejectsCandidateWhenRemoteEvidenceArrivesDuringKeyLookup(otherSource: Bool) async throws {
+        let f = try await CloudTransportFixture(); defer { f.disk.cleanUp() }
+        let profile = CodexSignInFixture.profile(), source = UUID()
+        let old = try CodexSignIn(data: CodexSignInFixture.data(refresh: UUID().uuidString))
+        let next = try CodexSignIn(data: CodexSignInFixture.data(refresh: UUID().uuidString))
+        let first = try f.record(.session(sessionDocument(profile: profile, payload: .desktop(signIn: old, consumed: []), source: source)))
+        defer { first.lease.release() }
+        try await stageProfile(profile, in: f.journal)
+        try await f.startReady()
+        await f.driver.emit(.fetched(records: [first.record], deletions: []))
+        // Only the inbox reader is suspended; transport can authenticate the arrival.
+        let readerKeys = CloudTransportKeys(f.key)
+        let inbox = CloudSessionInbox(journal: f.journal, keys: readerKeys)
+        await readerKeys.holdLookups()
+        let lookup = Task { try? await inbox.candidate(recordName: first.record.recordID.recordName, for: profile) }
+        await readerKeys.waitForLookup()
+        let newer = try f.record(.session(sessionDocument(profile: profile,
+            payload: .desktop(signIn: next, consumed: otherSource ? [CloudSessionPayload.fingerprint(old.refreshToken)] : []),
+            source: otherSource ? UUID() : source, revision: otherSource ? 1 : 2)))
+        defer { newer.lease.release() }
+        await f.driver.emit(.fetched(records: [newer.record], deletions: []))
+        await readerKeys.releaseLookups()
+        #expect(await lookup.value == nil)
+        #expect(try await inbox.summaries(for: profile).map(\.recordName) == [newer.record.recordID.recordName])
+        await f.transport.stop()
+    }
+
+    @Test func coordinatorRejectsCandidateAfterInboxChangesAndFreshReadSucceeds() async throws {
+        let keys = CloudTransportKeys(try CloudCryptoFixture.key())
+        let f = try SessionFixture(inboxKeys: keys); defer { f.clean() }
+        await f.coordinator.start(); await f.coordinator.setEnabled(true)
+        let codec = CloudRecordCodec(assets: .init(root: f.root.appendingPathComponent("staging")))
+        let source = UUID()
+        let first = try sessionDocument(profile: f.profile,
+            payload: .desktop(signIn: CodexSignIn(data: CodexSignInFixture.data(refresh: UUID().uuidString)), consumed: []), source: source)
+        let record = try codec.encode(.session(first), owner: f.owner, key: keys.writer)
+        defer { record.lease.release() }
+        let envelope = try codec.envelope(from: record.record)
+        try await f.journal.receive(id: envelope.id, recordName: envelope.recordName,
+            metadata: CloudJournalCoding.encode(envelope.routing), ciphertext: envelope.ciphertext)
+        await keys.holdLookups()
+        let lookup = Task { try? await f.coordinator.sessionCandidate(recordName: envelope.recordName, for: f.profile.id) }
+        await keys.waitForLookup()
+        let second = try sessionDocument(profile: f.profile,
+            payload: .desktop(signIn: CodexSignIn(data: CodexSignInFixture.data(refresh: UUID().uuidString)), consumed: []), source: source, revision: 2)
+        let newer = try codec.encode(.session(second), owner: f.owner, key: keys.writer)
+        defer { newer.lease.release() }
+        let arrival = try codec.envelope(from: newer.record)
+        try await f.journal.receive(id: arrival.id, recordName: arrival.recordName,
+            metadata: CloudJournalCoding.encode(arrival.routing), ciphertext: arrival.ciphertext)
+        await keys.releaseLookups()
+        #expect(await lookup.value == nil)
+        let candidate = try await f.coordinator.sessionCandidate(recordName: arrival.recordName, for: f.profile.id)
+        #expect(candidate.summary.revision == 2)
+        #expect(candidate.validationStamp != nil)
+        await f.coordinator.stop()
+    }
+
     @Test func postDurableSaveAutomaticallyPublishesResolvedGeneration() async throws {
         let native = try NativeSwitchFixture(); defer { native.cleanUp() }
         try CodexSignInFixture.data(refresh: UUID().uuidString).write(to: native.authURL)
@@ -321,12 +449,12 @@ import Testing
     }
 }
 
-private func sessionDocument(profile: PlusProfile, payload: CloudSessionPayload, source: UUID = UUID(), revision: UInt64 = 1) throws -> CloudSessionDocument {
+func sessionDocument(profile: PlusProfile, payload: CloudSessionPayload, source: UUID = UUID(), revision: UInt64 = 1) throws -> CloudSessionDocument {
     .init(profileID: profile.id, sourceDeviceID: source, sourceName: "Synthetic Mac", kind: payload.kind,
         revision: revision, capturedAt: Date(timeIntervalSince1970: 100), payload: try payload.encoded())
 }
 
-private func stageProfile(_ profile: PlusProfile, in journal: CloudSyncJournal, deleted: Bool = false) async throws {
+func stageProfile(_ profile: PlusProfile, in journal: CloudSyncJournal, deleted: Bool = false) async throws {
     try await journal.transaction {
         let version = CloudVersion(counter: 1, deviceID: UUID())
         $0.profiles[CloudJournalState.profileRecordName(profile.id)] = .init(id: profile.id, createdAt: profile.createdAt,
@@ -344,6 +472,7 @@ private func stageProfile(_ profile: PlusProfile, in journal: CloudSyncJournal, 
     let journal: CloudSyncJournal
     let preferences: CloudSyncPreferencesStore
     let snapshots: CloudSessionSnapshotService?
+    let inboxKeys: (any CloudKeyStoring)?
     let profiles: PlusProfileController
     let transport = SessionTransport()
     let defaults: UserDefaults
@@ -352,8 +481,10 @@ private func stageProfile(_ profile: PlusProfile, in journal: CloudSyncJournal, 
     var currentOwner: CloudOwner?
     lazy var coordinator = CloudSyncCoordinator(profiles: profiles, preferences: preferences,
         availability: { .development }, identity: { [self] _ in currentOwner ?? owner }, snapshots: snapshots,
+        makeSessionInbox: { [self] journal in .init(journal: journal, keys: inboxKeys ?? CloudKeyStore(journal: journal)) },
         makeTransport: { [self] journal in transport.journal = journal; return transport })
-    init(snapshots: CloudSessionSnapshotService? = nil) throws {
+    init(snapshots: CloudSessionSnapshotService? = nil, inboxKeys: (any CloudKeyStoring)? = nil) throws {
+        self.inboxKeys = inboxKeys
         self.snapshots = snapshots ?? .init(providers: [], revision: { 0 })
         root = try CodexSignInFixture.directory()
         profile = CodexSignInFixture.profile()

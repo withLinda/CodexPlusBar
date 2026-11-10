@@ -149,6 +149,7 @@ struct CloudSessionAdmission: Equatable, Sendable {
                 try bridge.pauseLocalAdmission()
             } else if !recoveryDeferred { try bridge.reconcileLocal(inferDeletions: !explicit && !restoringUnion) }
             try journal.catalogTransaction {
+                $0.compactLocalSessions()
                 if $0.transport == nil { $0.transport = .init() }
                 $0.transport?.catalogPublicationPaused = true
                 $0.transport?.includeSavedSessions = saved.preferences.includesSessions(for: current)
@@ -378,6 +379,7 @@ struct CloudSessionAdmission: Equatable, Sendable {
             guard state.restoreIntent == nil, !state.receipts.values.contains(where: { $0.phase == .applying }),
                   let profile = state.profiles[CloudJournalState.profileRecordName(document.profileID)],
                   profile.tombstone == nil else { throw CloudJournalError.invalidTransition }
+            state.compactLocalSessions()
             let name = CloudRecordCodec.recordName(for: .session(document))
             let previous = state.sessions.values.filter { $0.profileID == document.profileID && $0.sourceDeviceID == document.sourceDeviceID && $0.kind == document.kind }
                 .max { $0.revision < $1.revision }
@@ -390,7 +392,8 @@ struct CloudSessionAdmission: Equatable, Sendable {
                 guard existing == document else { throw CloudSyncModelError.conflictingVersion }
                 return
             }
-            guard document.revision > (previous?.revision ?? 0) else { throw CloudSyncModelError.conflictingVersion }
+            guard document.revision > state.latestSessionRevision(profileID: document.profileID,
+                sourceDeviceID: document.sourceDeviceID, kind: document.kind) else { throw CloudSyncModelError.conflictingVersion }
             state.sessions[name] = document
             try state.markDirty(recordName: name, body: .session(document))
             state.transport?.validatedSessionRecords?.insert(name)
@@ -399,10 +402,12 @@ struct CloudSessionAdmission: Equatable, Sendable {
                     state.dirtyGenerations.removeValue(forKey: oldName)
                     state.transport?.validatedSessionRecords?.remove(oldName)
                 } else if let oldPayload = try? JSONDecoder().decode(CloudSessionPayload.self, from: old.payload),
+                          (try? oldPayload.identity) == (try? payload.identity),
                           let fingerprint = try? oldPayload.generationFingerprint, payload.consumed.contains(fingerprint) {
                     state.dirtyGenerations.removeValue(forKey: oldName)
                 }
             }
+            state.compactLocalSessions()
         }
         status = .pending
     }
@@ -445,8 +450,7 @@ struct CloudSessionAdmission: Equatable, Sendable {
                     guard let bridge, admission.epoch == epoch,
                           let device = try preferences.read()?.deviceID else { continue }
                     let state = try bridge.journal.catalogState()
-                    let previous = state.sessions.values.filter { $0.profileID == row.id && $0.sourceDeviceID == device && $0.kind == payload.kind }
-                        .map(\.revision).max() ?? 0
+                    let previous = state.latestSessionRevision(profileID: row.id, sourceDeviceID: device, kind: payload.kind)
                     let (revision, overflow) = previous.addingReportingOverflow(1)
                     guard !overflow else { throw CloudSyncModelError.counterOverflow }
                     let document = CloudSessionDocument(profileID: row.id, sourceDeviceID: device, sourceName: "Mac",
@@ -474,7 +478,10 @@ struct CloudSessionAdmission: Equatable, Sendable {
         guard let admission = sessionAdmission(for: profileID), let sessionInbox,
               let profile = try profiles.cloudCommittedRows().first(where: { $0.id == profileID }) else { throw CloudSessionError.unavailable }
         let candidate = try await sessionInbox.candidate(recordName: recordName, for: profile)
-        guard sessionAdmission(for: profileID) == admission else { throw CloudSessionError.unavailable }
+        guard sessionAdmission(for: profileID) == admission, let bridge,
+              try candidate.validationStamp == bridge.journal.catalogState().sessionInboxStamp(for: profileID) else {
+            throw CloudSessionError.unavailable
+        }
         return candidate
     }
 

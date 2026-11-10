@@ -5,6 +5,51 @@ import Testing
 @testable import CodexPlusBar
 
 struct CloudSyncJournalTests {
+    @Test(arguments: [CloudJournalIO.Operation.rename, .directorySync])
+    func interruptedLocalSessionCompactionPreservesEvidenceAndInbox(operation: CloudJournalIO.Operation) async throws {
+        let f = try JournalFixture(); defer { f.cleanUp() }
+        let journal = CloudSyncJournal(root: f.root, owner: Self.owner)
+        let profile = CodexSignInFixture.profile(), source = UUID()
+        let old = try CodexSignIn(data: CodexSignInFixture.data(refresh: UUID().uuidString))
+        let middle = try CodexSignIn(data: CodexSignInFixture.data(refresh: UUID().uuidString))
+        let newest = try CodexSignIn(data: CodexSignInFixture.data(refresh: UUID().uuidString))
+        let first = try sessionDocument(profile: profile, payload: .desktop(signIn: old, consumed: []), source: source)
+        let second = try sessionDocument(profile: profile,
+            payload: .desktop(signIn: middle, consumed: [CloudSessionPayload.fingerprint(old.refreshToken)]), source: source, revision: 2)
+        let third = try sessionDocument(profile: profile, payload: .desktop(signIn: newest, consumed: []), source: source, revision: 3)
+        // Legacy state has no compacted evidence/indexes yet.
+        for document in [first, second, third] { try await queueSession(document, in: journal) }
+        let pending = try await journal.receive(recordName: "session.pending", ciphertext: Data([1, 2, 3]), transportManaged: true)
+        let before = try await journal.load()
+        let failing = CloudSyncJournal(root: f.root, owner: Self.owner, io: .init { event, name in
+            if name == "journal.json", event == operation { throw POSIXError(.EIO) }
+        })
+        await #expect(throws: (any Error).self) { try await failing.transaction { $0.compactLocalSessions() } }
+        let restarted = CloudSyncJournal(root: f.root, owner: Self.owner)
+        try await restarted.transaction { $0.compactLocalSessions() }
+        let after = try await restarted.load()
+        #expect(after.sessions.values.map(\.revision) == [3])
+        #expect(after.recordGenerations == before.recordGenerations)
+        #expect(after.payloadDigests == before.payloadDigests)
+        #expect(after.receivedEnvelopes == before.receivedEnvelopes)
+        #expect(after.receipts == before.receipts)
+        #expect(after.transport?.pendingSessionDeletes.isEmpty == true)
+        #expect(after.transport?.deletedSessions.isEmpty == true)
+        // An old send may have reached the server before its ack was journaled.
+        // Explicit later profile deletion must still know that cloud record name.
+        #expect(after.transport?.sessionProfiles[CloudRecordCodec.recordName(for: .session(first))] == profile.id)
+        #expect(try await restarted.ciphertext(for: pending.id) == Data([1, 2, 3]))
+        let stale = try sessionDocument(profile: profile, payload: .desktop(signIn: old, consumed: []), source: UUID())
+        #expect(!after.canPublishSession(stale))
+        #expect(after.latestSessionRevision(profileID: profile.id, sourceDeviceID: source, kind: .desktop) == 3)
+        await #expect(throws: CloudJournalError.invalidTransition) {
+            try await restarted.transaction { $0.consumedSessionGenerations = nil }
+        }
+        await #expect(throws: CloudJournalError.invalidTransition) {
+            try await restarted.transaction { $0.sessionRevisionHighWater = nil }
+        }
+    }
+
     @Test func compactionRestartsAfterUnlinkButBeforeCleanupListClears() async throws {
         let f = try JournalFixture(); defer { f.cleanUp() }
         let journal = CloudSyncJournal(root: f.root, owner: Self.owner)

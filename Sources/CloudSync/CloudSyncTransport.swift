@@ -78,6 +78,8 @@ struct CloudTransportJournalState: Codable, Equatable, Sendable {
     var sessionProfiles: [String: UUID] = [:]
     var sessionDigests: [String: Data] = [:]
     var sessionReceipts: [String: UUID] = [:]
+    /// Allows older processed inbox entries to acquire typed evidence on restart.
+    var sessionEvidenceChecked: Set<UUID>?
     var acknowledgedTombstones: Set<UUID> = []
     var pendingSessionDeletes: Set<String> = []
     var deletedSessions: Set<String> = []
@@ -87,6 +89,7 @@ struct CloudTransportJournalState: Codable, Equatable, Sendable {
               validatedSessionRecords?.allSatisfy({ state.sessions[$0] != nil }) != false,
               inboxOrder.allSatisfy({ state.receipts[$0] != nil }),
               processedInbox.isSubset(of: Set(inboxOrder)),
+              sessionEvidenceChecked?.isSubset(of: processedInbox) != false,
               pendingSessionDeletes.allSatisfy({ sessionProfiles[$0] != nil }),
               sessionProfiles.keys.allSatisfy({ $0.hasPrefix("session.") }),
               sessionDigests.values.allSatisfy({ $0.count == 32 }),

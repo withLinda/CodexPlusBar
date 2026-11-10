@@ -71,6 +71,63 @@ final class CloudSessionChangeObserver: @unchecked Sendable {
 }
 
 extension CloudJournalState {
+    static func sessionSourceKey(_ profileID: UUID, _ sourceDeviceID: UUID, _ kind: CloudSessionKind) -> String {
+        "\(profileID.uuidString).\(sourceDeviceID.uuidString).\(kind.rawValue)"
+    }
+
+    func latestSessionRevision(profileID: UUID, sourceDeviceID: UUID, kind: CloudSessionKind) -> UInt64 {
+        max(sessionRevisionHighWater?[Self.sessionSourceKey(profileID, sourceDeviceID, kind)] ?? 0,
+            sessions.values.filter { $0.profileID == profileID && $0.sourceDeviceID == sourceDeviceID && $0.kind == kind }
+                .map(\.revision).max() ?? 0)
+    }
+
+    /// Atomic journal-only compaction. Active sends own a value-copy of the exact
+    /// document plus their ciphertext lease in Flight until ack/cancellation drains.
+    /// No send reloads its body by name after admission. Restart publishes only the
+    /// retained latest capture after store reconciliation; old cloud copies remain.
+    mutating func compactLocalSessions() {
+        var latest: [String: UInt64] = sessionRevisionHighWater ?? [:]
+        for document in sessions.values {
+            let source = Self.sessionSourceKey(document.profileID, document.sourceDeviceID, document.kind)
+            latest[source] = max(latest[source] ?? 0, document.revision)
+            rememberSessionConsumption(document)
+            // A send may have reached CloudKit before its ack reached disk.
+            // Preserve exact names for later explicit tombstone cleanup.
+            if transport == nil { transport = .init() }
+            transport?.sessionProfiles[CloudRecordCodec.recordName(for: .session(document))] = document.profileID
+        }
+        if !latest.isEmpty { sessionRevisionHighWater = latest }
+        for (name, document) in sessions {
+            let source = Self.sessionSourceKey(document.profileID, document.sourceDeviceID, document.kind)
+            guard document.revision < (latest[source] ?? 0) else { continue }
+            sessions.removeValue(forKey: name)
+            dirtyGenerations.removeValue(forKey: name)
+            transport?.validatedSessionRecords?.remove(name)
+            // Keep generation/digest and cloud deletion/replay indexes. Never
+            // touch received envelopes, receipts, assets or remote deletion queues.
+        }
+    }
+
+    static func sessionIdentityScope(_ profileID: UUID, _ kind: CloudSessionKind, _ identity: CloudSessionIdentity) throws -> String {
+        CloudSessionPayload.fingerprint(String(decoding: try CloudJournalCoding.encode(
+            [profileID.uuidString, kind.rawValue, identity.accountID, identity.userID]), as: UTF8.self))
+    }
+
+    /// Call only for validated local capture or authenticated codec output. JWT
+    /// claims alone, routing fields and opaque/future payloads never add evidence.
+    mutating func rememberSessionConsumption(_ document: CloudSessionDocument) {
+        guard document.revision > 0, document.sourceName.utf8.count <= 1_024,
+              let payload = try? JSONDecoder().decode(CloudSessionPayload.self, from: document.payload).validated(),
+              payload.kind == document.kind, !payload.consumed.isEmpty,
+              let scope = try? Self.sessionIdentityScope(document.profileID, document.kind, payload.identity) else { return }
+        if consumedSessionGenerations == nil { consumedSessionGenerations = [:] }
+        consumedSessionGenerations?[scope, default: []].formUnion(payload.consumed)
+    }
+
+    func consumedSessionFingerprints(profileID: UUID, payload: CloudSessionPayload) throws -> Set<String> {
+        consumedSessionGenerations?[try Self.sessionIdentityScope(profileID, payload.kind, payload.identity)] ?? []
+    }
+
     func canPublishSession(_ document: CloudSessionDocument) -> Bool {
         let name = CloudRecordCodec.recordName(for: .session(document))
         guard transport?.validatedSessionRecords?.contains(name) != false else { return false }
@@ -84,14 +141,14 @@ extension CloudJournalState {
         guard let payload = try? decoded.validated(), payload.kind == document.kind else { return false }
         if let fingerprint = try? payload.generationFingerprint {
             if CloudSavedSessionChange.isConsumed(fingerprint, kind: document.kind) { return false }
+            if (try? consumedSessionFingerprints(profileID: document.profileID, payload: payload).contains(fingerprint)) == true { return false }
             for other in sessions.values where other.profileID == document.profileID && other.kind == document.kind {
-                guard let candidate = try? JSONDecoder().decode(CloudSessionPayload.self, from: other.payload).validated() else { continue }
+                guard let candidate = try? JSONDecoder().decode(CloudSessionPayload.self, from: other.payload).validated(),
+                      candidate.kind == document.kind, (try? candidate.identity) == (try? payload.identity) else { continue }
                 if candidate.consumed.contains(fingerprint) { return false }
             }
         }
-        return !sessions.values.contains {
-            $0.profileID == document.profileID && $0.kind == document.kind &&
-                $0.sourceDeviceID == document.sourceDeviceID && $0.revision > document.revision
-        }
+        return document.revision >= latestSessionRevision(profileID: document.profileID,
+            sourceDeviceID: document.sourceDeviceID, kind: document.kind)
     }
 }

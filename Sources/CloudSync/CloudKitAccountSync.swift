@@ -342,7 +342,8 @@ actor CloudKitAccountSync: CloudSyncTransport {
             if state.receipts.values.contains(where: { $0.phase == .applying }) || state.restoreIntent != nil {
                 waiting.insert(stored.recordName); continue
             }
-            if state.transport?.processedInbox.contains(id) == true {
+            if state.transport?.processedInbox.contains(id) == true,
+               routing.kind != "session" || state.transport?.sessionEvidenceChecked?.contains(id) == true {
                 if routing.kind != "session" || state.transport?.sessionReceipts[stored.recordName] == id {
                     emit(.received([envelope]))
                 }
@@ -413,11 +414,18 @@ actor CloudKitAccountSync: CloudSyncTransport {
         case .session(let document):
             // Remote sessions stay encrypted in the inbox; only locally queued sessions
             // belong in state.sessions. No credentials are installed by transport.
+            if let localDigest = state.payloadDigests[name],
+               localDigest != CloudJournalCoding.digest(try CloudJournalCoding.encode(remote)) {
+                throw CloudSyncModelError.conflictingVersion
+            }
             transport.sessionProfiles[name] = document.profileID
             transport.deletedSessions.remove(name)
             let digest = CloudJournalCoding.digest(try CloudJournalCoding.encode(document))
             if let previous = transport.sessionDigests[name], previous != digest { throw CloudSyncModelError.conflictingVersion }
             transport.sessionDigests[name] = digest
+            state.rememberSessionConsumption(document)
+            if transport.sessionEvidenceChecked == nil { transport.sessionEvidenceChecked = [] }
+            transport.sessionEvidenceChecked?.insert(envelope.id)
             if transport.sessionReceipts[name] != nil { publish = false }
             else { transport.sessionReceipts[name] = envelope.id }
         }
@@ -517,7 +525,7 @@ actor CloudKitAccountSync: CloudSyncTransport {
             let key = try await keys.writerKey(owner: state.owner, deviceID: device)
             try check(expected)
             if case .session(let session) = body {
-                let current = try await journal.load()
+                let current = try journal.catalogState()
                 try check(expected)
                 guard current.sentRevision(for: name) == revision, current.canPublishSession(session),
                       current.transport?.includeSavedSessions != false,
