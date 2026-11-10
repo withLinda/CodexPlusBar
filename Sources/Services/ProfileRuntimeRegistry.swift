@@ -56,6 +56,10 @@ final class ProfileRuntimeRegistry {
         runtimesByProfileID.removeValue(forKey: profileID)
     }
 
+    func adopt(_ runtime: PlusProfileRuntime, for profile: PlusProfile) {
+        runtimesByProfileID[profile.id] = (profile.webDataStoreID, runtime)
+    }
+
     func removeProfileData(for profile: PlusProfile) async throws {
         releaseRuntime(for: profile.id)
         try await dataStoreManager.removeDataStore(for: profile.webDataStoreID)

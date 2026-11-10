@@ -485,7 +485,8 @@ func stageProfile(_ profile: PlusProfile, in journal: CloudSyncJournal, deleted:
         nativeAdoption: { [self] in nativeAdoption($0) },
         makeSessionInbox: { [self] journal in .init(journal: journal, keys: inboxKeys ?? CloudKeyStore(journal: journal)) },
         makeTransport: { [self] journal in transport.journal = journal; return transport })
-    init(snapshots: CloudSessionSnapshotService? = nil, inboxKeys: (any CloudKeyStoring)? = nil) throws {
+    init(snapshots: CloudSessionSnapshotService? = nil, inboxKeys: (any CloudKeyStoring)? = nil,
+         dataService: (any PlusProfileDataServing)? = nil) throws {
         self.inboxKeys = inboxKeys
         self.snapshots = snapshots ?? .init(providers: [], revision: { 0 })
         root = try CodexSignInFixture.directory()
@@ -496,7 +497,7 @@ func stageProfile(_ profile: PlusProfile, in journal: CloudSyncJournal, deleted:
         preferences = .init(root: root.appendingPathComponent("cloud"))
         defaults = UserDefaults(suiteName: suite)!
         defaults.set(false, forKey: OpenChamberSyncPreference.enabledKey)
-        profiles = .init(catalogStore: store, dataService: SessionDataService(),
+        profiles = .init(catalogStore: store, dataService: dataService ?? SessionDataService(),
             accountSwitchService: SessionDesktop(), syncDefaults: defaults, autoStart: false)
     }
     func clean() {

@@ -124,7 +124,8 @@ final class ChromeLauncher {
                 mode: mode,
                 initialURLs: initialURLs,
                 requiresDevTools: requiresDevTools,
-                storagePolicy: storagePolicy
+                storagePolicy: storagePolicy,
+                restoreSession: profileStore.restoresSessionCookies(for: profile)
             )
         )
         let endpoint = requiresDevTools
@@ -192,7 +193,7 @@ final class ChromeLauncher {
         mode: LaunchMode,
         initialURLs: [URL],
         requiresDevTools: Bool,
-        storagePolicy: StoragePolicy
+        storagePolicy: StoragePolicy, restoreSession: Bool
     ) -> [String] {
         var arguments = [
             "--user-data-dir=\(userDataDirectory.path)",
@@ -200,6 +201,8 @@ final class ChromeLauncher {
             "--no-first-run",
             "--no-default-browser-check",
         ]
+
+        if restoreSession { arguments.append("--restore-last-session") }
 
         switch storagePolicy {
         case .minimal:

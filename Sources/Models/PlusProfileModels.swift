@@ -245,12 +245,12 @@ struct PlusProfile: Identifiable, Codable, Equatable, Sendable {
         return trimmed.isEmpty ? "Untitled profile" : trimmed
     }
 
-    func reidentified(_ id: UUID) -> Self {
+    func reidentified(_ id: UUID, webDataStoreID: UUID? = nil) -> Self {
         Self(id: id, provider: provider, label: label, codexAccountKey: codexAccountKey,
              codexSignIn: codexSignIn, openCodeOpenAIAccount: openCodeOpenAIAccount,
              openChamberSignInCheck: openChamberSignInCheck, emailLink: emailLink, detectedNote: detectedNote,
              password: password, twoFactorCode: twoFactorCode, phoneNumber: phoneNumber, notes: notes,
-             expiresAt: expiresAt, tags: tags, webDataStoreID: webDataStoreID, sortOrder: sortOrder,
+             expiresAt: expiresAt, tags: tags, webDataStoreID: webDataStoreID ?? self.webDataStoreID, sortOrder: sortOrder,
              createdAt: createdAt, lastRefreshAt: lastRefreshAt, lastKnownState: lastKnownState)
     }
 

@@ -77,6 +77,16 @@ struct ChromeProfileStore {
             || fileManager.fileExists(atPath: legacyProfileDirectory(for: profile).path)
     }
 
+    /// Only this app-owned profile opts into Chrome's session restoration.
+    func retainSessionCookies(for profile: PlusProfile) throws {
+        let directory = try ensureProfileDirectory(for: profile)
+        try OpenCodePrivateFile.write(Data(), to: directory.appendingPathComponent("CPBRestoreSession"))
+    }
+
+    func restoresSessionCookies(for profile: PlusProfile) -> Bool {
+        fileManager.fileExists(atPath: profileDirectory(for: profile).appendingPathComponent("CPBRestoreSession").path)
+    }
+
     /// Removes both the current and pre-migration locations for one account.
     /// Callers must close Chrome first because these directories contain cookies
     /// and password/passkey databases.

@@ -499,7 +499,7 @@ struct CloudSessionAdmission: Equatable, Sendable {
               let profile = try profiles.cloudCommittedRows().first(where: { $0.id == request.profileID }) else { throw CloudSessionError.unavailable }
         let candidate = try await sessionCandidate(recordName: request.recordName, for: request.profileID, recovering: true)
         guard candidate.summary.revision == request.sourceRevision, candidate.summary.profileID == request.profileID,
-              candidate.payload.kind != .browser, sessionAdmission(for: request.profileID) == admission else { throw CloudSessionError.unavailable }
+              sessionAdmission(for: request.profileID) == admission else { throw CloudSessionError.unavailable }
         try profiles.beginCloudSessionAdoption(for: request.profileID)
         defer { profiles.finishCloudSessionAdoption() }
         let authorization = CloudSessionAdoptionAuthorization(owner: admission.owner, request: request,
@@ -517,14 +517,24 @@ struct CloudSessionAdmission: Equatable, Sendable {
                 let consumed = try bridge.journal.catalogState().consumedSessionFingerprints(profileID: profile.id, payload: payload)
                 if let fingerprint = try payload.generationFingerprint,
                    consumed.contains(fingerprint) || candidate.consumedFingerprints.contains(fingerprint) { throw CloudSessionError.unavailable }
-            }, sourceConsumed: candidate.sourceConsumed)
+            }, sourceConsumed: candidate.sourceConsumed, browserCompleted: { [weak self] incoming, remote in
+                guard let self else { throw CloudSessionError.unavailable }
+                try self.validateAdoption(candidate, admission: admission)
+                if remote { try self.recordAdoptedDigest(candidate, admission: admission) }
+                try self.profiles.completeCloudBrowserAdoption(incoming)
+            }, browserCommitStatus: { [weak self] incoming in
+                guard let self else { throw CloudSessionError.unavailable }
+                return try self.profiles.cloudCommittedRows().contains {
+                    $0.id == incoming.id && $0.webDataStoreID == incoming.webDataStoreID
+                }
+            })
         await profiles.prepareCloudCatalogApply()
         try authorization.validate()
         let adapter = nativeAdoption(authorization)
         switch candidate.payload.kind {
         case .desktop: _ = try await adapter.adoptDesktop(candidate.payload, for: profile)
         case .openChamber: _ = try await adapter.adoptOpenChamber(candidate.payload, for: profile)
-        case .browser: throw CloudSessionError.unavailable
+        case .browser: try await profiles.adoptCloudBrowserSession(candidate.payload, for: profile, authorization: authorization)
         }
     }
 

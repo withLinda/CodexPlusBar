@@ -16,6 +16,8 @@ struct CloudSessionAdoptionAuthorization: Sendable {
     var completed: @MainActor @Sendable (CodexSignInIdentity, CloudSessionKind, Bool) throws -> Void = { _, _, _ in }
     var validateGeneration: @MainActor @Sendable (CloudSessionPayload) throws -> Void = { _ in }
     var sourceConsumed = false
+    var browserCompleted: @MainActor @Sendable (PlusProfile, Bool) throws -> Void = { _, _ in throw CloudSessionError.unavailable }
+    var browserCommitStatus: @MainActor @Sendable (PlusProfile) throws -> Bool = { _ in false }
 
     @MainActor func write<T: Sendable>(_ operation: @MainActor @Sendable () throws -> T) throws -> T {
         try validate()

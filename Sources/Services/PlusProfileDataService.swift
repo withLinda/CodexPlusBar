@@ -22,11 +22,13 @@ protocol PlusProfileDataServing: AnyObject {
     func clearSession(for profile: PlusProfile) async throws
     func removeProfileData(for profile: PlusProfile) async throws
     func captureSavedSession(for profile: PlusProfile) async throws -> CloudSessionPayload?
+    func adoptBrowserSession(_ payload: CloudSessionPayload, for profile: PlusProfile, authorization: CloudSessionAdoptionAuthorization) async throws
 }
 
 extension PlusProfileDataServing {
     func openAppAuthorization(_ url: URL, for profile: PlusProfile) async throws { throw AppSignInRepairError.helperUnavailable }
     func captureSavedSession(for profile: PlusProfile) async throws -> CloudSessionPayload? { nil }
+    func adoptBrowserSession(_ payload: CloudSessionPayload, for profile: PlusProfile, authorization: CloudSessionAdoptionAuthorization) async throws { throw CloudSessionError.unavailable }
 }
 
 @MainActor
@@ -35,13 +37,51 @@ final class PlusProfileDataService: PlusProfileDataServing {
     private let chromeSessionManager: ChromeSessionManaging
     private var operating: Set<UUID> = []
     private var browserProof: [UUID: (store: UUID, payload: CloudSessionPayload)] = [:]
+    private let browserAdoption: CloudBrowserSessionAdoption?
+    private let browserSeeds: CloudBrowserSeedStore
 
     init(
         runtimeProvider: PlusProfileRuntimeProviding = ProfileRuntimeRegistry(),
-        chromeSessionManager: ChromeSessionManaging = DefaultChromeSessionManager()
+        chromeSessionManager: ChromeSessionManaging = DefaultChromeSessionManager(),
+        browserAdoption: CloudBrowserSessionAdoption? = nil, browserSeeds: CloudBrowserSeedStore = .init()
     ) {
         self.runtimeProvider = runtimeProvider
         self.chromeSessionManager = chromeSessionManager
+        self.browserAdoption = browserAdoption ?? (runtimeProvider as? ProfileRuntimeRegistry).map { .init(registry: $0) }
+        self.browserSeeds = browserSeeds
+    }
+
+    func adoptBrowserSession(_ payload: CloudSessionPayload, for profile: PlusProfile, authorization: CloudSessionAdoptionAuthorization) async throws {
+        guard profile.id == authorization.request.profileID, let browserAdoption, operating.insert(profile.id).inserted else { throw CloudSessionError.unavailable }
+        defer { operating.remove(profile.id); CloudSavedSessionChange.released() }
+        var staged: PlusProfile?
+        var catalogAttempted = false
+        do {
+            try authorization.check(payload)
+            let fresh = try await browserAdoption.prepare(payload, for: profile) { try authorization.check(payload) }
+            staged = fresh
+            let verified = try await browserAdoption.preparedPayload(profileID: profile.id)
+            try Task.checkCancellation()
+            try authorization.write {
+                let remote = fresh.webDataStoreID != profile.webDataStoreID
+                if remote { try browserSeeds.save(verified, for: fresh) }
+                catalogAttempted = true
+                try authorization.browserCompleted(fresh, remote)
+                try browserAdoption.commit(profileID: profile.id)
+                browserProof[profile.id] = (fresh.webDataStoreID, verified)
+                CloudSavedSessionChange.committed()
+                if remote { try? browserSeeds.remove(for: profile) }
+            }
+        } catch {
+            if let staged, staged.webDataStoreID != profile.webDataStoreID {
+                // A save can rename before reporting an error. Never destroy the
+                // recovery body for a visible or uncertain catalog commit.
+                let committed = catalogAttempted ? (try? authorization.browserCommitStatus(staged)) : false
+                if committed == false { try? browserSeeds.remove(for: staged) }
+            }
+            await browserAdoption.discard(profileID: profile.id)
+            throw error
+        }
     }
 
     func openAppAuthorization(_ url: URL, for profile: PlusProfile) async throws {
@@ -55,6 +95,7 @@ final class PlusProfileDataService: PlusProfileDataServing {
             throw ChatGPTAPIError.unsupported("This saved provider is inactive.")
         }
         let runtime = runtimeProvider.runtime(for: profile)
+        try await restoreBrowserIfNeeded(profile, runtime: runtime)
         let authSessionService = AuthSessionService(
             transport: runtime.transport,
             sessionStore: runtime.sessionStore
@@ -98,6 +139,7 @@ final class PlusProfileDataService: PlusProfileDataServing {
     func clearSession(for profile: PlusProfile) async throws {
         guard operating.insert(profile.id).inserted else { throw CloudSessionError.unavailable }
         defer { operating.remove(profile.id) }
+        try browserSeeds.remove(for: profile)
         browserProof.removeValue(forKey: profile.id)
         let runtime = runtimeProvider.runtime(for: profile)
         runtime.updateAuthContext(nil)
@@ -108,6 +150,7 @@ final class PlusProfileDataService: PlusProfileDataServing {
     func removeProfileData(for profile: PlusProfile) async throws {
         guard operating.insert(profile.id).inserted else { throw CloudSessionError.unavailable }
         defer { operating.remove(profile.id) }
+        try browserSeeds.remove(for: profile)
         browserProof.removeValue(forKey: profile.id)
         let runtime = runtimeProvider.runtime(for: profile)
         runtime.updateAuthContext(nil)
@@ -116,20 +159,61 @@ final class PlusProfileDataService: PlusProfileDataServing {
     }
 
     func openChromeSignIn(for profile: PlusProfile) async throws {
+        guard operating.insert(profile.id).inserted else { throw CloudSessionError.unavailable }
+        defer { operating.remove(profile.id) }
+        // Explicit Sign in starts a new local authorization. A queued imported
+        // snapshot must never overwrite that newer session on a later open.
+        try browserSeeds.remove(for: profile)
         try await chromeSessionManager.openSignIn(for: profile)
     }
 
     func openChromeAccountPage(for profile: PlusProfile) async throws {
+        guard operating.insert(profile.id).inserted else { throw CloudSessionError.unavailable }
+        defer { operating.remove(profile.id) }
+        try await seedPendingBrowser(profile)
         try await chromeSessionManager.openAccountPage(for: profile)
     }
 
     func openChromePasskeySetup(for profile: PlusProfile) async throws {
+        guard operating.insert(profile.id).inserted else { throw CloudSessionError.unavailable }
+        defer { operating.remove(profile.id) }
+        try await seedPendingBrowser(profile)
         try await chromeSessionManager.openPasskeySetup(for: profile)
+    }
+
+    private func seedPendingBrowser(_ profile: PlusProfile) async throws {
+        try await restoreBrowserIfNeeded(profile, runtime: runtimeProvider.runtime(for: profile))
+        guard let pending = try browserSeeds.load(for: profile), case .browser(let cookies, _, _) = pending.payload else { return }
+        guard pending.chromeSeedPending else { return }
+        try await chromeSessionManager.seedCookies(cookies, for: profile)
+        try browserSeeds.save(pending.payload, for: profile, chromeSeedPending: false)
+    }
+
+    private func restoreBrowserIfNeeded(_ profile: PlusProfile, runtime: PlusProfileRuntime) async throws {
+        guard let saved = try browserSeeds.load(for: profile), case .browser(let cookies, _, _) = saved.payload else { return }
+        let current = await runtime.sessionStore.portableChatGPTCookies()
+        let valid = cookies.filter { $0.expires.map { $0 > .now } ?? true }
+        // A newer local cookie always wins. An empty/restarted store or an exact
+        // surviving persistent subset can recover the saved session-only values.
+        func normalized(_ cookie: BackupCookie) -> BackupCookie {
+            var value = cookie
+            value.sameSite = value.sameSite?.lowercased()
+            value.expires = value.expires.map { Date(timeIntervalSince1970: floor($0.timeIntervalSince1970)) }
+            return value
+        }
+        let known = valid.map(normalized), observed = current.map(normalized)
+        guard observed.allSatisfy({ known.contains($0) }) else {
+            try browserSeeds.remove(for: profile)
+            return
+        }
+        let missing = valid.filter { !observed.contains(normalized($0)) }
+        await runtime.sessionStore.storeCookies(missing.compactMap(\.cookie))
     }
 
     func syncChromeSession(for profile: PlusProfile) async throws {
         guard operating.insert(profile.id).inserted else { throw CloudSessionError.unavailable }
         defer { operating.remove(profile.id); CloudSavedSessionChange.committed(); CloudSavedSessionChange.released() }
+        try browserSeeds.remove(for: profile)
         browserProof.removeValue(forKey: profile.id)
         guard profile.provider == .codex else {
             throw ChatGPTAPIError.unsupported("This saved provider is inactive.")
@@ -179,6 +263,12 @@ final class PlusProfileDataService: PlusProfileDataServing {
             browserProof.removeValue(forKey: profile.id); return
         }
         browserProof[profile.id] = (profile.webDataStoreID, validated)
+        // Replace recovery with the newly verified local generation. Never leave
+        // an older queued Chrome seed behind a newer authenticated WebKit login.
+        if let saved = try? browserSeeds.load(for: profile) {
+            do { try browserSeeds.save(validated, for: profile, chromeSeedPending: saved.chromeSeedPending && saved.payload == validated) }
+            catch { try? browserSeeds.remove(for: profile) }
+        }
     }
 
     func captureSavedSession(for profile: PlusProfile) async throws -> CloudSessionPayload? {

@@ -223,6 +223,23 @@ final class PlusProfileController {
         }
     }
 
+    func adoptCloudBrowserSession(_ payload: CloudSessionPayload, for profile: PlusProfile, authorization: CloudSessionAdoptionAuthorization) async throws {
+        try await dataService.adoptBrowserSession(payload, for: profile, authorization: authorization)
+    }
+
+    func completeCloudBrowserAdoption(_ incoming: PlusProfile) throws {
+        guard cloudSessionAdoptionAllowed(for: incoming.id) else { throw CloudSessionError.unavailable }
+        var rows = try cloudCommittedRows()
+        guard let index = rows.firstIndex(where: { $0.id == incoming.id }) else { throw CloudSessionError.unavailable }
+        rows[index] = rows[index].reidentified(incoming.id, webDataStoreID: incoming.webDataStoreID)
+        try saveCatalog(rows)
+        if let displayed = indexOfProfile(incoming.id) {
+            profiles[displayed] = .init(profile: rows[index], state: .idle, usage: nil, statusMessage: nil, isRefreshing: false)
+        }
+        selectorPublisher?.invalidate(profileID: incoming.id)
+        updateCatalogConsumers(trusted: true)
+    }
+
     func initializeFreshCloudCatalog(state: CloudJournalState) throws {
         guard case .missing = cloudCatalogRead() else { return }
         guard lastCommittedProfiles == nil, state.committedProjection.profiles.isEmpty,

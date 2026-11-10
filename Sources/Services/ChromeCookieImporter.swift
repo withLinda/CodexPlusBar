@@ -8,6 +8,8 @@ struct ChromeDevToolsCookie: Decodable, Equatable, Sendable {
     let expires: Double?
     let httpOnly: Bool
     let secure: Bool
+    var sameSite: String? = nil
+    var session: Bool? = nil
 }
 
 enum ChromeCookieImporter {

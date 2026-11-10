@@ -80,6 +80,7 @@
 		7FEC8D0EA907E8BB4C62CFF1 /* BackupManifest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21DF02CC5E50936F42A54924 /* BackupManifest.swift */; };
 		8491E254498B90904C946B1F /* ProfilePhoneNumberComboBox.swift in Sources */ = {isa = PBXBuildFile; fileRef = F369067FAFB972FD6B6E3E08 /* ProfilePhoneNumberComboBox.swift */; };
 		89BE04B8E01A11995B81279C /* Manrope.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 1180E836FF1F527C13A405F6 /* Manrope.ttf */; };
+		8AD3227697F55600B565B8BC /* CloudBrowserSeedStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF8BA794D4B75E10714A1745 /* CloudBrowserSeedStore.swift */; };
 		8B3A38D788C8A9D80967D5F0 /* CloudKeyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68D62DC94E703C5BFDEBA587 /* CloudKeyStore.swift */; };
 		8EBBC44056F2C7852B8BF3CB /* ChatGPTAuthContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49259342335BED6B1E4F0C9D /* ChatGPTAuthContext.swift */; };
 		8EE9AA7D4F275B5EC2F36BA1 /* CloudSyncJournal.swift in Sources */ = {isa = PBXBuildFile; fileRef = A04DFF9FF8F36E7C8721F726 /* CloudSyncJournal.swift */; };
@@ -139,6 +140,7 @@
 		F75ADD4591D74B77C5BC03D6 /* ProfilePhoneNumberCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 534B523C2B9C7E021F4C3316 /* ProfilePhoneNumberCatalog.swift */; };
 		F8992BA5B63F2FDB24A07C77 /* ChromeDevToolsClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0943E3401A421B19D7C9FE6C /* ChromeDevToolsClient.swift */; };
 		F95875C1D8C72999ECDF0CB1 /* CloudProfileDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86072FAE5F9387399D5310A1 /* CloudProfileDocument.swift */; };
+		FDBE39554AEEBCC3B6FDF28E /* CloudBrowserSessionAdoption.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD3651CA9916CA353F3D5A40 /* CloudBrowserSessionAdoption.swift */; };
 		FDD57D8D0B1E62F657EC4249 /* ProfileSearchField.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC22ABE1C29F922515DAC181 /* ProfileSearchField.swift */; };
 		FDEB8416A5A23DB8615A2189 /* CloudNativeSessionAdoption.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31786A9A535A437620F0C8DD /* CloudNativeSessionAdoption.swift */; };
 		FE5F12E4CBEA5B9B32EE96C8 /* JSONFileStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 252004FBE714815D978A9765 /* JSONFileStorage.swift */; };
@@ -256,6 +258,7 @@
 		AB2B62885A823A8F2ACA0311 /* Inter-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Inter-SemiBold.ttf"; sourceTree = "<group>"; };
 		AC100253BC756ECF8B338B48 /* ProfileRuntimeRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileRuntimeRegistry.swift; sourceTree = "<group>"; };
 		AC207A422DE9829E2C6F6A3B /* CodexPlusBarTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CodexPlusBarTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		AD3651CA9916CA353F3D5A40 /* CloudBrowserSessionAdoption.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudBrowserSessionAdoption.swift; sourceTree = "<group>"; };
 		AFFE17432F98288D4A9114B2 /* AppRuntimeController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRuntimeController.swift; sourceTree = "<group>"; };
 		B2EF95AD3249A505CD5A22EA /* TransientValue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransientValue.swift; sourceTree = "<group>"; };
 		B39904930FBF14684F139DA3 /* OpenChamberSyncStateStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenChamberSyncStateStore.swift; sourceTree = "<group>"; };
@@ -268,6 +271,7 @@
 		CAAD6E2326B542701573C814 /* CodexSignIn.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexSignIn.swift; sourceTree = "<group>"; };
 		CEEC302F552BC386137C7A03 /* MenuBarStatusItemController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarStatusItemController.swift; sourceTree = "<group>"; };
 		CF773DBE36527C1FEC0FDBB3 /* App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App.swift; sourceTree = "<group>"; };
+		CF8BA794D4B75E10714A1745 /* CloudBrowserSeedStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudBrowserSeedStore.swift; sourceTree = "<group>"; };
 		D05645796D76886DD5BA1FE3 /* ChatGPTRequestSigner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatGPTRequestSigner.swift; sourceTree = "<group>"; };
 		D2820DACD0C61C524A4ECD46 /* OpenChamberSyncStatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenChamberSyncStatusView.swift; sourceTree = "<group>"; };
 		D2CCF039048CB5F92D4BDF6C /* OneTimePasswordGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OneTimePasswordGenerator.swift; sourceTree = "<group>"; };
@@ -311,6 +315,8 @@
 			isa = PBXGroup;
 			children = (
 				443FBB5A6737C257DADB37DA /* CloudAssetStore.swift */,
+				CF8BA794D4B75E10714A1745 /* CloudBrowserSeedStore.swift */,
+				AD3651CA9916CA353F3D5A40 /* CloudBrowserSessionAdoption.swift */,
 				EABC3E1C42A5FABA8D7C5C29 /* CloudCatalogBridge.swift */,
 				60DBCA96928F97820D1173B1 /* CloudCatalogCommit.swift */,
 				9BFB4EEAF2E037DEC8D516C7 /* CloudJournalState.swift */,
@@ -688,6 +694,8 @@
 				64FA25D57C1F29959BB5115B /* ChromeProfileStore.swift in Sources */,
 				2ECE03F2044A2EB02194E7B5 /* ChromeSessionManager.swift in Sources */,
 				D1C1C3B743F5CE732F8F3EBA /* CloudAssetStore.swift in Sources */,
+				8AD3227697F55600B565B8BC /* CloudBrowserSeedStore.swift in Sources */,
+				FDBE39554AEEBCC3B6FDF28E /* CloudBrowserSessionAdoption.swift in Sources */,
 				EF29E26AC48A4592E64B4101 /* CloudCatalogBridge.swift in Sources */,
 				552032FC5044E00468A5EA2D /* CloudCatalogCommit.swift in Sources */,
 				97F196F0B1A8065C5B1CF4FD /* CloudJournalState.swift in Sources */,

@@ -72,10 +72,12 @@ protocol ChromeSessionManaging: AnyObject {
     func clearCookies(for profile: PlusProfile) async throws
     func removeProfileData(for profile: PlusProfile) async throws
     func closeSignIn(for profile: PlusProfile) async
+    func seedCookies(_ cookies: [BackupCookie], for profile: PlusProfile) async throws
 }
 
 extension ChromeSessionManaging {
     func openAppAuthorization(_ url: URL, for profile: PlusProfile) async throws { throw AppSignInRepairError.helperUnavailable }
+    func seedCookies(_ cookies: [BackupCookie], for profile: PlusProfile) async throws { throw CloudSessionError.unavailable }
 }
 
 @MainActor
@@ -341,6 +343,42 @@ final class DefaultChromeSessionManager: ChromeSessionManaging {
 
                 try await client.clearCookies()
                 await self.closeInspectorSession(client: client, session: session)
+            } catch {
+                await self.closeInspectorSession(client: client, session: session)
+                throw error
+            }
+        }
+    }
+
+    func seedCookies(_ cookies: [BackupCookie], for profile: PlusProfile) async throws {
+        guard profile.provider == .codex, cookies.allSatisfy({ $0.isValid(for: .codex) }) else { throw CloudSessionError.invalidPayload }
+        let expected = cookies.filter { $0.expires.map { $0 > .now } ?? true }
+        guard expected.contains(where: { $0.name == "__Secure-next-auth.session-token" || $0.name.hasPrefix("__Secure-next-auth.session-token.") }) else { throw CloudSessionError.unavailable }
+        try await withExclusiveOperation {
+            try Task.checkCancellation()
+            try await self.closeActiveSession()
+            try self.profileStore.retainSessionCookies(for: profile)
+            let session = try await self.launcher.launch(profile: profile, mode: .headless,
+                initialURL: URL(string: "about:blank")!, requiresDevTools: true, storagePolicy: .minimal)
+            var client: ChromeDevToolsClient?
+            do {
+                let connected = try await self.makeClient(for: session); client = connected
+                // New store ID owns a new app-only Chrome profile. Replace the
+                // entire provider family so old chunks cannot survive a retry.
+                for cookie in try await connected.getCookies() where ChromeDevToolsClient.isProviderCookie(cookie) {
+                    try await connected.deleteCookie(cookie)
+                }
+                try await connected.setCookies(expected)
+                let actual = try await connected.getCookies().filter(ChromeDevToolsClient.isProviderCookie)
+                guard actual.count == expected.count, expected.allSatisfy({ wanted in
+                    actual.contains { cookie in cookie.name == wanted.name && cookie.value == wanted.value &&
+                        cookie.domain == wanted.domain && cookie.path == wanted.path &&
+                        cookie.secure == wanted.secure && cookie.httpOnly == wanted.httpOnly &&
+                        cookie.sameSite?.lowercased() == wanted.sameSite?.lowercased() &&
+                        (wanted.expires.map { abs((cookie.expires ?? 0) - $0.timeIntervalSince1970) < 1 }
+                            ?? ((cookie.expires ?? -1) <= 0 && cookie.session != false)) }
+                }) else { throw CloudSessionError.unavailable }
+                await self.closeInspectorSession(client: connected, session: session)
             } catch {
                 await self.closeInspectorSession(client: client, session: session)
                 throw error
