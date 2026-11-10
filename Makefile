@@ -204,3 +204,16 @@ $(TARGET_PREFIX)clean:
 $(TARGET_PREFIX)agent-verify:
 	@$(MAKE) --no-print-directory $(TARGET_PREFIX)build
 	@$(MAKE) --no-print-directory $(TARGET_PREFIX)test
+
+# Cloud release is deliberately opt-in; ordinary build/test/dmg targets are local-only.
+CLOUD_PROFILE ?=
+CLOUD_SIGN_IDENTITY ?=
+CLOUD_APP ?=
+NOTARY_PROFILE ?= CodexPlusBar-notary
+.PHONY: cloud-preflight cloud-archive cloud-dmg
+cloud-preflight:
+	@python3 scripts/cloud_signing_preflight.py --app "$(CLOUD_APP)" --environment Production --team 2Z8N5KTWQZ --container iCloud.com.linda.CodexPlusBar
+cloud-archive:
+	@CLOUD_PROFILE="$(CLOUD_PROFILE)" CLOUD_SIGN_IDENTITY="$(CLOUD_SIGN_IDENTITY)" bash scripts/notarize_cloud_dmg.sh --archive-only
+cloud-dmg:
+	@CLOUD_PROFILE="$(CLOUD_PROFILE)" CLOUD_SIGN_IDENTITY="$(CLOUD_SIGN_IDENTITY)" NOTARY_PROFILE="$(NOTARY_PROFILE)" bash scripts/notarize_cloud_dmg.sh

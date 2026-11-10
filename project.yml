@@ -1,4 +1,9 @@
 name: CodexPlusBar
+configs:
+  Debug: debug
+  Release: release
+  CloudDevelopment: debug
+  CloudProduction: release
 options:
   deploymentTarget:
     macOS: 14.0
@@ -10,6 +15,22 @@ settings:
     SWIFT_VERSION: 6.0
 
 schemes:
+  CodexPlusBar-CloudDevelopment:
+    build:
+      targets:
+        CodexPlusBar: all
+    run:
+      config: CloudDevelopment
+    archive:
+      config: CloudDevelopment
+  CodexPlusBar-CloudProduction:
+    build:
+      targets:
+        CodexPlusBar: all
+    run:
+      config: CloudProduction
+    archive:
+      config: CloudProduction
   CodexPlusBar:
     shared: true
     build:
@@ -54,6 +75,25 @@ targets:
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         CURRENT_PROJECT_VERSION: 22
         MARKETING_VERSION: 1.6.2
+      configs:
+        CloudDevelopment:
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: Apple Development
+          DEVELOPMENT_TEAM: 2Z8N5KTWQZ
+          PROVISIONING_PROFILE_SPECIFIER: CodexPlusBar macOS Development CloudKit
+          CODE_SIGN_ENTITLEMENTS: Config/CloudSync-Development.entitlements
+          CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
+          ENABLE_HARDENED_RUNTIME: YES
+          ENABLE_APP_SANDBOX: NO
+        CloudProduction:
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: Developer ID Application
+          DEVELOPMENT_TEAM: 2Z8N5KTWQZ
+          PROVISIONING_PROFILE_SPECIFIER: CodexPlusBar Developer ID CloudKit
+          CODE_SIGN_ENTITLEMENTS: Config/CloudSync-Production.entitlements
+          CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
+          ENABLE_HARDENED_RUNTIME: YES
+          ENABLE_APP_SANDBOX: NO
 
   CodexPlusBarTests:
     type: bundle.unit-test

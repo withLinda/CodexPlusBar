@@ -8,6 +8,7 @@
 build/
 DerivedData/
 *.xcresult/
+__pycache__/
 
 # Xcode user-specific data
 *.xcuserdatad/
