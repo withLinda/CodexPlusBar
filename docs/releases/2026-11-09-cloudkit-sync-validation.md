@@ -205,3 +205,46 @@ Final targeted GREEN: **79 tests in four suites passed**, Xcode **TEST SUCCEEDED
 ```text
 74506ef3add4896c73a7ec1366f80237e1e54a8fe23d0e339c3cab95bebc48a2  CodexPlusBar.dmg
 ```
+
+## 1.7.4 normal-launch download and recovery crash
+
+The user reported that Sync Now still failed on both Macs and the other app closed. Local DiagnosticReports contained three1.7.3/build26 crashes at23:14–23:17 and matching earlier1.7.2 crashes. All were SIGTRAP in CloudKit. Symbolication using the matching1.7.3 archive UUID identified `CloudKitEngineDriver.fetchChanges` ← `CloudKitAccountSync.fetchChanges` ← `restartIfDesired`. Unified logs recorded the exact fatal assertion: “Cannot await a call into CKSyncEngine from within a delegate callback ... Try performing this in a detached Task.” The recovery began30seconds after the failed fetch. The currently installed application subsequently reported1.6.2/build22; it was not replaced or modified during investigation.
+
+### Reproduce the initiating failure
+
+Copying the whole actual private sync directory, catalog and device preferences into disposable storage still passed when the signed probe was started as a command-line executable. Using the same production objects, real driver, production bundle/executable name and **LaunchServices (`open -n -W`)** reproduced the installed failure:
+
+- CloudKit delivered46 records (45 profiles plus order).
+- Direct reading of the granted CKAsset file succeeded (the sampled file was1077bytes, user-owned, mode0600, single-link).
+- Opening its `CloudKit` parent directory failed with `EPERM`. Every production codec envelope read failed at the descriptor-relative parent walk. The transport therefore invalidated the cursor/epoch and scheduled storage recovery.
+- Awaiting that recovery in the GUI probe reproduced CloudKit's exact fatal assertion. Ordinary `Task` had retained the SDK's delegate task-local guard despite the asynchronous delay.
+
+The previous signed CLI probes had a broader file-access context; their success did not establish normal application behavior. The previous investigation also failed to inspect existing crash reports. Both omissions are now explicit release-validation requirements.
+
+### Narrow corrections
+
+- CloudKit-owned input is opened directly using Darwin `O_NOFOLLOW_ANY | O_NONBLOCK | O_CLOEXEC | O_RDONLY`. This kernel flag rejects symlinks at **every** path component without requiring directory-open permissions. The shared descriptor reader preserves bounded allocation/streaming, regular-file, single-link and current-user checks. Account-tree exclusion remains. Local storage still uses its existing private descriptor-relative walk, permissions, locks and fsync rules.
+- Detach the four engine-affecting follow-up task roots: cancellation drain, expired-token restart, timed network/key retry, and storage recovery. Keep event processing serialized and awaited; keep cancellation's operation-completion barrier and token/lifecycle checks. Detaching all delegate processing or fire-and-forget inbox writes was deliberately unnecessary.
+
+### Targeted evidence
+
+- RED: two targeted tests with five issues: all four synthetic callback-context cases (storage, token, network, account) inherited the forbidden context; reading a file under a search-only parent failed with EACCES. The initial interrupted run used a retry clock that had not advanced and was discarded; the corrected test clock completed RED normally.
+- GREEN: **88 tests in three suites passed**, Xcode **TEST SUCCEEDED**: `CloudKitAccountSyncTests`, `CloudPayloadCipherTests`, `CloudSyncJournalTests`. Existing symlink/FIFO/nonregular/oversize rejection, cancellation, old-epoch callbacks, lease retention and journal durability checks remain green.
+- Signed normal-launch GREEN: complete production coordinator against private copies of actual catalog/journal/preferences fetched45 profiles, set initialized, reopened publication, and retained zero catalog receipts with no issue. Pending here reflects intentionally disabled writes for the122 retained local session records.
+- Signed normal-launch recovery GREEN: inject one storage failure **inside an actual SDK fetched callback**, await recovery, then Sync Now again. The engine restarted and fetched successfully; no reentry assertion, initialized=true, issue=nil.
+- Signed normal-launch roundtrip GREEN:122 synthetic Production records uploaded under overlapping sends,122 downloaded with exact production-codec decrypted-body equality, zero failures/dirty work. Disposable zone and subscription removed.
+- Final affected end-to-end GREEN: **four tests passed** in `CloudSyncEndToEndTests`, including45/33 overlapping profiles,122 saved sessions, local browser-ID preservation, settled restart/no extra writes, offline merge/delete, delayed keys and explicit import. Combined with the earlier targeted run: **92 tests across four suites passed**. No full suite was run.
+
+Evidence: `cloud-174-red.log`, `cloud-174-green.log`, `cloud-174-launchservices-red.log`, `cloud-174-launchservices-recovery-green.log`, `cloud-174-launchservices-roundtrip-green.log`, `cloud-174-replicas-green.log` in the session temporary directory. Probe sources/runner remain under ignored `build/cloud-account-probe/`. No user profile/credential data or real account records were modified. Author self-review only; targeted tests only; physical two-Mac acceptance remains pending.
+
+### 1.7.4 packaged artifact
+
+- Workspace: `build/cloud-releases/release-20261110T164051Z-LiwCwm/`; strict universal archive **ARCHIVE SUCCEEDED**, exactly `arm64` and `x86_64`; Info.plist verified `1.7.4`, build `27`.
+- App notarization **Accepted**: `8ce494f0-e32e-4c3d-8203-1f5624e5d003`.
+- DMG notarization **Accepted**: `34fd01b9-ea27-49fd-adfd-9a9998d13897`.
+- App/DMG signatures, staples and Gatekeeper passed. Read-only mounted app passed Production profile/CloudKit/APNs/Keychain preflight and ticket validation; image detached.
+- Five release-preflight Python tests passed. Upload copy `github/CodexPlusBar.dmg`: 7,747,675 bytes. Packaging logs and notary JSON remain with the artifact.
+
+```text
+9b1061e4a0eb91b11f26b57ad0fbffb45647b59f02f265f9f9a211e379aa28dd  CodexPlusBar.dmg
+```

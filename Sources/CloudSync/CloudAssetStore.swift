@@ -42,21 +42,27 @@ struct CloudAssetStore: Sendable {
     }
 
     /// CloudKit-owned input may be mode 0644, but must be a regular, single-link file
-    /// owned by this user. Walk every parent without following symlinks or creating paths.
+    /// owned by this user. Reject symlinks anywhere in the path without opening parents.
     /// The shared reader preflights size, then caps every streaming read at limit + 1.
     func copyBounded(from source: URL) throws -> URL {
         try stage(encryptedBytes(from: source))
     }
 
-    /// Same bounded, no-follow read for the codec before committing an inbox envelope.
+    /// CloudKit authorizes the staged file, not enumeration/opening of its protected
+    /// parent directories. O_NOFOLLOW_ANY checks the whole path in the kernel without
+    /// requiring those extra permissions. Local journal writes keep their private,
+    /// descriptor-relative directory walk and durability checks.
     func encryptedBytes(from source: URL) throws -> Data {
         let source = CloudSyncPaths(root: source).root
-        guard source.isFileURL else { throw CloudJournalError.unsafePath }
-        let parent = try CloudPrivateFiles.openRoot(source.deletingLastPathComponent(), io: io, create: false, requirePrivate: false)
-        defer { close(parent) }
-        guard let bytes = try CloudPrivateFiles.read(source.lastPathComponent, in: parent,
-                limit: CloudPayloadCipher.maximumAssetBytes, requirePrivate: false) else { throw CloudJournalError.missingAsset }
-        return bytes
+        guard source.isFileURL, source.path.hasPrefix("/"), !source.path.contains("\0"),
+              !source.pathComponents.contains(where: { $0.caseInsensitiveCompare("CodexPlusBar") == .orderedSame }) else {
+            throw CloudJournalError.unsafePath
+        }
+        let descriptor = open(source.path, O_RDONLY | O_NOFOLLOW_ANY | O_NONBLOCK | O_CLOEXEC)
+        if descriptor < 0, errno == ENOENT { throw CloudJournalError.missingAsset }
+        guard descriptor >= 0 else { throw CloudPrivateFiles.systemError() }
+        defer { close(descriptor) }
+        return try CloudPrivateFiles.read(descriptor: descriptor, limit: CloudPayloadCipher.maximumAssetBytes, requirePrivate: false)
     }
 
     /// Caller supplies only completed or durably established orphan assets. A live send

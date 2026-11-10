@@ -67,3 +67,10 @@ After publishing, confirm the remote tag resolves to that exact commit, download
 Separate provisioned synthetic Development and Developer ID Production probes passed account availability, encrypted CKAsset save/readback, and app-owned synchronizable Keychain add/read/delete. Production APNs registration and private-zone subscription save/readback also passed. Temporary zones/subscriptions/keys were removed. New offline preflight validates both signed probe bundles.
 
 Those checks do not prove cross-device key delivery, push delivery, or the finished app's two-Mac operation. Follow the acceptance document and record those observations from the final installed artifact before declaring cross-Mac acceptance complete.
+
+## Runtime validation after a sync failure
+
+- When an app closes, inspect `~/Library/Logs/DiagnosticReports/CodexPlusBar*.ips` and symbolicate using the archive dSYM with the matching binary UUID. Correlate the timestamp with unified CloudKit logs before assuming the closure is voluntary.
+- Launch signed runtime probes through LaunchServices (`open -n -W` with separate stdout/stderr files), as a normal GUI app is launched. Running the executable from Terminal can inherit broader file permissions and hide denied access to CloudKit staging directories.
+- Exercise both the initial failure and the entire delayed recovery. A successful fetch-only probe or an early stop does not validate a callback-triggered retry. Inject a single storage failure within an actual SDK callback, await recovery, then fetch again.
+- Keep record tests in disposable zones with synthetic encrypted bodies, and use private copies for existing catalog/journal checks. Verify upload, download and decoded-body equality, then remove probe records/subscriptions. Keep logs free of account/credential values.

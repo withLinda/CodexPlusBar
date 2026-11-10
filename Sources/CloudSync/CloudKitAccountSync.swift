@@ -136,7 +136,10 @@ actor CloudKitAccountSync: CloudSyncTransport {
         token = nil; ready = false; retryTask?.cancel(); retryTask = nil
         if let drain { return drain }
         let engine = driver
-        let task = Task {
+        // A plain Task inherits CloudKit's delegate task-local reentrancy guard,
+        // even after the callback returns. Detach engine-affecting follow-up work;
+        // the serial queues, epoch checks and operation drain still own ordering.
+        let task = Task.detached { [work] in
             await engine?.cancelOperations()
             _ = try? await work.run { await self.releaseAllFlights() }
         }
@@ -628,7 +631,7 @@ actor CloudKitAccountSync: CloudSyncTransport {
                 }
                 let wanted = desiredRun
                 let draining = beginDrain()
-                Task {
+                Task.detached { [lifecycle] in
                     await draining.value
                     _ = try? await lifecycle.run { try await self.restartIfDesired(wanted) }
                 }
@@ -668,7 +671,7 @@ actor CloudKitAccountSync: CloudSyncTransport {
     private func scheduleRetry(after delay: TimeInterval, token expected: UUID) {
         guard token == expected, retryTask == nil else { return }
         let sleep = sleep
-        retryTask = Task { [weak self] in
+        retryTask = Task.detached { [weak self] in
             do { try await sleep(min(delay, 300)); try Task.checkCancellation() }
             catch { return }
             await self?.retryWake(token: expected)
@@ -710,7 +713,7 @@ actor CloudKitAccountSync: CloudSyncTransport {
         let draining = beginDrain()
         guard wanted != nil, recoveryTask == nil else { return }
         let sleep = sleep
-        recoveryTask = Task { [weak self] in
+        recoveryTask = Task.detached { [weak self] in
             await draining.value
             do { try await sleep(30); try Task.checkCancellation() }
             catch { return }

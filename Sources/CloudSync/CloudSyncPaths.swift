@@ -138,6 +138,11 @@ enum CloudPrivateFiles {
     static func read(_ name: String, in directory: Int32, limit: Int, requirePrivate: Bool = true) throws -> Data? {
         guard let descriptor = try openFile(name, in: directory, requirePrivate: requirePrivate) else { return nil }
         defer { close(descriptor) }
+        return try read(descriptor: descriptor, limit: limit, requirePrivate: requirePrivate)
+    }
+
+    /// Read the already-open inode; callers retain ownership of the descriptor.
+    static func read(descriptor: Int32, limit: Int, requirePrivate: Bool = true) throws -> Data {
         let info = try validateFile(descriptor, requirePrivate: requirePrivate)
         guard info.st_size >= 0, info.st_size <= limit else { throw CloudJournalError.tooLarge }
         var bytes = Data()

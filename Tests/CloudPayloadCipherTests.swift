@@ -151,6 +151,24 @@ struct CloudPayloadCipherTests {
         #expect(throws: (any Error).self) { try store.copyBounded(from: parentLink.appendingPathComponent(file.lastPathComponent)) }
     }
 
+    @Test func cloudAssetCanBeReadWithoutPermissionToListItsStagingDirectory() throws {
+        let f = try CloudCryptoFixture(); defer { f.cleanUp() }
+        let source = f.base.appendingPathComponent("system-staging")
+        try FileManager.default.createDirectory(at: source, withIntermediateDirectories: false)
+        let file = source.appendingPathComponent("download.asset")
+        let bytes = Data([3, 7, 11, 19])
+        try bytes.write(to: file)
+        // CloudKit grants access to the file, not to opening/listing its parent.
+        // Search-only POSIX access reproduces that distinction without TCC setup.
+        #expect(chmod(source.path, 0o100) == 0)
+        defer { _ = chmod(source.path, 0o700) }
+        #expect(try Data(contentsOf: file) == bytes)
+        let store = CloudAssetStore(root: f.root)
+        #expect(try store.encryptedBytes(from: file) == bytes)
+        let copied = try store.copyBounded(from: file)
+        #expect(try Data(contentsOf: copied) == bytes)
+    }
+
     @Test func stagingCannotRemoveOutsideFilesOrAdoptUnsafeRoots() throws {
         let f = try CloudCryptoFixture(); defer { f.cleanUp() }
         let store = CloudAssetStore(root: f.root)

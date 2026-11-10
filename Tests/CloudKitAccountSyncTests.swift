@@ -4,6 +4,28 @@ import Testing
 @testable import CodexPlusBar
 
 struct CloudKitAccountSyncTests {
+    @Test(arguments: ["storage", "token", "network", "account"])
+    func delegateTriggeredEngineWorkDoesNotInheritCallbackTaskContext(reason: String) async throws {
+        let sleeper = CloudTransportSleeper(), clock = CloudTransportClock()
+        let f = try await CloudTransportFixture(now: { clock.now() }, sleep: { try await sleeper.sleep($0) })
+        defer { f.disk.cleanUp() }
+        try await f.startReady()
+        await CloudSyntheticDelegateContext.$isCallback.withValue(true) {
+            switch reason {
+            case "storage": await f.driver.emit(.engineStateFailure)
+            case "token": await f.driver.emit(.zoneFetched(error: CKError(.changeTokenExpired)))
+            case "network": await f.driver.emit(.zoneFetched(error: CKError(.networkUnavailable)))
+            default: await f.driver.emit(.accountChanged)
+            }
+        }
+        if reason == "storage" || reason == "network" {
+            await sleeper.waitForSleep(1); clock.advance(31); await sleeper.wake()
+        }
+        if reason != "account" { await f.driver.waitForFetches(1) }
+        await f.transport.stop()
+        #expect(await f.driver.callbackContextCalls.isEmpty)
+    }
+
     @Test func overlappingEmptySendCannotRemoveAnotherRequestsAssetsOrAcknowledgement() async throws {
         let f = try await CloudTransportFixture(); defer { f.disk.cleanUp() }
         let name = try await f.localProfile()
@@ -1027,6 +1049,14 @@ struct CloudKitAccountSyncTests {
 }
 
 actor CloudFakeEngineDriver: CloudEngineDriving {
+    private(set) var callbackContextCalls: [String] = []
+    private var fetchWaiter: (Int, CheckedContinuation<Void, Never>)?
+    func waitForFetches(_ count: Int) async {
+        if fetchCalls < count { await withCheckedContinuation { fetchWaiter = (count, $0) } }
+    }
+    private func inspectContext(_ operation: String) {
+        if CloudSyntheticDelegateContext.isCallback { callbackContextCalls.append(operation) }
+    }
     var callbacks: CloudEngineCallbacks?
     private var accountDelegate: CloudKitEngineDelegate?
     private var initialAccountChange: CKSyncEngine.Event.AccountChange.ChangeType?
@@ -1050,6 +1080,7 @@ actor CloudFakeEngineDriver: CloudEngineDriving {
     private var startup: CheckedContinuation<Void, Never>?
     private var startupWaiter: CheckedContinuation<Void, Never>?
     func start(owner: CloudOwner, state: Data?, callbacks: CloudEngineCallbacks) async throws {
+        inspectContext("start")
         self.loadedState = state; self.callbacks = callbacks; starts += 1
         accountDelegate = CloudKitEngineDelegate(owner: owner, callbacks: callbacks)
         operations = CloudEngineOperationDrain()
@@ -1080,7 +1111,9 @@ actor CloudFakeEngineDriver: CloudEngineDriving {
     func failFetchAfterDelegateCompletion(withZoneSuccess: Bool) { failedFetchZoneSuccess = withZoneSuccess }
     func setFetchInspector(_ inspect: @escaping @Sendable () async throws -> Date?) { inspectFetchCompletion = inspect }
     func fetchChanges() async throws {
+        inspectContext("fetch")
         fetchCalls += 1
+        if let waiter = fetchWaiter, fetchCalls >= waiter.0 { fetchWaiter = nil; waiter.1.resume() }
         if completesFetch { await callbacks?.event(.zoneFetched(error: nil)) }
         if let withZoneSuccess = failedFetchZoneSuccess {
             await callbacks?.event(.fetchStarted)
@@ -1090,8 +1123,9 @@ actor CloudFakeEngineDriver: CloudEngineDriving {
             throw CKError(.networkFailure)
         }
     }
-    func sendChanges() async throws { sendCalls += 1 }
+    func sendChanges() async throws { inspectContext("send"); sendCalls += 1 }
     func cancelOperations() async {
+        inspectContext("cancel")
         guard held else { return }
         await operations.close()
         await withCheckedContinuation { continuation in
@@ -1109,6 +1143,10 @@ actor CloudFakeEngineDriver: CloudEngineDriving {
     func batch(scope: CKSyncEngine.SendChangesOptions.Scope = .all) async -> CKSyncEngine.RecordZoneChangeBatch? {
         await callbacks?.nextBatch(scope, pending)
     }
+}
+
+enum CloudSyntheticDelegateContext {
+    @TaskLocal static var isCallback = false
 }
 
 /// Models the documented State.add last-operation-wins contract, not a second copy of
