@@ -20,7 +20,11 @@ On a clean checkout, run `make test AGENT_NAME=expiry-selector` first. Swift con
 
 The built `dist/` folder is the extension. Do not install the source directory or `.runtime/` probes. Packaging verification must pass before installation.
 
-The local acceptance archive is `output/expiry-selector-0.1.0.zip` at the repository root. Extract it and select its `expiry-selector/` folder when installing. The archive contains the same eight verified distribution files. The source-tree report `docs/acceptance-2026-11-09.md` records its checksum and review boundaries.
+Every CodexPlusBar release includes [the current extension ZIP](https://github.com/withLinda/CodexPlusBar/releases/latest/download/expiry-selector.zip). Extract it and select its `expiry-selector/` folder when installing. The archive contains only the eight verified distribution files; its `package.json` records the extension version. `SHA256SUMS` in the same release covers both the ZIP and DMG.
+
+`make cloud-dmg` rebuilds and verifies this extension and prepares all three release assets. To prepare assets from an already notarized DMG, run `make release-assets RELEASE_DMG=/path/to/CodexPlusBar.dmg RELEASE_ASSETS=/path/to/new/github`. This installs the locked dependencies and builds from the current source checkout. See the [release runbook](../../docs/releases/cloudkit-dmg-runbook.md#github-release-assets).
+
+The historical acceptance archive was `output/expiry-selector-0.1.0.zip`; `docs/acceptance-2026-11-09.md` records that artifact's checksum and review boundaries.
 
 ## Supported boundary
 

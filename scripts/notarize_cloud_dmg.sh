@@ -89,3 +89,5 @@ trap - EXIT
     shasum -a 256 -c "$(basename "$DMG").sha256"
 )
 echo "Notarized DMG: $DMG"
+python3 scripts/release_assets.py prepare --dmg "$DMG" --output "$RUN/github"
+echo "GitHub release assets: $RUN/github"

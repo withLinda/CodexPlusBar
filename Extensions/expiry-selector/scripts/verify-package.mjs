@@ -7,10 +7,11 @@ import { build } from 'esbuild';
 
 const root = resolve('dist');
 const metadata = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
+const sourceMetadata = JSON.parse(await readFile('package.json', 'utf8'));
 const parsed = parseManifest(metadata);
 if (!parsed.ok) throw new Error(`Invalid extension manifest: ${JSON.stringify(parsed)}`);
 const manifest = metadata.openchamber;
-if (metadata.version !== '0.1.0' || manifest.apiVersion !== 1 || manifest.contributes.service.provides) throw new Error('Unexpected package contract');
+if (metadata.version !== sourceMetadata.version || manifest.apiVersion !== 1 || manifest.contributes.service.provides) throw new Error('Unexpected package contract');
 const safePath = value => {
   if (typeof value !== 'string' || value.startsWith('/') || value.includes('..') || value.includes(':') || value.includes('\\')) throw new Error('Unsafe declared path');
   return join(root, value);

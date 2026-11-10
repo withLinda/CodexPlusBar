@@ -45,6 +45,7 @@ Every release uses a unique directory under `build/cloud-releases/`. The script:
 4. Notarizes and staples the app, then builds, signs, notarizes and staples the DMG. Each staple precedes its validation.
 5. Assesses Gatekeeper and mounts the DMG read-only to check the actual packaged app and its ticket.
 6. Writes a basename-relative SHA-256 checksum after all stapling is complete.
+7. Installs the extension's locked npm dependencies, rebuilds a clean distribution, verifies its manifest and bundles, then prepares `github/CodexPlusBar.dmg`, `github/expiry-selector.zip` and `github/SHA256SUMS` together. Node 22+ and npm are required.
 
 Keep `archive.log`, `app-notary.json`, `dmg-notary.json`, preflight results and checksum beside the DMG. If notarization is rejected, inspect its submission ID with `xcrun notarytool log <id> --keychain-profile CodexPlusBar-notary`. Do not mutate a notarized signed app. Rebuild a new release directory instead.
 
@@ -54,11 +55,30 @@ Building never publishes, installs or replaces `/Applications/CodexPlusBar.app`.
 
 Starting with 1.7.0, the standard GitHub installer is the `CloudProduction` DMG. Use `make cloud-dmg` above; the ordinary local `make dmg` path does not supply this cloud signing contract.
 
-After all verification and stapling, copy the versioned DMG into a fresh upload directory as **`CodexPlusBar.dmg`**. Renaming the outer file preserves its signed bytes. Generate **`SHA256SUMS`** from inside that directory with `shasum -a 256 CodexPlusBar.dmg > SHA256SUMS`, then verify with `shasum -a 256 -c SHA256SUMS`. The checksum must name the uploaded basename, not a workspace path or the original versioned filename.
+Every release must include **`CodexPlusBar.dmg`**, **`expiry-selector.zip`** and **`SHA256SUMS`**. Use the generated `github/` directory from `make cloud-dmg`. The ZIP is rebuilt from the release checkout, uses a single `expiry-selector/` root folder, and contains only verified distribution files. Its package manifest supplies its own version; do not rename it to the app version or copy an older release's ZIP.
 
-Commit version/build settings, the regenerated Xcode project, installation instructions and release evidence on the requested release branch. Push that branch, then create the versioned GitHub release with `gh release create --target <full-40-character-commit-SHA>` and the reviewed notes/assets. Select Latest only when making it the standard download; do not merge another branch as part of publication.
+To reuse a verified notarized DMG without rebuilding it:
 
-After publishing, confirm the remote tag resolves to that exact commit, download both assets into a fresh folder, verify the checksum, and check that `https://github.com/withLinda/CodexPlusBar/releases/latest/download/CodexPlusBar.dmg` resolves to the new asset. Keep the published asset name stable for the README download links.
+```bash
+make release-assets RELEASE_DMG=/absolute/path/to/notarized.dmg RELEASE_ASSETS=/absolute/path/to/new/github
+make verify-release-assets RELEASE_ASSETS=/absolute/path/to/new/github
+```
+
+The asset directory must be new to prevent mixing releases. The DMG is copied byte-for-byte; the checksum file names both uploaded basenames. The helper rejects missing, extra or symlinked extension files and verifies the ZIP's contents and checksums.
+
+Commit version/build settings, the regenerated Xcode project, installation instructions and release evidence, then push the release commit. CloudKit is integrated into `main`; iCloud Sync remains off until enabled on each Mac. Publish through the required-asset helper:
+
+```bash
+make publish-release \
+  RELEASE_ASSETS=/absolute/path/to/release/github \
+  RELEASE_TAG=v1.7.5 \
+  RELEASE_COMMIT=<full-40-character-commit-SHA> \
+  RELEASE_NOTES=docs/releases/1.7.5.md
+```
+
+Use the actual version/commit/notes for the release. The helper validates all three files before upload, creates a draft, downloads and compares the uploaded bytes, then publishes it as Latest. A failed upload or verification leaves a draft for investigation; it never publishes a DMG-only release. Do not bypass this helper with a DMG-only `gh release create`.
+
+After publishing, confirm the remote tag resolves to the release commit and both stable latest-download links resolve to the new release: `CodexPlusBar.dmg` and `expiry-selector.zip`. Keep those asset names stable for the README links.
 
 ## Schema and live evidence
 

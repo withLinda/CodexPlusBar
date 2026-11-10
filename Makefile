@@ -73,6 +73,9 @@ $(TARGET_PREFIX)help:
 		"  make $(TARGET_PREFIX)build-and-run-background Build then run in background" \
 		"  make $(TARGET_PREFIX)archive                  Build a Release .xcarchive for packaging" \
 		"  make $(TARGET_PREFIX)dmg                      Build a local drag-to-Applications DMG" \
+		"  make cloud-dmg                              Notarized DMG + current OpenChamber ZIP + checksums" \
+		"  make release-assets RELEASE_DMG=... RELEASE_ASSETS=...  Prepare assets from an existing DMG" \
+		"  make publish-release RELEASE_ASSETS=... RELEASE_TAG=... RELEASE_COMMIT=... RELEASE_NOTES=..." \
 		"  make $(TARGET_PREFIX)clean                    Clean derived data + logs" \
 		"  TRACE_PRIVATE_API=1 make $(TARGET_PREFIX)build-and-run Capture private API trace in $(TRACE_LOG_FILE)" \
 		"  make $(TARGET_PREFIX)agent-verify             Build and test"
@@ -217,3 +220,17 @@ cloud-archive:
 	@CLOUD_PROFILE="$(CLOUD_PROFILE)" CLOUD_SIGN_IDENTITY="$(CLOUD_SIGN_IDENTITY)" bash scripts/notarize_cloud_dmg.sh --archive-only
 cloud-dmg:
 	@CLOUD_PROFILE="$(CLOUD_PROFILE)" CLOUD_SIGN_IDENTITY="$(CLOUD_SIGN_IDENTITY)" NOTARY_PROFILE="$(NOTARY_PROFILE)" bash scripts/notarize_cloud_dmg.sh
+
+# All GitHub releases include a freshly built OpenChamber extension.
+RELEASE_DMG ?=
+RELEASE_ASSETS ?=
+RELEASE_TAG ?=
+RELEASE_COMMIT ?=
+RELEASE_NOTES ?=
+.PHONY: release-assets verify-release-assets publish-release
+release-assets:
+	@python3 scripts/release_assets.py prepare --dmg "$(RELEASE_DMG)" --output "$(RELEASE_ASSETS)"
+verify-release-assets:
+	@python3 scripts/release_assets.py verify --assets "$(RELEASE_ASSETS)"
+publish-release:
+	@python3 scripts/release_assets.py publish --assets "$(RELEASE_ASSETS)" --tag "$(RELEASE_TAG)" --target "$(RELEASE_COMMIT)" --notes "$(RELEASE_NOTES)"

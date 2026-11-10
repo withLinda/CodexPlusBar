@@ -82,12 +82,14 @@ The optional **Account Priority** extension automatically switches to the soones
 *See which account is next—and why another account cannot be used.*
 
 1. Use **CodexPlusBar 1.6.1 or later** and refresh your accounts.
-2. [Download Account Priority](https://github.com/withLinda/CodexPlusBar/releases/download/v1.6.1/expiry-selector-0.1.0.zip), extract it, and install the **expiry-selector** folder in **OpenChamber → Settings → Extensions**. Approve its plugin and local-service capabilities.
+2. [Download Account Priority](https://github.com/withLinda/CodexPlusBar/releases/latest/download/expiry-selector.zip), extract it, and install the **expiry-selector** folder in **OpenChamber → Settings → Extensions**. Approve its plugin and local-service capabilities.
 3. Open **Account Priority**, check the accounts and expiry countdowns, disable OpenChamber's competing native limit-switch/fallback settings, then choose **Enable Auto**.
 
 Keep CodexPlusBar running. Unknown, stale, or exhausted accounts cannot qualify; if none qualify, the current account stays selected. Selection is shared across OpenChamber sessions. Pause Auto before native **Use**. CodexPlusBar checks, switches, and repairs leave Auto paused until you resume it.
 
 Verified with **OpenChamber 2.7.0 / OpenCode 2.2.6**. [Compatibility and recovery guide](Extensions/expiry-selector/README.md#supported-boundary).
+
+Every release includes the current extension as **expiry-selector.zip**, alongside the Mac DMG and **SHA256SUMS**. The extension's version is recorded in its packaged `package.json` and can differ from the app version.
 
 ## Take your setup to another Mac
 

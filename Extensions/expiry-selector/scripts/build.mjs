@@ -1,5 +1,5 @@
 import { build } from 'esbuild';
-import { mkdir, copyFile, writeFile, readFile, access } from 'node:fs/promises';
+import { mkdir, copyFile, writeFile, readFile, access, rm } from 'node:fs/promises';
 
 // Isolated runtime probes; packaging is supplied separately.
 await build({
@@ -19,6 +19,8 @@ await build({ entryPoints: ['tests/runtime/package-refresh.ts'], outfile: '.runt
 if (process.argv.includes('--probes-only')) process.exit(0);
 
 const metadata = JSON.parse(await readFile('package.json', 'utf8'));
+// Release builds must never retain files from an older distribution.
+await rm('dist', { recursive: true, force: true });
 await mkdir('dist/plugin', { recursive: true });
 await mkdir('dist/service', { recursive: true });
 await writeFile('dist/package.json', JSON.stringify({ name: metadata.name, version: metadata.version, type: 'module',

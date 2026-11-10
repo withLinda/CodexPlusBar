@@ -248,3 +248,19 @@ Evidence: `cloud-174-red.log`, `cloud-174-green.log`, `cloud-174-launchservices-
 ```text
 9b1061e4a0eb91b11f26b57ad0fbffb45647b59f02f265f9f9a211e379aa28dd  CodexPlusBar.dmg
 ```
+
+## 2026-11-11 main integration and extension release assets
+
+The user approved merging the opt-in CloudKit branch into `main` and including the current OpenChamber extension in every release. The branch is a fast-forward from both local and remote `main`; unrelated local notes and design files are preserved.
+
+- `make cloud-dmg` now prepares the notarized DMG, a fresh verified `expiry-selector.zip`, and checksums for both. `make release-assets` also supports an existing verified DMG. Builds clear old extension output and use the pinned dependency lockfile.
+- `make publish-release` rejects missing or altered assets, uploads a draft, downloads and compares all three files, then publishes. Release instructions and `AGENTS.md` require this path. README extension links use the stable latest asset name.
+- Targeted verification: **12 Python release-tool tests passed** (seven asset/publication tests plus five signing-preflight tests); **11 Swift opt-in/owner-consent/off-startup tests passed**. No full app or extension test suite was run. Author self-review completed.
+- A real clean extension build verified all eight distribution files, manifest, classic panel and self-contained service/plugin bundles. An injected stale distribution file was removed by the rebuild.
+- The 1.7.4 installer bytes remain identical to the notarized artifact above. Companion Account Priority is **0.1.0**; the new ZIP is built from current source and documentation under `build/cloud-releases/release-174-with-extension-final/github/`.
+
+```text
+bf747f0c593a40cb7cf337bb3b342d42085fad96baf7297ff8a48b53f5394c79  expiry-selector.zip
+```
+
+Physical two-Mac acceptance remains pending independently of this release-packaging and main-integration work.
