@@ -138,3 +138,32 @@ Logs: `cloud-browser-path-red.log` and `cloud-browser-path-green.log` in the ses
 ```text
 6924321d74f3ebc5e9fd6eebd89bba89febaf267749bb073dd34ff03f67171c1  CodexPlusBar.dmg
 ```
+
+## 1.7.2 iCloud enablement regression
+
+The installed 1.7.1/build 24 passed Production profile/CloudKit/APNs/Keychain preflight, and system logs showed successful private-database requests. Nevertheless, enabling sync immediately disabled it and displayed “Waiting for iCloud sign-in.” Preferences retained an owner consent entry but `enabled=false`; the journal had not initialized.
+
+A signed fresh-engine probe confirmed `accountStatus == .available` and an initial `.signIn(currentUser:)` matching the verified owner. `CloudKitEngineDelegate` incorrectly mapped every SDK account event to `.accountChanged`; the transport invalidated its epoch and the coordinator disabled consent. The correction passes the verified `CloudOwner` into the delegate and ignores only that matching sign-in. All other account changes retain the existing invalidation/drain/consent path, including sign-out and switches back to the verified owner.
+
+Targeted verification:
+
+- Extracted a delegate handler for the SDK's constructible `AccountChange.ChangeType`, preserving the original unconditional invalidation before running RED. The SDK's containing event has no public initializer.
+- RED: **75 tests in two suites**, six issues in the two new same-owner regressions: transport `.notStarted`, disabled Settings, non-resumable consent, uninitialized journal, and disabled/ownerless restart.
+- GREEN: **82 tests in three suites passed**, Xcode **TEST SUCCEEDED**: `CloudKitAccountSyncTests`, `CloudSyncCoordinatorTests`, `CloudSyncPresentationTests`.
+- Tests exercise the real delegate/transport and a real coordinator/presentation with isolated storage and synthetic network delivery. They cover startup/repeated matching sign-in, restart consent, mismatched sign-in, sign-out, both switch directions, late matching sign-in/state rejection after invalidation, and retained dirty work.
+- Signed live adapter probe linked the actual app object files from the verified Debug build (excluding the app entry point) into an isolated executable, then forwarded complete SDK events to the production delegate. Result: **one matching sign-in, zero invalidations, four state updates, one completed empty-scope fetch**. Its unique subscription was deleted. It did not read/write account records or touch local profiles.
+- Five release-preflight Python tests passed. Author self-review checked verified-owner propagation, default invalidation of unknown future cases, owner/environment gating before delegate construction, transport token/drain behavior, and Settings persistence. No new review findings; no full tests or subagents.
+
+Evidence: `cloud-account-event-red.log`, `cloud-account-event-green.log` in the session temporary directory; signed probe source/build helper and `adapter-probe.log` in `build/cloud-account-probe/`. The fixed installer is **1.7.2/build 25**; see [release notes](1.7.2.md). Live two-Mac acceptance remains pending.
+
+### 1.7.2 packaged artifact
+
+- Workspace: `build/cloud-releases/release-20261110T132700Z-ghy9pt/`; fresh strict universal archive **ARCHIVE SUCCEEDED**, exactly `arm64` and `x86_64`; Info.plist verified `1.7.2`, build `25`, macOS minimum `14.0`.
+- App notarization **Accepted**: `c7de4a98-5ef3-43f6-ae96-8a37a05ecc6f`.
+- DMG notarization **Accepted**: `3101816f-cd53-4e1e-9706-2a9eb011de39`.
+- App/DMG signatures, staples and Gatekeeper passed. Read-only mounted app passed Production profile/CloudKit/APNs/Keychain preflight and ticket validation; image detached.
+- Upload copy `github/CodexPlusBar.dmg`: 7,746,438 bytes. `github/SHA256SUMS` verified after all stapling. `packaging.log`, notary JSON and archive/preflight evidence remain alongside the image.
+
+```text
+3f24d637e4e63208ec0e16f4c53ecdc3cacf786d9886678b94a3104c4c8bc5f1  CodexPlusBar.dmg
+```

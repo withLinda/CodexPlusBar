@@ -4,6 +4,34 @@ import WebKit
 @testable import CodexPlusBar
 
 @MainActor struct CloudSyncCoordinatorTests {
+    @Test func initialSDKSignInKeepsSettingsEnabledAcrossRestart() async throws {
+        let f = try CloudCoordinatorFixture(); defer { f.clean() }
+        let driver = CloudFakeEngineDriver()
+        await driver.setInitialAccountChange(.signIn(currentUser: .init(recordName: f.owner.userRecordName)), completesFetch: true)
+        let keys = CloudTransportKeys(try CloudCryptoFixture.key())
+        try f.journal.catalogTransaction { $0.transport = .init(); $0.transport?.zoneEstablished = true }
+        func makeCoordinator() -> CloudSyncCoordinator {
+            .init(profiles: f.profiles, preferences: f.preferences, availability: { .development },
+                identity: { _ in f.owner }, snapshots: .init(providers: [], revision: { 0 }),
+                makeTransport: { journal in
+                    CloudKitAccountSync(journal: journal, keys: keys,
+                        assets: .init(root: f.cloud.appendingPathComponent("staging")), makeDriver: { driver })
+                })
+        }
+        let coordinator = makeCoordinator()
+        let settings = CloudSyncPresentation(coordinator: coordinator)
+        await coordinator.start(); await settings.setEnabled(true)
+        #expect(settings.enabled)
+        #expect(try f.preferences.read()?.preferences.canResume(for: f.owner) == true)
+        #expect(try f.journal.catalogState().transport?.initialized == true)
+        await coordinator.stop()
+        let restarted = makeCoordinator()
+        await restarted.start()
+        #expect(restarted.isEnabled)
+        #expect(restarted.owner == f.owner)
+        await restarted.stop()
+    }
+
     @Test(arguments: [false, true])
     func freshControllerOffOrPausedStartupProtectsDurableRemap(disabled: Bool) async throws {
         let f = try CloudCoordinatorFixture(); defer { f.clean() }

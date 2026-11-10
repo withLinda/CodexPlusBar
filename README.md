@@ -58,7 +58,7 @@ Finish active work before desktop switching: it closes and reopens the app. Brow
 2. Open the downloaded DMG and drag **CodexPlusBar.app** onto the **Applications** shortcut.
 3. Eject the disk image, then open **CodexPlusBar** from Applications. Confirm macOS's first-open prompt if shown. The app appears in the **menu bar**, not the Dock.
 
-The **1.7.1 DMG includes iCloud Sync** and fixes the storage-path error that blocked profile refresh in 1.7.0. Sync stays off until you enable it on each Mac. The app and DMG are Developer ID-signed, notarized by Apple, and stapled for offline ticket verification. [Version 1.7.1 release notes and SHA256SUMS](https://github.com/withLinda/CodexPlusBar/releases/tag/v1.7.1) include the download checksum.
+The **1.7.2 DMG includes iCloud Sync** and fixes the checkbox turning itself off when sync starts. It also includes the profile-refresh fix from 1.7.1. Sync stays off until you enable it on each Mac. The app and DMG are Developer ID-signed, notarized by Apple, and stapled for offline ticket verification. [Version 1.7.2 release notes and SHA256SUMS](https://github.com/withLinda/CodexPlusBar/releases/tag/v1.7.2) include the download checksum.
 
 ### Add your first account
 
@@ -97,7 +97,7 @@ Password-encrypted backups include profile details, saved sign-ins, browser data
 
 ### iCloud Sync
 
-Included in the [1.7.1 DMG](https://github.com/withLinda/CodexPlusBar/releases/download/v1.7.1/CodexPlusBar.dmg). Install it on both Macs; no separate cloud build is needed. Local replica tests and signed Apple service probes passed; [live two-Mac acceptance, cross-device Keychain delivery, and automatic push delivery remain pending](docs/releases/2026-11-09-cloudkit-sync-validation.md#two-mac-acceptance--pending).
+Included in the [1.7.2 DMG](https://github.com/withLinda/CodexPlusBar/releases/download/v1.7.2/CodexPlusBar.dmg). Install it on both Macs; no separate cloud build is needed. Local replica tests and signed Apple service probes passed; [live two-Mac acceptance, cross-device Keychain delivery, and automatic push delivery remain pending](docs/releases/2026-11-09-cloudkit-sync-validation.md#two-mac-acceptance--pending).
 
 1. Sign in to the same iCloud account on both Macs and enable **Passwords & Keychain** in System Settings.
 2. On each Mac, open **Settings → iCloud Sync → Sync accounts with iCloud**. Profile details, passwords and 2FA secrets merge with the local accounts.

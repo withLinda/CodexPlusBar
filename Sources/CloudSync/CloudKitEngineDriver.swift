@@ -20,7 +20,7 @@ actor CloudKitEngineDriver: CloudEngineDriving {
         guard try await container.accountStatus() == .available,
               try await container.userRecordID().recordName == owner.userRecordName else { throw CloudTransportError.accountChanged }
         let serialization = try state.map { try JSONDecoder().decode(CKSyncEngine.State.Serialization.self, from: $0) }
-        let delegate = CloudKitEngineDelegate(callbacks: callbacks)
+        let delegate = CloudKitEngineDelegate(owner: owner, callbacks: callbacks)
         let database = container.privateCloudDatabase
         let configuration = CKSyncEngine.Configuration(database: database, stateSerialization: serialization, delegate: delegate)
         self.delegate = delegate
@@ -72,17 +72,18 @@ enum CloudEnginePendingChanges {
     }
 }
 
-private final class CloudKitEngineDelegate: CKSyncEngineDelegate {
+final class CloudKitEngineDelegate: CKSyncEngineDelegate {
+    private let owner: CloudOwner
     let callbacks: CloudEngineCallbacks
     let operations = CloudEngineOperationDrain()
-    init(callbacks: CloudEngineCallbacks) { self.callbacks = callbacks }
+    init(owner: CloudOwner, callbacks: CloudEngineCallbacks) { self.owner = owner; self.callbacks = callbacks }
 
     func handleEvent(_ event: CKSyncEngine.Event, syncEngine: CKSyncEngine) async {
         switch event {
         case .stateUpdate(let update):
             do { await callbacks.event(.state(try JSONEncoder().encode(update.stateSerialization))) }
             catch { await callbacks.event(.engineStateFailure) }
-        case .accountChange: await callbacks.event(.accountChanged)
+        case .accountChange(let change): await handleAccountChange(change.changeType)
         case .fetchedDatabaseChanges(let changes):
             if changes.deletions.contains(where: { $0.zoneID == CloudRecordCodec.zoneID }) { await callbacks.event(.zoneLost) }
         case .fetchedRecordZoneChanges(let changes):
@@ -110,6 +111,14 @@ private final class CloudKitEngineDelegate: CKSyncEngineDelegate {
         case .willFetchRecordZoneChanges: break
         @unknown default: break
         }
+    }
+
+    func handleAccountChange(_ change: CKSyncEngine.Event.AccountChange.ChangeType) async {
+        // A fresh engine reports the account already verified by start as a sign-in.
+        // Only that exact owner is benign; sign-out/switch still revoke this epoch,
+        // even when a switch's destination happens to match the verified owner.
+        if case .signIn(let currentUser) = change, currentUser.recordName == owner.userRecordName { return }
+        await callbacks.event(.accountChanged)
     }
 
     func nextRecordZoneChangeBatch(_ context: CKSyncEngine.SendChangesContext, syncEngine: CKSyncEngine) async -> CKSyncEngine.RecordZoneChangeBatch? {

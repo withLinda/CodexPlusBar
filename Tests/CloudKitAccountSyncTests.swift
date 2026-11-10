@@ -4,6 +4,43 @@ import Testing
 @testable import CodexPlusBar
 
 struct CloudKitAccountSyncTests {
+    @Test func sameOwnerSDKSignInPreservesStartupAndJournalProgress() async throws {
+        let f = try await CloudTransportFixture(); defer { f.disk.cleanUp() }
+        let name = try await f.localProfile()
+        let signIn = CKSyncEngine.Event.AccountChange.ChangeType.signIn(
+            currentUser: .init(recordName: CloudCryptoFixture.owner.userRecordName))
+        await f.driver.setInitialAccountChange(signIn)
+        try await f.startReady()
+        // Repeated matching sign-in must not disable a running engine either.
+        try await f.driver.emitAccountChange(signIn)
+        await f.driver.emit(.state(Data([1, 7, 2])))
+        #expect(try await f.journal.load().engineState == Data([1, 7, 2]))
+        #expect(await f.driver.batch()?.recordsToSave.map(\.recordID.recordName) == [name])
+        await f.transport.stop()
+    }
+
+    @Test(arguments: [
+        CKSyncEngine.Event.AccountChange.ChangeType.signIn(currentUser: .init(recordName: "different-owner")),
+        .signOut(previousUser: .init(recordName: CloudCryptoFixture.owner.userRecordName)),
+        .switchAccounts(previousUser: .init(recordName: CloudCryptoFixture.owner.userRecordName), currentUser: .init(recordName: "different-owner")),
+        .switchAccounts(previousUser: .init(recordName: "different-owner"), currentUser: .init(recordName: CloudCryptoFixture.owner.userRecordName))
+    ])
+    func genuineSDKAccountChangesInvalidateTransport(change: CKSyncEngine.Event.AccountChange.ChangeType) async throws {
+        let f = try await CloudTransportFixture(); defer { f.disk.cleanUp() }
+        let name = try await f.localProfile()
+        try await f.startReady()
+        await f.driver.emit(.state(Data([7])))
+        try await f.driver.emitAccountChange(change)
+        // Even a later matching sign-in cannot revive this invalidated epoch.
+        try await f.driver.emitAccountChange(.signIn(currentUser: .init(recordName: CloudCryptoFixture.owner.userRecordName)))
+        await f.driver.emit(.state(Data([9])))
+        #expect(await f.driver.batch() == nil)
+        await #expect(throws: CloudTransportError.notStarted) { try await f.transport.syncNow() }
+        #expect(try await f.journal.load().engineState == Data([7]))
+        #expect(try await f.journal.load().dirtyGenerations[name] != nil)
+        await f.transport.stop()
+    }
+
     @Test func compactedLocalRecordStillRejectsConflictingRemoteReplay() async throws {
         let f = try await CloudTransportFixture(); defer { f.disk.cleanUp() }
         let profile = CodexSignInFixture.profile(), source = UUID()
@@ -951,6 +988,9 @@ struct CloudKitAccountSyncTests {
 
 actor CloudFakeEngineDriver: CloudEngineDriving {
     var callbacks: CloudEngineCallbacks?
+    private var accountDelegate: CloudKitEngineDelegate?
+    private var initialAccountChange: CKSyncEngine.Event.AccountChange.ChangeType?
+    private var completesFetch = false
     var loadedState: Data?
     private let pendingState = CloudSyntheticPendingState()
     var pending: [CKSyncEngine.PendingRecordZoneChange] { pendingState.pendingRecordZoneChanges }
@@ -971,11 +1011,20 @@ actor CloudFakeEngineDriver: CloudEngineDriving {
     private var startupWaiter: CheckedContinuation<Void, Never>?
     func start(owner: CloudOwner, state: Data?, callbacks: CloudEngineCallbacks) async throws {
         self.loadedState = state; self.callbacks = callbacks; starts += 1
+        accountDelegate = CloudKitEngineDelegate(owner: owner, callbacks: callbacks)
         operations = CloudEngineOperationDrain()
         if let waiter = startWaiter, starts >= waiter.0 { startWaiter = nil; waiter.1.resume() }
         if holdStart {
             await withCheckedContinuation { startup = $0; startupWaiter?.resume(); startupWaiter = nil }
         }
+        if let initialAccountChange { try await emitAccountChange(initialAccountChange) }
+    }
+    func setInitialAccountChange(_ change: CKSyncEngine.Event.AccountChange.ChangeType, completesFetch: Bool = false) {
+        initialAccountChange = change; self.completesFetch = completesFetch
+    }
+    func emitAccountChange(_ change: CKSyncEngine.Event.AccountChange.ChangeType) async throws {
+        let delegate = try #require(accountDelegate)
+        await delegate.handleAccountChange(change)
     }
     func holdStartup() { holdStart = true }
     func waitForStartup() async { if startup == nil { await withCheckedContinuation { startupWaiter = $0 } } }
@@ -992,6 +1041,7 @@ actor CloudFakeEngineDriver: CloudEngineDriving {
     func setFetchInspector(_ inspect: @escaping @Sendable () async throws -> Date?) { inspectFetchCompletion = inspect }
     func fetchChanges() async throws {
         fetchCalls += 1
+        if completesFetch { await callbacks?.event(.zoneFetched(error: nil)) }
         if let withZoneSuccess = failedFetchZoneSuccess {
             await callbacks?.event(.fetchStarted)
             if withZoneSuccess { await callbacks?.event(.zoneFetched(error: nil)) }
