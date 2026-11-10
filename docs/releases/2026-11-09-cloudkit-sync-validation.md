@@ -91,3 +91,22 @@ Release tooling commit: `0c36c8a`. Verified application source and integration c
 ```
 
 The `.sha256`, `architectures.txt`, preflight results and both notarization JSON results are beside the DMG. Full packaging log: `cloud-notarization-final.log` in the session's temporary evidence directory. The app was not installed, published, or substituted for the current `/Applications` copy.
+
+## Version 1.7.0 release artifact
+
+The earlier 1.6.2 artifact above is historical. The release uses a **fresh 1.7.0/build 23** archive from `feature/cloudkit-account-sync`, with matching generated Xcode settings in all four configurations. Application code is the previously verified source; this release changes version metadata and documentation.
+
+- Workspace: `build/cloud-releases/release-20261110T104543Z-DHDteM/`; archive: `CodexPlusBar.xcarchive`; packaged image: `CodexPlusBar-1.7.0-cloud.dmg`.
+- Strict universal `CloudProduction` archive: **ARCHIVE SUCCEEDED**. Archived Info.plist verified version `1.7.0`, build `23`, bundle ID `com.linda.CodexPlusBar`, macOS minimum `14.0`; executable contains exactly `arm64` and `x86_64`.
+- Five targeted Python release-preflight tests passed again. Version/build consistency and README local links/anchors verified. No full Swift suite repeated for metadata/docs changes.
+- App notarization **Accepted**: `6dce42b0-d600-477f-b6e1-e9dfcefc7588`.
+- DMG notarization **Accepted**: `76be0761-a8d3-419e-bb4d-12a3107e89fe`.
+- App and DMG signature/staple validation and Gatekeeper passed. Actual mounted app passed Production profile, CloudKit, APNs and Keychain preflight plus staple validation; the image was detached.
+- Upload copy: `github/CodexPlusBar.dmg` (7,743,896 bytes). `github/SHA256SUMS` names that stable basename and passed `shasum -a 256 -c SHA256SUMS`. Copying changed the filename only, not the notarized bytes.
+- Release notes: [1.7.0.md](1.7.0.md); release URL: <https://github.com/withLinda/CodexPlusBar/releases/tag/v1.7.0>. Publication targets the exact release commit on the active feature branch.
+
+```text
+b6fbe1c759dc164b0be550b1b78a8962cab5b139015e327a2b2a8b927fb538ce  CodexPlusBar.dmg
+```
+
+`packaging.log`, `archive.log`, architecture/preflight results and notary JSON files are retained in that release workspace. Installation on either Mac and the live acceptance checks above remain separate, pending user actions.

@@ -50,6 +50,16 @@ Keep `archive.log`, `app-notary.json`, `dmg-notary.json`, preflight results and 
 
 Building never publishes, installs or replaces `/Applications/CodexPlusBar.app`.
 
+## GitHub release assets
+
+Starting with 1.7.0, the standard GitHub installer is the `CloudProduction` DMG. Use `make cloud-dmg` above; the ordinary local `make dmg` path does not supply this cloud signing contract.
+
+After all verification and stapling, copy the versioned DMG into a fresh upload directory as **`CodexPlusBar.dmg`**. Renaming the outer file preserves its signed bytes. Generate **`SHA256SUMS`** from inside that directory with `shasum -a 256 CodexPlusBar.dmg > SHA256SUMS`, then verify with `shasum -a 256 -c SHA256SUMS`. The checksum must name the uploaded basename, not a workspace path or the original versioned filename.
+
+Commit version/build settings, the regenerated Xcode project, installation instructions and release evidence on the requested release branch. Push that branch, then create the versioned GitHub release with `gh release create --target <full-40-character-commit-SHA>` and the reviewed notes/assets. Select Latest only when making it the standard download; do not merge another branch as part of publication.
+
+After publishing, confirm the remote tag resolves to that exact commit, download both assets into a fresh folder, verify the checksum, and check that `https://github.com/withLinda/CodexPlusBar/releases/latest/download/CodexPlusBar.dmg` resolves to the new asset. Keep the published asset name stable for the README download links.
+
 ## Schema and live evidence
 
 `CPBEncryptedRecordV1` is deployed to Production with `schemaVersion` (Int64), `kind`, `keyID`, `profileID` (String), and `payload` (Asset). No query indexes are needed. `_creator` has READ/WRITE and `_icloud` CREATE. The application uses the private database; user payloads inside assets are AES-GCM encrypted.

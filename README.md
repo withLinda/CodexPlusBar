@@ -48,6 +48,7 @@ Finish active work before desktop switching: it closes and reopens the app. Brow
 - **Organize the details:** labels, links, notes, phone numbers, status tags, optional passwords, and 2FA secrets with copyable TOTP codes. Private fields stay covered until revealed.
 - **Handle larger collections:** bulk-import email/password/2FA rows through **More → Import from Text…**, group by phone number, and track Gmail dot variations in **Email Tools**.
 - **Make it yours:** light, dark, or system appearance; three contrast levels; adjustable dark canvas depth.
+- **Sync between Macs:** opt in to [iCloud Sync](#icloud-sync) for profile details and saved login sessions. Review and import incoming sessions before using them.
 
 ## Get started
 
@@ -57,7 +58,7 @@ Finish active work before desktop switching: it closes and reopens the app. Brow
 2. Open the downloaded DMG and drag **CodexPlusBar.app** onto the **Applications** shortcut.
 3. Eject the disk image, then open **CodexPlusBar** from Applications. Confirm macOS's first-open prompt if shown. The app appears in the **menu bar**, not the Dock.
 
-The DMG is Developer ID-signed and notarized by Apple. [Version 1.6.2 release notes and SHA256SUMS](https://github.com/withLinda/CodexPlusBar/releases/tag/v1.6.2) are available for this update.
+The **1.7.0 DMG includes iCloud Sync**, which stays off until you enable it on each Mac. The app and DMG are Developer ID-signed, notarized by Apple, and stapled for offline ticket verification. [Version 1.7.0 release notes and SHA256SUMS](https://github.com/withLinda/CodexPlusBar/releases/tag/v1.7.0) include the download checksum.
 
 ### Add your first account
 
@@ -70,7 +71,7 @@ Ready to change accounts in your apps? [Save their sign-ins and start switching]
 
 **Reading the numbers:** percentages mean **remaining**, not used. `5H` and `7D` are quota windows. `—` means unavailable. Subscription expiry is separate from a quota reset. Changes to ChatGPT's website can temporarily affect refreshes.
 
-**Updating?** Quit CodexPlusBar, open the latest DMG, drag the new app into Applications, and choose **Replace**. Eject the DMG, reopen the app, and refresh. Your saved Codex profiles stay in place. Version 1.6.2 removes Claude support; earlier Claude records remain stored but inactive and hidden. Existing backups can still be restored.
+**Updating?** Quit CodexPlusBar, open the latest DMG, drag the new app into Applications, and choose **Replace**. Eject the DMG, reopen the app, and refresh. Your saved Codex profiles and sign-ins stay in place; updating does not enable iCloud Sync. Existing backups can still be restored. If upgrading from before 1.6.2, earlier Claude records remain stored but inactive and hidden.
 
 ## Switch automatically in OpenChamber
 
@@ -94,9 +95,9 @@ Choose **Settings → Backup & Transfer → Export Backup…**, set a password, 
 
 Password-encrypted backups include profile details, saved sign-ins, browser data, Email Tools, and preferences. Keep the password. Some browser sessions may need a fresh sign-in.
 
-### iCloud Sync (cloud-enabled DMG)
+### iCloud Sync
 
-The cloud-enabled build adds opt-in synchronization. It is built separately from the currently published 1.6.2 installer; [two-Mac acceptance is still pending](docs/releases/2026-11-09-cloudkit-sync-validation.md).
+Included in the [1.7.0 DMG](https://github.com/withLinda/CodexPlusBar/releases/download/v1.7.0/CodexPlusBar.dmg). Install it on both Macs; no separate cloud build is needed. Local replica tests and signed Apple service probes passed; [live two-Mac acceptance, cross-device Keychain delivery, and automatic push delivery remain pending](docs/releases/2026-11-09-cloudkit-sync-validation.md#two-mac-acceptance--pending).
 
 1. Sign in to the same iCloud account on both Macs and enable **Passwords & Keychain** in System Settings.
 2. On each Mac, open **Settings → iCloud Sync → Sync accounts with iCloud**. Profile details, passwords and 2FA secrets merge with the local accounts.
