@@ -474,6 +474,7 @@ struct ProfileManagerWindowView: View {
             let latest = PlusProfileDetailsDraft(profile: snapshot.profile)
             detailsDraft = detailsDraft.refreshingUneditedFields(from: latest, base: detailsDraftBase)
             detailsDraftBase = latest
+            controller.setCloudDraftOwner(detailsDraft == latest ? nil : snapshot.id)
         }
         .onChange(of: controller.profiles.map(\.id)) { _, _ in
             if controller.profiles.isEmpty {
@@ -1339,6 +1340,7 @@ struct ProfileManagerWindowView: View {
             .map { PlusProfileDetailsDraft(profile: $0.profile) } ?? detailsDraft
         detailsDraftBase = detailsDraft
         showsSavedConfirmation = true
+        controller.setCloudDraftOwner(nil)
         scheduleSaveReset()
     }
 

@@ -48,6 +48,7 @@ struct CloudSessionAdmission: Equatable, Sendable {
     @ObservationIgnored private var sessionChangeCounter: UInt64 = 0
     @ObservationIgnored private var capturing = false
     @ObservationIgnored private let nativeAdoption: @MainActor (CloudSessionAdoptionAuthorization) -> CloudNativeSessionAdoption
+    @ObservationIgnored private let sourceName: @MainActor () -> String
 
     init(profiles: PlusProfileController, preferences: CloudSyncPreferencesStore = .init(),
          availability: @escaping @MainActor () -> CloudEnvironment? = { CloudSyncAvailability().environment },
@@ -58,6 +59,7 @@ struct CloudSessionAdmission: Equatable, Sendable {
              return .init(container: CloudSyncAvailability.containerIdentifier, environment: environment, userRecordName: id.recordName)
          },
          snapshots: CloudSessionSnapshotService? = nil,
+         sourceName: @escaping @MainActor () -> String = { Host.current().localizedName ?? "Mac" },
          nativeAdoption: @escaping @MainActor (CloudSessionAdoptionAuthorization) -> CloudNativeSessionAdoption = { .init(authorization: $0) },
          makeSessionInbox: @escaping @MainActor (CloudSyncJournal) -> CloudSessionInbox = { journal in
              .init(journal: journal, keys: CloudKeyStore(journal: journal))
@@ -71,6 +73,7 @@ struct CloudSessionAdmission: Equatable, Sendable {
         self.snapshots = snapshots ?? profiles.cloudSessionSnapshotService()
         self.makeSessionInbox = makeSessionInbox
         self.nativeAdoption = nativeAdoption
+        self.sourceName = sourceName
         self.snapshots.adoption = { [weak self] request in
             guard let self else { throw CloudSessionError.unavailable }
             try await self.adoptSession(request)
@@ -486,7 +489,9 @@ struct CloudSessionAdmission: Equatable, Sendable {
                     let previous = state.latestSessionRevision(profileID: row.id, sourceDeviceID: device, kind: payload.kind)
                     let (revision, overflow) = previous.addingReportingOverflow(1)
                     guard !overflow else { throw CloudSyncModelError.counterOverflow }
-                    let document = CloudSessionDocument(profileID: row.id, sourceDeviceID: device, sourceName: "Mac",
+                    let name = sourceName().trimmingCharacters(in: .whitespacesAndNewlines)
+                    let document = CloudSessionDocument(profileID: row.id, sourceDeviceID: device,
+                        sourceName: name.isEmpty ? "Mac" : String(name.unicodeScalars.prefix(240)),
                         kind: payload.kind, revision: revision, capturedAt: .now, payload: try payload.encoded())
                     try commitCapturedSession(document, admission: admission)
                     let after = try bridge.journal.catalogState()

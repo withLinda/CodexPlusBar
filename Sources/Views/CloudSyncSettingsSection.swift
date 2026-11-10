@@ -9,11 +9,11 @@ struct CloudSyncSettingsSection: View {
                 Toggle("Sync accounts with iCloud", isOn: Binding(get: { presentation.enabled }, set: { value in
                     Task { await presentation.setEnabled(value) }
                 }))
-                .disabled(presentation.busy || presentation.isTransferring)
+                .disabled((presentation.busy && !presentation.enabled) || presentation.isTransferring)
                 Toggle("Include saved login sessions", isOn: Binding(get: { presentation.includesSessions }, set: { value in
                     Task { await presentation.setIncludesSessions(value) }
                 }))
-                .disabled(!presentation.enabled || presentation.busy || presentation.isTransferring)
+                .disabled(!presentation.enabled || (presentation.busy && !presentation.includesSessions) || presentation.isTransferring)
                 Text("Accounts, passwords and 2FA keys sync privately through iCloud. Saved logins are imported explicitly on each Mac; expiration or token rotation may require a fresh sign-in.")
                     .foregroundStyle(CodexTheme.mutedText)
                     .fixedSize(horizontal: false, vertical: true)

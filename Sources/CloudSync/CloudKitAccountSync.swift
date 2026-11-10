@@ -182,6 +182,10 @@ actor CloudKitAccountSync: CloudSyncTransport {
         }
         try check(token)
         await driver.createZone()
+        // State.add only queues the zone. Drain that database save before the
+        // first fetch, otherwise a brand-new owner hits zoneNotFound forever.
+        try await driver.sendChanges()
+        try check(token)
     }
 
     private func check(_ expected: UUID) throws {

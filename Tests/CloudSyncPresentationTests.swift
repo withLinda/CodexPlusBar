@@ -3,6 +3,31 @@ import Testing
 @testable import CodexPlusBar
 
 @MainActor struct CloudSyncPresentationTests {
+    @Test(arguments: [false, true])
+    func optOutDuringImportRevokesPublicationAndInstallation(sessionsOnly: Bool) async throws {
+        let keys = CloudTransportKeys(try CloudCryptoFixture.key()), f = try SessionFixture(inboxKeys: keys)
+        defer { f.clean() }
+        let barrier = SyncBarrier()
+        let native = try NativeSwitchFixture(verifier: AdoptionDesktopVerifier(verify: { _ in await barrier.wait() }))
+        defer { native.cleanUp() }
+        f.nativeAdoption = { .init(authorization: $0, desktop: native.service) }
+        let view = CloudSyncPresentation(coordinator: f.coordinator)
+        await f.coordinator.start(); await f.coordinator.setEnabled(true)
+        let login = try CodexSignIn(data: CodexSignInFixture.data(refresh: UUID().uuidString))
+        _ = try await receiveAdoption(.desktop(signIn: login, consumed: []), in: f, keys: keys)
+        await view.selectProfile(f.profile.id)
+        let summary = try #require(view.sessions.first)
+        let task = Task { try await view.adopt(summary) }
+        await barrier.started()
+        if sessionsOnly { await view.setIncludesSessions(false); #expect(!view.includesSessions) }
+        else { await view.setEnabled(false); #expect(!view.enabled) }
+        #expect(view.busy)
+        await barrier.release(); _ = await task.result
+        #expect(!view.busy)
+        #expect(!FileManager.default.fileExists(atPath: native.vault.url(for: login.identity).path))
+        await f.coordinator.stop()
+    }
+
     @Test func lastSuccessSurvivesDisableAndPendingNeverLooksCurrent() async throws {
         let f = try SessionFixture(); defer { f.clean() }
         let view = CloudSyncPresentation(coordinator: f.coordinator), date = Date(timeIntervalSince1970: 123_456)

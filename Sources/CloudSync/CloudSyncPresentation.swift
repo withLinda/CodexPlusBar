@@ -83,7 +83,8 @@ enum CloudSyncDisplayStatus: String, CaseIterable {
     let coordinator: CloudSyncCoordinator
     private(set) var selectedProfileID: UUID?
     private(set) var sessions: [CloudSessionSummary] = []
-    private(set) var busy = false
+    private var activeOperations = 0
+    var busy: Bool { activeOperations > 0 }
     private(set) var failure: CloudSyncIssue?
     private(set) var sessionMessage: String?
     @ObservationIgnored private var loadedEpoch: UUID?
@@ -126,20 +127,22 @@ enum CloudSyncDisplayStatus: String, CaseIterable {
         return (failure ?? coordinator.issue)?.message
     }
     func setEnabled(_ value: Bool) async {
-        guard !busy, !coordinator.isTransferring else { return }
-        busy = true; defer { busy = false }
+        guard (!value || !busy), !coordinator.isTransferring else { return }
+        if !value { action?.cancel() }
+        activeOperations += 1; defer { activeOperations -= 1 }
         await coordinator.setEnabled(value)
         await reload()
     }
     func setIncludesSessions(_ value: Bool) async {
-        guard !busy, enabled, !coordinator.isTransferring else { return }
-        busy = true; defer { busy = false }
+        guard (!value || !busy), enabled, !coordinator.isTransferring else { return }
+        if !value { action?.cancel() }
+        activeOperations += 1; defer { activeOperations -= 1 }
         await coordinator.setIncludesSessions(value)
         await reload()
     }
     func syncNow() async {
         guard canSyncNow else { return }
-        busy = true; defer { busy = false }
+        activeOperations += 1; defer { activeOperations -= 1 }
         await coordinator.syncNow(); await reload()
     }
     func selectProfile(_ id: UUID?) async {
@@ -176,11 +179,11 @@ enum CloudSyncDisplayStatus: String, CaseIterable {
         try await perform(request)
     }
     private func perform(_ request: CloudSessionAdoptionRequest) async throws {
-        busy = true; failure = nil; sessionMessage = nil
+        activeOperations += 1; failure = nil; sessionMessage = nil
         failedRequest = request; failedOwner = coordinator.owner
         let task = Task { try await coordinator.adoptSession(request) }
         action = task
-        defer { busy = false; action = nil }
+        defer { activeOperations -= 1; action = nil }
         do {
             try await task.value
             guard selectedProfileID == request.profileID else { return }
