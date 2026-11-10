@@ -94,9 +94,21 @@ Choose **Settings → Backup & Transfer → Export Backup…**, set a password, 
 
 Password-encrypted backups include profile details, saved sign-ins, browser data, Email Tools, and preferences. Keep the password. Some browser sessions may need a fresh sign-in.
 
-## Your data stays on your Mac
+### iCloud Sync (cloud-enabled DMG)
 
-CodexPlusBar has no profile-sync server. It reads usage directly from OpenAI through your signed-in sessions.
+The cloud-enabled build adds opt-in synchronization. It is built separately from the currently published 1.6.2 installer; [two-Mac acceptance is still pending](docs/releases/2026-11-09-cloudkit-sync-validation.md).
+
+1. Sign in to the same iCloud account on both Macs and enable **Passwords & Keychain** in System Settings.
+2. On each Mac, open **Settings → iCloud Sync → Sync accounts with iCloud**. Profile details, passwords and 2FA secrets merge with the local accounts.
+3. **Include saved login sessions** starts on. Incoming browser, Codex and OpenChamber logins appear under **Saved sessions from iCloud**. Choose **Reload**, then **Import saved session** for the source Mac you want.
+
+Import keeps a working local login when possible. Native imports save a login; **Switch** activates it. Expired or rotated credentials may need **Repair both** or a fresh sign-in. The selected native account and each Mac's browser stores stay local.
+
+Use **Sync Now** to retry pending changes. Missing encryption keys show **Waiting for iCloud Keychain**. Turning sync or saved sessions off stops new work and keeps existing copies. Restoring a backup pauses sync until you explicitly enable it again to merge.
+
+### Data storage
+
+CodexPlusBar reads usage directly from OpenAI through your signed-in sessions. With iCloud Sync off, accounts stay local. When enabled, AES-GCM-encrypted payloads go to your private CloudKit database; app-owned encryption keys travel through iCloud Keychain. There is no CodexPlusBar-operated profile server.
 
 **Local passwords, 2FA secrets, and saved sign-in files are not encrypted by CodexPlusBar.** Covered fields are not a password vault. Keep your Mac account and backups private. Removing a profile also removes its local browser data.
 
