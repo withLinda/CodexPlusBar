@@ -36,7 +36,7 @@ enum CloudEngineEvent: Sendable {
     case fetched(records: [CKRecord], deletions: [CKRecord.ID])
     case zoneFetched(error: CKError?)
     case zoneSaved(error: CKError?)
-    case zoneLost, accountChanged, fetchStarted, fetchFinished, sendFinished, engineStateFailure
+    case zoneLost, accountChanged, fetchStarted, fetchFinished, sendStarted, sendFinished, engineStateFailure
     case sent(saved: [CKRecord], failed: [CloudEngineRecordFailure], deleted: [CKRecord.ID], failedDeletes: [CKRecord.ID: CKError])
 }
 

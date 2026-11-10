@@ -4,6 +4,73 @@ import Testing
 @testable import CodexPlusBar
 
 @MainActor struct CloudSyncEndToEndTests {
+    @Test func receivedSavedSessionIsSyncedWhileItWaitsForExplicitImport() async throws {
+        let server = try ReplicaCloud(); defer { server.clean() }
+        let a = try Replica(server: server), b = try Replica(server: server)
+        defer { a.clean(); b.clean() }
+        let login = try CodexSignIn(data: CodexSignInFixture.data(refresh: UUID().uuidString))
+        a.session = .desktop(signIn: login, consumed: [])
+        await a.keys.deliver(b.key); await b.keys.deliver(a.key)
+        await a.start(); await b.start(); await a.sync(); await b.sync()
+        #expect(try await b.coordinator.sessionSummaries(for: a.original.id).count == 1)
+        #expect(a.coordinator.status == .upToDate)
+        #expect(b.coordinator.status == .upToDate)
+        #expect(!FileManager.default.fileExists(atPath: b.native.vault.url(for: login.identity).path))
+        #expect(!FileManager.default.fileExists(atPath: b.native.authURL.path))
+        await a.stop(); await b.stop()
+    }
+
+    @Test func fortyFiveAndThirtyThreeOverlappingProfilesTransferAllSessionsAcrossOverlappingSendsAndRestart() async throws {
+        let server = try ReplicaCloud(); defer { server.clean() }
+        let rows = (0..<45).map { index in
+            var row = CodexSignInFixture.profile(); row.label = "Account \(index)"; row.sortOrder = index
+            return row
+        }
+        let smaller = rows.prefix(33).map { row in
+            PlusProfile(id: row.id, label: row.label, emailLink: nil, detectedNote: nil,
+                webDataStoreID: UUID(), sortOrder: row.sortOrder, createdAt: row.createdAt,
+                lastRefreshAt: nil, lastKnownState: .needsLogin)
+        }
+        let a = try Replica(server: server, initialProfiles: rows)
+        let b = try Replica(server: server, initialProfiles: smaller)
+        defer { a.clean(); b.clean() }
+        for (index, row) in rows.enumerated() {
+            let login = try CodexSignIn(data: CodexSignInFixture.data(account: "account-\(index)", refresh: UUID().uuidString))
+            var payloads: [CloudSessionPayload] = [
+                .desktop(signIn: login, consumed: []),
+                .openChamber(value: .legacy(try login.openChamberAuth()), consumed: [])
+            ]
+            if index < 32 {
+                payloads.append(.browser(cookies: [.init(name: "__Secure-next-auth.session-token", value: UUID().uuidString,
+                    domain: "chatgpt.com", path: "/", secure: true, httpOnly: true, expires: nil, sameSite: nil)],
+                    identity: .init(accountID: "account-\(index)", userID: "user"), accessToken: login.accessToken))
+            }
+            a.sessions[row.id] = payloads
+        }
+        await a.keys.deliver(b.key); await b.keys.deliver(a.key)
+        await a.driver.overlapEmptySends(); await b.driver.overlapEmptySends()
+        await a.start(); await b.start(); await a.sync(); await b.sync()
+        #expect(try a.journal.catalogState().sessions.count == 122)
+        #expect(try Set(a.rows().map(\.id)) == Set(rows.map(\.id)))
+        #expect(try Set(b.rows().map(\.id)) == Set(rows.map(\.id)))
+        for row in smaller { #expect(try b.rows().first { $0.id == row.id }?.webDataStoreID == row.webDataStoreID) }
+        var imported = 0
+        for row in try b.rows() { imported += try await b.coordinator.sessionSummaries(for: row.id).count }
+        #expect(imported == 122)
+        #expect(a.coordinator.status == .upToDate && b.coordinator.status == .upToDate)
+        #expect(try a.journal.catalogState().dirtyGenerations.isEmpty)
+        #expect(try b.journal.catalogState().dirtyGenerations.isEmpty)
+        // Rebuild controllers, transport and coordinator from disk, then confirm the
+        // retained captures do not create new generations or duplicate cloud records.
+        let writes = await server.writes
+        await a.restart(); await b.restart(); await a.sync(); await b.sync()
+        #expect(a.coordinator.status == .upToDate && b.coordinator.status == .upToDate)
+        #expect(await server.writes == writes)
+        #expect(try b.rows().count == 45)
+        #expect(!FileManager.default.fileExists(atPath: b.native.authURL.path))
+        await a.stop(); await b.stop()
+    }
+
     @Test func twoEncryptedReplicasMergeOfflineEditsAndNeverResurrectDeletedRows() async throws {
         let server = try ReplicaCloud(); defer { server.clean() }
         let a = try Replica(server: server), b = try Replica(server: server)
@@ -145,9 +212,11 @@ private actor ReplicaDriver: CloudEngineDriving {
     private var online = true
     private var omitAcknowledgement = false
     private var zoneSavePending = false
+    private var overlap = false
     init(server: ReplicaCloud) { self.server = server }
     func setOnline(_ value: Bool) { online = value }
     func dropNextAcknowledgement() { omitAcknowledgement = true }
+    func overlapEmptySends() { overlap = true }
     func start(owner: CloudOwner, state: Data?, callbacks: CloudEngineCallbacks) { self.callbacks = callbacks }
     func setPending(_ changes: [CKSyncEngine.PendingRecordZoneChange]) { pending = changes }
     // Like CKSyncEngine.State.add, this queues rather than performs the save.
@@ -163,13 +232,21 @@ private actor ReplicaDriver: CloudEngineDriving {
     }
     func sendChanges() async throws {
         guard online else { throw CKError(.networkUnavailable) }
+        guard let callbacks else { return }
+        await callbacks.event(.sendStarted)
         if zoneSavePending {
             await server.createZone(); zoneSavePending = false
-            await callbacks?.event(.zoneSaved(error: nil))
+            await callbacks.event(.zoneSaved(error: nil))
         }
-        guard let callbacks, let batch = await callbacks.nextBatch(.all, pending) else { return }
+        guard let batch = await callbacks.nextBatch(.all, pending) else {
+            await callbacks.event(.sendFinished); return
+        }
+        if overlap {
+            await callbacks.event(.sendStarted)
+            await callbacks.event(.sendFinished)
+        }
         let saved = try await server.save(batch.recordsToSave, deleting: batch.recordIDsToDelete)
-        if omitAcknowledgement { omitAcknowledgement = false; return }
+        if omitAcknowledgement { omitAcknowledgement = false; await callbacks.event(.sendFinished); return }
         await callbacks.event(.sent(saved: saved, failed: [], deleted: batch.recordIDsToDelete, failedDeletes: [:]))
         await callbacks.event(.sendFinished)
     }
@@ -190,14 +267,15 @@ private actor ReplicaDriver: CloudEngineDriving {
     let suite = "CloudEndToEnd.\(UUID())"
     var owner = CloudOwner(container: CloudSyncAvailability.containerIdentifier, environment: .development, userRecordName: "replica-owner")
     var session: CloudSessionPayload?
+    var sessions: [UUID: [CloudSessionPayload]] = [:]
     var profiles: PlusProfileController!
     var coordinator: CloudSyncCoordinator!
-    init(server: ReplicaCloud) throws {
+    init(server: ReplicaCloud, initialProfiles: [PlusProfile]? = nil) throws {
         root = try CodexSignInFixture.directory()
         native = try NativeSwitchFixture()
-        original = CodexSignInFixture.profile()
+        original = initialProfiles?.first ?? CodexSignInFixture.profile()
         store = .init(fileURL: root.appendingPathComponent("accounts/profiles.json"))
-        try store.saveProfiles([original])
+        try store.saveProfiles(initialProfiles ?? [original])
         preferences = .init(root: root.appendingPathComponent("cloud"))
         journal = .init(root: root.appendingPathComponent("cloud"), owner: owner)
         key = try CloudCryptoFixture.key(); keys = CloudTransportKeys(key)
@@ -211,7 +289,12 @@ private actor ReplicaDriver: CloudEngineDriving {
                          syncDefaults: defaults, autoStart: false)
         coordinator = .init(profiles: profiles, preferences: preferences, availability: { .development },
             identity: { [unowned self] _ in self.owner },
-            snapshots: .init(providers: [{ [unowned self] profile in profile.id == self.original.id ? self.session : nil }], revision: { 0 }),
+            snapshots: .init(providers: [CloudSessionKind.desktop, .browser, .openChamber].map { kind in
+                { [unowned self] profile in
+                    if let payload = self.sessions[profile.id]?.first(where: { $0.kind == kind }) { return payload }
+                    return profile.id == self.original.id && self.session?.kind == kind ? self.session : nil
+                }
+            }, revision: { 0 }),
             sourceName: { "Synthetic source Mac" },
             nativeAdoption: { [unowned self] in .init(authorization: $0, desktop: self.native.service) },
             makeSessionInbox: { [unowned self] in .init(journal: $0, keys: self.keys) },

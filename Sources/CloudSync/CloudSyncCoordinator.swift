@@ -307,8 +307,15 @@ struct CloudSessionAdmission: Equatable, Sendable {
         guard let bridge, isEnabled else { return }
         let state = try bridge.journal.catalogState()
         lastSuccessfulSync = state.lastSuccess ?? lastSuccessfulSync
+        // Authenticated saved sessions are synced once durably received. Import is
+        // a separate, explicit local action, so its retained receipt is not backlog.
+        let receiptsSettled = state.receipts.allSatisfy { id, receipt in
+            receipt.phase == .applied || (receipt.phase == .received &&
+                state.receivedEnvelopes[id]?.recordName.hasPrefix("session.") == true &&
+                state.transport?.processedInbox.contains(id) == true)
+        }
         let clean = verifiedPass && !needsInitialUnion && bridge.failure == nil && state.dirtyGenerations.isEmpty &&
-            state.receipts.values.allSatisfy { $0.phase == .applied } && state.restoreIntent == nil &&
+            receiptsSettled && state.restoreIntent == nil &&
             state.transport?.blockedRecords.isEmpty != false && state.transport?.retryAfter.isEmpty != false &&
             state.transport?.pendingSessionDeletes.isEmpty != false
         status = clean ? .upToDate : .pending

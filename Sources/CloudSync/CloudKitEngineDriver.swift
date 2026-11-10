@@ -107,7 +107,9 @@ final class CloudKitEngineDelegate: CKSyncEngineDelegate {
         case .didSendChanges:
             await callbacks.event(.sendFinished)
             await operations.endOperation()
-        case .willSendChanges: await operations.beginOperation()
+        case .willSendChanges:
+            await operations.beginOperation()
+            await callbacks.event(.sendStarted)
         case .willFetchRecordZoneChanges: break
         @unknown default: break
         }

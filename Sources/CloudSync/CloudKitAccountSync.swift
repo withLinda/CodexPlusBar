@@ -22,6 +22,7 @@ actor CloudKitAccountSync: CloudSyncTransport {
     private var deleting: Set<String> = []
     private var waitingRecords: Set<String> = []
     private var attempted: Set<String> = []
+    private var activeSends = 0
     private var ready = false
     private var explicitFetches: Set<UUID> = []
     private var fetchIsActive = false
@@ -84,6 +85,7 @@ actor CloudKitAccountSync: CloudSyncTransport {
         fetchIsActive = false
         fetchedZoneSuccessfully = false
         verifiedFetch = false
+        activeSends = 0
         token = newToken
         let engine = makeDriver()
         driver = engine
@@ -269,10 +271,15 @@ actor CloudKitAccountSync: CloudSyncTransport {
                 verifiedFetch = fetchedZoneSuccessfully && explicitFetches.isEmpty
                 fetchedZoneSuccessfully = false
                 try await reportSuccessIfSettled(token: expected)
+            case .sendStarted:
+                activeSends += 1
             case .sendFinished:
-                // SDK completion is the other valid lease release boundary (including a
-                // request that ended without per-item outcomes). Dirty work remains queued.
-                releaseAllFlights()
+                activeSends = max(0, activeSends - 1)
+                // Manual and automatic requests can overlap. One request's completion
+                // says nothing about assets still owned by another request. Per-item
+                // results release their own flights; unmatched flights survive until
+                // every started send has completed (or cancellation fully drains).
+                if activeSends == 0 { releaseAllFlights() }
                 try await updatePending(token: expected)
                 try await reportSuccessIfSettled(token: expected)
             case .sent(let saved, let failed, let deleted, let failedDeletes):

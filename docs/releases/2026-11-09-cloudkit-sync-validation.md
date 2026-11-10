@@ -167,3 +167,41 @@ Evidence: `cloud-account-event-red.log`, `cloud-account-event-green.log` in the 
 ```text
 3f24d637e4e63208ec0e16f4c53ecdc3cacf786d9886678b94a3104c4c8bc5f1  CodexPlusBar.dmg
 ```
+
+## 1.7.3 overlapping-send investigation
+
+The user reported 45 profiles on this Mac and 33 overlapping profiles on another, both enabled on 1.7.2 but unable to finish syncing. Read-only inventory found 45 encrypted profile records and one order record, with no sessions uploaded. The installed journal retained 122 dirty saved-session records. Apple daemon logs showed asset upload failures with `CKInternalErrorDomain:3002`.
+
+Investigation used actual production transport/codec/delegate objects linked into signed disposable probes. Read-only fetches passed for fresh and cloned journals, automatic sync, and the complete coordinator with a private copy of the actual 45-profile catalog and device preferences. The probe also used the production executable name. These checks did not reproduce a download or catalog-apply failure; earlier installed fetch cancellations alone do not establish one.
+
+### Confirmed upload cause and correction
+
+Apple documents each `didSendChanges` as the completion of its own request, and requires CKAsset source files to survive the upload. Manual and automatic requests can overlap even though delegate events are serialized. The transport discarded all flights on every send completion. An empty request could therefore delete another request's files and lose its acknowledgement ownership.
+
+- Deterministic RED: two new targeted tests produced four expected issues, including deleted/unreadable files and re-admission while another request remained active.
+- Live RED: in a disposable Production zone, a real 122-record send overlapped a real empty-scope send. The latter completed with zero item results and **zero source files remaining**. All122 failed: `CKErrorDomain:16` with underlying `CKInternalErrorDomain:3002`; the outer request returned partial failure (`CKErrorDomain:2`). This matches the installed daemon failure.
+- Correction: forward SDK will-send events and count active sends per engine epoch. Per-record outcomes still release only their exact flight. A request completion releases unmatched flights only when all started sends have completed. Existing cancellation drain remains the shutdown boundary.
+- Live GREEN: the same event ordering retained **122 source files** after the empty request completed; **122 saves, zero failures, zero dirty generations**. An additional live run downloaded all122 records and verified exact decoded-body equality using the production codec/AES-GCM. Every disposable zone/subscription was removed.
+- Initial targeted GREEN: **70 tests in three suites passed**, including transport, session snapshots, and the existing end-to-end scenarios.
+
+### Confirmed status cause and correction
+
+The new45/33-profile/122-session scenario successfully transferred every profile and session but exposed both replicas remaining Pending. Authenticated saved-session receipts intentionally remain received while awaiting explicit import; `refreshStatus` incorrectly required them all to be applied. A separate small RED test reproduced both incorrect statuses. Only received, transport-processed session envelopes now count as settled. Catalog application, missing-key/quarantined input, restore, dirty work and errors retain their existing success gates. Explicit import and native activation remain separate actions.
+
+Evidence is in the session temporary directory: `cloud-173-overlap-red.log`, `cloud-173-overlap-green.log`, `cloud-173-inbox-status-red.log`, `cloud-173-targeted-final.log`. Signed live probe sources/results are under ignored `build/cloud-account-probe/`. The live asset reproduction used synthetic profile bodies; actual saved-session capture, encryption, download, summaries and restart are exercised by the45/33 replica scenario. No real local profiles, credentials, or cloud account records were changed by the probes.
+
+Author self-review checked paired event ordering, epoch resets, per-item exact-generation acknowledgements, missing-result retention, cancellation drain, retry admission, and receipt authentication/application gates. No subagents or full-suite runs were used. Live physical two-Mac acceptance remains pending.
+
+Final targeted GREEN: **79 tests in four suites passed**, Xcode **TEST SUCCEEDED** (`CloudKitAccountSyncTests`, `CloudSessionSnapshotTests`, `CloudSyncEndToEndTests`, `CloudSyncPresentationTests`). The45/33 scenario transferred all122 saved sessions, preserved existing browser-store IDs, reached Up to date on both replicas, and stayed settled after fresh-controller restart without additional cloud writes. Debug runtime was322seconds, dominated by full synthetic fetches and durable journal/asset revalidation. The initial120second interrupted attempt was discarded; the final run completed uninterrupted. Only known toolchain AppIntents-metadata and host linkd diagnostics appeared, with no compile errors or test issues.
+
+### 1.7.3 packaged artifact
+
+- Workspace: `build/cloud-releases/release-20261110T141010Z-5zLoKs/`; strict universal archive **ARCHIVE SUCCEEDED**, exactly `arm64` and `x86_64`; Info.plist verified `1.7.3`, build `26`, macOS minimum `14.0`.
+- App notarization **Accepted**: `36401c96-cb44-4d8f-a028-68a95d1f9c35`.
+- DMG notarization **Accepted**: `3076822f-dbf0-49ae-b1dd-a67cd3ff72f1`.
+- App/DMG signatures, staples and Gatekeeper passed. Read-only mounted app passed Production profile/CloudKit/APNs/Keychain preflight and ticket validation; image detached.
+- Five release-preflight Python tests passed. Upload copy `github/CodexPlusBar.dmg`: 7,747,071 bytes. All packaging logs and notary JSON remain with the artifact.
+
+```text
+74506ef3add4896c73a7ec1366f80237e1e54a8fe23d0e339c3cab95bebc48a2  CodexPlusBar.dmg
+```

@@ -4,6 +4,46 @@ import Testing
 @testable import CodexPlusBar
 
 struct CloudKitAccountSyncTests {
+    @Test func overlappingEmptySendCannotRemoveAnotherRequestsAssetsOrAcknowledgement() async throws {
+        let f = try await CloudTransportFixture(); defer { f.disk.cleanUp() }
+        let name = try await f.localProfile()
+        try await f.startReady()
+        await f.driver.emit(.sendStarted)
+        let batch = try #require(await f.driver.batch())
+        let record = try #require(batch.recordsToSave.first)
+        let url = try #require((record["payload"] as? CKAsset)?.fileURL)
+        let ciphertext = try Data(contentsOf: url)
+        // Automatic send A has supplied an asset. Manual send B has no batch,
+        // and finishes while CloudKit still owns A's pending upload.
+        await f.driver.emit(.sendStarted)
+        #expect(await f.driver.batch() == nil)
+        await f.driver.emit(.sendFinished)
+        #expect(FileManager.default.fileExists(atPath: url.path))
+        #expect((try? Data(contentsOf: url)) == ciphertext)
+        await f.driver.emit(.sent(saved: [record], failed: [], deleted: [], failedDeletes: [:]))
+        #expect(try await f.journal.load().dirtyGenerations[name] == nil)
+        await f.driver.emit(.sendFinished)
+        #expect(!FileManager.default.fileExists(atPath: url.path))
+        await f.transport.stop()
+    }
+
+    @Test func overlappingSendWithoutItemResultReleasesOnlyAfterLastCompletion() async throws {
+        let f = try await CloudTransportFixture(); defer { f.disk.cleanUp() }
+        let name = try await f.localProfile()
+        try await f.startReady()
+        await f.driver.emit(.sendStarted)
+        await f.driver.emit(.sendStarted)
+        let batch = try #require(await f.driver.batch())
+        let url = try #require((batch.recordsToSave.first?["payload"] as? CKAsset)?.fileURL)
+        await f.driver.emit(.sendFinished)
+        #expect(FileManager.default.fileExists(atPath: url.path))
+        await f.driver.emit(.sendFinished)
+        #expect(!FileManager.default.fileExists(atPath: url.path))
+        #expect(try await f.journal.load().dirtyGenerations[name] != nil)
+        #expect(await f.driver.batch()?.recordsToSave.count == 1)
+        await f.transport.stop()
+    }
+
     @Test func sameOwnerSDKSignInPreservesStartupAndJournalProgress() async throws {
         let f = try await CloudTransportFixture(); defer { f.disk.cleanUp() }
         let name = try await f.localProfile()
