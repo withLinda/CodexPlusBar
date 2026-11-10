@@ -1,6 +1,47 @@
 // Native visual QA host. Compiled by render_design.sh, never included in the app.
 import AppKit
 import SwiftUI
+import Observation
+
+@Observable @MainActor private final class PreviewCloudSync: CloudSyncPresenting {
+    var enabled = true
+    var includesSessions = true
+    var busy = false
+    var isTransferring = false
+    var deliveryDegraded = false
+    var epoch: UUID? = UUID()
+    var status: CloudSyncDisplayStatus = .upToDate
+    var lastSuccessfulSync: Date? = .now
+    var sessions: [CloudSessionSummary] = []
+    var sessionMessage: String?
+    var failure: CloudSyncIssue?
+    var statusMessage: String? { failure?.message }
+    var canSyncNow: Bool { enabled && !busy && !isTransferring && status != .pausedAfterRestore }
+    var canRetry: Bool { failure != nil && !busy }
+    func setEnabled(_ value: Bool) async { enabled = value; status = value ? .upToDate : .off }
+    func setIncludesSessions(_ value: Bool) async { includesSessions = value }
+    func syncNow() async { status = .upToDate; lastSuccessfulSync = .now }
+    func selectProfile(_ id: UUID?) async {}
+    func reload() async {}
+    func canAdopt(_ summary: CloudSessionSummary) -> Bool { enabled && includesSessions && !busy }
+    func adopt(_ summary: CloudSessionSummary) async throws { sessionMessage = "Saved session ready. A working local login is kept; use Switch to activate a native login." }
+    func retry() async throws { failure = nil; sessionMessage = "Saved session ready." }
+    init(arguments: [String], profileID: UUID?) {
+        if let index = arguments.firstIndex(of: "--cloud-status"), arguments.indices.contains(index + 1) {
+            status = CloudSyncDisplayStatus(rawValue: arguments[index + 1]) ?? .upToDate
+        }
+        enabled = status != .off && status != .pausedAfterRestore && status != .waitingForAccount
+        isTransferring = status == .pausedForTransfer
+        failure = status == .waitingForKeychain ? .keychain : status == .waitingForNetwork ? .network : status == .error ? .repair : nil
+        if let profileID, !arguments.contains("--cloud-empty") {
+            sessions = ["Linda’s MacBook Air", "Studio Mac — a long source name for a shared workspace"].enumerated().map { index, name in
+                .init(recordName: "session-preview-\(index)", profileID: profileID, sourceDeviceID: UUID(), sourceName: name,
+                    kind: index == 0 ? .browser : .desktop, revision: UInt64(index + 3), capturedAt: .now,
+                    identity: .init(accountID: "preview", userID: "preview"))
+            }
+        }
+    }
+}
 
 private struct PreviewSignInChecker: OpenChamberSignInChecking {
     var slow = false
@@ -143,10 +184,11 @@ enum DesignPreview {
         let isEmailTools = arguments.contains("--email-tools")
         let isBackup = arguments.contains(where: { $0.hasPrefix("--backup-") })
         let isSettings = arguments.contains("--settings")
+        let cloud = arguments.contains("--cloud") ? PreviewCloudSync(arguments: arguments, profileID: controller.selectedProfileID) : nil
         let size = isPanel
             ? CGSize(width: MenuBarPanelMetrics.width, height: MenuBarPanelMetrics.height)
             : isBackup ? CGSize(width: 480, height: 360)
-            : isSettings ? CGSize(width: 460, height: 440)
+            : isSettings ? CGSize(width: 460, height: cloud == nil ? 440 : 680)
             : isEmailTools ? (arguments.contains("--empty") ? EmailToolsLayout.emptySize : arguments.contains("--compact") ? EmailToolsLayout.minimumSize : EmailToolsLayout.defaultSize)
             : arguments.contains("--empty") ? ProfileManagerLayout.emptySize
             : arguments.contains("--compact") ? ProfileManagerLayout.minimumSize : ProfileManagerLayout.defaultSize
@@ -196,9 +238,9 @@ enum DesignPreview {
             }
             root = AnyView(EmailToolsWindowView(controller: emailController))
         } else if isSettings {
-            root = AnyView(CodexSettingsView())
+            root = AnyView(CodexSettingsView(cloudSync: cloud))
         } else {
-            root = AnyView(ProfileManagerWindowView(controller: controller, currentTime: clock, initiallyShowsDetails: arguments.contains("--details"), initialPage: arguments.contains("--phone-summary") ? .phoneSummary : .profile))
+            root = AnyView(ProfileManagerWindowView(controller: controller, currentTime: clock, initiallyShowsDetails: arguments.contains("--details"), initialPage: arguments.contains("--phone-summary") ? .phoneSummary : .profile, cloudSync: cloud))
         }
         window.contentView = NSHostingView(rootView: root.background(PreviewAccessibilityProbe().frame(width: 0, height: 0)))
         if arguments.contains("--accessible") {

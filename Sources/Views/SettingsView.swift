@@ -3,6 +3,7 @@ import SwiftUI
 struct CodexSettingsView: View {
     var openBackup: (BackupTransferMode) -> Void = { _ in }
     var isTransferring = false
+    var cloudSync: (any CloudSyncPresenting)? = nil
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage(CodexThemeSettings.Keys.appearanceMode) private var appearanceMode = CodexThemeSettings.defaultAppearanceMode
     @AppStorage(CodexThemeSettings.Keys.contrast) private var contrast = CodexThemeSettings.defaultContrast
@@ -10,6 +11,7 @@ struct CodexSettingsView: View {
     @AppStorage(OpenChamberSyncPreference.enabledKey) private var automaticSync = OpenChamberSyncPreference.defaultEnabled
 
     var body: some View {
+      ScrollView {
         VStack(alignment: .leading, spacing: CodexTheme.sectionSpacing) {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Settings")
@@ -17,6 +19,8 @@ struct CodexSettingsView: View {
                     .foregroundStyle(CodexTheme.primaryText)
 
             }
+
+            if let cloudSync { CloudSyncSettingsSection(presentation: cloudSync) }
 
             CodexCard(tier: .regular, shadow: false) {
                 VStack(alignment: .leading, spacing: 16) {
@@ -64,9 +68,12 @@ struct CodexSettingsView: View {
 
             CodexCard(tier: .regular, shadow: false) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Toggle("Automatically sync OpenChamber", isOn: $automaticSync)
-                        .toggleStyle(CodexCheckboxStyle())
-                        .font(ProfileManagerTypography.bodyStrong)
+                    HStack(spacing: 6) {
+                        Toggle("Automatically sync OpenChamber", isOn: $automaticSync)
+                            .toggleStyle(CodexCheckboxStyle())
+                        Text("Automatically sync OpenChamber")
+                            .font(ProfileManagerTypography.bodyStrong)
+                    }
                     Text("Keep OpenChamber's OpenAI logins matched to your saved Codex profiles, including removals.")
                         .font(ProfileManagerTypography.small)
                         .foregroundStyle(CodexTheme.mutedText)
@@ -89,6 +96,8 @@ struct CodexSettingsView: View {
         }
         .padding(20)
         .frame(width: 460, alignment: .topLeading)
+      }
+        .frame(width: 460, height: cloudSync == nil ? 440 : 680)
         .background(CodexBackdrop())
         .codexThemeRefreshScope()
         .disabled(isTransferring)

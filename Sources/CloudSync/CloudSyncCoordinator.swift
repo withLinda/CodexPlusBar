@@ -19,6 +19,10 @@ struct CloudSessionAdmission: Equatable, Sendable {
     private(set) var isEnabled = false
     private(set) var includesSessions = true
     private(set) var deliveryDegraded = false
+    private(set) var lastSuccessfulSync: Date?
+    private(set) var issue: CloudSyncIssue?
+    var isInitialMerge: Bool { needsInitialUnion }
+    var isTransferring: Bool { profiles.isTransferring }
     private(set) var epoch: UUID?
     private(set) var owner: CloudOwner?
     @ObservationIgnored private let profiles: PlusProfileController
@@ -83,8 +87,10 @@ struct CloudSessionAdmission: Equatable, Sendable {
         profiles.cloudCatalogWriteAdmission = { throw CloudJournalError.applicationPending }
         do {
             let saved = try preferences.read()
+            includesSessions = saved?.preferences.includeSavedSessions ?? true
             if let owner = saved?.preferences.previousActiveOwner {
                 let journal = CloudSyncJournal(root: preferences.paths.root, owner: owner)
+                lastSuccessfulSync = try journal.existingCatalogState()?.lastSuccess
                 profiles.cloudCatalogWriteAdmission = {
                     guard let state = try journal.existingCatalogState() else { return }
                     guard state.restoreIntent == nil, !state.receipts.values.contains(where: { $0.phase == .applying }) else {
@@ -95,7 +101,7 @@ struct CloudSessionAdmission: Equatable, Sendable {
             guard let saved, saved.preferences.enabled else { status = .off; return }
             guard !saved.preferences.paused, saved.preferences.transferPause == nil else { status = .paused; return }
             await activate(explicit: false)
-        } catch { status = .failed }
+        } catch { issue = CloudSyncIssue(error); status = .failed }
     }
 
     func setEnabled(_ enabled: Bool) async {
@@ -107,13 +113,14 @@ struct CloudSessionAdmission: Equatable, Sendable {
             await activate(explicit: true)
         } else {
             // Invalidate before any await; old owner callbacks cannot apply/ack state.
-            intent = UUID(); epoch = nil; isEnabled = false; status = .off
-            do { try preferences.update { $0.enabled = false } } catch { status = .failed }
+            intent = UUID(); epoch = nil; isEnabled = false; status = .off; issue = nil
+            do { try preferences.update { $0.enabled = false } } catch { issue = CloudSyncIssue(error); status = .failed }
             await stopEngine()
         }
     }
 
     private func activate(explicit: Bool) async {
+        issue = nil
         let admission = UUID(); intent = admission
         guard let environment = availability() else { status = .unavailable; return }
         do {
@@ -122,6 +129,8 @@ struct CloudSessionAdmission: Equatable, Sendable {
             let current = try await identity(environment)
             guard intent == admission, started else { return }
             guard current.environment == environment, current.container == CloudSyncAvailability.containerIdentifier else { throw CloudJournalError.ownerMismatch }
+            let journal = CloudSyncJournal(root: preferences.paths.root, owner: current)
+            lastSuccessfulSync = try journal.existingCatalogState()?.lastSuccess
             let saved = try preferences.update {
                 if explicit { $0.setConsent(enabled: true, for: current) }
                 else { $0.observeOwner(current) }
@@ -131,7 +140,6 @@ struct CloudSessionAdmission: Equatable, Sendable {
                 status = saved.preferences.paused ? .paused : .needsConsent
                 return
             }
-            let journal = CloudSyncJournal(root: preferences.paths.root, owner: current)
             let newEpoch = UUID()
             let bridge = CloudCatalogBridge(profiles: profiles, journal: journal, deviceID: saved.deviceID, epoch: newEpoch)
             let startingState = try journal.catalogState()
@@ -189,6 +197,7 @@ struct CloudSessionAdmission: Equatable, Sendable {
             await syncNow()
         } catch {
             guard intent == admission else { return }
+            issue = CloudSyncIssue(error)
             status = .failed
             await stopEngine()
         }
@@ -205,7 +214,7 @@ struct CloudSessionAdmission: Equatable, Sendable {
             await stopEngine(requestedIntent: requested)
             guard intent == requested, started else { return }
             if wasEnabled { await activate(explicit: false) }
-        } catch { status = .failed }
+        } catch { issue = CloudSyncIssue(error); status = .failed }
     }
 
     func syncNow() async {
@@ -223,6 +232,7 @@ struct CloudSessionAdmission: Equatable, Sendable {
                 await captureSavedSessions()
                 guard self.epoch == epoch, isEnabled else { return }
                 verifiedPass = false
+                issue = nil
                 status = .syncing
                 try await engine.syncNow()
                 guard self.epoch == epoch, isEnabled else { return }
@@ -252,6 +262,7 @@ struct CloudSessionAdmission: Equatable, Sendable {
             } catch {
                 guard self.epoch == epoch, isEnabled else { return }
                 verifiedPass = false
+                issue = CloudSyncIssue(error)
                 status = error as? CloudJournalError == .applicationPending ? .pending : .failed
             }
         }
@@ -270,11 +281,20 @@ struct CloudSessionAdmission: Equatable, Sendable {
                 try await bridge.applyRemote(profiles: [], order: nil, epoch: event.epoch)
                 guard isEnabled, event.epoch == epoch else { return }
                 try refreshStatus()
-            } catch { if event.epoch == epoch { status = .pending } }
+            } catch { if event.epoch == epoch { issue = CloudSyncIssue(error); status = .pending } }
         case .sent: break
         case .status(let value):
+            switch value {
+            case .waitingForKey: issue = .keychain
+            case .retrying: issue = .network
+            case .quota: issue = .quota
+            case .quarantined, .itemFailure: issue = .storage
+            case .paused(let error): issue = CloudSyncIssue(error)
+            case .upToDate: issue = nil
+            case .syncing: break
+            }
             if value == .upToDate {
-                if pass == nil { do { try refreshStatus() } catch { status = .failed } }
+                if pass == nil { do { try refreshStatus() } catch { issue = CloudSyncIssue(error); status = .failed } }
             } else if case .paused = value { verifiedPass = false; status = .paused }
             else if value != .syncing { verifiedPass = false; status = .pending }
         }
@@ -283,6 +303,7 @@ struct CloudSessionAdmission: Equatable, Sendable {
     private func refreshStatus() throws {
         guard let bridge, isEnabled else { return }
         let state = try bridge.journal.catalogState()
+        lastSuccessfulSync = state.lastSuccess ?? lastSuccessfulSync
         let clean = verifiedPass && !needsInitialUnion && bridge.failure == nil && state.dirtyGenerations.isEmpty &&
             state.receipts.values.allSatisfy { $0.phase == .applied } && state.restoreIntent == nil &&
             state.transport?.blockedRecords.isEmpty != false && state.transport?.retryAfter.isEmpty != false &&
@@ -292,9 +313,10 @@ struct CloudSessionAdmission: Equatable, Sendable {
 
     private func accountChanged(_ current: CloudOwner?) async {
         intent = UUID(); epoch = nil; isEnabled = false; status = .needsConsent
+        lastSuccessfulSync = nil; issue = .account
         do { try preferences.update { prefs in
             if let current { prefs.observeOwner(current) } else { prefs.enabled = false }
-        } } catch { status = .failed }
+        } } catch { issue = CloudSyncIssue(error); status = .failed }
         await stopEngine()
     }
 
@@ -304,7 +326,7 @@ struct CloudSessionAdmission: Equatable, Sendable {
         let previousBridge = bridge
         let saved = try preferences.read()
         pausedJournal = bridge?.journal ?? saved?.preferences.previousActiveOwner.map { CloudSyncJournal(root: preferences.paths.root, owner: $0) }
-        status = .paused
+        status = .paused; issue = nil
         await stopEngine(holdCatalogForTransfer: true)
         if let journal = pausedJournal, let saved {
             let recovery = previousBridge ?? CloudCatalogBridge(profiles: profiles, journal: journal, deviceID: saved.deviceID, epoch: UUID())
@@ -349,7 +371,7 @@ struct CloudSessionAdmission: Equatable, Sendable {
             if saved.preferences.paused { status = .paused }
             else if saved.preferences.enabled { await activate(explicit: false) }
             else { status = .off }
-        } catch { status = .failed }
+        } catch { issue = CloudSyncIssue(error); status = .failed }
     }
 
     func notificationRegistrationFailed() { deliveryDegraded = true }
@@ -362,6 +384,10 @@ struct CloudSessionAdmission: Equatable, Sendable {
         return .init(owner: owner, epoch: epoch, profileID: profileID, webDataStoreID: row.webDataStoreID,
             desktopIdentity: row.codexSignIn, openChamberIdentity: row.openCodeOpenAIAccount,
             credentialRevision: snapshots.revision)
+    }
+
+    func canAdoptSession(for profileID: UUID) -> Bool {
+        sessionAdmission(for: profileID) != nil && profiles.canBeginCloudSessionAdoption(for: profileID)
     }
 
     /// Capture/adoption services use this narrow final admission after their awaits.

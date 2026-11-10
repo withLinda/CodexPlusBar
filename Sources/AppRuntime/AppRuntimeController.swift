@@ -12,6 +12,7 @@ final class AppRuntimeController {
     let controller: PlusProfileController
     let clock: AppMinuteClock
     let cloudSync: CloudSyncCoordinator
+    let cloudPresentation: CloudSyncPresentation
 
     private let chromeProfileStore: ChromeProfileStore
     private let profileManagerWindowPresenter: ProfileManagerWindowPresenter
@@ -56,6 +57,7 @@ final class AppRuntimeController {
         self.emailController = dotTrickController
         let cloudSync = CloudSyncCoordinator(profiles: controller)
         self.cloudSync = cloudSync
+        self.cloudPresentation = CloudSyncPresentation(coordinator: cloudSync)
         let transfer = BackupTransferController(profiles: controller, email: dotTrickController, cloudSync: cloudSync)
         self.backupPresenter = BackupTransferPresenter(controller: transfer)
         self.chromeProfileStore = chromeProfileStore
@@ -68,6 +70,7 @@ final class AppRuntimeController {
         )
         self.singleInstanceCoordinator = singleInstanceCoordinator
         self.profileManagerWindowPresenter.openBackup = { [weak self] mode in self?.showBackup(mode) }
+        self.profileManagerWindowPresenter.cloudSync = cloudPresentation
         transfer.showProfiles = { [weak self] in self?.showManagerWindow() }
     }
 

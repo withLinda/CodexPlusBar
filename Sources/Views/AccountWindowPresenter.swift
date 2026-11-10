@@ -7,6 +7,7 @@ final class ProfileManagerWindowPresenter {
     private let clock: AppMinuteClock
     private var window: NSWindow?
     var openBackup: (BackupTransferMode) -> Void = { _ in }
+    var cloudSync: CloudSyncPresentation?
 
     init(controller: PlusProfileController, clock: AppMinuteClock) {
         self.controller = controller
@@ -29,7 +30,8 @@ final class ProfileManagerWindowPresenter {
             rootView: ProfileManagerWindowView(
                 controller: controller,
                 currentTime: clock,
-                openBackup: openBackup
+                openBackup: openBackup,
+                cloudSync: cloudSync
             )
         )
         let window = NSWindow(

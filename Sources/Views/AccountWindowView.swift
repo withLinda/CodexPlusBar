@@ -351,6 +351,7 @@ struct ProfileManagerWindowView: View {
     @Bindable var controller: PlusProfileController
     let currentTime: AppMinuteClock
     var openBackup: (BackupTransferMode) -> Void
+    var cloudSync: (any CloudSyncPresenting)?
     @AppStorage(ProfileDisplayOrderPreference.orderKey) private var profileDisplayOrder = ProfileDisplayOrderPreference.defaultOrder
     @AppStorage(MenuBarPanelTextScalePreference.textScaleKey) private var textScaleStorage = MenuBarPanelTextScalePreference.defaultScale
     @State private var detailsDraft = PlusProfileDetailsDraft()
@@ -381,11 +382,13 @@ struct ProfileManagerWindowView: View {
         userDefaults: UserDefaults = .standard,
         initiallyShowsDetails: Bool = false,
         initialPage: ProfileManagerPage = .profile,
-        openBackup: @escaping (BackupTransferMode) -> Void = { _ in }
+        openBackup: @escaping (BackupTransferMode) -> Void = { _ in },
+        cloudSync: (any CloudSyncPresenting)? = nil
     ) {
         self.controller = controller
         self.currentTime = currentTime
         self.openBackup = openBackup
+        self.cloudSync = cloudSync
         _textScaleStorage = AppStorage(
             wrappedValue: MenuBarPanelTextScalePreference.defaultScale,
             MenuBarPanelTextScalePreference.textScaleKey,
@@ -492,6 +495,7 @@ struct ProfileManagerWindowView: View {
             if newDraft != PlusProfileDetailsDraft(profile: snapshot.profile) {
                 resetSaveFeedback()
             }
+            controller.setCloudDraftOwner(newDraft == PlusProfileDetailsDraft(profile: snapshot.profile) ? nil : snapshot.id)
         }
         .onDisappear {
             controller.setCloudDraftOwner(nil)
@@ -733,6 +737,14 @@ struct ProfileManagerWindowView: View {
                             repairBoth: { Task { await controller.repairBothSignIns(profileID: snapshot.id) } },
                             cancelRepair: { controller.cancelAppSignInRepair() }
                         )
+                        .disabled(controller.isImportingCloudSession)
+                        if let cloudSync {
+                            if detailsDraft != PlusProfileDetailsDraft(profile: snapshot.profile) {
+                                Text("Save profile edits before importing a saved session.")
+                                    .font(ProfileManagerTypography.small).foregroundStyle(CodexTheme.mutedText)
+                            }
+                            CloudSessionInboxSection(presentation: cloudSync, profileID: snapshot.id)
+                        }
                     }
 
                     profileDetailsSection(for: snapshot)
@@ -1293,7 +1305,7 @@ struct ProfileManagerWindowView: View {
         detailsDraft = snapshot.map { PlusProfileDetailsDraft(profile: $0.profile) } ?? .init()
         detailsDraftBase = detailsDraft
         detailsDraftProfileID = snapshot?.id
-        controller.setCloudDraftOwner(snapshot?.id)
+        controller.setCloudDraftOwner(nil)
         isNotesExpanded = !detailsDraft.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 

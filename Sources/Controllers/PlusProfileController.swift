@@ -124,8 +124,8 @@ final class PlusProfileController {
     @ObservationIgnored private var catalogCommitSequence: UInt64 = 0
     @ObservationIgnored private var lastCommittedProfiles: [PlusProfile]?
     @ObservationIgnored var cloudCatalogWriteAdmission: (@MainActor () throws -> Void)?
-    @ObservationIgnored private var cloudDraftOwner: UUID?
-    @ObservationIgnored private var cloudAdoptionProfileID: UUID?
+    private var cloudDraftOwner: UUID?
+    private var cloudAdoptionProfileID: UUID?
     var isImportingCloudSession: Bool { cloudAdoptionProfileID != nil }
     @ObservationIgnored var onCloudDraftReleased: (@MainActor () -> Void)?
 
@@ -175,10 +175,13 @@ final class PlusProfileController {
     }
 
     func beginCloudSessionAdoption(for id: UUID) throws {
-        guard cloudSessionCaptureAllowed(for: id), cloudAdoptionProfileID == nil,
-              cloudDraftOwner != id, openChamberCheckProgress == nil else { throw CloudSessionError.unavailable }
+        guard canBeginCloudSessionAdoption(for: id) else { throw CloudSessionError.unavailable }
         cloudAdoptionProfileID = id
         activeDataOperations += 1
+    }
+
+    func canBeginCloudSessionAdoption(for id: UUID) -> Bool {
+        cloudSessionCaptureAllowed(for: id) && cloudAdoptionProfileID == nil && cloudDraftOwner != id && openChamberCheckProgress == nil
     }
 
     func cloudSessionAdoptionAllowed(for id: UUID) -> Bool {

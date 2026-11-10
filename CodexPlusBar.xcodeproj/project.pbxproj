@@ -37,6 +37,7 @@
 		348E43439B1CB45D07EEB785 /* CodexSignIn.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAAD6E2326B542701573C814 /* CodexSignIn.swift */; };
 		34FAB5E3DDE1E8310BE8FFFA /* OpenChamberSyncPlanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = A358996D3CFA906F7755E4E8 /* OpenChamberSyncPlanner.swift */; };
 		35BD902A6191BBF858BFA966 /* SelectorExportPublisher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C2420E56C976EAC7063683C /* SelectorExportPublisher.swift */; };
+		398EF02B96F4E28C4B00F58E /* CloudSyncPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 469DC64B00DCA14FE3D6C2A4 /* CloudSyncPresentation.swift */; };
 		4030C99FC89E2EAD67D978ED /* OpenChamberSyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E61CD774A9F9F92C7F47948A /* OpenChamberSyncService.swift */; };
 		4036E5B4D91CF9FADA81B301 /* SelectorExportStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AD32F42F517EFCA76D09BFC /* SelectorExportStore.swift */; };
 		46246E7896E5BDE19A4AE73A /* WorkspaceModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77CB4E67AC5FFFB8307F18C5 /* WorkspaceModels.swift */; };
@@ -97,6 +98,7 @@
 		A899E6D55407F7CD8C0ACA04 /* ChatGPTAPIError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81400FBA3D7B45736A65F770 /* ChatGPTAPIError.swift */; };
 		AAC2DD0D6D608AC9668FD83F /* EmailToolsWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 864277862C546E5920AB3163 /* EmailToolsWindowView.swift */; };
 		AEAB7F867EAA417C39CA40EA /* PlusProfileDataService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F0C740A5ED0A2BB15A75554 /* PlusProfileDataService.swift */; };
+		AF267C29E4DE2B6993638F52 /* CloudSessionInboxSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA581C79797401742505718D /* CloudSessionInboxSection.swift */; };
 		B0D9DEA1A710685A443CABDE /* MenuBarPanelTextScalePreference.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D6E8D24A2C7E16B085B2581 /* MenuBarPanelTextScalePreference.swift */; };
 		B609098339F75B5CE31A0340 /* SelectorObservation.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1BEAF53ABFC366F0F8B9DD2 /* SelectorObservation.swift */; };
 		B693F39FFBC205652F115EC1 /* CloudSessionSnapshotService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 901AA1B5C060C906BA39502A /* CloudSessionSnapshotService.swift */; };
@@ -122,6 +124,7 @@
 		D5550C919F5E95543ACF794D /* Inter-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 33360E8618EAD73760FD014F /* Inter-Medium.ttf */; };
 		D6CA6FF0C21311398F56C566 /* OpenChamberSyncScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C26E6A53E3766353307F15A /* OpenChamberSyncScheduler.swift */; };
 		D74C0C215FE67426FF797835 /* ProfileSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = A86489B28B4EEE86C87A88E9 /* ProfileSearch.swift */; };
+		D9F62EE05682E07F47F48C60 /* CloudSyncSettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D6670CA613F0C8CAE6EF29B /* CloudSyncSettingsSection.swift */; };
 		DD341BBA564490520ECFB6CA /* WorkspaceLimitService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38D97AFB21D00935D66A3DE2 /* WorkspaceLimitService.swift */; };
 		DEF34F589596A99C9895724F /* CodexLegacySignInImporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8416D8C433CC85EDA06BDC61 /* CodexLegacySignInImporter.swift */; };
 		E09D9DB0604E7D4DCF5B09F3 /* TransientValue.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2EF95AD3249A505CD5A22EA /* TransientValue.swift */; };
@@ -200,6 +203,7 @@
 		42D52FDA17A73C900D1E7869 /* ProfileKeyboardShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileKeyboardShortcuts.swift; sourceTree = "<group>"; };
 		443FBB5A6737C257DADB37DA /* CloudAssetStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudAssetStore.swift; sourceTree = "<group>"; };
 		4603C263C3EF604B51D7E7DD /* ChatGPTWebURLs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatGPTWebURLs.swift; sourceTree = "<group>"; };
+		469DC64B00DCA14FE3D6C2A4 /* CloudSyncPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudSyncPresentation.swift; sourceTree = "<group>"; };
 		47524A60EFC92CD85F147545 /* OpenCodeOpenAICredentialVerifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodeOpenAICredentialVerifier.swift; sourceTree = "<group>"; };
 		49259342335BED6B1E4F0C9D /* ChatGPTAuthContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatGPTAuthContext.swift; sourceTree = "<group>"; };
 		4A0441E818BD8B568CBC6AE1 /* MacSystemActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacSystemActions.swift; sourceTree = "<group>"; };
@@ -207,6 +211,7 @@
 		4B83C451759354D40D65FAC2 /* CodexTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexTheme.swift; sourceTree = "<group>"; };
 		4C2420E56C976EAC7063683C /* SelectorExportPublisher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectorExportPublisher.swift; sourceTree = "<group>"; };
 		4C26E6A53E3766353307F15A /* OpenChamberSyncScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenChamberSyncScheduler.swift; sourceTree = "<group>"; };
+		4D6670CA613F0C8CAE6EF29B /* CloudSyncSettingsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudSyncSettingsSection.swift; sourceTree = "<group>"; };
 		4EBC778B3C5FE9FCF54E6ED4 /* BackupArchive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupArchive.swift; sourceTree = "<group>"; };
 		52247492C355D2EFB16E98B0 /* OpenChamberSignInCheckService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenChamberSignInCheckService.swift; sourceTree = "<group>"; };
 		534B523C2B9C7E021F4C3316 /* ProfilePhoneNumberCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfilePhoneNumberCatalog.swift; sourceTree = "<group>"; };
@@ -268,6 +273,7 @@
 		BDB2F727B33B769B1AD9836D /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		C0F88F72B4D638B549072FF2 /* AccountWindowPresenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountWindowPresenter.swift; sourceTree = "<group>"; };
 		C1618DDE37504A73E53F29D5 /* DotTrickController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DotTrickController.swift; sourceTree = "<group>"; };
+		CA581C79797401742505718D /* CloudSessionInboxSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudSessionInboxSection.swift; sourceTree = "<group>"; };
 		CAAD6E2326B542701573C814 /* CodexSignIn.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexSignIn.swift; sourceTree = "<group>"; };
 		CEEC302F552BC386137C7A03 /* MenuBarStatusItemController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarStatusItemController.swift; sourceTree = "<group>"; };
 		CF773DBE36527C1FEC0FDBB3 /* App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App.swift; sourceTree = "<group>"; };
@@ -337,6 +343,7 @@
 				A04DFF9FF8F36E7C8721F726 /* CloudSyncJournal.swift */,
 				E87B2FBC33700D1110851644 /* CloudSyncPaths.swift */,
 				83A3637F5902A8947892FE3C /* CloudSyncPreferences.swift */,
+				469DC64B00DCA14FE3D6C2A4 /* CloudSyncPresentation.swift */,
 				29BF6E2A808E2EA81D1DFEB7 /* CloudSyncTransport.swift */,
 				22CF680CD2ED2A777915E75B /* CloudSyncTypes.swift */,
 			);
@@ -438,6 +445,8 @@
 			children = (
 				C0F88F72B4D638B549072FF2 /* AccountWindowPresenter.swift */,
 				39C5A0B333E8C1A19467704E /* AccountWindowView.swift */,
+				CA581C79797401742505718D /* CloudSessionInboxSection.swift */,
+				4D6670CA613F0C8CAE6EF29B /* CloudSyncSettingsSection.swift */,
 				FF11C163E2745CE7277AF9DE /* DisplayFormatter.swift */,
 				7755A62F2846FD0B38D5D005 /* EmailToolsWindowPresenter.swift */,
 				864277862C546E5920AB3163 /* EmailToolsWindowView.swift */,
@@ -709,6 +718,7 @@
 				4FE08D41A463CF57AD36D2F3 /* CloudProfileProjection.swift in Sources */,
 				F26962AE918A238AE55B6AA7 /* CloudRecordCodec.swift in Sources */,
 				70169B2413A072973150BBB3 /* CloudSessionInbox.swift in Sources */,
+				AF267C29E4DE2B6993638F52 /* CloudSessionInboxSection.swift in Sources */,
 				21BA6CB05364F97BB85BB788 /* CloudSessionPayload.swift in Sources */,
 				B693F39FFBC205652F115EC1 /* CloudSessionSnapshotService.swift in Sources */,
 				A0082AFBEC4DFAEA21FC28BC /* CloudSyncAvailability.swift in Sources */,
@@ -716,6 +726,8 @@
 				8EE9AA7D4F275B5EC2F36BA1 /* CloudSyncJournal.swift in Sources */,
 				1DACB8A1A57CC61D700AA4E3 /* CloudSyncPaths.swift in Sources */,
 				BDFBEE647F56B663238F9442 /* CloudSyncPreferences.swift in Sources */,
+				398EF02B96F4E28C4B00F58E /* CloudSyncPresentation.swift in Sources */,
+				D9F62EE05682E07F47F48C60 /* CloudSyncSettingsSection.swift in Sources */,
 				EC47C03BACD857D0E175667F /* CloudSyncTransport.swift in Sources */,
 				0CF362DE39C05BCEBB814C55 /* CloudSyncTypes.swift in Sources */,
 				9F4BB893794F0163A8A84E66 /* CodexAccountSwitchService.swift in Sources */,
