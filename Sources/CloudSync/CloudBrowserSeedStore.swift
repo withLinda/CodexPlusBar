@@ -10,7 +10,9 @@ struct CloudBrowserSeedStore: Sendable {
         var chromeSeedPending = true
     }
     let directory: URL
-    init(directory: URL = ProfileCatalogStore.defaultFileURL().deletingLastPathComponent().appendingPathComponent("CloudBrowserSeeds")) {
+    // Recovery is private device-local state outside the backup-swapped account
+    // tree, matching CloudPrivateFiles' path contract and native-selection policy.
+    init(directory: URL = ProfileCatalogStore.defaultFileURL().deletingLastPathComponent().appendingPathExtension("browser-recovery")) {
         self.directory = CloudSyncPaths(root: directory).root
     }
     func save(_ payload: CloudSessionPayload, for profile: PlusProfile, chromeSeedPending: Bool = true) throws {

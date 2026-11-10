@@ -110,3 +110,31 @@ b6fbe1c759dc164b0be550b1b78a8962cab5b139015e327a2b2a8b927fb538ce  CodexPlusBar.d
 ```
 
 `packaging.log`, `archive.log`, architecture/preflight results and notary JSON files are retained in that release workspace. Installation on either Mac and the live acceptance checks above remain separate, pending user actions.
+
+## 1.7.1 browser storage regression
+
+The installed 1.7.0 app reported `unsafePath` for all profile refreshes even with iCloud Sync off. `CloudBrowserSeedStore` defaulted to `CodexPlusBar/CloudBrowserSeeds`, inside the account tree that `CloudPrivateFiles.openRoot` rejects before checking existence. `PlusProfileDataService.refreshProfile` loads browser recovery before session/usage HTTP requests, so the path error blocked ordinary refresh as well as related browser actions.
+
+The correction changes only the default recovery location to the private sibling `CodexPlusBar.browser-recovery`. It retains descriptor-relative access, ownership/permissions and symlink checks. The original production location could never pass validation, so there is no valid production recovery data to migrate. Profiles, existing browser data and native sign-ins are not moved.
+
+Targeted RED→GREEN verification:
+
+- Tests derive the actual default's full Application Support-relative layout and rebase it into an isolated temporary directory. The old arbitrary `seeds` fixture omitted the production conflict.
+- Before the fix: 30 selected tests ran in two suites; the new default-layout test and affected service tests reproduced `unsafePath` (14 reported issues).
+- After the fix: **30 tests in two suites passed**, Xcode **TEST SUCCEEDED**. Suites: `CloudBrowserSessionAdoptionTests` and `PlusProfileDataServiceTests`.
+- Coverage includes no-op missing-store reads/removals, private directory/file modes, durable save/restart/remove, session→usage→expiry refresh and existing browser actions. Rejection of account-tree paths and redirected directories still passes.
+- Five release-preflight Python tests passed again. No full test run and no subagents. Author self-review confirmed the minimal default-path change and isolated fixtures; provider responses are controlled, not evidence of live account acceptance.
+
+Logs: `cloud-browser-path-red.log` and `cloud-browser-path-green.log` in the session temporary evidence directory. The corrected installer is version **1.7.1/build 24**; see [release notes](1.7.1.md).
+
+### 1.7.1 packaged artifact
+
+- Workspace: `build/cloud-releases/release-20261110T111956Z-TmDBmC/`; fresh strict universal archive **ARCHIVE SUCCEEDED**, exactly `arm64` and `x86_64`; Info.plist verified `1.7.1`, build `24`, macOS minimum `14.0`.
+- App notarization **Accepted**: `a87df92d-f009-4b12-bf01-5a49ec36ce00`.
+- DMG notarization **Accepted**: `d70ec478-4155-49c4-a125-8882421e08f5`.
+- App/DMG signatures, staples and Gatekeeper passed. Read-only mounted app passed Production profile/CloudKit/APNs/Keychain preflight and ticket validation; image detached.
+- Upload copy `github/CodexPlusBar.dmg`: 7,743,920 bytes. `github/SHA256SUMS` verified after all stapling. `packaging.log`, notary JSON and archive/preflight evidence remain alongside the image.
+
+```text
+6924321d74f3ebc5e9fd6eebd89bba89febaf267749bb073dd34ff03f67171c1  CodexPlusBar.dmg
+```

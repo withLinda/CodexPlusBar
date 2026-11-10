@@ -5,6 +5,10 @@ import WebKit
 
 @MainActor
 struct PlusProfileDataServiceTests {
+    private let recovery: CloudBrowserSeedTestStorage
+
+    init() throws { recovery = try CloudBrowserSeedTestStorage() }
+
     @Test func browserCaptureRequiresAuthenticatedProofAndDoesNotRefreshOrWriteCookies() async throws {
         let profile = sampleProfile(label: "arbitrary label", sortOrder: 0)
         let signIn = try CodexSignIn(data: CodexSignInFixture.data())
@@ -12,7 +16,7 @@ struct PlusProfileDataServiceTests {
             sessionUser: "user", accessToken: signIn.accessToken)
         let runtime = PlusProfileRuntime(dataStore: .nonPersistent(), transport: transport)
         let service = PlusProfileDataService(runtimeProvider: StubRuntimeProvider(runtimeByProfileID: [profile.id: runtime]),
-            chromeSessionManager: StubChromeSessionManager())
+            chromeSessionManager: StubChromeSessionManager(), browserSeeds: recovery.store)
         let cookie = try #require(HTTPCookie(properties: [.name: "__Secure-next-auth.session-token.0", .value: "synthetic-browser",
             .domain: "chatgpt.com", .path: "/api", .secure: "TRUE"]))
         await runtime.sessionStore.storeCookies([cookie])
@@ -41,7 +45,8 @@ struct PlusProfileDataServiceTests {
             "can_access_with_session":true,"entitlement":{"expires_at":"2027-06-01T00:00:00Z","has_active_subscription":true}}}}
             """, sessionUser: "user-a", failCatalogAfterFirst: true)
         let runtime = PlusProfileRuntime(dataStore: .nonPersistent(), transport: transport)
-        let service = PlusProfileDataService(runtimeProvider: StubRuntimeProvider(runtimeByProfileID: [profile.id: runtime]), chromeSessionManager: StubChromeSessionManager())
+        let service = PlusProfileDataService(runtimeProvider: StubRuntimeProvider(runtimeByProfileID: [profile.id: runtime]),
+            chromeSessionManager: StubChromeSessionManager(), browserSeeds: recovery.store)
         let first = try await service.refreshProfile(profile)
         let observation = try #require(first.selectorObservation)
         let entitlement = try #require(observation.entitlement)
@@ -57,7 +62,7 @@ struct PlusProfileDataServiceTests {
     }
 
     @Test
-    func refreshProfileFetchesSessionThenUsageAndExpiryAndBuildsDetectedNote() async throws {
+    func refreshWithDefaultStorageLayoutFetchesSessionThenUsageAndExpiry() async throws {
         let profile = sampleProfile(label: "alpha@example.com", sortOrder: 0)
         let transport = MockHTTPTransport { request in
             switch request.url?.path {
@@ -184,7 +189,7 @@ struct PlusProfileDataServiceTests {
             transport: transport
         )
         let provider = StubRuntimeProvider(runtimeByProfileID: [profile.id: runtime])
-        let service = PlusProfileDataService(runtimeProvider: provider)
+        let service = PlusProfileDataService(runtimeProvider: provider, browserSeeds: recovery.store)
 
         let result = try await service.refreshProfile(profile)
 
@@ -248,7 +253,7 @@ struct PlusProfileDataServiceTests {
             transport: transport
         )
         let provider = StubRuntimeProvider(runtimeByProfileID: [profile.id: runtime])
-        let service = PlusProfileDataService(runtimeProvider: provider)
+        let service = PlusProfileDataService(runtimeProvider: provider, browserSeeds: recovery.store)
 
         let result = try await service.refreshProfile(profile)
 
@@ -287,7 +292,7 @@ struct PlusProfileDataServiceTests {
             transport: transport
         )
         let provider = StubRuntimeProvider(runtimeByProfileID: [profile.id: runtime])
-        let service = PlusProfileDataService(runtimeProvider: provider)
+        let service = PlusProfileDataService(runtimeProvider: provider, browserSeeds: recovery.store)
 
         let result = try await service.refreshProfile(profile)
 
@@ -387,7 +392,8 @@ struct PlusProfileDataServiceTests {
         )
         let service = PlusProfileDataService(
             runtimeProvider: provider,
-            chromeSessionManager: chromeSessionManager
+            chromeSessionManager: chromeSessionManager,
+            browserSeeds: recovery.store
         )
 
         try await service.syncChromeSession(for: profile)
@@ -461,7 +467,8 @@ struct PlusProfileDataServiceTests {
         )
         let service = PlusProfileDataService(
             runtimeProvider: provider,
-            chromeSessionManager: chromeSessionManager
+            chromeSessionManager: chromeSessionManager,
+            browserSeeds: recovery.store
         )
 
         await #expect(throws: ChatGPTAPIError.unauthorized) {
@@ -485,7 +492,8 @@ struct PlusProfileDataServiceTests {
         let chromeSessionManager = StubChromeSessionManager()
         let service = PlusProfileDataService(
             runtimeProvider: provider,
-            chromeSessionManager: chromeSessionManager
+            chromeSessionManager: chromeSessionManager,
+            browserSeeds: recovery.store
         )
 
         try await service.clearSession(for: profile)
@@ -505,7 +513,8 @@ struct PlusProfileDataServiceTests {
         let chromeSessionManager = StubChromeSessionManager()
         let service = PlusProfileDataService(
             runtimeProvider: provider,
-            chromeSessionManager: chromeSessionManager
+            chromeSessionManager: chromeSessionManager,
+            browserSeeds: recovery.store
         )
 
         try await service.openChromePasskeySetup(for: profile)
@@ -523,7 +532,8 @@ struct PlusProfileDataServiceTests {
         let chromeSessionManager = StubChromeSessionManager()
         let service = PlusProfileDataService(
             runtimeProvider: provider,
-            chromeSessionManager: chromeSessionManager
+            chromeSessionManager: chromeSessionManager,
+            browserSeeds: recovery.store
         )
 
         try await service.openChromeAccountPage(for: profile)
@@ -541,7 +551,8 @@ struct PlusProfileDataServiceTests {
         let chromeSessionManager = StubChromeSessionManager()
         let service = PlusProfileDataService(
             runtimeProvider: provider,
-            chromeSessionManager: chromeSessionManager
+            chromeSessionManager: chromeSessionManager,
+            browserSeeds: recovery.store
         )
 
         try await service.removeProfileData(for: profile)

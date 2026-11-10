@@ -4,6 +4,35 @@ import WebKit
 @testable import CodexPlusBar
 
 @MainActor struct CloudBrowserSessionAdoptionTests {
+    @Test func defaultStorageLayoutSupportsAbsentReadsAndPrivateRecovery() throws {
+        let fixture = try CloudBrowserSeedTestStorage()
+        let store = fixture.store, profile = CodexSignInFixture.profile()
+        #expect(try store.load(for: profile) == nil)
+        try store.remove(for: profile)
+        #expect(FileManager.default.fileExists(atPath: store.directory.path) == false)
+
+        let payload = try browserPayload([browserCookie("__Secure-next-auth.session-token")])
+        try store.save(payload, for: profile)
+        let attributes = try FileManager.default.attributesOfItem(atPath: store.directory.path)
+        #expect((attributes[.posixPermissions] as? NSNumber)?.intValue == 0o700)
+        for file in try FileManager.default.contentsOfDirectory(at: store.directory, includingPropertiesForKeys: nil) {
+            let attributes = try FileManager.default.attributesOfItem(atPath: file.path)
+            #expect((attributes[.posixPermissions] as? NSNumber)?.intValue == 0o600)
+        }
+        let restarted = CloudBrowserSeedStore(directory: store.directory)
+        #expect(try restarted.load(for: profile)?.payload == payload)
+        try restarted.remove(for: profile)
+        #expect(try restarted.load(for: profile) == nil)
+        #expect(FileManager.default.fileExists(atPath: fixture.root.path))
+    }
+
+    @Test func browserRecoveryStillRejectsAccountTreeStorage() throws {
+        let root = try CodexSignInFixture.directory(); defer { try? FileManager.default.removeItem(at: root) }
+        let store = CloudBrowserSeedStore(directory: root.appendingPathComponent("CodexPlusBar/CloudBrowserSeeds"))
+        #expect(throws: CloudJournalError.unsafePath) { try store.load(for: CodexSignInFixture.profile()) }
+        #expect(FileManager.default.fileExists(atPath: store.directory.path) == false)
+    }
+
     @Test func browserRecoveryRejectsRedirectedDirectory() throws {
         let root = try CodexSignInFixture.directory(); defer { try? FileManager.default.removeItem(at: root) }
         let target = root.appendingPathComponent("target"), link = root.appendingPathComponent("seeds")
@@ -334,6 +363,25 @@ import WebKit
         #expect(await old.sessionStore.cookieValue(named: cookie.name) == "original")
         try? await registry.removeProfileData(for: profile)
     }
+}
+
+/// Rebase the real default's full Application Support layout, rather than replacing
+/// it with an arbitrary "seeds" folder that bypasses production path validation.
+final class CloudBrowserSeedTestStorage {
+    let root: URL
+    let store: CloudBrowserSeedStore
+
+    init() throws {
+        let support = ProfileCatalogStore.defaultFileURL().deletingLastPathComponent().deletingLastPathComponent()
+        let productionPath = CloudBrowserSeedStore().directory.path
+        let prefix = support.path + "/"
+        try #require(productionPath.hasPrefix(prefix))
+        root = try CodexSignInFixture.directory()
+        store = CloudBrowserSeedStore(directory: root.appendingPathComponent("Library/Application Support")
+            .appendingPathComponent(String(productionPath.dropFirst(prefix.count))))
+    }
+
+    deinit { try? FileManager.default.removeItem(at: root) }
 }
 
 func browserCookie(_ name: String, value: String = "synthetic", expires: Date? = nil) -> BackupCookie {
