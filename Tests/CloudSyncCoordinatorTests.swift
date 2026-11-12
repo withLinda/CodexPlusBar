@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Testing
 import WebKit
@@ -671,6 +672,299 @@ import WebKit
     }
 }
 
+@MainActor struct CloudStartupTests {
+    @Test func stoppingBootstrapPreventsAnotherRefreshBatch() async throws {
+        let f = try CloudCoordinatorFixture(); defer { f.clean() }
+        try f.store.saveProfiles([backupTestProfile(), backupTestProfile()])
+        let gate = StartupCloudGate(), data = CoordinatorDataService()
+        data.refreshGate = gate
+        f.profiles = .init(catalogStore: f.store, dataService: data, accountSwitchService: CoordinatorAccountSwitch(),
+            syncDefaults: f.defaults, maxConcurrentProfileRefreshes: 1, autoStart: false)
+        f.profiles.startBackgroundTasks()
+        await gate.waitUntilEntered()
+        f.profiles.stopBackgroundTasks(); gate.release()
+        let deadline = ContinuousClock.now + .seconds(2)
+        while f.profiles.isRefreshing, ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(data.refreshCalls == 1)
+        #expect(!f.profiles.isRefreshing)
+        #expect(f.profiles.profiles.allSatisfy { !$0.isRefreshing })
+    }
+
+    @Test func earlyRefreshCannotVersionStaleFieldsDuringFirstUnionRecovery() async throws {
+        let f = try CloudCoordinatorFixture(); defer { f.clean() }
+        let local = try #require(try f.store.loadProfiles().first)
+        try f.preferences.update { $0.setConsent(enabled: true, for: f.owner) }
+        let remoteVersion = CloudVersion(counter: 25, deviceID: UUID())
+        try f.journal.catalogTransaction {
+            $0.initialCatalogProjection = CloudCatalogBridge.projection([local])
+            $0.profiles[CloudJournalState.profileRecordName(local.id)] = .init(id: local.id, createdAt: local.createdAt,
+                fields: .init(label: .init(value: "already fetched remote", version: remoteVersion)))
+            $0.lamportCounter = 25
+        }
+        let native = StartupNativeDrain(), refresh = StartupCloudGate()
+        let data = CoordinatorDataService(); data.refreshGate = refresh
+        f.defaults.set(true, forKey: OpenChamberSyncPreference.enabledKey)
+        f.profiles = .init(catalogStore: f.store, dataService: data, accountSwitchService: CoordinatorAccountSwitch(),
+            syncService: native, syncDefaults: f.defaults, autoStart: false)
+        let clock = AppMinuteClock()
+        var identityReads = 0
+        let cloud = CloudSyncCoordinator(profiles: f.profiles, preferences: f.preferences, availability: { .development },
+            identity: { _ in identityReads += 1; if identityReads == 1 { await native.entered.started() }; return f.owner },
+            snapshots: .init(providers: [], revision: { 0 }), makeTransport: { _ in f.transport })
+        let startup = Task {
+            await AppRuntimeController.startServices(controller: f.profiles, clock: clock, cloudSync: cloud,
+                showStatusItem: {}, configureCloudNotifications: {})
+        }
+        await native.cancelled.started()
+        await refresh.waitUntilEntered()
+        refresh.release()
+        let deadline = ContinuousClock.now + .seconds(2)
+        while f.profiles.isRefreshing, ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(10)) }
+        let saved = try f.journal.catalogState().profiles[CloudJournalState.profileRecordName(local.id)]
+        #expect(saved?.fields.label?.value == "already fetched remote")
+        #expect(saved?.fields.label?.version == remoteVersion)
+        await native.entered.release(); await native.cancelled.release()
+        await startup.value
+        #expect(try f.journal.catalogState().profiles[CloudJournalState.profileRecordName(local.id)]?.fields.label?.value == "already fetched remote")
+        await cloud.stop(); f.profiles.stopBackgroundTasks(); clock.stop()
+    }
+
+    @Test(arguments: [false, true])
+    func localServicesRemainAvailableWithCloudOffOrOffline(enabled: Bool) async throws {
+        let f = try CloudCoordinatorFixture(); defer { f.clean() }
+        if enabled { try f.preferences.update { $0.setConsent(enabled: true, for: f.owner) } }
+        var writes = 0, identityReads = 0
+        let publisher = SelectorExportPublisher(binding: { _ in nil }, write: { _ in writes += 1 })
+        f.profiles = .init(catalogStore: f.store, dataService: CoordinatorDataService(),
+            accountSwitchService: CoordinatorAccountSwitch(), selectorPublisher: publisher,
+            syncDefaults: f.defaults, autoStart: false)
+        let cloud = CloudSyncCoordinator(profiles: f.profiles, preferences: f.preferences, availability: { .development },
+            identity: { _ in identityReads += 1; throw URLError(.notConnectedToInternet) },
+            snapshots: .init(providers: [], revision: { 0 }), makeTransport: { _ in f.transport })
+        let clock = AppMinuteClock()
+        var menuAvailable = false
+        await AppRuntimeController.startServices(controller: f.profiles, clock: clock, cloudSync: cloud,
+            showStatusItem: { menuAvailable = true }, configureCloudNotifications: {})
+        let deadline = ContinuousClock.now + .seconds(2)
+        while writes == 0, ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(menuAvailable)
+        #expect(writes > 0)
+        #expect(identityReads == (enabled ? 1 : 0))
+        #expect(cloud.status == (enabled ? .failed : .off))
+        #expect(f.transport.starts == 0)
+        await cloud.stop(); f.profiles.stopBackgroundTasks(); clock.stop()
+    }
+
+    @Test(arguments: [false, true])
+    func localMenuAndSelectorStartWhileCloudRequestIsSuspended(blockFetch: Bool) async throws {
+        let f = try CloudCoordinatorFixture(); defer { f.clean() }
+        try f.preferences.update { $0.setConsent(enabled: true, for: f.owner) }
+        let gate = StartupCloudGate()
+        let export = SelectorExportStore(homeDirectory: f.root)
+        var row = try #require(try f.store.loadProfiles().first)
+        row.openCodeOpenAIAccount = .init(accountID: "startup-account", userID: "startup-user", email: "startup@example.test")
+        try f.store.saveProfiles([row])
+        let publisher = SelectorExportPublisher(binding: { _ in "startup-credential" }, write: { try export.write($0) })
+        f.profiles = .init(catalogStore: f.store, dataService: StartupUsageService(),
+            accountSwitchService: CoordinatorAccountSwitch(), selectorPublisher: publisher,
+            syncDefaults: f.defaults, autoStart: false)
+        let cloud = CloudSyncCoordinator(profiles: f.profiles, preferences: f.preferences, availability: { .development },
+            identity: { _ in if !blockFetch { await gate.wait() }; return f.owner },
+            snapshots: .init(providers: [], revision: { 0 }), makeTransport: { _ in f.transport })
+        if blockFetch { f.transport.fetch = { _ in await gate.wait() } }
+        let clock = AppMinuteClock()
+        var menu: MenuBarStatusItemController?
+        var notificationsReady = false
+        let startup = Task {
+            await AppRuntimeController.startServices(controller: f.profiles, clock: clock, cloudSync: cloud,
+                showStatusItem: {
+                    menu = .init(controller: f.profiles, clock: clock, userDefaults: f.defaults,
+                        openManagerWindow: { _ in }, openEmailToolsWindow: {})
+                    menu?.start()
+                }, configureCloudNotifications: { notificationsReady = true })
+        }
+        await gate.waitUntilEntered()
+        // The cloud barrier stays closed for all assertions: network completion
+        // cannot accidentally make the old startup order pass.
+        let deadline = ContinuousClock.now + .seconds(2)
+        func snapshot() -> SelectorExport? {
+            (try? Data(contentsOf: export.file)).flatMap { try? SelectorExport.decode($0) }
+        }
+        while snapshot()?.accounts.first?.usage == nil, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(menu != nil)
+        #expect(notificationsReady)
+        #expect(FileManager.default.fileExists(atPath: export.file.path))
+        if let bytes = try? Data(contentsOf: export.file) {
+            let result = try SelectorExport.decode(bytes)
+            #expect(result.catalogTrusted)
+            #expect(result.accounts.first?.credentialID == "startup-credential")
+            #expect(result.accounts.first?.usage?.fiveHour.remainingPercent == 75)
+            #expect(result.accounts.first?.entitlement?.usable == true)
+            #expect(result.accounts.first?.unavailableReasons == [])
+        }
+        #expect(f.profiles.profiles.first?.usage?.fiveHourRemainingPercent == 75)
+        gate.release()
+        await startup.value
+        await cloud.stop()
+        f.profiles.stopBackgroundTasks(); clock.stop()
+        if let menu, let item = Mirror(reflecting: menu).children.compactMap({ $0.value as? NSStatusItem }).first {
+            #expect(item.button?.title.isEmpty == false)
+            NSStatusBar.system.removeStatusItem(item)
+        }
+    }
+
+    @Test func stoppingDuringCloudStartupCannotStartLocalTasksAfterward() async throws {
+        let f = try CloudCoordinatorFixture(); defer { f.clean() }
+        try f.preferences.update { $0.setConsent(enabled: true, for: f.owner) }
+        let gate = StartupCloudGate()
+        var writes = 0
+        let publisher = SelectorExportPublisher(binding: { _ in nil }, write: { _ in writes += 1 })
+        f.profiles = .init(catalogStore: f.store, dataService: CoordinatorDataService(),
+            accountSwitchService: CoordinatorAccountSwitch(), selectorPublisher: publisher,
+            syncDefaults: f.defaults, autoStart: false)
+        let cloud = CloudSyncCoordinator(profiles: f.profiles, preferences: f.preferences, availability: { .development },
+            identity: { _ in await gate.wait(); return f.owner }, snapshots: .init(providers: [], revision: { 0 }),
+            makeTransport: { _ in f.transport })
+        let clock = AppMinuteClock()
+        let startup = Task {
+            await AppRuntimeController.startServices(controller: f.profiles, clock: clock, cloudSync: cloud,
+                showStatusItem: {}, configureCloudNotifications: {})
+        }
+        await gate.waitUntilEntered()
+        startup.cancel(); f.profiles.stopBackgroundTasks(); await cloud.stop(); clock.stop()
+        let before = writes
+        gate.release(); await startup.value
+        // Drain the actor work enqueued by the startup continuation.
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(writes == before)
+        #expect(f.transport.starts == 0)
+        f.profiles.stopBackgroundTasks(); clock.stop()
+    }
+
+    @Test(arguments: [false, true])
+    func pendingCatalogRecoveryKeepsPublisherGatedButLeavesMenuAvailable(stopBeforeRecovery: Bool) async throws {
+        let f = try CloudCoordinatorFixture(); defer { f.clean() }
+        let local = try #require(try f.store.loadProfiles().first)
+        let device = try f.preferences.update { $0.setConsent(enabled: true, for: f.owner) }.deviceID
+        try f.journal.catalogTransaction { try $0.reconcile(f.profiles.cloudCatalogRead(), deviceID: device) }
+        try await f.stage(.init(id: local.id, createdAt: local.createdAt,
+            fields: .init(label: .init(value: "recovered catalog", version: .init(counter: 25, deviceID: UUID())))), journal: f.journal)
+        let bridge = CloudCatalogBridge(profiles: f.profiles, journal: f.journal, deviceID: device, epoch: UUID())
+        try bridge.prepareNextReceipt()
+        #expect(try f.journal.catalogState().receipts.values.contains { $0.phase == .applying })
+        var publishedLabels: [String] = []
+        let publisher = SelectorExportPublisher(binding: { _ in nil }, write: { _ in
+            publishedLabels.append(f.profiles.profiles.first?.label ?? "missing")
+        })
+        let data = CoordinatorDataService(), desktop = StartupDesktopActions(), native = StartupOpenChamberActions()
+        f.profiles = .init(catalogStore: f.store, dataService: data,
+            accountSwitchService: desktop, openCodeAuthService: native, selectorPublisher: publisher,
+            syncDefaults: f.defaults, autoStart: false)
+        let gate = StartupCloudGate(), clock = AppMinuteClock()
+        var menuAvailable = false
+        let cloud = CloudSyncCoordinator(profiles: f.profiles, preferences: f.preferences, availability: { .development },
+            identity: { _ in await gate.wait(); return f.owner }, snapshots: .init(providers: [], revision: { 0 }),
+            makeTransport: { _ in f.transport })
+        let startup = Task {
+            await AppRuntimeController.startServices(controller: f.profiles, clock: clock, cloudSync: cloud,
+                showStatusItem: { menuAvailable = true }, configureCloudNotifications: {})
+        }
+        await gate.waitUntilEntered()
+        #expect(menuAvailable)
+        #expect(publishedLabels.isEmpty)
+        #expect(throws: CloudJournalError.applicationPending) { try f.profiles.cloudCatalogWriteAdmission?() }
+        await f.profiles.refreshAll()
+        await f.profiles.refreshProfile(id: local.id)
+        await f.profiles.switchAndOpen(profileID: local.id)
+        await f.profiles.saveDesktopSignIn(profileID: local.id)
+        await f.profiles.switchOpenChamberAuth(profileID: local.id)
+        await f.profiles.saveOpenChamberAuth(profileID: local.id)
+        #expect(data.refreshCalls == 0)
+        #expect(await desktop.calls == 0)
+        #expect(await native.calls == 0)
+        #expect(try f.store.loadProfiles().first?.label == local.label)
+        if stopBeforeRecovery { startup.cancel(); await cloud.stop() }
+        gate.release(); await startup.value
+        let deadline = ContinuousClock.now + .seconds(2)
+        if stopBeforeRecovery {
+            #expect(publishedLabels.isEmpty)
+            #expect(f.transport.starts == 0)
+        } else {
+            while publishedLabels.isEmpty, ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(10)) }
+            #expect(publishedLabels.first == "recovered catalog")
+            #expect(try f.journal.catalogState().receipts.values.allSatisfy { $0.phase == .applied })
+        }
+        await cloud.stop(); f.profiles.stopBackgroundTasks(); clock.stop()
+    }
+}
+
+private actor StartupNativeDrain: OpenChamberSyncServing {
+    let entered = SyncBarrier(), cancelled = SyncBarrier()
+    private var initial = true
+    func reconcile(catalog: OpenChamberSyncCatalog, isCurrent: @escaping @Sendable (UInt64) async -> Bool) async throws -> OpenChamberSyncResult {
+        guard initial else { throw CancellationError() }
+        initial = false
+        await withTaskCancellationHandler {
+            await entered.wait()
+        } onCancel: {
+            Task { await self.cancelled.wait() }
+        }
+        throw CancellationError()
+    }
+}
+
+private actor StartupDesktopActions: CodexAccountSwitchServing {
+    var calls = 0
+    func saveCurrent(for profile: PlusProfile) async throws -> CodexSignInIdentity { calls += 1; throw CocoaError(.featureUnsupported) }
+    func switchAndOpen(profile: PlusProfile) async throws { calls += 1 }
+}
+
+private actor StartupOpenChamberActions: OpenCodeOpenAIAuthServing {
+    var calls = 0
+    func saveCurrent(for profile: PlusProfile) async throws -> OpenCodeOpenAIIdentity { calls += 1; throw CocoaError(.featureUnsupported) }
+    func switchTo(profile: PlusProfile) async throws { calls += 1 }
+}
+
+@MainActor private final class StartupUsageService: PlusProfileDataServing {
+    func refreshProfile(_ profile: PlusProfile) async throws -> PlusProfileRefreshResult {
+        let identity = try #require(profile.openCodeOpenAIAccount)
+        let now = Date.now
+        return .init(usage: .init(accountID: identity.accountID, planType: "plus",
+            primaryWindow: .init(usedPercent: 25, resetAt: now.addingTimeInterval(3600)),
+            secondaryWindow: nil, fetchedAt: now), detectedNote: nil,
+            selectorObservation: .init(identityKey: identity.storageKey, accountID: identity.accountID,
+                usage: .init(observedAt: now, identityKey: identity.storageKey, allowed: true, limitReached: false,
+                    fiveHour: .init(remainingPercent: 75, resetAt: now.addingTimeInterval(3600)), sevenDay: .notApplicable),
+                entitlement: .init(observedAt: now, accountID: identity.accountID, expiresAt: now.addingTimeInterval(86400),
+                    active: true, deactivated: false, usable: true, match: .canonical), unavailableReasons: []))
+    }
+    func openChromeAccountPage(for profile: PlusProfile) async throws {}
+    func openChromeSignIn(for profile: PlusProfile) async throws {}
+    func openChromePasskeySetup(for profile: PlusProfile) async throws {}
+    func syncChromeSession(for profile: PlusProfile) async throws {}
+    func waitForChromeSignInToFinish(for profile: PlusProfile) async -> Bool { false }
+    func closeChromeSignIn(for profile: PlusProfile) async {}
+    func clearSession(for profile: PlusProfile) async throws {}
+    func removeProfileData(for profile: PlusProfile) async throws {}
+}
+
+@MainActor private final class StartupCloudGate {
+    private var continuation: CheckedContinuation<Void, Never>?
+    private var entered: CheckedContinuation<Void, Never>?
+    private var released = false
+    func wait() async {
+        guard !released else { return }
+        await withCheckedContinuation { continuation = $0; entered?.resume(); entered = nil }
+    }
+    func waitUntilEntered() async {
+        if continuation != nil { return }
+        await withCheckedContinuation { entered = $0 }
+    }
+    func release() { released = true; continuation?.resume(); continuation = nil }
+}
+
 @MainActor private final class CloudCoordinatorFixture {
     static let ownerA = CloudOwner(container: "iCloud.com.linda.CodexPlusBar", environment: .development, userRecordName: "synthetic-A")
     let root: URL
@@ -739,7 +1033,13 @@ private final class CoordinatorJournalFault: @unchecked Sendable {
 }
 
 @MainActor private final class CoordinatorDataService: PlusProfileDataServing {
-    func refreshProfile(_ profile: PlusProfile) async throws -> PlusProfileRefreshResult { throw ChatGPTAPIError.unauthorized }
+    var refreshGate: StartupCloudGate?
+    var refreshCalls = 0
+    func refreshProfile(_ profile: PlusProfile) async throws -> PlusProfileRefreshResult {
+        refreshCalls += 1
+        await refreshGate?.wait()
+        throw ChatGPTAPIError.unauthorized
+    }
     func openChromeAccountPage(for profile: PlusProfile) async throws {}
     func openChromeSignIn(for profile: PlusProfile) async throws {}
     func openChromePasskeySetup(for profile: PlusProfile) async throws {}

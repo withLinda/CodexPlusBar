@@ -129,7 +129,7 @@ struct MenuBarRootView: View {
         )
         .onAppear(perform: clearStalePreferredProfileID)
         .background {
-            ProfileKeyboardShortcuts(isEnabled: !controller.isTransferring, handle: handleKeyboardAction)
+            ProfileKeyboardShortcuts(isEnabled: !controller.isLocalOperationBlocked, handle: handleKeyboardAction)
                 .frame(width: 0, height: 0)
         }
         .tint(CodexTheme.searchActionToken(preset: CodexThemeRefreshContext(appearanceMode: themeAppearance, contrast: themeContrast, systemVariant: colorScheme == .dark ? .dark : .light, canvas: themeCanvas).preset).color)
@@ -167,13 +167,13 @@ struct MenuBarRootView: View {
                         .frame(width: 28, height: 28)
                 }
                 .buttonStyle(CodexQuietButtonStyle(horizontalPadding: 0, verticalPadding: 0))
-                .disabled(controller.isRefreshing || controller.appSignInRepairProgress != nil)
+                .disabled(controller.isLocalOperationBlocked || controller.isRefreshing || controller.appSignInRepairProgress != nil)
                 .keyboardShortcut("r")
                 .help(controller.isRefreshing ? "Refreshing profiles…" : "Refresh all profiles")
                 .accessibilityLabel("Refresh all profiles")
             }
 
-            Text(controller.isRefreshing ? "Refreshing…" : headerMetaText(filterBar: listPresentation.filterBar))
+            Text(controller.isWaitingForCloudRecovery ? "Finishing local recovery…" : controller.isRefreshing ? "Refreshing…" : headerMetaText(filterBar: listPresentation.filterBar))
                 .font(ProfileManagerTypography.small(scale: panelTextScale))
                 .foregroundStyle(CodexTheme.mutedText)
                 .lineLimit(1)
@@ -249,6 +249,7 @@ struct MenuBarRootView: View {
                     }
                 )
                 .id(snapshot.id)
+                .disabled(controller.isLocalOperationBlocked)
                 .accessibilityAddTraits(snapshot.id == keyboardSelectedProfileID ? .isSelected : [])
                 .contextMenu {
                     if snapshot.profile.provider == .codex {

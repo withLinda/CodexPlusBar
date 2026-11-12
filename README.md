@@ -58,7 +58,7 @@ Finish active work before desktop switching: it closes and reopens the app. Brow
 2. Open the downloaded DMG and drag **CodexPlusBar.app** onto the **Applications** shortcut.
 3. Eject the disk image, then open **CodexPlusBar** from Applications. Confirm macOS's first-open prompt if shown. The app appears in the **menu bar**, not the Dock.
 
-The **1.7.4 DMG includes iCloud Sync** and fixes downloads failing in normally launched apps and a crash during sync recovery. It includes the earlier upload, sync-status, checkbox and profile-refresh fixes. Sync stays off until you enable it on each Mac. The app and DMG are Developer ID-signed, notarized by Apple, and stapled for offline ticket verification. [Version 1.7.4 release notes and SHA256SUMS](https://github.com/withLinda/CodexPlusBar/releases/tag/v1.7.4) include the download checksum.
+The **1.7.5 DMG restores the menu bar and OpenChamber Account Priority startup** when iCloud Sync is enabled. The menu and local account refresh no longer wait for iCloud networking; pending local recovery still protects your saved data. It includes the earlier iCloud download, crash, upload and profile-refresh fixes. Sync stays off until you enable it on each Mac. The app and DMG are Developer ID-signed, notarized by Apple, and stapled for offline ticket verification. [Version 1.7.5 release notes and SHA256SUMS](https://github.com/withLinda/CodexPlusBar/releases/tag/v1.7.5) cover both the DMG and the freshly built OpenChamber extension ZIP.
 
 ### Add your first account
 
@@ -72,6 +72,8 @@ Ready to change accounts in your apps? [Save their sign-ins and start switching]
 **Reading the numbers:** percentages mean **remaining**, not used. `5H` and `7D` are quota windows. `—` means unavailable. Subscription expiry is separate from a quota reset. Changes to ChatGPT's website can temporarily affect refreshes.
 
 **Updating?** Quit CodexPlusBar, open the latest DMG, drag the new app into Applications, and choose **Replace**. Eject the DMG, reopen the app, and refresh. Your saved Codex profiles and sign-ins stay in place; updating does not enable iCloud Sync. Existing backups can still be restored. If upgrading from before 1.6.2, earlier Claude records remain stored but inactive and hidden.
+
+If the menu disappeared on 1.7.x, open CodexPlusBar from Applications to reach its window and quit it with **⌘Q**, then install 1.7.5 using the steps above. Keep the app running while fresh quota arrives in Account Priority. Its optional extension is a separate [ZIP download](https://github.com/withLinda/CodexPlusBar/releases/latest/download/expiry-selector.zip), not part of the DMG.
 
 ## Switch automatically in OpenChamber
 
@@ -99,7 +101,7 @@ Password-encrypted backups include profile details, saved sign-ins, browser data
 
 ### iCloud Sync
 
-Included in the [1.7.4 DMG](https://github.com/withLinda/CodexPlusBar/releases/download/v1.7.4/CodexPlusBar.dmg). Install it on both Macs; no separate cloud build is needed. Local replica tests and signed Apple service probes passed; [live two-Mac acceptance, cross-device Keychain delivery, and automatic push delivery remain pending](docs/releases/2026-11-09-cloudkit-sync-validation.md#two-mac-acceptance--pending).
+Included in the [1.7.5 DMG](https://github.com/withLinda/CodexPlusBar/releases/download/v1.7.5/CodexPlusBar.dmg). Install it on both Macs; no separate cloud build is needed. Local replica tests and signed Apple service probes passed; [live two-Mac acceptance, cross-device Keychain delivery, and automatic push delivery remain pending](docs/releases/2026-11-09-cloudkit-sync-validation.md#two-mac-acceptance--pending).
 
 1. Sign in to the same iCloud account on both Macs and enable **Passwords & Keychain** in System Settings.
 2. On each Mac, open **Settings → iCloud Sync → Sync accounts with iCloud**. Profile details, passwords and 2FA secrets merge with the local accounts.

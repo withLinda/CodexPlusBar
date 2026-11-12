@@ -35,6 +35,7 @@ struct CloudSessionAdmission: Equatable, Sendable {
     @ObservationIgnored private var listener: Task<Void, Never>?
     @ObservationIgnored private var pass: Task<Void, Never>?
     @ObservationIgnored private var started = false
+    @ObservationIgnored private var localServicesReady: (@MainActor () -> Void)?
     @ObservationIgnored private var intent = UUID()
     @ObservationIgnored private var needsInitialUnion = true
     @ObservationIgnored private var verifiedPass = false
@@ -80,9 +81,11 @@ struct CloudSessionAdmission: Equatable, Sendable {
         }
     }
 
-    func start() async {
+    func start(localServicesReady: (@MainActor () -> Void)? = nil) async {
         guard !started else { return }
         started = true
+        self.localServicesReady = localServicesReady
+        profiles.isWaitingForCloudRecovery = true
         sessionObserver = CloudSessionChangeObserver { [weak self] in
             Task { @MainActor [weak self] in self?.requestSessionCapture() }
         }
@@ -101,10 +104,25 @@ struct CloudSessionAdmission: Equatable, Sendable {
                     }
                 }
             } else { profiles.cloudCatalogWriteAdmission = nil }
+            // Local refresh and selector publication need a settled local catalog,
+            // not an iCloud identity lookup or a completed network sync. Keep the
+            // callback pending only when durable recovery still forbids writes.
+            startLocalServicesIfReady()
             guard let saved, saved.preferences.enabled else { status = .off; return }
             guard !saved.preferences.paused, saved.preferences.transferPause == nil else { status = .paused; return }
             await activate(explicit: false)
         } catch { issue = CloudSyncIssue(error); status = .failed }
+    }
+
+    private func startLocalServicesIfReady() {
+        guard started, !Task.isCancelled,
+              localServicesReady != nil || profiles.isWaitingForCloudRecovery else { return }
+        do { try profiles.cloudCatalogWriteAdmission?() }
+        catch { return }
+        profiles.isWaitingForCloudRecovery = false
+        let ready = localServicesReady
+        localServicesReady = nil
+        ready?()
     }
 
     func setEnabled(_ enabled: Bool) async {
@@ -149,6 +167,9 @@ struct CloudSessionAdmission: Equatable, Sendable {
             try profiles.initializeFreshCloudCatalog(state: startingState)
             let firstUnion = startingState.profiles.isEmpty || startingState.initialCatalogProjection != nil
             self.bridge = bridge
+            // Local refresh is already running. Protect the initial baseline
+            // before attaching callbacks or awaiting native-operation drain.
+            if firstUnion { try bridge.pauseLocalAdmission() }
             bridge.attach()
             if restoringUnion {
                 // Device restore pause remains durable while transport obtains the
@@ -162,10 +183,8 @@ struct CloudSessionAdmission: Equatable, Sendable {
             do { try await bridge.recoverPending() }
             catch CloudJournalError.applicationPending { recoveryDeferred = true }
             guard intent == admission, started else { return }
-            if firstUnion {
-                _ = try profiles.cloudCatalogRead().projection()
-                try bridge.pauseLocalAdmission()
-            } else if !recoveryDeferred { try bridge.reconcileLocal(inferDeletions: !explicit && !restoringUnion) }
+            startLocalServicesIfReady()
+            if !firstUnion, !recoveryDeferred { try bridge.reconcileLocal(inferDeletions: !explicit && !restoringUnion) }
             try journal.catalogTransaction {
                 $0.compactLocalSessions()
                 if $0.transport == nil { $0.transport = .init() }
@@ -231,6 +250,7 @@ struct CloudSessionAdmission: Equatable, Sendable {
                 guard current == owner else { await accountChanged(current); return }
                 try await bridge.recoverPending()
                 guard self.epoch == epoch, isEnabled else { return }
+                startLocalServicesIfReady()
                 try bridge.reconcileLocal(inferDeletions: false)
                 await captureSavedSessions()
                 guard self.epoch == epoch, isEnabled else { return }
@@ -261,6 +281,7 @@ struct CloudSessionAdmission: Equatable, Sendable {
                     try await bridge.applyRemote(profiles: [], order: nil, epoch: epoch)
                 }
                 verifiedPass = true
+                startLocalServicesIfReady()
                 try refreshStatus()
             } catch {
                 guard self.epoch == epoch, isEnabled else { return }
@@ -613,6 +634,7 @@ struct CloudSessionAdmission: Equatable, Sendable {
 
     func stop() async {
         started = false
+        localServicesReady = nil
         sessionObserver = nil
         await stopEngine()
     }

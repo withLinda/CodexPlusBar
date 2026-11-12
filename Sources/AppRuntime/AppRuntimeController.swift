@@ -34,6 +34,7 @@ final class AppRuntimeController {
     private var localReopenObserver: Any?
     private var terminationObserver: Any?
     private var cloudObservers: [NSObjectProtocol] = []
+    private var startupTask: Task<Void, Never>?
 
     init(singleInstanceCoordinator: SingleInstanceCoordinator = SingleInstanceCoordinator()) {
         let chromeProfileStore = ChromeProfileStore()
@@ -80,7 +81,9 @@ final class AppRuntimeController {
         terminationObserver = NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification,
             object: nil, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated {
+                    self?.startupTask?.cancel()
                     self?.controller.stopBackgroundTasks()
+                    self?.clock.stop()
                     Task { @MainActor in await self?.cloudSync.stop() }
                 }
             }
@@ -105,11 +108,13 @@ final class AppRuntimeController {
         }
 
         CodexCloudLifecycle.shutdown = { [weak self] in
+            self?.startupTask?.cancel()
             self?.controller.stopBackgroundTasks()
+            self?.clock.stop()
             await self?.cloudSync.stop()
         }
 
-        Task { @MainActor in await finishStartup() }
+        startupTask = Task { @MainActor in await finishStartup() }
     }
 
     private func finishStartup() async {
@@ -143,7 +148,23 @@ final class AppRuntimeController {
             Self.logger.error("Chrome storage preparation failed: \(String(describing: error), privacy: .public)")
         }
 
-        await cloudSync.start()
+        await Self.startServices(controller: controller, clock: clock, cloudSync: cloudSync,
+            showStatusItem: { self.menuBarStatusItemController.start() },
+            configureCloudNotifications: { self.configureCloudNotifications() })
+    }
+
+    static func startServices(controller: PlusProfileController, clock: AppMinuteClock,
+                              cloudSync: CloudSyncCoordinator,
+                              showStatusItem: @MainActor () -> Void,
+                              configureCloudNotifications: @MainActor () -> Void) async {
+        guard !Task.isCancelled else { return }
+        showStatusItem()
+        clock.start()
+        configureCloudNotifications()
+        await cloudSync.start(localServicesReady: { controller.startBackgroundTasks() })
+    }
+
+    private func configureCloudNotifications() {
         for name in [NSApplication.didBecomeActiveNotification, CodexCloudNotifications.received, CodexCloudNotifications.accountChanged] {
             cloudObservers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
                 Task { @MainActor in await self?.cloudSync.syncNow() }
@@ -158,9 +179,6 @@ final class AppRuntimeController {
         if CloudSyncAvailability().environment != nil {
             NSApplication.shared.registerForRemoteNotifications(matching: [])
         }
-        controller.startBackgroundTasks()
-        menuBarStatusItemController.start()
-        clock.start()
     }
 
     func showManagerWindow(selecting profileID: UUID? = nil) {

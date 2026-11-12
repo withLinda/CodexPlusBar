@@ -79,6 +79,8 @@ final class PlusProfileController {
         didSet { if oldValue, !isRefreshing { CloudSavedSessionChange.released() } }
     }
     private(set) var isTransferring = false
+    var isWaitingForCloudRecovery = false
+    var isLocalOperationBlocked: Bool { isTransferring || isWaitingForCloudRecovery }
     @ObservationIgnored private var activeDataOperations = 0 {
         didSet { if oldValue > 0, activeDataOperations == 0 { CloudSavedSessionChange.released() } }
     }
@@ -170,7 +172,7 @@ final class PlusProfileController {
     }
 
     func cloudSessionCaptureAllowed(for id: UUID) -> Bool {
-        !isTransferring && activeDataOperations == 0 && !isRefreshing && appSignInRepairProgress == nil &&
+        !isLocalOperationBlocked && activeDataOperations == 0 && !isRefreshing && appSignInRepairProgress == nil &&
             !chromeSignInProfileIDs.contains(id) && switchingProfileIDs.isEmpty && openCodeSwitchingProfileIDs.isEmpty
     }
 
@@ -338,7 +340,7 @@ final class PlusProfileController {
     /// storage migration) has completed.  Keeping this separate from `init`
     /// prevents a first-run migration from racing session work.
     func startBackgroundTasks() {
-        guard !isTransferring else { return }
+        guard !isLocalOperationBlocked else { return }
         guard bootstrapTask == nil, autoRefreshTask == nil else {
             return
         }
@@ -495,7 +497,7 @@ final class PlusProfileController {
         label: String? = nil,
         provider: ProfileProvider = .codex
     ) {
-        guard !isTransferring else { return }
+        guard !isLocalOperationBlocked else { return }
         let nextIndex = profiles.count + 1
         let newProfile = PlusProfile(
             id: UUID(),
@@ -527,7 +529,7 @@ final class PlusProfileController {
     @discardableResult
     func importProfiles(from rawText: String) -> BulkProfileImportPreview {
         let preview = BulkProfileImporter.preview(from: rawText)
-        guard !isTransferring else { return preview }
+        guard !isLocalOperationBlocked else { return preview }
         guard preview.canSubmit else {
             statusMessage = preview.issueSummary ?? "Paste at least one profile row."
             updateDashboardStatus()
@@ -585,7 +587,7 @@ final class PlusProfileController {
 
     @discardableResult
     func updateDetails(for profileID: UUID, draft: PlusProfileDetailsDraft, base: PlusProfileDetailsDraft? = nil) -> Bool {
-        guard !isTransferring, appSignInRepairProgress?.profileID != profileID else { return false }
+        guard !isLocalOperationBlocked, appSignInRepairProgress?.profileID != profileID else { return false }
         guard let index = indexOfProfile(profileID) else {
             return false
         }
@@ -603,7 +605,7 @@ final class PlusProfileController {
     }
 
     func setTags(_ tags: [PlusProfileTag], for profileID: UUID) {
-        guard !isTransferring else { return }
+        guard !isLocalOperationBlocked else { return }
         guard let index = indexOfProfile(profileID) else { return }
         var updatedProfile = profiles[index].profile
         updatedProfile.tags = PlusProfile.normalizedTags(tags)
@@ -612,7 +614,7 @@ final class PlusProfileController {
     }
 
     func toggleTag(_ tag: PlusProfileTag, for profileID: UUID) {
-        guard !isTransferring else { return }
+        guard !isLocalOperationBlocked else { return }
         guard let index = indexOfProfile(profileID) else { return }
         var updatedTags = profiles[index].profile.normalizedTags
 
@@ -626,7 +628,7 @@ final class PlusProfileController {
     }
 
     func moveSelectedProfileUp() {
-        guard !isTransferring else { return }
+        guard !isLocalOperationBlocked else { return }
         guard let selectedProfileID,
               let index = indexOfProfile(selectedProfileID),
               index > 0 else { return }
@@ -636,7 +638,7 @@ final class PlusProfileController {
     }
 
     func moveSelectedProfileDown() {
-        guard !isTransferring else { return }
+        guard !isLocalOperationBlocked else { return }
         guard let selectedProfileID,
               let index = indexOfProfile(selectedProfileID),
               index < profiles.count - 1 else { return }
@@ -646,7 +648,7 @@ final class PlusProfileController {
     }
 
     func refreshAll() async {
-        guard !isTransferring, !isImportingCloudSession, appSignInRepairProgress == nil else { return }
+        guard !Task.isCancelled, !isLocalOperationBlocked, !isImportingCloudSession, appSignInRepairProgress == nil else { return }
         guard isRefreshing == false else { return }
         guard profiles.isEmpty == false else {
             statusMessage = "Add a profile, then sign in one by one."
@@ -664,6 +666,7 @@ final class PlusProfileController {
 
         let profileIDs = profiles.map(\.id)
         for batch in profileIDs.chunked(into: maxConcurrentProfileRefreshes) {
+            guard !Task.isCancelled else { break }
             let tasks = batch.map { profileID in
                 Task { @MainActor [weak self] in
                     await self?.refreshProfile(id: profileID, isBackgroundBatch: true)
@@ -675,6 +678,9 @@ final class PlusProfileController {
             }
         }
 
+        if Task.isCancelled {
+            for id in profileIDs { setRefreshingState(for: id, isRefreshing: false) }
+        }
         isRefreshing = false
         statusMessage = makeGlobalStatusMessage()
         updateDashboardStatus()
@@ -685,7 +691,7 @@ final class PlusProfileController {
     }
 
     func switchAndOpen(profileID: UUID) async {
-        guard !isTransferring, !isImportingCloudSession, appSignInRepairProgress == nil else { return }
+        guard !isLocalOperationBlocked, !isImportingCloudSession, appSignInRepairProgress == nil else { return }
         activeDataOperations += 1
         defer { activeDataOperations -= 1 }
         guard switchingProfileIDs.isEmpty, let index = indexOfProfile(profileID),
@@ -711,7 +717,7 @@ final class PlusProfileController {
     }
 
     func saveDesktopSignIn(profileID: UUID) async {
-        guard !isTransferring, !isImportingCloudSession, appSignInRepairProgress == nil else { return }
+        guard !isLocalOperationBlocked, !isImportingCloudSession, appSignInRepairProgress == nil else { return }
         activeDataOperations += 1
         defer { activeDataOperations -= 1 }
         guard switchingProfileIDs.isEmpty, let index = indexOfProfile(profileID),
@@ -759,7 +765,7 @@ final class PlusProfileController {
     }
 
     var canRepairAppSignIns: Bool {
-        !isTransferring && !isImportingCloudSession && appSignInRepairProgress == nil && openChamberCheckProgress == nil
+        !isLocalOperationBlocked && !isImportingCloudSession && appSignInRepairProgress == nil && openChamberCheckProgress == nil
             && switchingProfileIDs.isEmpty && openCodeSwitchingProfileIDs.isEmpty && chromeSignInProfileIDs.isEmpty
     }
 
@@ -865,7 +871,7 @@ final class PlusProfileController {
     }
 
     var canCheckOpenChamberSignIns: Bool {
-        !isTransferring && !isImportingCloudSession && appSignInRepairProgress == nil && openChamberCheckProgress == nil && openCodeSwitchingProfileIDs.isEmpty
+        !isLocalOperationBlocked && !isImportingCloudSession && appSignInRepairProgress == nil && openChamberCheckProgress == nil && openCodeSwitchingProfileIDs.isEmpty
             && profiles.contains { $0.profile.provider == .codex }
     }
 
@@ -954,7 +960,7 @@ final class PlusProfileController {
     }
 
     func saveOpenChamberAuth(profileID: UUID) async {
-        guard !isTransferring, !isImportingCloudSession, appSignInRepairProgress == nil, openChamberCheckProgress == nil else { return }
+        guard !isLocalOperationBlocked, !isImportingCloudSession, appSignInRepairProgress == nil, openChamberCheckProgress == nil else { return }
         activeDataOperations += 1
         defer { activeDataOperations -= 1 }
         guard openCodeSwitchingProfileIDs.isEmpty, let index = indexOfProfile(profileID),
@@ -996,7 +1002,7 @@ final class PlusProfileController {
     }
 
     func switchOpenChamberAuth(profileID: UUID) async {
-        guard !isTransferring, !isImportingCloudSession, appSignInRepairProgress == nil, openChamberCheckProgress == nil else { return }
+        guard !isLocalOperationBlocked, !isImportingCloudSession, appSignInRepairProgress == nil, openChamberCheckProgress == nil else { return }
         activeDataOperations += 1
         defer { activeDataOperations -= 1 }
         guard openCodeSwitchingProfileIDs.isEmpty, let index = indexOfProfile(profileID),
@@ -1027,7 +1033,7 @@ final class PlusProfileController {
     }
 
     func clearSession(for profileID: UUID) async {
-        guard !isTransferring, !isImportingCloudSession, appSignInRepairProgress == nil else { return }
+        guard !isLocalOperationBlocked, !isImportingCloudSession, appSignInRepairProgress == nil else { return }
         activeDataOperations += 1
         defer { activeDataOperations -= 1 }
         guard let index = indexOfProfile(profileID) else { return }
@@ -1063,7 +1069,7 @@ final class PlusProfileController {
     }
 
     func removeProfile(id profileID: UUID) async {
-        guard !isTransferring, !isImportingCloudSession, appSignInRepairProgress == nil else { return }
+        guard !isLocalOperationBlocked, !isImportingCloudSession, appSignInRepairProgress == nil else { return }
         activeDataOperations += 1
         defer { activeDataOperations -= 1 }
         guard !removingProfileIDs.contains(profileID), let index = indexOfProfile(profileID) else { return }
@@ -1113,7 +1119,7 @@ final class PlusProfileController {
     }
 
     func openChrome(for profileID: UUID) async {
-        guard !isTransferring, !isImportingCloudSession, appSignInRepairProgress == nil else { return }
+        guard !isLocalOperationBlocked, !isImportingCloudSession, appSignInRepairProgress == nil else { return }
         activeDataOperations += 1
         defer { activeDataOperations -= 1 }
         guard let index = indexOfProfile(profileID) else { return }
@@ -1163,7 +1169,7 @@ final class PlusProfileController {
     }
 
     func openChromePasskeySetup(for profileID: UUID) async {
-        guard !isTransferring, !isImportingCloudSession, appSignInRepairProgress == nil else { return }
+        guard !isLocalOperationBlocked, !isImportingCloudSession, appSignInRepairProgress == nil else { return }
         activeDataOperations += 1
         defer { activeDataOperations -= 1 }
         guard let index = indexOfProfile(profileID) else { return }
@@ -1189,7 +1195,7 @@ final class PlusProfileController {
     }
 
     func syncChromeSession(for profileID: UUID) async {
-        guard !isTransferring, !isImportingCloudSession, appSignInRepairProgress == nil else { return }
+        guard !isLocalOperationBlocked, !isImportingCloudSession, appSignInRepairProgress == nil else { return }
         activeDataOperations += 1
         defer { activeDataOperations -= 1 }
         guard let index = indexOfProfile(profileID) else { return }
@@ -1232,7 +1238,7 @@ final class PlusProfileController {
     private func refreshProfile(id profileID: UUID, isBackgroundBatch: Bool) async {
         // Repair waits for refreshAll to finish. Let that already-scheduled batch
         // drain, including rows marked as loading before repair was requested.
-        guard !isTransferring, !isImportingCloudSession, appSignInRepairProgress == nil || isBackgroundBatch else { return }
+        guard !isLocalOperationBlocked, !isImportingCloudSession, appSignInRepairProgress == nil || isBackgroundBatch else { return }
         activeDataOperations += 1
         defer { activeDataOperations -= 1 }
         guard let index = indexOfProfile(profileID) else { return }
@@ -1347,7 +1353,7 @@ final class PlusProfileController {
     }
 
     func syncOpenChamberNow() async {
-        guard !isTransferring, appSignInRepairProgress == nil else { return }
+        guard !isLocalOperationBlocked, appSignInRepairProgress == nil else { return }
         await syncScheduler.syncNow()
     }
 

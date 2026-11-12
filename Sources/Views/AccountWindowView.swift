@@ -442,7 +442,7 @@ struct ProfileManagerWindowView: View {
           }
         }
         .background {
-            ProfileKeyboardShortcuts(isEnabled: !controller.isTransferring && !showsBulkImportSheet, handle: handleKeyboardAction)
+            ProfileKeyboardShortcuts(isEnabled: !controller.isLocalOperationBlocked && !showsBulkImportSheet, handle: handleKeyboardAction)
                 .frame(width: 0, height: 0)
         }
         .sheet(isPresented: $showsBulkImportSheet) {
@@ -455,7 +455,7 @@ struct ProfileManagerWindowView: View {
             )
             .codexThemeRefreshScope()
         }
-        .disabled(controller.isTransferring)
+        .disabled(controller.isLocalOperationBlocked)
         .onAppear {
             syncDrafts(with: controller.selectedProfile)
         }
