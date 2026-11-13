@@ -42,6 +42,21 @@ test('50 simultaneous triggers coalesce into one verified native activation', as
   expect(h.activations).toEqual(['credential-a']);
   expect(decisions.every(value => value.action === 'activate' || value.action === 'keep')).toBe(true);
 });
+test('weekly priority drives paused preview and prompt selection, then falls back after observed use', async () => {
+  const h = await harness(), snapshot = structuredClone(fixture);
+  snapshot.accounts[1]!.usage!.sevenDay = { state: 'available', remainingPercent: 100, resetAtMs: now + 604_800_000 };
+  h.update(snapshot); h.setActive('credential-a');
+  expect(await h.coordinator.recheck('weekly-preview')).toMatchObject({ mode: 'paused', nextCredentialID: 'credential-b' });
+  expect(h.activations).toEqual([]);
+  await h.coordinator.setMode('auto', 'enable');
+  expect(await h.coordinator.requestSelection('prompt', '/one')).toMatchObject({ action: 'activate', credentialID: 'credential-b' });
+  snapshot.accounts[1]!.usage!.sevenDay.remainingPercent = 99;
+  snapshot.accounts[1]!.usage!.observedAtMs = now;
+  snapshot.sequence++;
+  h.update(snapshot);
+  expect(await h.coordinator.requestSelection('snapshot', '/one')).toMatchObject({ action: 'activate', credentialID: 'credential-a' });
+  expect(h.activations).toEqual(['credential-b', 'credential-a']);
+});
 test('late A failure while healthy B active persists A exhaustion and retries B without activation', async () => {
   const h = await harness(); await h.coordinator.setMode('auto', 'enable');
   const row = fixture.accounts[0]!;

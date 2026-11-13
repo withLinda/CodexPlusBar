@@ -12,8 +12,43 @@ function input(): SelectionInput {
     activeCredentialID: null, cooldowns: {}, failedIdentityKeys: new Set(), nowMs: now };
 }
 
-test('earliest verified expiry wins even at 1% against a later 90% account', () => {
+test('without full weekly quota, earliest verified expiry wins even at 1% against a later 90% account', () => {
   expect(selectAccount(input())).toMatchObject({ action: 'activate', credentialID: 'credential-a' });
+});
+
+test.each(['partial', 'not-applicable'] as const)('full weekly quota beats earlier expiry with %s weekly quota', state => {
+  const value = input(), earlier = value.snapshot.accounts[0]!, later = value.snapshot.accounts[1]!;
+  earlier.usage!.sevenDay = state === 'partial'
+    ? { state: 'available', remainingPercent: 99, resetAtMs: now + 604_800_000 }
+    : { state: 'not-applicable' };
+  earlier.usage!.fiveHour.remainingPercent = 100;
+  later.usage!.sevenDay = { state: 'available', remainingPercent: 100, resetAtMs: now + 604_800_000 };
+  later.usage!.fiveHour.remainingPercent = 1;
+  later.entitlement!.expiresAtMs = now + 30 * 86_400_000;
+  value.activeCredentialID = 'credential-a';
+  expect(selectAccount(value)).toMatchObject({ action: 'activate', credentialID: 'credential-b' });
+  value.snapshot.accounts.reverse();
+  expect(selectAccount(value)).toMatchObject({ action: 'activate', credentialID: 'credential-b' });
+});
+
+test('full weekly quota loses priority once fresh usage falls below 100%', () => {
+  const value = input(), later = value.snapshot.accounts[1]!;
+  value.activeCredentialID = 'credential-b';
+  later.usage!.sevenDay = { state: 'available', remainingPercent: 100, resetAtMs: now + 604_800_000 };
+  expect(selectAccount(value)).toMatchObject({ action: 'keep', credentialID: 'credential-b' });
+  later.usage!.sevenDay.remainingPercent = 99;
+  later.usage!.observedAtMs = now;
+  value.snapshot.sequence++;
+  expect(selectAccount(value)).toMatchObject({ action: 'activate', credentialID: 'credential-a' });
+});
+
+test('earliest expiry breaks full weekly quota ties even when the later account is active', () => {
+  const value = input();
+  for (const row of value.snapshot.accounts.slice(0, 2)) {
+    row.usage!.sevenDay = { state: 'available', remainingPercent: 100, resetAtMs: now + 604_800_000 };
+  }
+  value.activeCredentialID = 'credential-b';
+  expect(selectAccount(value)).toMatchObject({ action: 'activate', credentialID: 'credential-a' });
 });
 
 test.each([
@@ -24,19 +59,26 @@ test.each([
   ['denied', (v: SelectionInput) => { v.snapshot.accounts[0]!.usage!.allowed = false; }, 'usage-denied'],
   ['reached', (v: SelectionInput) => { v.snapshot.accounts[0]!.usage!.limitReached = true; }, 'usage-denied'],
   ['reset needs observation', (v: SelectionInput) => { v.snapshot.accounts[0]!.usage!.fiveHour.resetAtMs = now; }, 'reset-unconfirmed'],
+  ['weekly reset needs observation', (v: SelectionInput) => { v.snapshot.accounts[0]!.usage!.sevenDay = { state: 'available', remainingPercent: 100, resetAtMs: now }; }, 'reset-unconfirmed'],
+  ['stale usage', (v: SelectionInput) => { v.snapshot.accounts[0]!.usage!.observedAtMs = now - 900_001; }, 'usage-stale'],
   ['inactive', (v: SelectionInput) => { v.snapshot.accounts[0]!.entitlement!.active = false; }, 'inactive'],
   ['deactivated', (v: SelectionInput) => { v.snapshot.accounts[0]!.entitlement!.deactivated = true; }, 'unusable'],
   ['missing credential', (v: SelectionInput) => { v.connections.shift(); }, 'binding-missing'],
   ['unsupported method', (v: SelectionInput) => { v.connections[0]!.method = 'api-key'; }, 'native-unavailable'],
   ['failed in this chain', (v: SelectionInput) => { v.failedIdentityKeys.add(v.snapshot.accounts[0]!.identityKey); }, 'cooldown'],
-])('%s excludes A and selects B', (_name, mutate, code) => {
-  const value = input(); mutate(value);
+])('%s excludes A from priority and selects B', (_name, mutate, code) => {
+  const value = input();
+  value.snapshot.accounts[0]!.usage!.sevenDay = { state: 'available', remainingPercent: 100, resetAtMs: now + 604_800_000 };
+  mutate(value);
   expect(selectAccount(value)).toMatchObject({ action: 'activate', credentialID: 'credential-b',
     exclusions: expect.arrayContaining([{ credentialID: 'credential-a', code }]) });
 });
 
-test('equal expiry retains eligible current, otherwise stable identity order', () => {
+test.each([false, true])('equal expiry retains eligible current, otherwise stable identity order (full weekly: %s)', fullWeekly => {
   const value = input(); value.snapshot.accounts[1]!.entitlement!.expiresAtMs = value.snapshot.accounts[0]!.entitlement!.expiresAtMs;
+  if (fullWeekly) for (const row of value.snapshot.accounts.slice(0, 2)) {
+    row.usage!.sevenDay = { state: 'available', remainingPercent: 100, resetAtMs: now + 604_800_000 };
+  }
   value.activeCredentialID = 'credential-a';
   expect(selectAccount(value)).toMatchObject({ action: 'keep', credentialID: 'credential-a' });
   value.activeCredentialID = 'credential-b';

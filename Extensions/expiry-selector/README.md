@@ -1,8 +1,13 @@
 # Account Priority for OpenChamber
 
-Selects the earliest verified OpenAI subscription expiry among identity-matched accounts with usable five-hour and applicable seven-day quota. Unknown, stale, exhausted, expired, or conflicting evidence cannot qualify an automatic replacement.
+Selects among identity-matched OpenAI accounts with usable five-hour and applicable seven-day quota, in this order:
 
-Expiry means the subscription countdown shown in CodexPlusBar, such as **Expires in 16d 6h**. A healthy account with 17 days left is preferred over one with 30 days left. The panel shows days/hours remaining; hover for the exact expiry date. OAuth token expiry and quota reset timers do not determine priority.
+1. **100% weekly (7D) quota remaining first**, regardless of remaining subscription days, so using the account can start its weekly reset countdown. If several qualify, the earliest verified subscription expiry wins.
+2. **Otherwise, earliest verified subscription expiry** among accounts with usable quota.
+
+Weekly quota must be explicitly available and exactly 100% to receive first priority; a not-applicable weekly window receives no boost. Fresh observations below 100% return the account to normal expiry ordering. Equal expiry within the same priority tier keeps the eligible current account, then uses stable identity order. Unknown, stale, exhausted, expired, or conflicting evidence cannot qualify an automatic replacement, including an account reporting 100% weekly quota.
+
+Expiry means the subscription countdown shown in CodexPlusBar, such as **Expires in 16d 6h**. A healthy account with 30 days left and 100% weekly quota is preferred over one with 17 days left and partially used weekly quota. When neither has 100% weekly quota, the 17-day account wins. The panel shows days/hours remaining; hover for the exact expiry date. OAuth token expiry and quota reset timers do not determine priority.
 
 ## Build and verify
 

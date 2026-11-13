@@ -53,6 +53,10 @@ export function selectAccount(input: SelectionInput): SelectionDecision {
     else eligible.push(row);
   }
   eligible.sort((a, b) => {
+    const aWeekly = a.usage!.sevenDay, bWeekly = b.usage!.sevenDay;
+    const aFullWeekly = aWeekly.state === 'available' && aWeekly.remainingPercent === 100;
+    const bFullWeekly = bWeekly.state === 'available' && bWeekly.remainingPercent === 100;
+    if (aFullWeekly !== bFullWeekly) return aFullWeekly ? -1 : 1;
     const expiry = a.entitlement!.expiresAtMs! - b.entitlement!.expiresAtMs!;
     if (expiry) return expiry;
     if (a.credentialID === input.activeCredentialID) return -1;
