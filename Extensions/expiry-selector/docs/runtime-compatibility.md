@@ -1,5 +1,9 @@
 # Expiry selector compatibility gate
 
+2026-11-15: Extension 0.2.1 adds OpenChamber **2.7.1 / OpenCode 2.2.7**;
+see [the compatibility update](compatibility-2026-11-15.md) for runtime evidence,
+test isolation and reproduction. The earlier acceptance record below is historical.
+
 Updated: 2026-11-09. **Built extension passes isolated acceptance. Live rollout remains pending authorization.**
 
 ## Built-package acceptance (2026-11-09)

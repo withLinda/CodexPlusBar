@@ -1,6 +1,9 @@
 {
   "schemaVersion": 1,
   "target": { "openchamber": "2.7.0", "opencode": "2.2.6" },
+  "additionalVerifiedTargets": [
+    { "openchamber": "2.7.1", "opencode": "2.2.7", "evidence": "compatibility-2026-11-15.md" }
+  ],
   "proofs": [
     { "id": "extensionLifecycle", "status": "passed", "reason": "Installed host modules install/grant/disable/enable/uninstall the packaged fixture in a private store; managed config delivers to both native locations and unload releases the listener. Desktop UI rollout remains Task 9." },
     { "id": "singleOwner", "status": "passed", "reason": "Shared FIFO serializes cross-location native activation and maintenance; a second real OpenCode process cannot bind or select; last unload awaits outstanding result then releases ownership." },

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { selectAccount, type SelectionInput } from '../policy/eligibility.js';
 import { classifyLimitFailure, type LimitFailureInput } from '../policy/limit-failure.js';
 import { initialState, type SelectorState } from './state-store.js';
+import { supportedVersions, supportsRuntime } from '../shared/compatibility.js';
 import type { Mode, NativeConnection, SelectionDecision, SnapshotReadResult, Trigger } from '../shared/contracts.js';
 
 export interface NativeAccess {
@@ -42,7 +43,7 @@ export class SelectorCoordinator {
   private holds = new Map<string, string>();
   private operations = new Map<string, { signature: string; result: Promise<unknown>; settled: boolean }>();
   private chains = new Map<string, { attempt: number; failed: Set<string>; locationKey: string; sessionID: string; startedAtMs: number }>();
-  private view: SelectorStatus = { mode: 'paused', blockedReason: 'paused', supportedVersions: { opencode: '2.2.6', openchamber: '2.7.0' },
+  private view: SelectorStatus = { mode: 'paused', blockedReason: 'paused', supportedVersions,
     activeCredentialID: null, activeLabel: null, nextCredentialID: null, snapshotAgeMs: null, exclusions: [], holdsCount: 0,
     lastSwitch: null, recentHistory: [], checking: false, accounts: [], snapshotGeneratedAtMs: null, nativeObservedAtMs: null };
   constructor(private readonly dependencies: CoordinatorDependencies) {}
@@ -108,7 +109,7 @@ export class SelectorCoordinator {
     if (!this.dependencies.owns()) return 'ownership-unavailable';
     if (this.unsupported.size) return 'unsupported-route';
     if (!adapter || this.adapters.get(adapter.locationKey) !== adapter) return 'native-unavailable';
-    if (adapter.version() !== '2.2.6') return 'unsupported-runtime';
+    if (!supportsRuntime(adapter.version())) return 'unsupported-runtime';
     if (this.holds.size || this.state.maintenanceRecovery) return 'maintenance';
     if (auto && this.state.desiredMode !== 'auto') return 'paused';
     return null;
@@ -118,7 +119,7 @@ export class SelectorCoordinator {
     const first = this.baseGuard(adapter, auto);
     if (first) return first;
     for (const location of this.adapters.values()) {
-      if (location.version() !== '2.2.6') return 'unsupported-runtime';
+      if (!supportsRuntime(location.version())) return 'unsupported-runtime';
       const plugins = await location.pluginIDs();
       if (generation !== this.generation) return 'checking-cancelled';
       if (plugins.includes('openchamber-limit-failover')) return 'competing-switcher';

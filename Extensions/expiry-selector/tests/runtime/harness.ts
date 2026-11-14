@@ -4,10 +4,12 @@ import { createServer } from 'node:net';
 import { join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { createHash } from 'node:crypto';
+import { expect } from 'vitest';
 import { accounts, credential } from './fixtures.js';
 import { tokenIdentity } from '../../src/shared/identity.js';
 
-const binary = '/Applications/OpenChamber.app/Contents/Resources/opencode-cli/opencode';
+const app = process.env.EXPIRY_TEST_OPENCHAMBER_APP ?? '/Applications/OpenChamber.app';
+const binary = join(app, 'Contents/Resources/opencode-cli/opencode');
 const tempParent = '/private/var/folders/43/wvysbd0n0fs9n2724h44s4br0000gn/T/opencode';
 
 async function unusedPort() {
@@ -23,7 +25,7 @@ async function unusedPort() {
 
 export async function startHarness(fixtureOrigin: string, sharedCoordinatorPort?: number, hostDelivery = false, production = false, packaged = false) {
   const version = execFileSync(binary, ['--version'], { encoding: 'utf8' }).trim();
-  if (version !== 'opencode v2.2.6') throw new Error(`Unsupported runtime: ${version}`);
+  if (!['opencode v2.2.6', 'opencode v2.2.7'].includes(version)) throw new Error(`Unsupported runtime: ${version}`);
   const checksum = createHash('sha256').update(await readFile(binary)).digest('hex');
   const root = await mkdtemp(join(tempParent, 'expiry-runtime-'));
   const locations = [join(root, 'one'), join(root, 'two')];
@@ -56,7 +58,17 @@ export async function startHarness(fixtureOrigin: string, sharedCoordinatorPort?
       }) }), { mode: 0o600 });
   }
   await writeFile(join(plugin, 'package.json'), JSON.stringify({ name: 'expiry-selector-probe', version: '0.1.0', type: 'module', exports: './index.js' }));
-  const coordinatorPort = packaged ? 53971 : sharedCoordinatorPort ?? await unusedPort();
+  const coordinatorPort = sharedCoordinatorPort ?? await unusedPort();
+  if (packaged) {
+    // Remap only the fixed-port constant in the private copies. The shipping
+    // dist stays byte-for-byte intact and the live owner's port is never used.
+    for (const file of ['plugin/index.js', 'service/main.js']) {
+      const path = join(root, 'extension', file), source = await readFile(path, 'utf8');
+      const declaration = 'var controlPort = 53971;';
+      if (source.split(declaration).length !== 2) throw new Error(`Expected one packaged control port in ${file}`);
+      await writeFile(path, source.replace(declaration, `var controlPort = ${coordinatorPort};`));
+    }
+  }
   await writeFile(join(plugin, 'index.js'), `import probe from './probe.js'; export default { ...probe, setup(ctx) { return probe.setup({ ...ctx, options: ${JSON.stringify({ fixtureOrigin, coordinatorPort })} }); } };\n`);
   if (!packaged) await writeFile(join(root, 'extension', 'package.json'), JSON.stringify({ name: 'expiry-selector-probe', version: '0.1.0',
     openchamber: { apiVersion: 1, engines: { openchamber: '>=2.7.0' }, contributes: {
@@ -158,6 +170,15 @@ export async function startHarness(fixtureOrigin: string, sharedCoordinatorPort?
       await writeFile(join(root, 'opencode.json'), JSON.stringify({ ...configuration,
         plugins: [...(enabled ? configuration.plugins : []), ...(competitor ? [{ package: competitorPath }] : [])] }), { mode: 0o600 });
       for (const location of locations) await api('/api/location/reload', {}, location);
+      // Reload invalidates a location; wait for its requested plugin generation
+      // before sending RPCs or asserting that the owner has drained.
+      for (const location of locations) await expect.poll(async () => {
+        const { data } = await api('/api/plugin', undefined, location);
+        return {
+          probe: data.some((p: any) => p.id === 'codexplusbar-expiry-selector-probe' && p.state.status === 'active'),
+          competitor: data.some((p: any) => p.id === 'openchamber-limit-failover' && p.state.status === 'active'),
+        };
+      }, { timeout: 10_000 }).toEqual({ probe: enabled, competitor });
     };
     const ownerStatus = async (release = false) => {
       const response = await fetch(`http://127.0.0.1:${coordinatorPort}${release ? '/release' : ''}`, {
@@ -168,7 +189,14 @@ export async function startHarness(fixtureOrigin: string, sharedCoordinatorPort?
       await stop(); child = launch();
       for (let attempt = 0; attempt < 100; attempt++) {
         try { if ((await api('/api/info')).pid === child.pid) {
-          for (const location of locations) { await api('/api/plugin', undefined, location); await api('/api/integration', undefined, location); }
+          for (const location of locations) {
+            await expect.poll(async () => {
+              const { data } = await api('/api/plugin', undefined, location);
+              return ['codexplusbar-expiry-selector-probe', ...(packaged ? ['codexplusbar-expiry-selector'] : [])]
+                .every(id => data.some((p: any) => p.id === id && p.state.status === 'active'));
+            }, { timeout: 10_000 }).toBe(true);
+            await api('/api/integration', undefined, location);
+          }
           return;
         } } catch { /* Await isolated process readiness. */ }
         await delay(100);

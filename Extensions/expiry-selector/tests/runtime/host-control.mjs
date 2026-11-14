@@ -5,6 +5,7 @@ import { pathToFileURL } from 'node:url';
 const [root, action] = process.argv.slice(2);
 if (!root?.includes('/T/opencode/expiry-runtime-') || process.env.HOME !== path.join(root, 'home')) throw new Error('Isolated host required');
 const source = path.resolve('.runtime/host/node_modules/@openchamber/web/server/lib');
+const { version: openchamberVersion } = JSON.parse(await fs.readFile(path.resolve('.runtime/host/package.json'), 'utf8'));
 const load = name => import(pathToFileURL(path.join(source, name)).href);
 const { installGuestFromPath, uninstallGuest } = await load('guests/install.js');
 const { setGuestEnabled } = await load('guests/service.js');
@@ -17,7 +18,7 @@ const persistPath = path.join(root, 'host-instance', 'extensions.json');
 const metadata = JSON.parse(await fs.readFile(path.join(root, 'extension/package.json'), 'utf8'));
 const id = metadata.openchamber.contributes.panel.id;
 if (action === 'install') {
-  const installed = await installGuestFromPath(path.join(root, 'extension'), persistPath, { openchamberVersion: '2.7.0' });
+  const installed = await installGuestFromPath(path.join(root, 'extension'), persistPath, { openchamberVersion });
   if (!installed.ok) throw new Error(`Fixture install rejected: ${installed.code}`);
   await setCapabilityGrants(id, persistPath, metadata.openchamber.contributes.service ? ['opencodePlugin', 'service'] : ['opencodePlugin'], guestGrantScope(metadata.openchamber.contributes));
 } else if (action === 'disable' || action === 'enable') {
@@ -30,6 +31,6 @@ const context = createGuestAgentContext({ listGuests: () => listInstalledGuests(
 const refresh = path.join(root, 'refresh-helper');
 const hasRefresh = await fs.stat(refresh).then(s => s.isDirectory(), () => false);
 const managed = createManagedConfigRuntime({ fsPromises: fs, path, instanceDir: path.join(root, 'host-instance'),
-  env: {}, readSettings: async () => ({}), listExtensionPluginDirectories: async () => [...(hasRefresh ? [refresh] : []), ...await context.pluginDirectories()], openchamberVersion: '2.7.0' });
+  env: {}, readSettings: async () => ({}), listExtensionPluginDirectories: async () => [...(hasRefresh ? [refresh] : []), ...await context.pluginDirectories()], openchamberVersion });
 await managed.buildManagedChildEnv();
 console.log(JSON.stringify({ action, plugins: (await context.pluginDirectories()).length }));

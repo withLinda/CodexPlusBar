@@ -6,12 +6,12 @@ import type { SelectorExportV1 } from '../src/shared/contracts.js';
 const fixture = JSON.parse(await readFile(new URL('./fixtures/selector-v1.json', import.meta.url), 'utf8')) as SelectorExportV1;
 const now = 1_800_000_000_000;
 const gate = () => Promise.withResolvers<void>();
-async function harness() {
+async function harness(version = '2.2.6') {
   let snapshot = structuredClone(fixture), active = 'credential-b', owns = true, competitor = false, failSave = false, failActivate = false, missing = false;
   let resolveGate: ReturnType<typeof gate> | null = null, activateGate: ReturnType<typeof gate> | null = null;
   const resolveStarted = gate(), activateStarted = gate(), activations: string[] = [], saved: any[] = [];
   const adapter: NativeAccess = {
-    locationKey: '/one', version: () => '2.2.6',
+    locationKey: '/one', version: () => version,
     async pluginIDs() { return competitor ? ['openchamber-limit-failover'] : []; },
     async connections() { return snapshot.accounts.map(row => ({ id: row.credentialID, label: row.label, method: 'oauth' })); },
     async activeID() { return active; },
@@ -35,6 +35,30 @@ async function harness() {
     setActive(value: string) { active = value; }, update(value: SelectorExportV1) { snapshot = value; },
   };
 }
+
+test.each(['2.2.6', '2.2.7'])('verified runtime %s permits preview and selection across locations', async version => {
+  const h = await harness(version);
+  h.coordinator.attach({ ...h.adapter, locationKey: '/two' });
+  expect(await h.coordinator.recheck('preview')).toMatchObject({ mode: 'paused', nextCredentialID: 'credential-a' });
+  expect(h.activations).toEqual([]);
+  await h.coordinator.setMode('auto', 'enable');
+  expect(await h.coordinator.requestSelection('prompt', '/two')).toMatchObject({ action: 'activate', credentialID: 'credential-a' });
+  expect(h.activations).toEqual(['credential-a']);
+});
+
+test.each(['2.2.5', '2.2.8', '2.3.0', '2.2.7-dev', ''])('unverified runtime %s blocks selection and retry in any attached location', async version => {
+  for (const secondary of [false, true]) {
+    const h = await harness();
+    await h.coordinator.setMode('auto', 'enable');
+    if (secondary) h.coordinator.attach({ ...h.adapter, locationKey: '/two', version: () => version });
+    else h.adapter.version = () => version;
+    await expect(h.coordinator.setMode('auto', 'resume')).rejects.toThrow('unsupported-runtime');
+    expect(await h.coordinator.requestSelection('prompt', '/one')).toMatchObject({ action: 'blocked', code: 'unsupported-runtime' });
+    expect(await h.coordinator.handleRetry({ locationKey: '/one', sessionID: 's', modelID: 'm', attempt: 2,
+      identityKey: fixture.accounts[1]!.identityKey, errorType: 'provider.quota' })).toBeNull();
+    expect(h.activations).toEqual([]);
+  }
+});
 
 test('50 simultaneous triggers coalesce into one verified native activation', async () => {
   const h = await harness(); await h.coordinator.setMode('auto', 'enable');

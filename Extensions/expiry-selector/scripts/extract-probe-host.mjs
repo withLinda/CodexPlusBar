@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 
 // Read-only extraction of the installed host for isolated lifecycle tests.
 // Never load these modules in the user's application process or write its store.
-const archivePath = '/Applications/OpenChamber.app/Contents/Resources/app.asar';
+const archivePath = join(process.env.EXPIRY_TEST_OPENCHAMBER_APP ?? '/Applications/OpenChamber.app', 'Contents/Resources/app.asar');
 const archive = await readFile(archivePath);
 const checksum = createHash('sha256').update(archive).digest('hex');
 const root = resolve('.runtime/host');

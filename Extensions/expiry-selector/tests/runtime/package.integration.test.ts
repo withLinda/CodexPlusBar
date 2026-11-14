@@ -18,7 +18,8 @@ async function control(route = 'status', body?: object) {
   const d = JSON.parse(await readFile(descriptorPath(), 'utf8'));
   // Never contact a preexisting live owner on the fixed port.
   expect(d.pid).toBe((await runtime.api('/api/info')).pid);
-  const response = await fetch(`http://127.0.0.1:53971/v1/${route}`, { method: body ? 'POST' : 'GET',
+  expect(d.port).toBe(runtime.coordinatorPort);
+  const response = await fetch(`http://127.0.0.1:${runtime.coordinatorPort}/v1/${route}`, { method: body ? 'POST' : 'GET',
     headers: { authorization: `Bearer ${d.bearer}`, 'x-selector-epoch': d.epoch, 'content-type': 'application/json' },
     ...(body ? { body: JSON.stringify({ operationID: crypto.randomUUID(), ...body }) } : {}), signal: AbortSignal.timeout(30_000) });
   const value = await response.json(); if (!response.ok) throw new Error(`Control ${response.status}: ${JSON.stringify(value)}`); return value;
@@ -35,10 +36,14 @@ async function prompt(title: string | undefined = 'Built package fixture', locat
   return s.id as string;
 }
 async function wait(id: string) { await runtime.api(`/api/experimental/session/${id}/wait`, {}); }
-async function reloadLocations() {
+async function reloadLocations(installed = true) {
   for (const location of runtime.locations) await runtime.api('/api/location/reload', {}, location);
   // Reload invalidates locations; plugin inventory waits for lazy location startup.
-  for (const location of runtime.locations) { await runtime.api('/api/plugin', undefined, location); await runtime.api('/api/integration', undefined, location); }
+  for (const location of runtime.locations) {
+    await expect.poll(async () => (await runtime.api('/api/plugin', undefined, location)).data.some((p: any) =>
+      p.id === 'codexplusbar-expiry-selector' && p.state.status === 'active'), { timeout: 10_000 }).toBe(installed);
+    await runtime.api('/api/integration', undefined, location);
+  }
 }
 
 test('built extension installs in two locations and prefers 17-day subscription over 30-day subscription', async () => {
@@ -79,7 +84,7 @@ test('built quota retry keeps tools and model, persists cooldown across OS proce
 
 test('stale publisher preserves native requests and recreated credential ID needs verified rebind', async () => {
   await snapshot(s => { s.generatedAtMs = Date.now() - 100_000; });
-  expect((await control('recheck', {})).blockedReason).toBe('publisher-stale');
+  await expect.poll(async () => (await control('recheck', {})).blockedReason).toBe('publisher-stale');
   const before = provider.requests.length; await wait(await prompt());
   expect(provider.requests.slice(before).map(row => row.accountID)).toEqual([accounts.B.accountID]);
   await control('mode', { mode: 'paused' });
@@ -92,7 +97,7 @@ test('stale publisher preserves native requests and recreated credential ID need
   await snapshot(s => { s.accounts[0]!.credentialID = 'cred_recreated_a'; });
   await expect.poll(async () => (await control('recheck', {})).exclusions).toContainEqual({ credentialID: 'cred_recreated_a', code: 'cooldown' });
   // Deterministically advance the persisted reset while unloaded; retain failure evidence.
-  runtime.hostAction('disable'); await reloadLocations();
+  runtime.hostAction('disable'); await reloadLocations(false);
   const path = join(runtime.root, 'home/.codexplusbar-selector/state.json'), state = JSON.parse(await readFile(path, 'utf8'));
   for (const row of Object.values(state.cooldowns) as any[]) row.resetAtMs = Date.now() - 1;
   await writeFile(path, JSON.stringify(state), { mode: 0o600 });
@@ -207,7 +212,7 @@ test('built plugin delegates delayed refresh once and Pause drains it without st
     value: { ...credential('A'), refresh: 'fixture-refresh-old', expires: 1 } });
   await snapshot(s => { s.accounts[0]!.credentialID = 'cred_refresh_a'; });
   // Recover the already-tested cooldown with fresh positive evidence after its reset.
-  runtime.hostAction('disable'); await reloadLocations();
+  runtime.hostAction('disable'); await reloadLocations(false);
   const path = join(runtime.root, 'home/.codexplusbar-selector/state.json'), state = JSON.parse(await readFile(path, 'utf8'));
   for (const row of Object.values(state.cooldowns) as any[]) row.resetAtMs = Date.now() - 1;
   await writeFile(path, JSON.stringify(state), { mode: 0o600 });
@@ -243,7 +248,7 @@ test('host disable during native refresh drains the built owner and prevents sta
   await expect.poll(() => provider.refresh.calls).toBe(calls + 1);
   runtime.hostAction('disable');
   let unloaded = false;
-  const unload = reloadLocations().then(() => { unloaded = true; });
+  const unload = reloadLocations(false).then(() => { unloaded = true; });
   try { expect((await control()).checking).toBe(true); expect(unloaded).toBe(false); }
   finally { provider.refresh.gate.resolve(); }
   await selection; await unload;
@@ -254,7 +259,7 @@ test('host disable during native refresh drains the built owner and prevents sta
 
 test('a second built-package OS process cannot acquire the fixed port or switch native selection', async () => {
   const before = await readFile(descriptorPath(), 'utf8');
-  const other = await startHarness(provider.origin, undefined, true, false, true);
+  const other = await startHarness(provider.origin, runtime.coordinatorPort, true, false, true);
   try {
     await expect(readFile(join(other.root, 'home/.codexplusbar-selector/runtime.json'))).rejects.toThrow();
     await other.api(`/api/credential/${accounts.B.id}/activate`, {});
@@ -281,7 +286,7 @@ test('built service health requires bearer, process crash does not stop plugin, 
     expect(text).not.toContain((JSON.parse(await readFile(descriptorPath(), 'utf8'))).bearer);
   } finally { service.kill('SIGKILL'); await exited; }
   const epoch = (await control()).epoch; await control('recheck', {}); expect((await control()).epoch).toBe(epoch);
-  await control('mode', { mode: 'paused' }); runtime.hostAction('uninstall'); await reloadLocations();
+  await control('mode', { mode: 'paused' }); runtime.hostAction('uninstall'); await reloadLocations(false);
   await expect(readFile(descriptorPath())).rejects.toThrow();
   for (const location of runtime.locations) expect((await runtime.api('/api/plugin', undefined, location)).data.some((p: any) => p.id === 'codexplusbar-expiry-selector')).toBe(false);
   await runtime.api(`/api/credential/${accounts.B.id}/activate`, {}); await wait(await prompt());

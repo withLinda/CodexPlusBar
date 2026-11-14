@@ -58,7 +58,7 @@ Finish active work before desktop switching: it closes and reopens the app. Brow
 2. Open the downloaded DMG and drag **CodexPlusBar.app** onto the **Applications** shortcut.
 3. Eject the disk image, then open **CodexPlusBar** from Applications. Confirm macOS's first-open prompt if shown. The app appears in the **menu bar**, not the Dock.
 
-The **1.7.6 release includes Account Priority 0.2.0**, which prefers usable accounts with **100% weekly (7D) quota remaining**, then falls back to earliest subscription expiry. Install the updated extension ZIP separately to get this rule. The DMG includes the earlier menu-bar startup, account-refresh and iCloud fixes. Sync stays off until you enable it on each Mac. The app and DMG are Developer ID-signed, notarized by Apple, and stapled for offline ticket verification. [Version 1.7.6 release notes and SHA256SUMS](https://github.com/withLinda/CodexPlusBar/releases/tag/v1.7.6) cover both the DMG and the freshly built OpenChamber extension ZIP.
+The **1.7.7 release includes Account Priority 0.2.1**, which restores automatic selection after updating to **OpenChamber 2.7.1 / OpenCode 2.2.7** and also supports **OpenChamber 2.7.0 / OpenCode 2.2.6**. Install the updated extension ZIP separately to get the compatibility fix. Full weekly (7D) quota still takes priority, followed by earliest subscription expiry. The DMG includes the earlier menu-bar startup, account-refresh and iCloud fixes. Sync stays off until you enable it on each Mac. The app and DMG are Developer ID-signed, notarized by Apple, and stapled for offline ticket verification. [Version 1.7.7 release notes and SHA256SUMS](https://github.com/withLinda/CodexPlusBar/releases/tag/v1.7.7) cover both the DMG and the freshly built OpenChamber extension ZIP.
 
 ### Add your first account
 
@@ -73,11 +73,11 @@ Ready to change accounts in your apps? [Save their sign-ins and start switching]
 
 **Updating?** Quit CodexPlusBar, open the latest DMG, drag the new app into Applications, and choose **Replace**. Eject the DMG, reopen the app, and refresh. Your saved Codex profiles and sign-ins stay in place; updating does not enable iCloud Sync. Existing backups can still be restored. If upgrading from before 1.6.2, earlier Claude records remain stored but inactive and hidden.
 
-If the menu disappeared on an earlier 1.7.x release, open CodexPlusBar from Applications to reach its window and quit it with **⌘Q**, then install 1.7.6 using the steps above. Keep the app running while fresh quota arrives in Account Priority. Its optional extension is a separate [ZIP download](https://github.com/withLinda/CodexPlusBar/releases/latest/download/expiry-selector.zip), not part of the DMG.
+If the menu disappeared on an earlier 1.7.x release, open CodexPlusBar from Applications to reach its window and quit it with **⌘Q**, then install 1.7.7 using the steps above. Keep the app running while fresh quota arrives in Account Priority. Its optional extension is a separate [ZIP download](https://github.com/withLinda/CodexPlusBar/releases/latest/download/expiry-selector.zip), not part of the DMG.
 
 ## Switch automatically in OpenChamber
 
-The optional **Account Priority 0.2.0** extension automatically selects eligible OpenAI accounts in this order:
+The optional **Account Priority 0.2.1** extension automatically selects eligible OpenAI accounts in this order:
 
 1. **100% weekly (7D) quota remaining first**, regardless of remaining subscription days, so using an untouched weekly allowance can start its reset countdown. Among multiple full-weekly accounts, the soonest expiry wins.
 2. **Otherwise, soonest subscription expiry with usable quota.** Once fresh usage shows an account below 100% weekly quota, it returns to normal expiry ordering.
@@ -88,15 +88,17 @@ For example, an account with **30 days left and 100% weekly quota** beats one wi
 
 *See which account is next—and why another account cannot be used.*
 
-1. [Install CodexPlusBar 1.7.6 from the DMG](#install-from-the-dmg), keep it running, and refresh your accounts.
+1. [Install CodexPlusBar 1.7.7 from the DMG](#install-from-the-dmg), keep it running, and refresh your accounts.
 2. [Download Account Priority](https://github.com/withLinda/CodexPlusBar/releases/latest/download/expiry-selector.zip), extract it, and install the **expiry-selector** folder in **OpenChamber → Settings → Extensions**. Approve its plugin and local-service capabilities.
 3. Open **Account Priority**, check the accounts and expiry countdowns, disable OpenChamber's competing native limit-switch/fallback settings, then choose **Enable Auto**.
 
-**Updating the extension?** Choose **Pause Auto** and wait for acknowledgement before replacing/reinstalling the extension with the newly extracted folder in Settings → Extensions. Check that the installed package is **0.2.0**, recheck the accounts, then explicitly resume Auto. Updating the Mac app alone does not update the extension.
+**Updating the extension?** Choose **Pause Auto** and wait for acknowledgement before replacing/reinstalling the extension with the newly extracted folder in Settings → Extensions. Check that the installed package is **0.2.1**, recheck the accounts, then explicitly resume Auto. Updating the Mac app alone does not update the extension.
+
+**Blocked after updating OpenChamber?** If Account Priority says “This OpenCode version has not passed compatibility checks” on OpenCode **2.2.7**, install this release's **0.2.1** extension using the steps above. Recheck alone cannot update an older extension's compatibility list. Other, unverified OpenCode versions continue to block Auto until tested.
 
 Keep CodexPlusBar running. Unknown, stale, or exhausted accounts cannot qualify; if none qualify, the current account stays selected. Selection is shared across OpenChamber sessions. Pause Auto before native **Use**. CodexPlusBar checks, switches, and repairs leave Auto paused until you resume it.
 
-Verified with **OpenChamber 2.7.0 / OpenCode 2.2.6**. [Compatibility and recovery guide](Extensions/expiry-selector/README.md#supported-boundary).
+Verified with **OpenChamber 2.7.0 / OpenCode 2.2.6** and **OpenChamber 2.7.1 / OpenCode 2.2.7**. [Compatibility and recovery guide](Extensions/expiry-selector/README.md#supported-boundary).
 
 Every release includes the current extension as **expiry-selector.zip**, alongside the Mac DMG and **SHA256SUMS**. The extension's version is recorded in its packaged `package.json` and can differ from the app version.
 
@@ -108,7 +110,7 @@ Password-encrypted backups include profile details, saved sign-ins, browser data
 
 ### iCloud Sync
 
-Included in the [1.7.6 DMG](https://github.com/withLinda/CodexPlusBar/releases/download/v1.7.6/CodexPlusBar.dmg). Install it on both Macs; no separate cloud build is needed. Local replica tests and signed Apple service probes passed; [live two-Mac acceptance, cross-device Keychain delivery, and automatic push delivery remain pending](docs/releases/2026-11-09-cloudkit-sync-validation.md#two-mac-acceptance--pending).
+Included in the [1.7.7 DMG](https://github.com/withLinda/CodexPlusBar/releases/download/v1.7.7/CodexPlusBar.dmg). Install it on both Macs; no separate cloud build is needed. Local replica tests and signed Apple service probes passed; [live two-Mac acceptance, cross-device Keychain delivery, and automatic push delivery remain pending](docs/releases/2026-11-09-cloudkit-sync-validation.md#two-mac-acceptance--pending).
 
 1. Sign in to the same iCloud account on both Macs and enable **Passwords & Keychain** in System Settings.
 2. On each Mac, open **Settings → iCloud Sync → Sync accounts with iCloud**. Profile details, passwords and 2FA secrets merge with the local accounts.
