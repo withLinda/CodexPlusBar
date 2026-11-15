@@ -4,7 +4,7 @@ import { expect, test, vi } from 'vitest';
 import { acquireOwnership, implementationVersion, type OwnershipOptions } from '../src/plugin/ownership.js';
 import { initialState } from '../src/plugin/state-store.js';
 import type { NativeAccess } from '../src/plugin/coordinator.js';
-const adapter = (locationKey: string): NativeAccess => ({ locationKey, version: () => '2.2.6', pluginIDs: async () => [],
+const adapter = (locationKey: string): NativeAccess => ({ locationKey, version: () => '2.2.6', compatibilityIssue: () => null, pluginIDs: async () => [],
   connections: async () => [], activeID: async () => null, validateIdentity: async () => { throw new Error('unused'); }, activate: async () => { throw new Error('must not activate'); } });
 
 async function options(): Promise<OwnershipOptions> {

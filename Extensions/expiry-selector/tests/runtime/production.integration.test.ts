@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from 'vitest';
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { startHarness } from './harness.js';
 import { fakeProvider } from './fake-provider.js';
@@ -28,16 +28,31 @@ test('production late quota attribution persists only A and retries already acti
   const arrived = Promise.withResolvers<void>(), release = Promise.withResolvers<void>();
   provider.behaviors.push(async () => { arrived.resolve(); await release.promise; return 'quota'; });
   const before = provider.requests.length;
-  const switches = (await runtime.rpc('status')).recentHistory.filter((row: any) => row.code === 'activated').length;
+  const initialSwitches = (await runtime.rpc('status')).recentHistory.filter((row: any) => row.code === 'activated').length;
   const id = await session(); await runtime.api(`/api/session/${id}/prompt`, { text: 'Fixture quota.' });
   await arrived.promise;
-  await runtime.api(`/api/credential/${accounts.B.id}/activate`, {}, runtime.locations[1]);
-  release.resolve(); await runtime.api(`/api/experimental/session/${id}/wait`, {});
+  let switches = initialSwitches;
+  const snapshot = JSON.parse(await readFile(runtime.snapshotPath, 'utf8'));
+  try {
+    // Complete a real automatic replacement before delivering the late failure.
+    // Manual B activation while Auto still prefers healthy A races config.updated
+    // and legitimately switches back to A before the quota response arrives.
+    snapshot.sequence++; snapshot.generatedAtMs = Date.now();
+    snapshot.accounts[0].usage.observedAtMs = Date.now();
+    snapshot.accounts[0].usage.fiveHour.remainingPercent = 0;
+    await writeFile(runtime.snapshotPath, JSON.stringify(snapshot), { mode: 0o600 });
+    await expect.poll(async () => {
+      const status = await runtime.rpc('status');
+      return { active: status.activeCredentialID, checking: status.checking };
+    }, { timeout: 10_000 }).toEqual({ active: accounts.B.id, checking: false });
+    switches = (await runtime.rpc('status')).recentHistory.filter((row: any) => row.code === 'activated').length;
+    expect(switches).toBe(initialSwitches + 1);
+  } finally { release.resolve(); await runtime.api(`/api/experimental/session/${id}/wait`, {}); }
   expect(provider.requests.slice(before).map(row => row.accountID)).toEqual([accounts.A.accountID, accounts.B.accountID]);
   const status = await runtime.rpc('status');
   expect(status.recentHistory.filter((row: any) => row.code === 'activated')).toHaveLength(switches);
   const state = JSON.parse(await readFile(join(runtime.root, 'home/.codexplusbar-selector/state.json'), 'utf8'));
-  expect(Object.keys(state.cooldowns)).toHaveLength(1);
+  expect(Object.keys(state.cooldowns)).toEqual([snapshot.accounts[0].identityKey]);
 });
 
 test('production reload detects competitor in either location and unload releases private descriptor', async () => {

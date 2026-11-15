@@ -1,15 +1,32 @@
 import type { Plugin } from '@opencode/plugin';
 import { tokenIdentity } from '../shared/identity.js';
 import type { NativeAccess } from './coordinator.js';
+import type { CompatibilityIssue } from '../shared/compatibility.js';
 
 const object = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 const text = (v: unknown): v is string => typeof v === 'string' && v.length > 0 && v.length <= 512;
 
 /** Thin location-scoped native API seam. Never caches credential material. */
 export class NativeAdapter implements NativeAccess {
+  private hookIssue: CompatibilityIssue | null = 'hooks-not-ready';
   constructor(private readonly ctx: Plugin.Context) {}
   get locationKey() { return this.ctx.location.directory; }
   version() { return this.ctx.app.version; }
+
+  compatibilityIssue(): CompatibilityIssue | null {
+    const ctx = this.ctx;
+    if ([ctx.plugin?.list, ctx.session?.get, ctx.integration?.get, ctx.integration?.connection?.active,
+      ctx.integration?.connection?.resolve, ctx.credential?.activate].some(value => typeof value !== 'function')) return 'native-api-unavailable';
+    if (typeof ctx.session?.hook !== 'function') return 'hooks-unavailable';
+    if (typeof ctx.event?.subscribe !== 'function') return 'lifecycle-unavailable';
+    return this.hookIssue;
+  }
+
+  hooksReady(): void {
+    // A subscription can end during setup; successful registrations cannot erase that failure.
+    if (this.hookIssue === 'hooks-not-ready') this.hookIssue = null;
+  }
+  blockHooks(issue: CompatibilityIssue): void { this.hookIssue = issue; }
 
   async pluginIDs(): Promise<string[]> {
     const result: unknown = await this.ctx.plugin.list();

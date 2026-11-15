@@ -21,7 +21,7 @@ npm --prefix Extensions/expiry-selector test
 npm --prefix Extensions/expiry-selector run verify:package
 ```
 
-On a clean checkout, run `make test AGENT_NAME=expiry-selector` first. Swift contract tests generate the ignored cross-language export fixture. Runtime tests require a supported OpenChamber macOS bundle and run with synthetic credentials in isolated homes. Set `EXPIRY_TEST_OPENCHAMBER_APP=/absolute/path/OpenChamber.app` to validate a downloaded bundle without installing it. Packaged tests remap only the control-port constant in private plugin/service copies, retaining the occupied-port collision test while leaving the installed selector running and `dist/` unchanged.
+On a clean checkout, run `make test AGENT_NAME=expiry-selector` first. Swift contract tests generate the ignored cross-language export fixture. Runtime tests require an OpenChamber macOS bundle and run with synthetic credentials in isolated homes. Set `EXPIRY_TEST_OPENCHAMBER_APP=/absolute/path/OpenChamber.app` to validate a downloaded or future bundle without installing it. Packaged tests remap only the control-port constant in private plugin/service copies, retaining the occupied-port collision test while leaving the installed selector running and `dist/` unchanged.
 
 The built `dist/` folder is the extension. Do not install the source directory or `.runtime/` probes. Packaging verification must pass before installation.
 
@@ -33,7 +33,7 @@ The historical acceptance archive was `output/expiry-selector-0.1.0.zip`; `docs/
 
 ## Supported boundary
 
-- Verified OpenChamber **2.7.0 / OpenCode 2.2.6** and **2.7.1 / OpenCode 2.2.7** on macOS. Other OpenCode versions block Auto until tested. The manifest's host minimum is not evidence that future versions are compatible.
+- **Capability-based compatibility, with no OpenCode version pin.** OpenChamber 2.7.0+ extension API 1 is required. Auto checks the native account APIs, successful registration of all five request/retry hooks, and the lifecycle event subscription in every attached location. Compatible future releases need no extension update merely because their version changed. Missing APIs, failed hooks, or a lost event subscription block Auto with a specific reason; breaking API behavior can still require an extension update. See [runtime evidence](docs/runtime-compatibility.md) for releases actually tested.
 - Native `chatgpt-browser` and `chatgpt-headless` OAuth connections with matching access-token and account metadata identities. No independent OAuth storage or refresh implementation.
 - Native selection is global across locations. Prompt admission and primary retry are guarded; this does not promise per-session account isolation or exact expiry ordering for every synthetic/tool continuation.
 - Retries use the account observed on the actual primary HTTP/WS request. Title and other background work never spend another account's quota retry budget. Unrecognized failures retain native retry handling.

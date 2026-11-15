@@ -8,7 +8,7 @@ import { startControlServer, controlPort, type RuntimeDescriptor } from './contr
 import { StateStore } from './state-store.js';
 import { SnapshotReader } from '../shared/snapshot-reader.js';
 
-export const implementationVersion = 'expiry-selector-v1.0';
+export const implementationVersion = 'expiry-selector-v1.1';
 const globalKey = Symbol.for('codexplusbar.expiry-selector.v1');
 type Shared = { version: string; ready: Promise<Owner>; closing: Promise<void> | undefined };
 type Owner = { coordinator: SelectorCoordinator; locations: Map<string, { refs: number; detach(): Promise<void>; resources: Promise<() => Promise<void>>; closing?: Promise<void> }>; close(): Promise<void> };

@@ -1,5 +1,11 @@
 # Expiry selector compatibility gate
 
+2026-11-15: Extension **0.3.0 removes the exact-version allowlist** and checks the
+required APIs, registered hooks and lifecycle subscription instead. The installed
+OpenChamber **2.7.2 / OpenCode 2.3.0** passes the 43-case isolated runtime gate.
+See [capability-based compatibility](capability-compatibility-2026-11-15.md).
+The version-pinned policy and acceptance records below are historical.
+
 2026-11-15: Extension 0.2.1 adds OpenChamber **2.7.1 / OpenCode 2.2.7**;
 see [the compatibility update](compatibility-2026-11-15.md) for runtime evidence,
 test isolation and reproduction. The earlier acceptance record below is historical.

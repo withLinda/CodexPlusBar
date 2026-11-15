@@ -19,7 +19,11 @@ const messages: Record<string, string> = {
   'publisher-stale': 'CodexPlusBar evidence is stale. Open CodexPlusBar and refresh its accounts.',
   'snapshot-missing': 'Open CodexPlusBar to publish account evidence.', 'snapshot-invalid': 'Account evidence could not be verified. Refresh CodexPlusBar.',
   'catalog-untrusted': 'The account catalog is not trusted yet. Check CodexPlusBar.', 'ownership-unavailable': 'Another process owns the selector port. Auto cannot run here.',
-  'unsupported-runtime': 'This OpenCode version has not passed compatibility checks. Auto is blocked.',
+  'unsupported-runtime': 'An older selector plugin is still enforcing a version restriction. Reload the updated extension.',
+  'native-api-unavailable': 'OpenCode is missing a required account API. Auto is blocked until compatibility is restored.',
+  'hooks-unavailable': 'OpenCode could not register the required request or retry hooks. Reload the extension; if this persists, it needs a compatibility update.',
+  'hooks-not-ready': 'The selector is still connecting its OpenCode hooks. Recheck in a moment.',
+  'lifecycle-unavailable': 'The OpenCode event connection is unavailable. Reload the extension to reconnect before resuming Auto.',
   'no-eligible-account': 'No account qualifies. Your native account stays selected.', 'unsupported-route': 'This provider route is unsupported. Auto is blocked.',
   'persistence-unavailable': 'Selector state could not be saved or verified. Auto is blocked.', 'activation-unconfirmed': 'Native activation could not be confirmed. Check the selected account in OpenChamber.',
   'native-unavailable': 'The native account could not be verified.', 'checking-cancelled': 'Selection was interrupted. Recheck for the latest state.',
@@ -89,7 +93,7 @@ function render(state: PanelState) {
   node('history').replaceChildren(...(s?.recentHistory ?? []).slice(-10).reverse().map(event => {
     const li = document.createElement('li'); li.textContent = `${age(event.atMs)} · ${reason(event.code)}${event.credentialID ? ` ${label(event.credentialID)}` : ''}`; return li;
   }));
-  set('versions', s ? `Verified versions: OpenChamber ${s.supportedVersions.openchamber} · OpenCode ${s.supportedVersions.opencode}` : '');
+  set('versions', s ? `Compatibility: OpenChamber ${s.supportedVersions.openchamber} · OpenCode ${s.supportedVersions.opencode}` : '');
 }
 
 let started = false;

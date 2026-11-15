@@ -2,12 +2,13 @@ import { randomUUID } from 'node:crypto';
 import { selectAccount, type SelectionInput } from '../policy/eligibility.js';
 import { classifyLimitFailure, type LimitFailureInput } from '../policy/limit-failure.js';
 import { initialState, type SelectorState } from './state-store.js';
-import { supportedVersions, supportsRuntime } from '../shared/compatibility.js';
+import { supportedVersions, type CompatibilityIssue } from '../shared/compatibility.js';
 import type { Mode, NativeConnection, SelectionDecision, SnapshotReadResult, Trigger } from '../shared/contracts.js';
 
 export interface NativeAccess {
   locationKey: string;
   version(): string;
+  compatibilityIssue(): CompatibilityIssue | null;
   pluginIDs(): Promise<string[]>;
   connections(): Promise<NativeConnection[]>;
   activeID(): Promise<string | null>;
@@ -109,7 +110,8 @@ export class SelectorCoordinator {
     if (!this.dependencies.owns()) return 'ownership-unavailable';
     if (this.unsupported.size) return 'unsupported-route';
     if (!adapter || this.adapters.get(adapter.locationKey) !== adapter) return 'native-unavailable';
-    if (!supportsRuntime(adapter.version())) return 'unsupported-runtime';
+    const compatibility = adapter.compatibilityIssue();
+    if (compatibility) return compatibility;
     if (this.holds.size || this.state.maintenanceRecovery) return 'maintenance';
     if (auto && this.state.desiredMode !== 'auto') return 'paused';
     return null;
@@ -119,7 +121,8 @@ export class SelectorCoordinator {
     const first = this.baseGuard(adapter, auto);
     if (first) return first;
     for (const location of this.adapters.values()) {
-      if (!supportsRuntime(location.version())) return 'unsupported-runtime';
+      const compatibility = location.compatibilityIssue();
+      if (compatibility) return compatibility;
       const plugins = await location.pluginIDs();
       if (generation !== this.generation) return 'checking-cancelled';
       if (plugins.includes('openchamber-limit-failover')) return 'competing-switcher';
@@ -158,6 +161,9 @@ export class SelectorCoordinator {
     };
     this.view.checking = true;
     try {
+      // Check before even read-only native calls, so a missing API has a useful diagnosis.
+      const compatibility = adapter?.compatibilityIssue();
+      if (compatibility) return this.blocked(compatibility);
       // Inspection is read-only even while a hold or competing switcher blocks selection.
       if (adapter && this.dependencies.owns()) {
         const inventory = await adapter.connections(), active = await adapter.activeID();

@@ -17,6 +17,7 @@ function nativeFixture() {
   const activations: string[] = [];
   const ctx = {
     app: { version: '2.2.6' }, location: { directory: '/fixture' },
+    event: { subscribe: async function* () {} },
     plugin: { list: async () => plugins },
     session: { get: async () => ({ model: provider ? { providerID: provider, id: 'fixture' } : undefined }),
       hook: async (name: string, callback: (event: any) => Promise<void>) => {
@@ -63,6 +64,8 @@ test('prompt hook preserves unrelated/unknown admission and retry hook uses actu
   const coordinator = new SelectorCoordinator({ now: () => now, owns: () => true, readSnapshot: async () => ({ ok: true, snapshot, exclusions: [] }), loadState: async () => initialState(), saveState: async () => {} });
   await coordinator.initialize(); const detach = coordinator.attach(adapter);
   const dispose = await registerSelectionHooks(h.ctx, adapter, coordinator, observer);
+  // This focused test installs selection hooks only; complete setup is covered by compatibility.test.ts.
+  adapter.hooksReady();
   try {
     await coordinator.setMode('auto', 'enable');
     const prompt = { sessionID: 'session', prompt: { text: 'unchanged' } };

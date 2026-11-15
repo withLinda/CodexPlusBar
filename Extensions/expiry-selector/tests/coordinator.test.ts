@@ -12,6 +12,7 @@ async function harness(version = '2.2.6') {
   const resolveStarted = gate(), activateStarted = gate(), activations: string[] = [], saved: any[] = [];
   const adapter: NativeAccess = {
     locationKey: '/one', version: () => version,
+    compatibilityIssue: () => null,
     async pluginIDs() { return competitor ? ['openchamber-limit-failover'] : []; },
     async connections() { return snapshot.accounts.map(row => ({ id: row.credentialID, label: row.label, method: 'oauth' })); },
     async activeID() { return active; },
@@ -36,7 +37,8 @@ async function harness(version = '2.2.6') {
   };
 }
 
-test.each(['2.2.6', '2.2.7'])('verified runtime %s permits preview and selection across locations', async version => {
+test.each(['2.2.6', '2.2.7', '2.3.0', '2.99.0', '3.0.0', '3.0.0-dev', ''])
+('capable runtime %s permits preview and selection across locations without a version pin', async version => {
   const h = await harness(version);
   h.coordinator.attach({ ...h.adapter, locationKey: '/two' });
   expect(await h.coordinator.recheck('preview')).toMatchObject({ mode: 'paused', nextCredentialID: 'credential-a' });
@@ -46,18 +48,29 @@ test.each(['2.2.6', '2.2.7'])('verified runtime %s permits preview and selection
   expect(h.activations).toEqual(['credential-a']);
 });
 
-test.each(['2.2.5', '2.2.8', '2.3.0', '2.2.7-dev', ''])('unverified runtime %s blocks selection and retry in any attached location', async version => {
+test.each(['native-api-unavailable', 'hooks-unavailable', 'hooks-not-ready', 'lifecycle-unavailable'] as const)
+('runtime issue %s blocks selection and retry in any attached location', async issue => {
   for (const secondary of [false, true]) {
     const h = await harness();
     await h.coordinator.setMode('auto', 'enable');
-    if (secondary) h.coordinator.attach({ ...h.adapter, locationKey: '/two', version: () => version });
-    else h.adapter.version = () => version;
-    await expect(h.coordinator.setMode('auto', 'resume')).rejects.toThrow('unsupported-runtime');
-    expect(await h.coordinator.requestSelection('prompt', '/one')).toMatchObject({ action: 'blocked', code: 'unsupported-runtime' });
+    if (secondary) h.coordinator.attach({ ...h.adapter, locationKey: '/two', compatibilityIssue: () => issue });
+    else h.adapter.compatibilityIssue = () => issue;
+    await expect(h.coordinator.setMode('auto', 'resume')).rejects.toThrow(issue);
+    expect(await h.coordinator.requestSelection('prompt', '/one')).toMatchObject({ action: 'blocked', code: issue });
     expect(await h.coordinator.handleRetry({ locationKey: '/one', sessionID: 's', modelID: 'm', attempt: 2,
       identityKey: fixture.accounts[1]!.identityKey, errorType: 'provider.quota' })).toBeNull();
     expect(h.activations).toEqual([]);
   }
+});
+
+test('losing a required API during identity resolution cancels activation', async () => {
+  const h = await harness(); await h.coordinator.setMode('auto', 'enable');
+  const resolve = gate(); h.setResolveGate(resolve);
+  const selection = h.coordinator.requestSelection('prompt'); await h.resolveStarted.promise;
+  h.adapter.compatibilityIssue = () => 'native-api-unavailable';
+  resolve.resolve();
+  expect(await selection).toMatchObject({ action: 'blocked', code: 'native-api-unavailable' });
+  expect(h.activations).toEqual([]);
 });
 
 test('50 simultaneous triggers coalesce into one verified native activation', async () => {

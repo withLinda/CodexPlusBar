@@ -25,7 +25,8 @@ async function unusedPort() {
 
 export async function startHarness(fixtureOrigin: string, sharedCoordinatorPort?: number, hostDelivery = false, production = false, packaged = false) {
   const version = execFileSync(binary, ['--version'], { encoding: 'utf8' }).trim();
-  if (!['opencode v2.2.6', 'opencode v2.2.7'].includes(version)) throw new Error(`Unsupported runtime: ${version}`);
+  // Exercise the selected binary's actual behavior, including future releases.
+  // Its version is recorded as evidence, never used as an admission allowlist.
   const checksum = createHash('sha256').update(await readFile(binary)).digest('hex');
   const root = await mkdtemp(join(tempParent, 'expiry-runtime-'));
   const locations = [join(root, 'one'), join(root, 'two')];

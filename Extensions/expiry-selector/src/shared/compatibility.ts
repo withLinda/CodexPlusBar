@@ -1,13 +1,14 @@
-// Exact runtime versions validated by the isolated native compatibility suite.
-// A patch release still needs transport, retry, refresh and lifecycle evidence.
-export const verifiedRuntimes = [
-  { openchamber: '2.7.0', opencode: '2.2.6' },
-  { openchamber: '2.7.1', opencode: '2.2.7' },
-] as const;
-
+// Keep the status wire shape stable; these describe the contract, not an allowlist.
 export const supportedVersions = {
-  openchamber: verifiedRuntimes.map(runtime => runtime.openchamber).join(', '),
-  opencode: verifiedRuntimes.map(runtime => runtime.opencode).join(', '),
+  openchamber: '2.7.0+ (extension API 1)',
+  opencode: 'required APIs and hooks; no version pin',
 };
 
-export const supportsRuntime = (version: string): boolean => verifiedRuntimes.some(runtime => runtime.opencode === version);
+export type CompatibilityIssue = 'native-api-unavailable' | 'hooks-unavailable' | 'hooks-not-ready' | 'lifecycle-unavailable';
+
+export function requireHookRegistration(value: unknown): { dispose(): Promise<void> } {
+  if (!value || typeof value !== 'object' || !('dispose' in value) || typeof value.dispose !== 'function') {
+    throw new Error('hooks-unavailable');
+  }
+  return value as { dispose(): Promise<void> };
+}

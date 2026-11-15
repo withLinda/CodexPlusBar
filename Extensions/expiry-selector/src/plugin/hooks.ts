@@ -2,6 +2,7 @@ import type { Plugin } from '@opencode/plugin';
 import type { NativeAdapter } from './native-adapter.js';
 import type { SelectorCoordinator } from './coordinator.js';
 import type { RequestObserver } from './request-observer.js';
+import { requireHookRegistration } from '../shared/compatibility.js';
 
 const object = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 const hintKeys = ['resets_at', 'reset_at', 'resetsAt', 'resetAt', 'retry_after', 'retryAfter', 'resets_in_seconds', 'reset_in_seconds'];
@@ -20,12 +21,12 @@ function resetHints(body: unknown): unknown {
 export async function registerSelectionHooks(ctx: Plugin.Context, adapter: NativeAdapter, coordinator: SelectorCoordinator, observer: RequestObserver) {
   const registrations: { dispose(): Promise<void> }[] = [];
   try {
-    registrations.push(await ctx.session.hook('prompt', async event => {
+    registrations.push(requireHookRegistration(await ctx.session.hook('prompt', async event => {
       try {
         if (await adapter.promptProvider(event.sessionID) === 'openai') await coordinator.requestSelection('prompt', adapter.locationKey);
       } catch { /* Preserve prompt admission on unknown native state. */ }
-    }));
-    registrations.push(await ctx.session.hook('retry', async event => {
+    })));
+    registrations.push(requireHookRegistration(await ctx.session.hook('retry', async event => {
       try {
         const attribution = observer.takeRetryAttribution({ locationKey: adapter.locationKey, sessionID: event.sessionID,
           providerID: event.model.providerID, modelID: event.model.id, agent: event.agent });
@@ -38,7 +39,7 @@ export async function registerSelectionHooks(ctx: Plugin.Context, adapter: Nativ
           ...(event.decision.retry ? { proposedDelayMs: event.decision.delay } : {}) });
         if (result) event.decision = result;
       } catch { /* A failed selector never replaces native retry handling. */ }
-    }, { providerID: 'openai' }));
+    }, { providerID: 'openai' })));
   } catch (error) {
     await Promise.allSettled(registrations.map(registration => registration.dispose()));
     throw error;
