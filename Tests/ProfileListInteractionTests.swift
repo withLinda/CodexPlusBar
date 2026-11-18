@@ -4,6 +4,19 @@ import Testing
 
 struct ProfileListInteractionTests {
     @Test
+    func menuSelectionsComposeAndClearTheVisibleListFilter() {
+        var filter = ProfileFilter()
+        for selection: ProfileFilterSegmentKind in [.tag(.active), .provider(.codex), .limit(.usable)] {
+            selection.apply(to: &filter)
+        }
+        #expect(filter == ProfileFilter([.active], limit: .usable, provider: .codex))
+        ProfileFilterSegmentKind.tag(.active).apply(to: &filter)
+        #expect(filter == ProfileFilter(limit: .usable, provider: .codex))
+        ProfileFilterSegmentKind.all.apply(to: &filter)
+        #expect(filter.isEmpty)
+    }
+
+    @Test
     func searchRenumbersResultsAndNavigationSkipsHiddenProfiles() {
         let first = interactionTestSnapshot(label: "keep-first@example.com", sortOrder: 0)
         let hidden = interactionTestSnapshot(label: "hidden@example.com", sortOrder: 1)
@@ -12,9 +25,10 @@ struct ProfileListInteractionTests {
         #expect(visible.numberedProfiles.map(\.ordinal) == [1, 2])
         // Search ranks the shorter prefix match ahead of saved order.
         #expect(visible.numberedProfiles.map(\.id) == [last.id, first.id])
-        #expect(ProfileListNavigation.targetID(currentID: last.id, items: visible.numberedProfiles, direction: .down) == first.id)
-        #expect(ProfileListNavigation.targetID(currentID: hidden.id, items: visible.numberedProfiles, direction: .up) == last.id)
-        #expect(ProfileListNavigation.targetID(currentID: first.id, items: [], direction: .down) == nil)
+        #expect(visible.navigationTarget(from: last.id, direction: .down) == first.id)
+        #expect(visible.navigationTarget(from: hidden.id, direction: .up) == last.id)
+        let noMatches = ProfileListPresentation(profiles: [first], filter: ProfileFilter(), query: "absent")
+        #expect(noMatches.navigationTarget(from: first.id, direction: .down) == nil)
     }
 
     @Test
@@ -55,49 +69,23 @@ struct ProfileListInteractionTests {
     }
 
     @Test
-    func arrowNavigationUsesVisibleItemsAndStopsAtTheEnds() throws {
+    func arrowNavigationUsesVisibleItemsAndStopsAtTheEnds() {
         let first = interactionTestSnapshot(label: "first@example.com", sortOrder: 0)
         let second = interactionTestSnapshot(label: "second@example.com", sortOrder: 1)
         let third = interactionTestSnapshot(label: "third@example.com", sortOrder: 2)
-        let items = [first, second, third].enumerated().map { offset, snapshot in
-            ProfileListItem(snapshot: snapshot, ordinal: offset + 1)
-        }
+        let presentation = ProfileListPresentation(
+            profiles: [first, second, third],
+            filter: ProfileFilter(),
+            query: "",
+            displayOrder: .saved
+        )
 
-        #expect(
-            ProfileListNavigation.targetID(
-                currentID: second.id,
-                items: items,
-                direction: .up
-            ) == first.id
-        )
-        #expect(
-            ProfileListNavigation.targetID(
-                currentID: second.id,
-                items: items,
-                direction: .down
-            ) == third.id
-        )
-        #expect(
-            ProfileListNavigation.targetID(
-                currentID: first.id,
-                items: items,
-                direction: .up
-            ) == first.id
-        )
-        #expect(
-            ProfileListNavigation.targetID(
-                currentID: third.id,
-                items: items,
-                direction: .down
-            ) == third.id
-        )
-        #expect(
-            ProfileListNavigation.targetID(
-                currentID: UUID(),
-                items: items,
-                direction: .down
-            ) == first.id
-        )
+        #expect(presentation.navigationTarget(from: second.id, direction: .up) == first.id)
+        #expect(presentation.navigationTarget(from: second.id, direction: .down) == third.id)
+        #expect(presentation.navigationTarget(from: first.id, direction: .up) == first.id)
+        #expect(presentation.navigationTarget(from: third.id, direction: .down) == third.id)
+        #expect(presentation.navigationTarget(from: UUID(), direction: .down) == first.id)
+        #expect(presentation.navigationTarget(from: nil, direction: .up) == first.id)
     }
 }
 

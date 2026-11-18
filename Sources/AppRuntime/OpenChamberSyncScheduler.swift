@@ -17,14 +17,14 @@ final class OpenChamberSyncScheduler {
     @ObservationIgnored private var operation: Task<Void, Never>?
     @ObservationIgnored private var debounce: Task<Void, Never>?
     @ObservationIgnored private var retry: Task<Void, Never>?
-    @ObservationIgnored private var observer: SyncPreferenceObserver?
+    @ObservationIgnored private var observer: NotificationSubscription?
     @ObservationIgnored var onBindingsChanged: (@MainActor () -> Void)?
 
     init(service: any OpenChamberSyncServing = OpenChamberSyncService(), defaults: UserDefaults = .standard,
          sleep: @escaping @Sendable (TimeInterval) async throws -> Void = { try await Task.sleep(for: .seconds($0)) }) {
         self.service = service; self.defaults = defaults; self.sleep = sleep
         enabled = OpenChamberSyncPreference.enabled(in: defaults)
-        observer = SyncPreferenceObserver { [weak self] in
+        observer = NotificationSubscription(UserDefaults.didChangeNotification) { [weak self] in
             Task { @MainActor [weak self] in self?.preferenceChanged() }
         }
     }
@@ -166,14 +166,4 @@ final class OpenChamberSyncScheduler {
         if let error = error as? SelectorControlError { return error.localizedDescription }
         return "OpenChamber sync could not finish. It will retry."
     }
-}
-
-/// Immutable Foundation observer token; only NotificationCenter manages its state.
-/// This wrapper permits deterministic removal from a nonisolated deinit.
-private final class SyncPreferenceObserver: @unchecked Sendable {
-    private let token: NSObjectProtocol
-    init(changed: @escaping @Sendable () -> Void) {
-        token = NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: nil, queue: nil) { _ in changed() }
-    }
-    deinit { NotificationCenter.default.removeObserver(token) }
 }

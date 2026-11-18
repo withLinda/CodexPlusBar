@@ -37,7 +37,6 @@ enum MenuBarProfilePreference {
         defaults: UserDefaults = .standard,
         validProfileIDs: S
     ) -> UUID? where S.Element == UUID {
-        let validIDs = Set(validProfileIDs)
         let rawValue = defaults.string(forKey: preferredProfileIDKey)
 
         guard let profileID = normalizedProfileID(from: rawValue) else {
@@ -48,7 +47,7 @@ enum MenuBarProfilePreference {
             return nil
         }
 
-        guard validIDs.contains(profileID) else {
+        guard validProfileIDs.contains(profileID) else {
             defaults.removeObject(forKey: preferredProfileIDKey)
             return nil
         }

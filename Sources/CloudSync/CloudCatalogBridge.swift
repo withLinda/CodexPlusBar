@@ -272,7 +272,7 @@ import Foundation
         .init(profiles: rows.map { .init(id: $0.id, createdAt: $0.createdAt, values: CloudProfileProjection.values(from: $0)) })
     }
 
-    private static func mergedProjection(_ current: CloudCatalogProjection, state: CloudJournalState) -> CloudCatalogProjection {
+    static func mergedProjection(_ current: CloudCatalogProjection, state: CloudJournalState) -> CloudCatalogProjection {
         var rows = Dictionary(uniqueKeysWithValues: current.profiles.map { ($0.id, $0) })
         for document in state.profiles.values {
             if document.tombstone != nil { rows.removeValue(forKey: document.id); continue }
@@ -288,8 +288,12 @@ import Foundation
             if let field = fields.tags { values.tags = field.value.filter { PlusProfileTag(rawValue: $0) != nil } }
             rows[document.id] = .init(id: document.id, createdAt: rows[document.id]?.createdAt ?? document.createdAt, values: values)
         }
-        var ids = CloudProfileMerge.orderedIDs(state.order, profiles: Array(state.profiles.values))
-        ids += current.profiles.map(\.id).filter { !ids.contains($0) }
-        return .init(profiles: ids.compactMap { rows[$0] })
+        let cloudIDs = CloudProfileMerge.orderedIDs(state.order, profiles: Array(state.profiles.values))
+        var orderedRows = cloudIDs.compactMap { rows.removeValue(forKey: $0) }
+        // Only local-only rows remain; keep their original catalog order.
+        if !rows.isEmpty {
+            orderedRows.append(contentsOf: current.profiles.lazy.compactMap { rows[$0.id] })
+        }
+        return .init(profiles: orderedRows)
     }
 }

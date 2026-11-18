@@ -476,8 +476,8 @@ struct ProfileManagerWindowView: View {
             detailsDraftBase = latest
             controller.setCloudDraftOwner(detailsDraft == latest ? nil : snapshot.id)
         }
-        .onChange(of: controller.profiles.map(\.id)) { _, _ in
-            if controller.profiles.isEmpty {
+        .onChange(of: controller.profiles.isEmpty) { _, isEmpty in
+            if isEmpty {
                 closeProfileSearch()
             }
         }
@@ -616,10 +616,7 @@ struct ProfileManagerWindowView: View {
                         ProfileListControlsBar(
                             filterPresentation: listPresentation.filterBar,
                             displayOrder: $profileDisplayOrder,
-                            clearFilter: clearSidebarFilter,
-                            toggleLimit: toggleSidebarLimitFilter,
-                            toggleTag: toggleSidebarTagFilter,
-                            toggleProvider: toggleSidebarProviderFilter
+                            selectFilter: selectSidebarFilter
                         )
                     }
                 }
@@ -1505,23 +1502,16 @@ struct ProfileManagerWindowView: View {
         case .resetZoom:
             textScaleStorage = MenuBarPanelTextScalePreference.defaultScale
         case .previousProfile, .nextProfile:
-            guard page == .profile, !sidebarListPresentation.displayedProfiles.isEmpty else { return false }
-            moveSelectedProfile(in: action == .previousProfile ? .up : .down)
+            guard page == .profile,
+                  let targetID = sidebarListPresentation.navigationTarget(
+                      from: controller.selectedProfileID,
+                      direction: action == .previousProfile ? .up : .down
+                  ) else { return false }
+            if targetID != controller.selectedProfileID {
+                openProfile(targetID)
+            }
         }
         return true
-    }
-
-    private func moveSelectedProfile(in direction: ProfileListNavigationDirection) {
-        let targetID = ProfileListNavigation.targetID(
-            currentID: controller.selectedProfileID,
-            items: sidebarListPresentation.numberedProfiles,
-            direction: direction
-        )
-        guard let targetID, targetID != controller.selectedProfileID else {
-            return
-        }
-
-        openProfile(targetID)
     }
 
     private func clearSidebarFilter() {
@@ -1544,32 +1534,23 @@ struct ProfileManagerWindowView: View {
         keepSelectedProfileVisible()
     }
 
-    private func toggleSidebarLimitFilter(_ limit: ProfileLimitFilter) {
-        sidebarFilter.toggle(limit)
-        keepSelectedProfileVisible()
-    }
-
-    private func toggleSidebarTagFilter(_ tag: PlusProfileTag) {
-        sidebarFilter.toggle(tag)
-        keepSelectedProfileVisible()
-    }
-
-    private func toggleSidebarProviderFilter(_ provider: ProfileProvider) {
-        sidebarFilter.toggle(provider)
-        keepSelectedProfileVisible()
+    private func selectSidebarFilter(_ selection: ProfileFilterSegmentKind) {
+        selection.apply(to: &sidebarFilter)
+        if selection != .all { keepSelectedProfileVisible() }
     }
 
     private func keepSelectedProfileVisible() {
-        guard filteredSidebarProfiles.isEmpty == false else {
+        let visibleProfiles = filteredSidebarProfiles
+        guard let first = visibleProfiles.first else {
             return
         }
 
         if let selectedProfileID = controller.selectedProfileID,
-           filteredSidebarProfiles.contains(where: { $0.id == selectedProfileID }) {
+           visibleProfiles.contains(where: { $0.id == selectedProfileID }) {
             return
         }
 
-        controller.selectProfile(id: filteredSidebarProfiles.first?.id)
+        controller.selectProfile(id: first.id)
     }
 
     private func toggleTag(_ tag: PlusProfileTag, for profileID: UUID) {

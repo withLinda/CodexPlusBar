@@ -86,6 +86,7 @@
 		8EBBC44056F2C7852B8BF3CB /* ChatGPTAuthContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49259342335BED6B1E4F0C9D /* ChatGPTAuthContext.swift */; };
 		8EE9AA7D4F275B5EC2F36BA1 /* CloudSyncJournal.swift in Sources */ = {isa = PBXBuildFile; fileRef = A04DFF9FF8F36E7C8721F726 /* CloudSyncJournal.swift */; };
 		914822A9E170A6544108DA64 /* CloudKitAccountSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05F77E8446611B3ADF5678BC /* CloudKitAccountSync.swift */; };
+		96A671D34D79998150E9F5BB /* NotificationSubscription.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5DD74BAA7A498C9E4662F9B /* NotificationSubscription.swift */; };
 		97F196F0B1A8065C5B1CF4FD /* CloudJournalState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BFB4EEAF2E037DEC8D516C7 /* CloudJournalState.swift */; };
 		985DCE74337A9763632F6FDB /* ProfileListInteraction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F1A794B3FC1ECD6CF5F3AC4 /* ProfileListInteraction.swift */; };
 		9926C4922CF7D033DCF17CEE /* EmailToolsWindowPresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7755A62F2846FD0B38D5D005 /* EmailToolsWindowPresenter.swift */; };
@@ -273,6 +274,7 @@
 		BDB2F727B33B769B1AD9836D /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		C0F88F72B4D638B549072FF2 /* AccountWindowPresenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountWindowPresenter.swift; sourceTree = "<group>"; };
 		C1618DDE37504A73E53F29D5 /* DotTrickController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DotTrickController.swift; sourceTree = "<group>"; };
+		C5DD74BAA7A498C9E4662F9B /* NotificationSubscription.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationSubscription.swift; sourceTree = "<group>"; };
 		CA581C79797401742505718D /* CloudSessionInboxSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudSessionInboxSection.swift; sourceTree = "<group>"; };
 		CAAD6E2326B542701573C814 /* CodexSignIn.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexSignIn.swift; sourceTree = "<group>"; };
 		CEEC302F552BC386137C7A03 /* MenuBarStatusItemController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarStatusItemController.swift; sourceTree = "<group>"; };
@@ -477,6 +479,7 @@
 				7D6E8D24A2C7E16B085B2581 /* MenuBarPanelTextScalePreference.swift */,
 				400D81A1F70064BA2F950787 /* MenuBarProfilePreference.swift */,
 				CEEC302F552BC386137C7A03 /* MenuBarStatusItemController.swift */,
+				C5DD74BAA7A498C9E4662F9B /* NotificationSubscription.swift */,
 				D9913EFDBB3E4A5DE5537F51 /* OpenChamberSyncPreference.swift */,
 				4C26E6A53E3766353307F15A /* OpenChamberSyncScheduler.swift */,
 				7FBDDA2EC7DC9B304A1496C4 /* ProfileDisplayOrderPreference.swift */,
@@ -756,6 +759,7 @@
 				75DFB4C19F6056DBAE57A1F3 /* MenuBarProfilePreference.swift in Sources */,
 				177E39EDA3111E142BC4F794 /* MenuBarRootView.swift in Sources */,
 				EF220468E18F70E23DBE1256 /* MenuBarStatusItemController.swift in Sources */,
+				96A671D34D79998150E9F5BB /* NotificationSubscription.swift in Sources */,
 				28E0C29A3990704FA9270764 /* OneTimePasswordGenerator.swift in Sources */,
 				725C797EC57E4E9996CEAC6C /* OpenChamberSignInCheck.swift in Sources */,
 				22BEC6AF178AF0F21F382E18 /* OpenChamberSignInCheckService.swift in Sources */,
@@ -857,13 +861,13 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 31;
+				CURRENT_PROJECT_VERSION = 32;
 				INFOPLIST_FILE = Sources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.7.8;
+				MARKETING_VERSION = 1.7.9;
 				PRODUCT_BUNDLE_IDENTIFIER = com.linda.CodexPlusBar;
 				SDKROOT = macosx;
 			};
@@ -951,13 +955,13 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 31;
+				CURRENT_PROJECT_VERSION = 32;
 				INFOPLIST_FILE = Sources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.7.8;
+				MARKETING_VERSION = 1.7.9;
 				PRODUCT_BUNDLE_IDENTIFIER = com.linda.CodexPlusBar;
 				SDKROOT = macosx;
 			};
@@ -1115,7 +1119,7 @@
 				CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO;
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 31;
+				CURRENT_PROJECT_VERSION = 32;
 				DEVELOPMENT_TEAM = 2Z8N5KTWQZ;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -1124,7 +1128,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.7.8;
+				MARKETING_VERSION = 1.7.9;
 				PRODUCT_BUNDLE_IDENTIFIER = com.linda.CodexPlusBar;
 				PROVISIONING_PROFILE_SPECIFIER = "CodexPlusBar macOS Development CloudKit";
 				SDKROOT = macosx;
@@ -1207,7 +1211,7 @@
 				CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO;
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 31;
+				CURRENT_PROJECT_VERSION = 32;
 				DEVELOPMENT_TEAM = 2Z8N5KTWQZ;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -1216,7 +1220,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.7.8;
+				MARKETING_VERSION = 1.7.9;
 				PRODUCT_BUNDLE_IDENTIFIER = com.linda.CodexPlusBar;
 				PROVISIONING_PROFILE_SPECIFIER = "CodexPlusBar Developer ID CloudKit";
 				SDKROOT = macosx;

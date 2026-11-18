@@ -1291,7 +1291,7 @@ struct PlusProfileControllerTests {
             ProfileFilter(limit: .fullFiveHour).apply(to: rows).map(\.id)
                 == [fullActive.id, fullPending.id]
         )
-        let limitCounts = ProfileLimitCounts(snapshots: rows)
+        let limitCounts = ProfileFilterCounts(snapshots: rows)
         #expect(limitCounts.usable == 7)
         #expect(limitCounts.aboveThirtyFive == 4)
         #expect(limitCounts.fullFiveHour == 2)
@@ -1335,22 +1335,10 @@ struct PlusProfileControllerTests {
         )
         controller.profiles = [urgent, preferred]
 
-        #expect(controller.preferredStatusProfile(preferredProfileID: preferred.id)?.id == preferred.id)
-        let content = controller.statusBarContent(
-            preferredProfileID: preferred.id,
-            referenceDate: Date(timeIntervalSince1970: 1_776_000_000)
-        )
-        #expect(content.profileLabel == "putrig**ah13@gma")
-        #expect(content.fiveHourText == "74%")
-        #expect(content.sevenDayText == "42%")
-        #expect(content.plainText == "putrig**ah13@gma 5H 74% 7D 42%")
-        #expect(content.accessibilityText == "putrig**ah13@gma, 5 hour 74%, 7 day 42%")
-        #expect(
-            controller.statusBarText(
-                preferredProfileID: preferred.id,
-                referenceDate: Date(timeIntervalSince1970: 1_776_000_000)
-            ) == "putrig**ah13@gma 5H 74% 7D 42%"
-        )
+        let appearance = controller.statusBarAppearance(preferredProfileID: preferred.id)
+        #expect(appearance.content == .usage(profileLabel: "putrig**ah13@gma", fiveHourText: "74%", sevenDayText: "42%"))
+        #expect(appearance.content.accessibilityText == "putrig**ah13@gma, 5 hour 74%, 7 day 42%")
+        #expect(appearance.symbolName == "exclamationmark.triangle.fill")
     }
 
     @Test(arguments: [
@@ -1370,12 +1358,8 @@ struct PlusProfileControllerTests {
         )
         controller.profiles = [profile]
 
-        let content = controller.statusBarContent(
-            preferredProfileID: profile.id,
-            referenceDate: Date(timeIntervalSince1970: 1_776_000_000)
-        )
-
-        #expect(content.profileLabel == expectedLabel)
+        let content = controller.statusBarAppearance(preferredProfileID: profile.id).content
+        #expect(content == .usage(profileLabel: expectedLabel, fiveHourText: "83%", sevenDayText: "72%"))
     }
 
     @Test
@@ -1391,7 +1375,7 @@ struct PlusProfileControllerTests {
         )
         controller.profiles = [profile]
 
-        #expect(controller.statusBarSymbolName == "figure.run")
+        #expect(controller.statusBarAppearance().symbolName == "figure.run")
     }
 
     @Test
@@ -1413,14 +1397,10 @@ struct PlusProfileControllerTests {
         )
         controller.profiles = [urgent, needsLogin]
 
-        #expect(controller.preferredStatusProfile(preferredProfileID: needsLogin.id)?.id == urgent.id)
-        #expect(controller.preferredStatusProfile(preferredProfileID: UUID())?.id == urgent.id)
-        #expect(
-            controller.statusBarText(
-                preferredProfileID: needsLogin.id,
-                referenceDate: Date(timeIntervalSince1970: 1_776_000_000)
-            ) == "UrgentP 5H 18% 7D 51%"
-        )
+        for id in [needsLogin.id, UUID()] {
+            let content = controller.statusBarAppearance(preferredProfileID: id).content
+            #expect(content == .usage(profileLabel: "UrgentP", fiveHourText: "18%", sevenDayText: "51%"))
+        }
     }
 
     @Test
@@ -1435,12 +1415,8 @@ struct PlusProfileControllerTests {
         )
         controller.profiles = [profile]
 
-        #expect(
-            controller.statusBarText(
-                preferredProfileID: profile.id,
-                referenceDate: Date(timeIntervalSince1970: 1_776_000_000)
-            ) == "LongLab 5H 83% 7D —"
-        )
+        let content = controller.statusBarAppearance(preferredProfileID: profile.id).content
+        #expect(content == .usage(profileLabel: "LongLab", fiveHourText: "83%", sevenDayText: "—"))
     }
 }
 

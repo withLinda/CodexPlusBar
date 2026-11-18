@@ -11,15 +11,13 @@ struct ProfileListPresentation: Equatable, Sendable {
         displayOrder: ProfileDisplayOrder = ProfileDisplayOrder.defaultOrder
     ) {
         let filteredProfiles = filter.apply(to: profiles)
-        let orderedProfiles = PlusProfileSnapshot.displayOrder(filteredProfiles, by: displayOrder)
+        let orderedProfiles = displayOrder.apply(to: filteredProfiles)
         displayedProfiles = ProfileSearch.filter(orderedProfiles, query: query)
         filterBar = ProfileFilterBarPresentation(
             filter: filter,
             shownCount: displayedProfiles.count,
             totalCount: profiles.count,
-            limitCounts: ProfileLimitCounts(snapshots: profiles),
-            tagCounts: ProfileTagCounts(snapshots: profiles),
-            providerCounts: ProfileProviderCounts(snapshots: profiles)
+            counts: ProfileFilterCounts(snapshots: profiles)
         )
     }
 }
@@ -27,40 +25,20 @@ struct ProfileListPresentation: Equatable, Sendable {
 struct ProfileListControlsBar: View {
     let filterPresentation: ProfileFilterBarPresentation
     @Binding var displayOrder: ProfileDisplayOrder
-    let textScale: Double
-    let clearFilter: () -> Void
-    let toggleLimit: (ProfileLimitFilter) -> Void
-    let toggleTag: (PlusProfileTag) -> Void
-    let toggleProvider: (ProfileProvider) -> Void
-
-    init(
-        filterPresentation: ProfileFilterBarPresentation,
-        displayOrder: Binding<ProfileDisplayOrder>,
-        textScale: Double = 1,
-        clearFilter: @escaping () -> Void,
-        toggleLimit: @escaping (ProfileLimitFilter) -> Void,
-        toggleTag: @escaping (PlusProfileTag) -> Void,
-        toggleProvider: @escaping (ProfileProvider) -> Void
-    ) {
-        self.filterPresentation = filterPresentation
-        _displayOrder = displayOrder
-        self.textScale = textScale
-        self.clearFilter = clearFilter
-        self.toggleLimit = toggleLimit
-        self.toggleTag = toggleTag
-        self.toggleProvider = toggleProvider
-    }
+    var textScale: Double = 1
+    let selectFilter: (ProfileFilterSegmentKind) -> Void
 
     var body: some View {
         HStack(alignment: .center, spacing: 8 * CGFloat(textScale)) {
-            ProfileFilterBar(
+            ProfileFilterMenu(
                 presentation: filterPresentation,
                 textScale: textScale,
-                clearFilter: clearFilter,
-                toggleLimit: toggleLimit,
-                toggleTag: toggleTag,
-                toggleProvider: toggleProvider
+                selectFilter: selectFilter
             )
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Profile filters")
+            .accessibilityValue(filterPresentation.accessibilitySummaryText)
             .layoutPriority(1)
 
             ProfileDisplayOrderMenu(
@@ -78,25 +56,7 @@ struct ProfileFilterBarPresentation: Equatable, Sendable {
     let filter: ProfileFilter
     let shownCount: Int
     let totalCount: Int
-    let limitCounts: ProfileLimitCounts
-    let tagCounts: ProfileTagCounts
-    let providerCounts: ProfileProviderCounts
-
-    init(
-        filter: ProfileFilter,
-        shownCount: Int,
-        totalCount: Int,
-        limitCounts: ProfileLimitCounts = ProfileLimitCounts(),
-        tagCounts: ProfileTagCounts = ProfileTagCounts(),
-        providerCounts: ProfileProviderCounts = ProfileProviderCounts()
-    ) {
-        self.filter = filter
-        self.shownCount = shownCount
-        self.totalCount = totalCount
-        self.limitCounts = limitCounts
-        self.tagCounts = tagCounts
-        self.providerCounts = providerCounts
-    }
+    let counts: ProfileFilterCounts
 
     var countText: String {
         if totalCount == 0 {
@@ -153,10 +113,6 @@ struct ProfileFilterBarPresentation: Equatable, Sendable {
         filter.isSelected(limit)
     }
 
-    var statusCountText: String {
-        tagCounts.statusText
-    }
-
     var allSegment: ProfileFilterSegment {
         ProfileFilterSegment(
             kind: .all,
@@ -169,10 +125,10 @@ struct ProfileFilterBarPresentation: Equatable, Sendable {
     }
 
     var providerSegments: [ProfileFilterSegment] {
-        if providerCounts.total > 0
+        if counts.codex > 0
             || filter.selectedProvider != nil {
             return ProfileProvider.allCases.map { provider in
-                let count = providerCounts.count(for: provider)
+                let count = counts.count(for: provider)
                 return ProfileFilterSegment(
                     kind: .provider(provider),
                     title: provider.displayName,
@@ -189,7 +145,7 @@ struct ProfileFilterBarPresentation: Equatable, Sendable {
 
     var limitSegments: [ProfileFilterSegment] {
         ProfileLimitFilter.selectableCases.map { limit in
-            let count = limitCounts.count(for: limit)
+            let count = counts.count(for: limit)
             return ProfileFilterSegment(
                 kind: .limit(limit),
                 title: limit.shortTitle,
@@ -203,7 +159,7 @@ struct ProfileFilterBarPresentation: Equatable, Sendable {
 
     var tagSegments: [ProfileFilterSegment] {
         PlusProfileTag.allCases.map { tag in
-            let count = tagCounts.count(for: tag)
+            let count = counts.count(for: tag)
             return ProfileFilterSegment(
                 kind: .tag(tag),
                 title: tag.shortDisplayName,
@@ -263,28 +219,13 @@ enum ProfileFilterSegmentKind: Hashable, Sendable {
         }
     }
 
-    var tag: PlusProfileTag? {
-        guard case let .tag(tag) = self else {
-            return nil
+    func apply(to filter: inout ProfileFilter) {
+        switch self {
+        case .all: filter.clear()
+        case let .provider(provider): filter.toggle(provider)
+        case let .limit(limit): filter.toggle(limit)
+        case let .tag(tag): filter.toggle(tag)
         }
-
-        return tag
-    }
-
-    var provider: ProfileProvider? {
-        guard case let .provider(provider) = self else {
-            return nil
-        }
-
-        return provider
-    }
-
-    var limit: ProfileLimitFilter? {
-        guard case let .limit(limit) = self else {
-            return nil
-        }
-
-        return limit
     }
 
     var systemImage: String {
@@ -313,72 +254,16 @@ struct ProfileFilterSegment: Identifiable, Equatable, Sendable {
         kind.id
     }
 
-    var tag: PlusProfileTag? {
-        kind.tag
-    }
-
-    var provider: ProfileProvider? {
-        kind.provider
-    }
-
-    var limit: ProfileLimitFilter? {
-        kind.limit
-    }
-
     var displayText: String {
         "\(title) \(count)"
     }
-}
-
-struct ProfileFilterBar: View {
-    let presentation: ProfileFilterBarPresentation
-    let textScale: Double
-    let clearFilter: () -> Void
-    let toggleLimit: (ProfileLimitFilter) -> Void
-    let toggleTag: (PlusProfileTag) -> Void
-    let toggleProvider: (ProfileProvider) -> Void
-
-    init(
-        presentation: ProfileFilterBarPresentation,
-        textScale: Double = 1,
-        clearFilter: @escaping () -> Void,
-        toggleLimit: @escaping (ProfileLimitFilter) -> Void,
-        toggleTag: @escaping (PlusProfileTag) -> Void,
-        toggleProvider: @escaping (ProfileProvider) -> Void
-    ) {
-        self.presentation = presentation
-        self.textScale = textScale
-        self.clearFilter = clearFilter
-        self.toggleLimit = toggleLimit
-        self.toggleTag = toggleTag
-        self.toggleProvider = toggleProvider
-    }
-
-    var body: some View {
-        ProfileFilterMenu(
-                presentation: presentation,
-                textScale: textScale,
-                clearFilter: clearFilter,
-                toggleLimit: toggleLimit,
-                toggleTag: toggleTag,
-                toggleProvider: toggleProvider
-        )
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Profile filters")
-        .accessibilityValue(presentation.accessibilitySummaryText)
-    }
-
 }
 
 private struct ProfileFilterMenu: View {
     @Environment(\.codexThemeRefreshContext) private var themeContext
     let presentation: ProfileFilterBarPresentation
     let textScale: Double
-    let clearFilter: () -> Void
-    let toggleLimit: (ProfileLimitFilter) -> Void
-    let toggleTag: (PlusProfileTag) -> Void
-    let toggleProvider: (ProfileProvider) -> Void
+    let selectFilter: (ProfileFilterSegmentKind) -> Void
 
     var body: some View {
         Menu {
@@ -407,7 +292,7 @@ private struct ProfileFilterMenu: View {
             if presentation.isAllSelected == false {
                 Divider()
 
-                Button("Clear filters", action: clearFilter)
+                Button("Clear filters") { selectFilter(.all) }
             }
         } label: {
             HStack(spacing: 6 * CGFloat(textScale)) {
@@ -453,28 +338,11 @@ private struct ProfileFilterMenu: View {
 
     private func segmentButton(_ segment: ProfileFilterSegment) -> some View {
         Button {
-            activate(segment)
+            selectFilter(segment.kind)
         } label: {
             Label(segment.displayText, systemImage: symbolName(for: segment))
         }
         .disabled(segment.isEnabled == false)
-    }
-
-    private func activate(_ segment: ProfileFilterSegment) {
-        guard segment.isEnabled else {
-            return
-        }
-
-        switch segment.kind {
-        case .all:
-            clearFilter()
-        case let .limit(limit):
-            toggleLimit(limit)
-        case let .tag(tag):
-            toggleTag(tag)
-        case let .provider(provider):
-            toggleProvider(provider)
-        }
     }
 
     private func symbolName(for segment: ProfileFilterSegment) -> String {

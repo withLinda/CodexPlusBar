@@ -491,8 +491,7 @@ struct ProfileManagerWindowViewTests {
             filter: ProfileFilter([.active]),
             shownCount: 2,
             totalCount: 5,
-            limitCounts: ProfileLimitCounts(usable: 4, aboveThirtyFive: 2, fullFiveHour: 1),
-            tagCounts: ProfileTagCounts(active: 2, needAction: 1, pending: 2)
+            counts: ProfileFilterCounts(usable: 4, aboveThirtyFive: 2, fullFiveHour: 1, active: 2, needAction: 1, pending: 2)
         )
 
         #expect(presentation.countText == "2 of 5 shown")
@@ -501,7 +500,6 @@ struct ProfileManagerWindowViewTests {
             presentation.accessibilitySummaryText
                 == "2 of 5 shown, Active status"
         )
-        #expect(presentation.statusCountText == "2 active · 1 need action · 2 pending")
         #expect(presentation.isAllSelected == false)
         #expect(presentation.isSelected(.fullFiveHour) == false)
         #expect(presentation.isSelected(.active))
@@ -514,7 +512,7 @@ struct ProfileManagerWindowViewTests {
             filter: ProfileFilter(provider: .codex),
             shownCount: 5,
             totalCount: 5,
-            providerCounts: ProfileProviderCounts(codex: 5)
+            counts: ProfileFilterCounts(codex: 5)
         )
 
         #expect(

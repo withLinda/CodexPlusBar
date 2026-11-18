@@ -31,9 +31,7 @@ final class AppRuntimeController {
         }
     )
     private var hasStarted = false
-    private var localReopenObserver: Any?
-    private var terminationObserver: Any?
-    private var cloudObservers: [NSObjectProtocol] = []
+    private var observers: [NotificationSubscription] = []
     private var startupTask: Task<Void, Never>?
 
     init(singleInstanceCoordinator: SingleInstanceCoordinator = SingleInstanceCoordinator()) {
@@ -78,25 +76,20 @@ final class AppRuntimeController {
     func start() {
         guard hasStarted == false else { return }
         hasStarted = true
-        terminationObserver = NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification,
-            object: nil, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated {
-                    self?.startupTask?.cancel()
-                    self?.controller.stopBackgroundTasks()
-                    self?.clock.stop()
-                    Task { @MainActor in await self?.cloudSync.stop() }
-                }
+        observers.append(NotificationSubscription(NSApplication.willTerminateNotification, queue: .main) { [weak self] in
+            MainActor.assumeIsolated {
+                self?.startupTask?.cancel()
+                self?.controller.stopBackgroundTasks()
+                self?.clock.stop()
+                Task { @MainActor in await self?.cloudSync.stop() }
             }
+        })
 
-        localReopenObserver = NotificationCenter.default.addObserver(
-            forName: CodexAppNotifications.reopenAccountWindowLocally,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
+        observers.append(NotificationSubscription(CodexAppNotifications.reopenAccountWindowLocally, queue: .main) { [weak self] in
             Task { @MainActor in
                 self?.showManagerWindow()
             }
-        }
+        })
 
         let launchAction = singleInstanceCoordinator.activate { [weak self] in
             self?.showManagerWindow()
@@ -166,14 +159,14 @@ final class AppRuntimeController {
 
     private func configureCloudNotifications() {
         for name in [NSApplication.didBecomeActiveNotification, CodexCloudNotifications.received, CodexCloudNotifications.accountChanged] {
-            cloudObservers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+            observers.append(NotificationSubscription(name, queue: .main) { [weak self] in
                 Task { @MainActor in await self?.cloudSync.syncNow() }
             })
         }
-        cloudObservers.append(NotificationCenter.default.addObserver(forName: CodexCloudNotifications.registrationFailed, object: nil, queue: .main) { [weak self] _ in
+        observers.append(NotificationSubscription(CodexCloudNotifications.registrationFailed, queue: .main) { [weak self] in
             MainActor.assumeIsolated { self?.cloudSync.notificationRegistrationFailed() }
         })
-        cloudObservers.append(NotificationCenter.default.addObserver(forName: CodexCloudNotifications.registered, object: nil, queue: .main) { [weak self] _ in
+        observers.append(NotificationSubscription(CodexCloudNotifications.registered, queue: .main) { [weak self] in
             MainActor.assumeIsolated { self?.cloudSync.notificationRegistrationSucceeded() }
         })
         if CloudSyncAvailability().environment != nil {

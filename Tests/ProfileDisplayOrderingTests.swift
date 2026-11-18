@@ -162,7 +162,7 @@ struct ProfileDisplayOrderingTests {
             createdAt: date("2026-06-03T00:00:00Z")
         )
 
-        let ordered = PlusProfileSnapshot.expiryFirstDisplayOrder([oldestKnown, unknownExpiry, soonestKnown])
+        let ordered = ProfileDisplayOrder.accountExpiry.apply(to: [oldestKnown, unknownExpiry, soonestKnown])
 
         #expect(ordered.map(\.label) == [
             "soonest@example.com",
@@ -186,7 +186,7 @@ struct ProfileDisplayOrderingTests {
             createdAt: date("2026-06-01T00:00:00Z")
         )
 
-        let ordered = PlusProfileSnapshot.expiryFirstDisplayOrder([second, first])
+        let ordered = ProfileDisplayOrder.accountExpiry.apply(to: [second, first])
 
         #expect(ordered.map(\.label) == [
             "first@example.com",
@@ -209,7 +209,7 @@ struct ProfileDisplayOrderingTests {
             createdAt: date("2026-06-02T00:00:00Z")
         )
 
-        let ordered = PlusProfileSnapshot.expiryFirstDisplayOrder([newer, older])
+        let ordered = ProfileDisplayOrder.accountExpiry.apply(to: [newer, older])
 
         #expect(ordered.map(\.label) == [
             "older@example.com",

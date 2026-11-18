@@ -11,7 +11,8 @@ final class MenuBarStatusItemController: NSObject, NSPopoverDelegate {
     private let openEmailToolsWindow: @MainActor () -> Void
     private let statusItem: NSStatusItem
     private let popover: NSPopover
-    private var defaultsObserver: NSObjectProtocol?
+    private var defaultsObserver: NotificationSubscription?
+    private var lastAppearance: MenuBarStatusAppearance?
 
     init(
         controller: PlusProfileController,
@@ -30,12 +31,12 @@ final class MenuBarStatusItemController: NSObject, NSPopoverDelegate {
         super.init()
         configureStatusItem()
         configurePopover()
-        startObservingPreferences()
-        startObservingStatus()
     }
 
     func start() {
-        updateStatusItemAppearance()
+        guard defaultsObserver == nil else { return }
+        startObservingPreferences()
+        startObservingStatus()
     }
 
     private func configureStatusItem() {
@@ -46,6 +47,7 @@ final class MenuBarStatusItemController: NSObject, NSPopoverDelegate {
         button.target = self
         button.action = #selector(togglePopover(_:))
         button.imagePosition = .imageLeading
+        button.toolTip = "CodexPlusBar"
         button.setAccessibilityLabel("CodexPlusBar")
     }
 
@@ -75,11 +77,7 @@ final class MenuBarStatusItemController: NSObject, NSPopoverDelegate {
     }
 
     private func startObservingPreferences() {
-        defaultsObserver = NotificationCenter.default.addObserver(
-            forName: UserDefaults.didChangeNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
+        defaultsObserver = NotificationSubscription(UserDefaults.didChangeNotification, queue: .main) { [weak self] in
             Task { @MainActor [weak self] in
                 self?.updateStatusItemAppearance()
             }
@@ -88,42 +86,29 @@ final class MenuBarStatusItemController: NSObject, NSPopoverDelegate {
 
     private func startObservingStatus() {
         withObservationTracking {
-            _ = controller.statusBarSymbolName
-            _ = controller.statusBarContent(referenceDate: clock.now).plainText
-            _ = controller.dashboardStatus
-            _ = controller.isRefreshing
-            _ = controller.profiles
-            _ = clock.now
+            updateStatusItemAppearance()
         } onChange: { [weak self] in
             Task { @MainActor [weak self] in
-                self?.updateStatusItemAppearance()
                 self?.startObservingStatus()
             }
         }
-
-        updateStatusItemAppearance()
     }
 
     private func updateStatusItemAppearance() {
-        guard let button = statusItem.button else {
-            return
-        }
-
         let preferredProfileID = MenuBarProfilePreference.preferredProfileID(
             defaults: userDefaults,
-            validProfileIDs: controller.profiles.map(\.id)
+            validProfileIDs: controller.profiles.lazy.map(\.id)
         )
-        let content = controller.statusBarContent(
+        let appearance = controller.statusBarAppearance(
             preferredProfileID: preferredProfileID,
             referenceDate: clock.now
         )
 
-        button.attributedTitle = statusTitle(for: content)
-        button.image = statusImage(named: controller.statusBarSymbolName)
-        button.contentTintColor = nil
-        button.toolTip = "CodexPlusBar"
-        button.setAccessibilityLabel("CodexPlusBar \(content.accessibilityText)")
-        statusItem.length = NSStatusItem.variableLength
+        guard appearance != lastAppearance, let button = statusItem.button else { return }
+        lastAppearance = appearance
+        button.attributedTitle = statusTitle(for: appearance.content)
+        button.image = statusImage(named: appearance.symbolName)
+        button.setAccessibilityLabel("CodexPlusBar \(appearance.content.accessibilityText)")
     }
 
     private func statusTitle(for content: MenuBarStatusContent) -> NSAttributedString {
@@ -134,17 +119,16 @@ final class MenuBarStatusItemController: NSObject, NSPopoverDelegate {
 
         title.append(NSAttributedString(string: " ", attributes: attributes))
 
-        guard content.showsUsageSummary else {
-            title.append(NSAttributedString(string: content.plainText, attributes: attributes))
-            return title
+        switch content {
+        case let .text(message):
+            title.append(NSAttributedString(string: message, attributes: attributes))
+        case let .usage(label, fiveHour, sevenDay):
+            title.append(NSAttributedString(string: "\(label) ", attributes: attributes))
+            title.append(statusSymbolAttachment(named: "hourglass.circle"))
+            title.append(NSAttributedString(string: " \(fiveHour) ", attributes: attributes))
+            title.append(statusSymbolAttachment(named: "7.calendar"))
+            title.append(NSAttributedString(string: " \(sevenDay)", attributes: attributes))
         }
-
-        title.append(NSAttributedString(string: content.profileLabel, attributes: attributes))
-        title.append(NSAttributedString(string: " ", attributes: attributes))
-        title.append(statusSymbolAttachment(named: "hourglass.circle"))
-        title.append(NSAttributedString(string: " \(content.fiveHourText) ", attributes: attributes))
-        title.append(statusSymbolAttachment(named: "7.calendar"))
-        title.append(NSAttributedString(string: " \(content.sevenDayText)", attributes: attributes))
 
         return title
     }

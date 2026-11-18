@@ -103,8 +103,7 @@ struct MenuBarRootViewTests {
             filter: ProfileFilter(),
             shownCount: 3,
             totalCount: 3,
-            limitCounts: ProfileLimitCounts(usable: 3, aboveThirtyFive: 2, fullFiveHour: 1),
-            tagCounts: ProfileTagCounts(active: 1, needAction: 1, pending: 1)
+            counts: ProfileFilterCounts(usable: 3, aboveThirtyFive: 2, fullFiveHour: 1, active: 1, needAction: 1, pending: 1)
         )
 
         #expect(presentation.countText == "3 profiles")
@@ -128,7 +127,7 @@ struct MenuBarRootViewTests {
             filter: ProfileFilter([.active]),
             shownCount: 2,
             totalCount: 3,
-            tagCounts: ProfileTagCounts(active: 2, needAction: 0, pending: 1)
+            counts: ProfileFilterCounts(active: 2, pending: 1)
         )
 
         let fullLimit = try #require(presentation.segments.first { $0.kind == .limit(.fullFiveHour) })
@@ -136,8 +135,8 @@ struct MenuBarRootViewTests {
         let aboveThirtyFive = try #require(
             presentation.segments.first { $0.kind == .limit(.aboveThirtyFive) }
         )
-        let active = try #require(presentation.segments.first { $0.tag == .active })
-        let needAction = try #require(presentation.segments.first { $0.tag == .needAction })
+        let active = try #require(presentation.segments.first { $0.kind == .tag(.active) })
+        let needAction = try #require(presentation.segments.first { $0.kind == .tag(.needAction) })
 
         #expect(presentation.visibleSummaryText == "2 of 3 shown")
         #expect(fullLimit.displayText == "Full 0")
@@ -162,7 +161,7 @@ struct MenuBarRootViewTests {
             filter: ProfileFilter(limit: .aboveThirtyFive),
             shownCount: 2,
             totalCount: 5,
-            limitCounts: ProfileLimitCounts(usable: 4, aboveThirtyFive: 2, fullFiveHour: 1)
+            counts: ProfileFilterCounts(usable: 4, aboveThirtyFive: 2, fullFiveHour: 1)
         )
 
         let usableLimit = try #require(presentation.segments.first { $0.kind == .limit(.usable) })

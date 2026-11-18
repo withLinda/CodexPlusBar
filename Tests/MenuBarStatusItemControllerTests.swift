@@ -78,8 +78,6 @@ struct MenuBarStatusItemControllerTests {
             openEmailToolsWindow: {}
         )
 
-        await controller.refreshAll()
-
         statusController.start()
 
         let statusItem = try #require(storedValue(in: statusController, as: NSStatusItem.self))
@@ -89,6 +87,8 @@ struct MenuBarStatusItemControllerTests {
         }
 
         let button = try #require(statusItem.button)
+        await controller.refreshAll()
+        try await waitForTitle(containing: "74%", on: button)
         let attributedTitle = button.attributedTitle
         var titleRange = NSRange(location: 0, length: 0)
         let titleColor = attributedTitle.attribute(
@@ -105,6 +105,12 @@ struct MenuBarStatusItemControllerTests {
         #expect(visibleTitle.contains("7D") == false)
         #expect(button.accessibilityLabel() == "CodexPlusBar putrig**ah13@gma, 5 hour 74%, 7 day 42%")
         #expect(titleColor == nil)
+
+        // A preference change alone must update the already-running AppKit item.
+        MenuBarProfilePreference.setPreferredProfileID(urgent.id, defaults: defaults)
+        NotificationCenter.default.post(name: UserDefaults.didChangeNotification, object: defaults)
+        try await waitForTitle(containing: "11%", on: button)
+        #expect(button.accessibilityLabel()?.contains("7 day 35%") == true)
     }
 
     @Test
@@ -161,6 +167,15 @@ struct MenuBarStatusItemControllerTests {
         #expect(button.accessibilityLabel() == "CodexPlusBar urgent**file@exa, 5 hour 11%, 7 day 35%")
         #expect(MenuBarProfilePreference.preferredProfileID(defaults: defaults, validProfileIDs: [urgent.id]) == nil)
     }
+}
+
+@MainActor
+private func waitForTitle(containing text: String, on button: NSStatusBarButton) async throws {
+    let deadline = ContinuousClock.now + .seconds(2)
+    while !button.attributedTitle.string.contains(text), ContinuousClock.now < deadline {
+        try await Task.sleep(for: .milliseconds(10))
+    }
+    try #require(button.attributedTitle.string.contains(text))
 }
 
 private func storedValue<Value>(in instance: Any, as _: Value.Type = Value.self) -> Value? {

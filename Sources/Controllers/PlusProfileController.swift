@@ -1,48 +1,22 @@
 import Foundation
 import Observation
 
-struct MenuBarStatusContent: Equatable, Sendable {
-    let profileLabel: String
-    let fiveHourText: String
-    let sevenDayText: String
-    let showsUsageSummary: Bool
+struct MenuBarStatusAppearance: Equatable {
+    let symbolName: String
+    let content: MenuBarStatusContent
+}
 
-    var plainText: String {
-        guard showsUsageSummary else {
-            return profileLabel
-        }
-
-        return "\(profileLabel) 5H \(fiveHourText) 7D \(sevenDayText)"
-    }
+enum MenuBarStatusContent: Equatable {
+    case text(String)
+    case usage(profileLabel: String, fiveHourText: String, sevenDayText: String)
 
     var accessibilityText: String {
-        guard showsUsageSummary else {
-            return profileLabel
+        switch self {
+        case let .text(message):
+            message
+        case let .usage(label, fiveHour, sevenDay):
+            "\(label), 5 hour \(fiveHour), 7 day \(sevenDay)"
         }
-
-        return "\(profileLabel), 5 hour \(fiveHourText), 7 day \(sevenDayText)"
-    }
-
-    static func usage(
-        profileLabel: String,
-        fiveHourText: String,
-        sevenDayText: String
-    ) -> MenuBarStatusContent {
-        MenuBarStatusContent(
-            profileLabel: profileLabel,
-            fiveHourText: fiveHourText,
-            sevenDayText: sevenDayText,
-            showsUsageSummary: true
-        )
-    }
-
-    static func text(_ text: String) -> MenuBarStatusContent {
-        MenuBarStatusContent(
-            profileLabel: text,
-            fiveHourText: "",
-            sevenDayText: "",
-            showsUsageSummary: false
-        )
     }
 }
 
@@ -419,59 +393,33 @@ final class PlusProfileController {
         return profiles.first(where: { $0.id == selectedProfileID }) ?? profiles.first
     }
 
-    var statusBarSymbolName: String {
-        if let urgent = mostUrgentHealthyProfile(),
-           let remaining = urgent.usage?.fiveHourRemainingPercent,
-           remaining <= 20 {
-            return "exclamationmark.triangle.fill"
-        }
-
-        return dashboardStatus.symbolName
-    }
-
-    func preferredStatusProfile(preferredProfileID: UUID?) -> PlusProfileSnapshot? {
-        if let preferredProfileID,
-           let preferred = profiles.first(where: { $0.id == preferredProfileID }),
-           preferred.state == .ready,
-           preferred.usage != nil {
-            return preferred
-        }
-
-        return mostUrgentHealthyProfile()
-    }
-
-    func statusBarText(
-        preferredProfileID: UUID?,
+    func statusBarAppearance(
+        preferredProfileID: UUID? = nil,
         referenceDate: Date = .now
-    ) -> String {
-        statusBarContent(
-            preferredProfileID: preferredProfileID,
-            referenceDate: referenceDate
-        ).plainText
-    }
-
-    func statusBarContent(referenceDate: Date = .now) -> MenuBarStatusContent {
-        statusBarContent(preferredProfileID: nil, referenceDate: referenceDate)
-    }
-
-    func statusBarContent(
-        preferredProfileID: UUID?,
-        referenceDate: Date = .now
-    ) -> MenuBarStatusContent {
-        if let preferred = preferredStatusProfile(preferredProfileID: preferredProfileID) {
-            let label = compactStatusLabel(for: preferred.profile.displayLabel)
-            return .usage(
-                profileLabel: label,
-                fiveHourText: preferred.fiveHourText,
-                sevenDayText: preferred.sevenDayText
+    ) -> MenuBarStatusAppearance {
+        let urgent = mostUrgentHealthyProfile()
+        let showsWarning = urgent?.usage.map { $0.fiveHourRemainingPercent <= 20 } == true
+        let pinned = preferredProfileID.flatMap { id in
+            profiles.first { $0.id == id && $0.state == .ready && $0.usage != nil }
+        }
+        let content = (pinned ?? urgent).map {
+            MenuBarStatusContent.usage(
+                profileLabel: DisplayFormatter.compactStatusProfileLabel($0.label),
+                fiveHourText: $0.fiveHourText,
+                sevenDayText: $0.sevenDayText
             )
-        }
+        } ?? fallbackStatusContent(referenceDate: referenceDate)
+        return MenuBarStatusAppearance(
+            symbolName: showsWarning ? "exclamationmark.triangle.fill" : dashboardStatus.symbolName,
+            content: content
+        )
+    }
 
+    private func fallbackStatusContent(referenceDate: Date) -> MenuBarStatusContent {
         if isRefreshing {
             return .text(profiles.isEmpty ? "Checking…" : "Refreshing…")
         }
 
-        let stateCounts = profileStateCounts
         switch dashboardStatus {
         case .empty:
             return .text("Add profile")
@@ -480,16 +428,16 @@ final class PlusProfileController {
         case .failed:
             return .text("Check profiles")
         case .mixedAttention:
-            return .text("\(stateCounts.ready)/\(profiles.count) ready")
+            return .text("\(profileStateCounts.ready)/\(profiles.count) ready")
         case .refreshing:
             return .text("Refreshing…")
         case .ready:
-            if let refreshedAt = profiles.compactMap(\.lastRefreshAt).max(),
+            if let refreshedAt = profiles.lazy.compactMap(\.lastRefreshAt).max(),
                let updated = DisplayFormatter.updatedText(refreshedAt, referenceDate: referenceDate) {
                 return .text(updated.replacingOccurrences(of: "Updated ", with: ""))
             }
 
-            return .text("\(stateCounts.ready) ready")
+            return .text("\(profileStateCounts.ready) ready")
         }
     }
 
@@ -1539,10 +1487,6 @@ final class PlusProfileController {
                 counts.failed += 1
             }
         }
-    }
-
-    private func compactStatusLabel(for label: String) -> String {
-        DisplayFormatter.compactStatusProfileLabel(label)
     }
 
     private func indexOfProfile(_ profileID: UUID) -> Int? {

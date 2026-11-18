@@ -55,10 +55,10 @@ Finish active work before desktop switching: it closes and reopens the app. Brow
 ### Install from the DMG
 
 1. [Download CodexPlusBar.dmg](https://github.com/withLinda/CodexPlusBar/releases/latest/download/CodexPlusBar.dmg). The same download supports Apple silicon and Intel Macs running macOS 14 or later.
-2. Open the downloaded DMG and drag **CodexPlusBar.app** onto the **Applications** shortcut.
+2. If you are updating, quit CodexPlusBar first. Open the downloaded DMG and drag **CodexPlusBar.app** onto the **Applications** shortcut. Choose **Replace** if Finder asks.
 3. Eject the disk image, then open **CodexPlusBar** from Applications. Confirm macOS's first-open prompt if shown. The app appears in the **menu bar**, not the Dock.
 
-The **1.7.8 release includes Account Priority 0.3.0**, verified on **OpenChamber 2.7.2 / OpenCode 2.3.0**. The extension now checks the APIs and hooks it needs instead of accepting only specific OpenCode versions, so compatible future releases no longer need a version-list update. Install its ZIP separately to get this fix. Full weekly (7D) quota still takes priority, followed by earliest subscription expiry. The DMG includes the earlier menu-bar startup, account-refresh and iCloud fixes. Sync stays off until you enable it on each Mac. The app and DMG are Developer ID-signed, notarized by Apple, and stapled for offline ticket verification. [Version 1.7.8 release notes and SHA256SUMS](https://github.com/withLinda/CodexPlusBar/releases/tag/v1.7.8) cover both downloads.
+**[Version 1.7.9 (build 32)](https://github.com/withLinda/CodexPlusBar/releases/tag/v1.7.9)** reduces repeated work when you filter profiles, navigate with the arrow keys, or refresh the menu bar. The release includes the signed and notarized Mac installer, the optional **Account Priority 0.3.0** extension, and `SHA256SUMS` for both downloads.
 
 **Using automatic switching in OpenChamber? Download both files.** The DMG installs CodexPlusBar; the ZIP installs Account Priority inside OpenChamber. Updating one does not update the other. Follow [the extension installation steps](#install-or-update-the-extension-zip) after installing the Mac app.
 
@@ -73,9 +73,7 @@ Ready to change accounts in your apps? [Save their sign-ins and start switching]
 
 **Reading the numbers:** percentages mean **remaining**, not used. `5H` and `7D` are quota windows. `—` means unavailable. Subscription expiry is separate from a quota reset. Changes to ChatGPT's website can temporarily affect refreshes.
 
-**Updating?** Quit CodexPlusBar, open the latest DMG, drag the new app into Applications, and choose **Replace**. Eject the DMG, reopen the app, and refresh. Your saved Codex profiles and sign-ins stay in place; updating does not enable iCloud Sync. Existing backups can still be restored. If upgrading from before 1.6.2, earlier Claude records remain stored but inactive and hidden.
-
-If the menu disappeared on an earlier 1.7.x release, open CodexPlusBar from Applications to reach its window and quit it with **⌘Q**, then install 1.7.8 using the steps above. Keep the app running while fresh quota arrives in Account Priority. Its optional extension is a separate [ZIP download](https://github.com/withLinda/CodexPlusBar/releases/latest/download/expiry-selector.zip), not part of the DMG.
+Updating the app keeps your saved profiles and sign-ins. iCloud Sync stays opt-in on each Mac. If you cannot find the menu icon to quit an older version, open CodexPlusBar from Applications and press **⌘Q** in its window, then follow the DMG steps above. If upgrading from before 1.6.2, earlier Claude records remain stored but inactive and hidden.
 
 ## Switch automatically in OpenChamber
 
@@ -92,7 +90,7 @@ For example, an account with **30 days left and 100% weekly quota** beats one wi
 
 ### Install or update the extension ZIP
 
-1. [Install CodexPlusBar 1.7.8 from the DMG](#install-from-the-dmg), keep it running, and refresh your accounts.
+1. [Install CodexPlusBar from the latest DMG](#install-from-the-dmg), keep it running, and refresh your accounts.
 2. If Account Priority is already installed, choose **Pause Auto** and wait for acknowledgement.
 3. [Download expiry-selector.zip](https://github.com/withLinda/CodexPlusBar/releases/latest/download/expiry-selector.zip) and double-click it in Finder to extract the **expiry-selector** folder.
 4. In **OpenChamber → Settings → Extensions**, install or replace the extension by selecting that extracted folder, not the ZIP itself. Approve its plugin and local-service capabilities, then reload the updated extension.
@@ -104,7 +102,7 @@ Repeat the extension update on each Mac where it is installed. Updating the Mac 
 
 Keep CodexPlusBar running. Unknown, stale, or exhausted accounts cannot qualify; if none qualify, the current account stays selected. Selection is shared across OpenChamber sessions. Pause Auto before native **Use**. CodexPlusBar checks, switches, and repairs leave Auto paused until you resume it.
 
-Verified with **OpenChamber 2.7.0 / OpenCode 2.2.6** and **OpenChamber 2.7.1 / OpenCode 2.2.7**. [Compatibility and recovery guide](Extensions/expiry-selector/README.md#supported-boundary).
+Account Priority 0.3.0 was verified with **OpenChamber 2.7.2 / OpenCode 2.3.0**. See the [compatibility and recovery guide](Extensions/expiry-selector/README.md#supported-boundary).
 
 Every release includes the current extension as **expiry-selector.zip**, alongside the Mac DMG and **SHA256SUMS**. The extension's version is recorded in its packaged `package.json` and can differ from the app version.
 
@@ -116,7 +114,7 @@ Password-encrypted backups include profile details, saved sign-ins, browser data
 
 ### iCloud Sync
 
-Included in the [1.7.7 DMG](https://github.com/withLinda/CodexPlusBar/releases/download/v1.7.7/CodexPlusBar.dmg). Install it on both Macs; no separate cloud build is needed. Local replica tests and signed Apple service probes passed; [live two-Mac acceptance, cross-device Keychain delivery, and automatic push delivery remain pending](docs/releases/2026-11-09-cloudkit-sync-validation.md#two-mac-acceptance--pending).
+Included in the [latest DMG](https://github.com/withLinda/CodexPlusBar/releases/latest/download/CodexPlusBar.dmg). Install it on both Macs; no separate cloud build is needed. Local replica tests and signed Apple service probes passed; [live two-Mac acceptance, cross-device Keychain delivery, and automatic push delivery remain pending](docs/releases/2026-11-09-cloudkit-sync-validation.md#two-mac-acceptance--pending).
 
 1. Sign in to the same iCloud account on both Macs and enable **Passwords & Keychain** in System Settings.
 2. On each Mac, open **Settings → iCloud Sync → Sync accounts with iCloud**. Profile details, passwords and 2FA secrets merge with the local accounts.

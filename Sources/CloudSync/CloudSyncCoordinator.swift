@@ -44,7 +44,7 @@ struct CloudSessionAdmission: Equatable, Sendable {
     @ObservationIgnored private let snapshots: CloudSessionSnapshotService
     @ObservationIgnored private let makeSessionInbox: @MainActor (CloudSyncJournal) -> CloudSessionInbox
     @ObservationIgnored private var sessionInbox: CloudSessionInbox?
-    @ObservationIgnored private var sessionObserver: CloudSessionChangeObserver?
+    @ObservationIgnored private var sessionObserver: NotificationSubscription?
     @ObservationIgnored private var sessionChangeTask: Task<Void, Never>?
     @ObservationIgnored private var sessionChangeCounter: UInt64 = 0
     @ObservationIgnored private var capturing = false
@@ -86,7 +86,7 @@ struct CloudSessionAdmission: Equatable, Sendable {
         started = true
         self.localServicesReady = localServicesReady
         profiles.isWaitingForCloudRecovery = true
-        sessionObserver = CloudSessionChangeObserver { [weak self] in
+        sessionObserver = NotificationSubscription(CloudSavedSessionChange.notification) { [weak self] in
             Task { @MainActor [weak self] in self?.requestSessionCapture() }
         }
         // Fail closed on an unreadable local recovery binding, even while off.

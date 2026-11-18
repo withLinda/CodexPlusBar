@@ -27,13 +27,12 @@ struct PlusProfileModelsTests {
         let pending = sampleSnapshot(tags: [.pending])
         let untagged = sampleSnapshot(tags: [])
 
-        let counts = ProfileTagCounts(snapshots: [active, action, pending, untagged])
+        let counts = ProfileFilterCounts(snapshots: [active, action, pending, untagged])
 
         #expect(counts.active == 1)
         #expect(counts.needAction == 1)
         #expect(counts.pending == 2)
         #expect(counts.count(for: .needAction) == 1)
-        #expect(counts.statusText == "1 active · 1 need action · 2 pending")
     }
 
     @Test
@@ -52,14 +51,14 @@ struct PlusProfileModelsTests {
 
     @Test
     func profileProviderCountsSummarizeCodexProfiles() {
-        let counts = ProfileProviderCounts(snapshots: [
+        let counts = ProfileFilterCounts(snapshots: [
             sampleSnapshot(tags: [], provider: .codex),
             sampleSnapshot(tags: [], provider: .codex),
+            sampleSnapshot(tags: [], provider: ProfileProvider(rawValue: "unsupported")),
         ])
 
         #expect(counts.codex == 2)
         #expect(counts.count(for: .codex) == 2)
-        #expect(counts.accessibilityText == "2 Codex profiles")
     }
 
     @Test

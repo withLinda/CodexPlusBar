@@ -68,14 +68,6 @@ enum CloudSavedSessionChange {
     }
 }
 
-final class CloudSessionChangeObserver: @unchecked Sendable {
-    private let token: NSObjectProtocol
-    init(_ changed: @escaping @Sendable () -> Void) {
-        token = NotificationCenter.default.addObserver(forName: CloudSavedSessionChange.notification, object: nil, queue: nil) { _ in changed() }
-    }
-    deinit { NotificationCenter.default.removeObserver(token) }
-}
-
 extension CloudJournalState {
     static func sessionSourceKey(_ profileID: UUID, _ sourceDeviceID: UUID, _ kind: CloudSessionKind) -> String {
         "\(profileID.uuidString).\(sourceDeviceID.uuidString).\(kind.rawValue)"

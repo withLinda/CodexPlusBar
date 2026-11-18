@@ -145,6 +145,28 @@ struct CloudProfileMergeTests {
         #expect(CloudProfileMerge.orderedIDs(nil, profiles: [Fixture.document(), Fixture.document()]) == [Fixture.profileID])
     }
 
+    @MainActor @Test
+    func mergedProjectionEmitsCloudRowsFirstThenSurvivingLocalRowsInCatalogOrder() {
+        func localRow(_ label: String) -> CloudCommittedProfile {
+            .init(id: UUID(), createdAt: Fixture.createdAt, values: .init(provider: "codex", label: label))
+        }
+        let first = localRow("First local"), last = localRow("Last local")
+        let shared = localRow("Old label"), removed = localRow("Deleted")
+        let current = CloudCatalogProjection(profiles: [first, shared, removed, last])
+        let remoteOnly = Fixture.document()
+        let edited = Fixture.document(id: shared.id, fields: .init(label: .init(value: "Cloud label", version: Fixture.version(1))))
+        let deleted = Fixture.document(id: removed.id, tombstone: .init(version: Fixture.version(1), deletedAt: Fixture.createdAt))
+        var state = CloudJournalState(owner: .init(container: "test", environment: .development, userRecordName: "test"))
+        for document in [edited, deleted, remoteOnly] {
+            state.profiles[CloudJournalState.profileRecordName(document.id)] = document
+        }
+        state.order = .init(ids: [remoteOnly.id, removed.id, shared.id], version: Fixture.version(2))
+
+        let result = CloudCatalogBridge.mergedProjection(current, state: state)
+        #expect(result.profiles.map(\.id) == [remoteOnly.id, shared.id, first.id, last.id])
+        #expect(result.profiles.map(\.values.label) == ["", "Cloud label", "First local", "Last local"])
+    }
+
     @Test
     func equalEmailsNeverMergeIndependentProfileUUIDs() throws {
         var fields = CloudProfileFields()

@@ -71,10 +71,7 @@ struct MenuBarRootView: View {
                         filterPresentation: listPresentation.filterBar,
                         displayOrder: $profileDisplayOrder,
                         textScale: panelTextScale,
-                        clearFilter: clearProfileFilter,
-                        toggleLimit: toggleLimitFilter,
-                        toggleTag: toggleProfileTagFilter,
-                        toggleProvider: toggleProfileProviderFilter
+                        selectFilter: { $0.apply(to: &profileFilter) }
                     )
                 }
 
@@ -97,7 +94,7 @@ struct MenuBarRootView: View {
               ScrollViewReader { proxy in
                 ScrollView(.vertical) {
                     LazyVStack(alignment: .leading, spacing: MenuBarPanelMetrics.rowSpacing) {
-                        content(displayedProfiles: listPresentation.numberedProfiles)
+                        content(listPresentation: listPresentation)
                     }
                     .frame(width: panelContentWidth, alignment: .leading)
                 }
@@ -182,7 +179,7 @@ struct MenuBarRootView: View {
     }
 
     @ViewBuilder
-    private func content(displayedProfiles: [ProfileListItem]) -> some View {
+    private func content(listPresentation: ProfileListPresentation) -> some View {
         if controller.profiles.isEmpty {
             CodexCard(tier: .strong, accent: controller.dashboardStatus.tone.foregroundColor) {
                 VStack(alignment: .leading, spacing: 12) {
@@ -203,7 +200,7 @@ struct MenuBarRootView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-        } else if displayedProfiles.isEmpty,
+        } else if listPresentation.displayedProfiles.isEmpty,
                   ProfileSearch.normalizedQuery(profileSearchQuery).isEmpty == false {
             ProfileSearchEmptyState(
                 query: profileSearchQuery,
@@ -211,10 +208,10 @@ struct MenuBarRootView: View {
                 textScale: panelTextScale,
                 clear: clearSearchAndActiveFilters
             )
-        } else if displayedProfiles.isEmpty {
+        } else if listPresentation.displayedProfiles.isEmpty {
             ProfileFilterEmptyState(clearFilter: clearProfileFilter)
         } else {
-            ForEach(displayedProfiles) { item in
+            ForEach(listPresentation.numberedProfiles) { item in
                 let snapshot = item.snapshot
                 let isPinned = snapshot.id == storedPinnedProfileID
 
@@ -430,18 +427,6 @@ struct MenuBarRootView: View {
         isProfileSearchPresented = false
     }
 
-    private func toggleLimitFilter(_ limit: ProfileLimitFilter) {
-        profileFilter.toggle(limit)
-    }
-
-    private func toggleProfileTagFilter(_ tag: PlusProfileTag) {
-        profileFilter.toggle(tag)
-    }
-
-    private func toggleProfileProviderFilter(_ provider: ProfileProvider) {
-        profileFilter.toggle(provider)
-    }
-
     private func zoomPanelIn() {
         panelTextScaleStorage = MenuBarPanelTextScalePreference.zoomedInValue(from: panelTextScale)
     }
@@ -452,13 +437,11 @@ struct MenuBarRootView: View {
         case .zoomOut: zoomPanelOut()
         case .resetZoom: panelTextScaleStorage = MenuBarPanelTextScalePreference.defaultScale
         case .previousProfile, .nextProfile:
-            let items = profileListPresentation.numberedProfiles
-            guard !items.isEmpty else { return false }
-            keyboardSelectedProfileID = ProfileListNavigation.targetID(
-                currentID: keyboardSelectedProfileID,
-                items: items,
+            guard let targetID = profileListPresentation.navigationTarget(
+                from: keyboardSelectedProfileID,
                 direction: action == .previousProfile ? .up : .down
-            )
+            ) else { return false }
+            keyboardSelectedProfileID = targetID
         }
         return true
     }

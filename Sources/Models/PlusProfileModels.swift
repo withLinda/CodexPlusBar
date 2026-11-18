@@ -836,16 +836,6 @@ struct PlusProfileSnapshot: Identifiable, Equatable, Sendable {
         )
     }
 
-    static func expiryFirstDisplayOrder(_ snapshots: [PlusProfileSnapshot]) -> [PlusProfileSnapshot] {
-        ProfileDisplayOrder.accountExpiry.apply(to: snapshots)
-    }
-
-    static func displayOrder(
-        _ snapshots: [PlusProfileSnapshot],
-        by order: ProfileDisplayOrder
-    ) -> [PlusProfileSnapshot] {
-        order.apply(to: snapshots)
-    }
 }
 
 enum ProfileDisplayOrder: String, CaseIterable, Identifiable, Sendable {
@@ -912,59 +902,26 @@ enum ProfileDisplayOrder: String, CaseIterable, Identifiable, Sendable {
     }
 
     func apply(to snapshots: [PlusProfileSnapshot]) -> [PlusProfileSnapshot] {
+        let date: KeyPath<PlusProfileSnapshot, Date?>
         switch self {
         case .nextFiveHourReset:
-            return snapshots.sorted { lhs, rhs in
-                compareOptionalDates(
-                    lhs.nextFiveHourResetAt,
-                    rhs.nextFiveHourResetAt,
-                    lhs: lhs,
-                    rhs: rhs
-                )
-            }
+            date = \.nextFiveHourResetAt
         case .nextSevenDayReset:
-            return snapshots.sorted { lhs, rhs in
-                compareOptionalDates(
-                    lhs.nextSevenDayResetAt,
-                    rhs.nextSevenDayResetAt,
-                    lhs: lhs,
-                    rhs: rhs
-                )
-            }
+            date = \.nextSevenDayResetAt
         case .accountExpiry:
-            return snapshots.sorted { lhs, rhs in
-                compareOptionalDates(
-                    lhs.expiresAt,
-                    rhs.expiresAt,
-                    lhs: lhs,
-                    rhs: rhs
-                )
-            }
+            date = \.expiresAt
         case .saved:
             return snapshots.sorted(by: Self.savedOrderSort)
         }
-    }
-
-    private func compareOptionalDates(
-        _ lhsDate: Date?,
-        _ rhsDate: Date?,
-        lhs: PlusProfileSnapshot,
-        rhs: PlusProfileSnapshot
-    ) -> Bool {
-        switch (lhsDate, rhsDate) {
-        case let (lhsDate?, rhsDate?):
-            if lhsDate != rhsDate {
+        return snapshots.sorted { lhs, rhs in
+            switch (lhs[keyPath: date], rhs[keyPath: date]) {
+            case let (lhsDate?, rhsDate?) where lhsDate != rhsDate:
                 return lhsDate < rhsDate
+            case (.some, .none): return true
+            case (.none, .some): return false
+            default: return Self.savedOrderSort(lhs, rhs)
             }
-        case (.some, .none):
-            return true
-        case (.none, .some):
-            return false
-        case (.none, .none):
-            break
         }
-
-        return Self.savedOrderSort(lhs, rhs)
     }
 
     private static func savedOrderSort(_ lhs: PlusProfileSnapshot, _ rhs: PlusProfileSnapshot) -> Bool {
@@ -1096,13 +1053,9 @@ struct ProfileFilter: Equatable, Sendable {
     }
 
     func includes(_ snapshot: PlusProfileSnapshot) -> Bool {
-        let matchesSelectedTags = selectedTags.isEmpty || selectedTags.contains { selectedTag in
-            snapshot.tags.contains(selectedTag)
-        }
-        let matchesLimit = selectedLimit.includes(snapshot)
-        let matchesProvider = selectedProvider == nil || snapshot.profile.provider == selectedProvider
-
-        return matchesSelectedTags && matchesLimit && matchesProvider
+        (selectedProvider == nil || snapshot.profile.provider == selectedProvider)
+            && selectedLimit.includes(snapshot)
+            && (selectedTags.isEmpty || selectedTags.contains(where: snapshot.profile.tags.contains))
     }
 
     func apply(to snapshots: [PlusProfileSnapshot]) -> [PlusProfileSnapshot] {
@@ -1138,22 +1091,14 @@ struct ProfileFilter: Equatable, Sendable {
     }
 }
 
-struct ProfileLimitCounts: Equatable, Sendable {
-    let usable: Int
-    let aboveThirtyFive: Int
-    let fullFiveHour: Int
-
-    init(usable: Int = 0, aboveThirtyFive: Int = 0, fullFiveHour: Int = 0) {
-        self.usable = usable
-        self.aboveThirtyFive = aboveThirtyFive
-        self.fullFiveHour = fullFiveHour
-    }
-
-    init(snapshots: [PlusProfileSnapshot]) {
-        usable = snapshots.count(where: ProfileLimitFilter.usable.includes)
-        aboveThirtyFive = snapshots.count(where: ProfileLimitFilter.aboveThirtyFive.includes)
-        fullFiveHour = snapshots.count(where: ProfileLimitFilter.fullFiveHour.includes)
-    }
+struct ProfileFilterCounts: Equatable, Sendable {
+    private(set) var usable = 0
+    private(set) var aboveThirtyFive = 0
+    private(set) var fullFiveHour = 0
+    private(set) var codex = 0
+    private(set) var active = 0
+    private(set) var needAction = 0
+    private(set) var pending = 0
 
     func count(for filter: ProfileLimitFilter) -> Int {
         switch filter {
@@ -1167,47 +1112,9 @@ struct ProfileLimitCounts: Equatable, Sendable {
             return fullFiveHour
         }
     }
-}
-
-struct ProfileProviderCounts: Equatable, Sendable {
-    let codex: Int
-
-    init(codex: Int = 0) {
-        self.codex = codex
-    }
-
-    init(snapshots: [PlusProfileSnapshot]) {
-        codex = snapshots.count { $0.profile.provider == .codex }
-    }
-
-    var total: Int {
-        codex
-    }
 
     func count(for provider: ProfileProvider) -> Int {
         provider == .codex ? codex : 0
-    }
-
-    var accessibilityText: String {
-        codex == 1 ? "1 Codex profile" : "\(codex) Codex profiles"
-    }
-}
-
-struct ProfileTagCounts: Equatable, Sendable {
-    let active: Int
-    let needAction: Int
-    let pending: Int
-
-    init(active: Int = 0, needAction: Int = 0, pending: Int = 0) {
-        self.active = active
-        self.needAction = needAction
-        self.pending = pending
-    }
-
-    init(snapshots: [PlusProfileSnapshot]) {
-        active = snapshots.count { $0.tags.contains(.active) }
-        needAction = snapshots.count { $0.tags.contains(.needAction) }
-        pending = snapshots.count { $0.tags.contains(.pending) }
     }
 
     func count(for tag: PlusProfileTag) -> Int {
@@ -1221,12 +1128,24 @@ struct ProfileTagCounts: Equatable, Sendable {
         }
     }
 
-    var statusText: String {
-        "\(active) active · \(needAction) need action · \(pending) pending"
-    }
+}
 
-    var accessibilityText: String {
-        "\(active) active, \(needAction) need action, \(pending) pending"
+extension ProfileFilterCounts {
+    init(snapshots: [PlusProfileSnapshot]) {
+        self.init()
+        for snapshot in snapshots {
+            if snapshot.profile.provider == .codex { codex += 1 }
+            if ProfileLimitFilter.usable.includes(snapshot) { usable += 1 }
+            if ProfileLimitFilter.aboveThirtyFive.includes(snapshot) { aboveThirtyFive += 1 }
+            if ProfileLimitFilter.fullFiveHour.includes(snapshot) { fullFiveHour += 1 }
+            for tag in snapshot.tags {
+                switch tag {
+                case .active: active += 1
+                case .needAction: needAction += 1
+                case .pending: pending += 1
+                }
+            }
+        }
     }
 }
 
