@@ -55,11 +55,25 @@ actor CloudSyncJournal {
 
     nonisolated func catalogTransaction<T>(_ body: (inout CloudJournalState) throws -> T) throws -> T {
         try withStorage { _, partition, inbox in
-            let previous = try readState(partition: partition, inbox: inbox)
+            let persisted = try readPersistedState(partition: partition, inbox: inbox)
+            let previous = persisted ?? CloudJournalState(owner: owner)
             var next = previous
             let result = try body(&next)
+            // readPersistedState has validated the current bytes and recovered any
+            // uncertain journal rename under this lock. Preserve first-write semantics.
+            if persisted != nil, next == previous {
+                // The body can run arbitrary synchronous work. Keep the asset
+                // integrity check on its return side even when no write is needed.
+                try validateAssets(next, inbox: inbox)
+                return result
+            }
             try validateTransition(from: previous, to: next)
-            try writeState(next, partition: partition, inbox: inbox)
+            // Generic transactions can attach an orphan (including one left by a
+            // failed asset-directory fsync). Only its first publication needs a sync.
+            let additions = next.receivedEnvelopes.compactMap { id, envelope in
+                previous.receivedEnvelopes[id] == nil ? envelope.asset : nil
+            }
+            try writeState(next, partition: partition, inbox: inbox, syncBeforePublication: additions)
             return result
         }
     }
@@ -101,29 +115,36 @@ actor CloudSyncJournal {
         let envelope = CloudReceivedEnvelope(id: id, recordName: recordName, metadata: metadata, systemFields: systemFields, asset: asset)
         return try withStorage { _, partition, inbox in
             var state = try readState(partition: partition, inbox: inbox)
-            if let existing = state.receivedEnvelopes[id] {
+            let published = state.receivedEnvelopes[id]
+            // A validated inbox order can only contain IDs with receipts.
+            let appendToOrder = transportManaged && (published == nil || state.transport?.inboxOrder.contains(id) != true)
+            if let existing = published {
                 guard existing == envelope else { throw CloudJournalError.invalidState }
+                if !appendToOrder, engineState == nil || engineState == state.engineState { return existing }
             } else {
                 guard state.receipts[id] == nil else { throw CloudJournalError.invalidTransition }
                 state.receivedEnvelopes[id] = envelope
                 state.receipts[id] = .init(phase: .received)
             }
             if let engineState { state.engineState = engineState }
-            if transportManaged {
+            if appendToOrder {
                 if state.transport == nil { state.transport = .init() }
-                if state.transport?.inboxOrder.contains(id) == false { state.transport?.inboxOrder.append(id) }
+                state.transport?.inboxOrder.append(id)
             }
             // Validate everything and bound the encoded state before mutating the inbox.
             try state.validate(expectedOwner: owner)
-            _ = try encodedState(state)
-            if let existing = try CloudPrivateFiles.read(asset.fileName, in: inbox, limit: Self.maximumAssetBytes) {
-                guard existing == ciphertext else { throw CloudJournalError.assetMismatch }
-                // This may be a retry after an uncertain asset rename.
-                try confirmDurability(asset.fileName, in: inbox)
-            } else {
-                try CloudPrivateFiles.replace(asset.fileName, bytes: ciphertext, in: inbox, io: io)
+            let bytes = try encodedState(state)
+            if published == nil {
+                if let existing = try CloudPrivateFiles.read(asset.fileName, in: inbox, limit: Self.maximumAssetBytes) {
+                    guard existing == ciphertext else { throw CloudJournalError.assetMismatch }
+                    // This may be a retry after an uncertain asset rename.
+                    try confirmDurability(asset.fileName, in: inbox)
+                } else {
+                    try CloudPrivateFiles.replace(asset.fileName, bytes: ciphertext, in: inbox, io: io)
+                }
             }
-            try writeState(state, partition: partition, inbox: inbox)
+            try validateAssets(state, inbox: inbox)
+            try CloudPrivateFiles.replace("journal.json", bytes: bytes, in: partition, io: io)
             return envelope
         }
     }
@@ -134,6 +155,12 @@ actor CloudSyncJournal {
             guard let envelope = state.receivedEnvelopes[id] else { throw CloudJournalError.missingAsset }
             return try readAsset(envelope.asset, inbox: inbox)
         }
+    }
+
+    /// Read one immutable reference from a validated snapshot. A reader using
+    /// this across awaits must revalidate its snapshot before publishing results.
+    func ciphertext(fromSnapshot envelope: CloudReceivedEnvelope) throws -> Data {
+        try withStorage { _, _, inbox in try readAsset(envelope.asset, inbox: inbox) }
     }
 
     /// Snapshot and bytes share the lock with compaction. A stale transport order
@@ -153,12 +180,14 @@ actor CloudSyncJournal {
         try withStorage { _, partition, inbox in
             var state = try readState(partition: partition, inbox: inbox)
             let ordered = state.transport?.inboxOrder ?? []
-            let ids = ordered + state.receipts.keys.filter { !ordered.contains($0) }.sorted { $0.uuidString < $1.uuidString }
+            let orderedIDs = Set(ordered)
+            let sessionIDs = state.transport.map { Set($0.sessionReceipts.values) } ?? []
+            let ids = ordered + state.receipts.keys.filter { !orderedIDs.contains($0) }.sorted { $0.uuidString < $1.uuidString }
             var removed: Set<UUID> = []
             for id in ids {
                 guard state.receipts[id]?.phase == .applied, let envelope = state.receivedEnvelopes[id],
                       envelope.recordName.hasPrefix("profile.") || envelope.recordName == CloudJournalState.orderRecordName,
-                      state.transport?.sessionReceipts.values.contains(id) != true else { continue }
+                      !sessionIDs.contains(id) else { continue }
                 if state.completedCatalogReceipts == nil { state.completedCatalogReceipts = [:] }
                 state.completedCatalogReceipts?[envelope.recordName] = id
                 if state.catalogAssetCleanup == nil { state.catalogAssetCleanup = [] }
@@ -195,9 +224,11 @@ actor CloudSyncJournal {
     }
 
     nonisolated private func readState(partition: Int32, inbox: Int32) throws -> CloudJournalState {
-        guard let bytes = try CloudPrivateFiles.read("journal.json", in: partition, limit: Self.maximumJournalBytes) else {
-            return CloudJournalState(owner: owner)
-        }
+        try readPersistedState(partition: partition, inbox: inbox) ?? CloudJournalState(owner: owner)
+    }
+
+    nonisolated private func readPersistedState(partition: Int32, inbox: Int32) throws -> CloudJournalState? {
+        guard let bytes = try CloudPrivateFiles.read("journal.json", in: partition, limit: Self.maximumJournalBytes) else { return nil }
         let state = try CloudJournalCoding.decode(CloudJournalState.self, from: bytes)
         try state.validate(expectedOwner: owner)
         try validateAssets(state, inbox: inbox)
@@ -207,11 +238,12 @@ actor CloudSyncJournal {
         return state
     }
 
-    nonisolated private func writeState(_ state: CloudJournalState, partition: Int32, inbox: Int32) throws {
+    nonisolated private func writeState(_ state: CloudJournalState, partition: Int32, inbox: Int32,
+                                        syncBeforePublication: [CloudCiphertextReference] = []) throws {
         try state.validate(expectedOwner: owner)
         try validateAssets(state, inbox: inbox)
-        for envelope in state.receivedEnvelopes.values {
-            try confirmDurability(envelope.asset.fileName, in: inbox)
+        for asset in syncBeforePublication {
+            try confirmDurability(asset.fileName, in: inbox)
         }
         try CloudPrivateFiles.replace("journal.json", bytes: encodedState(state), in: partition, io: io)
     }
@@ -290,6 +322,9 @@ actor CloudSyncJournal {
         defer { close(partition) }
         let inbox = try CloudPrivateFiles.directory("inbox", in: partition, io: io)
         defer { close(inbox) }
-        return try body(root, partition, inbox)
+        // CloudKit can drive many synchronous journal operations in one callback.
+        // Release Foundation's temporary decoding/encoding objects after each lock
+        // scope rather than retaining them until the whole callback returns.
+        return try autoreleasepool { try body(root, partition, inbox) }
     }
 }

@@ -58,7 +58,9 @@ Finish active work before desktop switching: it closes and reopens the app. Brow
 2. If you are updating, quit CodexPlusBar first. Open the downloaded DMG and drag **CodexPlusBar.app** onto the **Applications** shortcut. Choose **Replace** if Finder asks.
 3. Eject the disk image, then open **CodexPlusBar** from Applications. Confirm macOS's first-open prompt if shown. The app appears in the **menu bar**, not the Dock.
 
-**[Version 1.7.9 (build 32)](https://github.com/withLinda/CodexPlusBar/releases/tag/v1.7.9)** reduces repeated work when you filter profiles, navigate with the arrow keys, or refresh the menu bar. The release includes the signed and notarized Mac installer, the optional **Account Priority 0.3.0** extension, and `SHA256SUMS` for both downloads.
+**[Version 1.7.10 (build 33)](https://github.com/withLinda/CodexPlusBar/releases/tag/v1.7.10)** fixes sustained CPU use during iCloud sync with a large saved-session history. Install the [signed and notarized 1.7.10 DMG](https://github.com/withLinda/CodexPlusBar/releases/download/v1.7.10/CodexPlusBar.dmg) over your existing copy. Keep your sync history: there is no need to clear saved sessions or turn iCloud off and on.
+
+The [release page](https://github.com/withLinda/CodexPlusBar/releases/tag/v1.7.10) also includes **Account Priority 0.3.0** and `SHA256SUMS`. To verify both downloads, put the DMG, ZIP, and `SHA256SUMS` in one folder and run `shasum -a 256 -c SHA256SUMS` there. Both filenames should report `OK`.
 
 **Using automatic switching in OpenChamber? Download both files.** The DMG installs CodexPlusBar; the ZIP installs Account Priority inside OpenChamber. Updating one does not update the other. Follow [the extension installation steps](#install-or-update-the-extension-zip) after installing the Mac app.
 

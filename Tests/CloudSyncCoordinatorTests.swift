@@ -5,6 +5,84 @@ import WebKit
 @testable import CodexPlusBar
 
 @MainActor struct CloudSyncCoordinatorTests {
+    @Test func localOnlyCatalogRefreshDoesNotWakeCloudButRealEditDoes() throws {
+        let f = try CloudCoordinatorFixture(); defer { f.clean() }
+        let row = try #require(try f.store.loadProfiles().first)
+        let bridge = CloudCatalogBridge(profiles: f.profiles, journal: f.journal, deviceID: UUID(), epoch: UUID())
+        try bridge.reconcileLocal(inferDeletions: false)
+        var wakes = 0
+        bridge.onCommit = { wakes += 1 }
+        var refreshed = row
+        refreshed.lastRefreshAt = .now
+        bridge.committed(.init(before: [row], after: [refreshed], explicitDeletedIDs: [], sequence: 1, origin: .local, trustedPreimage: true))
+        #expect(wakes == 0)
+        var edited = refreshed
+        edited.label = "Cloud edit"
+        bridge.committed(.init(before: [refreshed], after: [edited], explicitDeletedIDs: [], sequence: 2, origin: .local, trustedPreimage: true))
+        #expect(wakes == 1)
+        #expect(try f.journal.catalogState().profiles[CloudJournalState.profileRecordName(row.id)]?.fields.label?.value == "Cloud edit")
+    }
+    @Test func ordinaryRestartResumesCursorAndRebuildsPendingChangesFromJournal() async throws {
+        let f = try CloudCoordinatorFixture(); defer { f.clean() }
+        let initial = f.coordinator()
+        await initial.start(); await initial.setEnabled(true)
+        await initial.stop()
+        let local = try #require(try f.store.loadProfiles().first)
+        let id = CloudRecordCodec.recordID(CloudJournalState.profileRecordName(local.id))
+        let cursor = Data("synthetic-resume-point".utf8)
+        try f.journal.catalogTransaction { state in
+            state.transport?.zoneEstablished = true
+            state.engineState = cursor
+            if let order = state.sentRevision(for: CloudJournalState.orderRecordName) { state.acknowledge(order) }
+        }
+        let driver = CloudFakeEngineDriver()
+        // Model operations from an older serialization: the order is already
+        // acknowledged, and the profile has a durable local save, not a delete.
+        await driver.setPending([.saveRecord(CloudRecordCodec.recordID(CloudJournalState.orderRecordName)), .deleteRecord(id)])
+        let keys = CloudTransportKeys(try CloudCryptoFixture.key())
+        f.reload()
+        let restarted = CloudSyncCoordinator(profiles: f.profiles, preferences: f.preferences, availability: { .development },
+            identity: { _ in f.owner }, snapshots: .init(providers: [], revision: { 0 }), makeTransport: { journal in
+                CloudKitAccountSync(journal: journal, keys: keys,
+                    assets: .init(root: f.cloud.appendingPathComponent("staging")), makeDriver: { driver })
+            })
+        // An unchanged incremental fetch can finish without another per-zone event.
+        await restarted.start()
+        #expect(await driver.loadedState == cursor)
+        #expect(await driver.fetchCalls > 0)
+        #expect(await driver.zoneCreations == 0)
+        #expect(!restarted.isInitialMerge)
+        #expect(await driver.pending == [.saveRecord(id)])
+        let batch = await driver.batch()
+        #expect(batch?.recordsToSave.map(\.recordID) == [id])
+        #expect(batch?.recordIDsToDelete.isEmpty == true)
+        await restarted.stop()
+    }
+
+    @Test(arguments: ["missing cursor", "zone never fetched", "zone not established", "zone creation pending"])
+    func incompleteZoneCheckpointRequiresFullFetch(_ reason: String) async throws {
+        let f = try CloudCoordinatorFixture(); defer { f.clean() }
+        let initial = f.coordinator()
+        await initial.start(); await initial.setEnabled(true)
+        await initial.stop()
+        try f.journal.catalogTransaction { state in
+            state.engineState = reason == "missing cursor" ? nil : Data([1])
+            state.transport?.initialized = reason != "zone never fetched"
+            state.transport?.zoneEstablished = reason != "zone not established"
+            state.transport?.zoneCreationRequested = reason == "zone creation pending"
+        }
+        f.transport.fetch = { journal in
+            let state = try journal.catalogState()
+            #expect(state.engineState == nil)
+            #expect(state.transport?.initialized == false)
+            #expect(state.transport?.catalogPublicationPaused == true)
+        }
+        let restarted = f.coordinator()
+        await restarted.start()
+        #expect(!restarted.isInitialMerge)
+        await restarted.stop()
+    }
+
     @Test func initialSDKSignInKeepsSettingsEnabledAcrossRestart() async throws {
         let f = try CloudCoordinatorFixture(); defer { f.clean() }
         let driver = CloudFakeEngineDriver()
@@ -383,6 +461,15 @@ import WebKit
         #expect(coordinator.status == .failed)
         #expect(try f.journal.catalogState().initialCatalogProjection != nil)
         await coordinator.stop()
+        // A partial first union can already have profiles and a serialized cursor.
+        try f.journal.catalogTransaction {
+            $0.engineState = Data([1]); $0.transport?.initialized = true; $0.transport?.zoneEstablished = true
+        }
+        f.transport.fetch = { journal in
+            let state = try journal.catalogState()
+            #expect(state.engineState == nil)
+            #expect(state.transport?.initialized == false)
+        }
         let restarted = f.coordinator()
         await restarted.start()
         let row = try #require(try f.store.loadProfiles().first)
@@ -549,7 +636,13 @@ import WebKit
         #expect(coordinator.status == .paused)
         let tombstone = CloudProfileDocument(id: local.id, createdAt: local.createdAt,
             tombstone: .init(version: .init(counter: 100, deviceID: UUID()), deletedAt: .now))
-        f.transport.fetch = { journal in try await f.stage(tombstone, journal: journal) }
+        try f.journal.catalogTransaction { $0.engineState = Data([1]); $0.transport?.zoneEstablished = true }
+        f.transport.fetch = { journal in
+            let state = try journal.catalogState()
+            #expect(state.engineState == nil)
+            #expect(state.transport?.initialized == false)
+            try await f.stage(tombstone, journal: journal)
+        }
         await coordinator.setEnabled(true)
         let restored = try #require(try f.store.loadProfiles().first)
         #expect(restored.id != local.id)
@@ -632,6 +725,51 @@ import WebKit
         await restarted.start()
         #expect(f.identityReads == reads)
         #expect(!restarted.isEnabled)
+    }
+
+    @Test(arguments: [false, true])
+    func lateCatalogReceiptDuringPassAppliesWithoutAnotherFetch(dropHint: Bool) async throws {
+        let f = try CloudCoordinatorFixture(); defer { f.clean() }
+        let cleanup = StartupCloudGate(), data = CoordinatorDataService()
+        data.removalGate = cleanup
+        f.profiles = .init(catalogStore: f.store, dataService: data, accountSwitchService: CoordinatorAccountSwitch(),
+            syncDefaults: f.defaults, autoStart: false)
+        let local = try #require(try f.store.loadProfiles().first)
+        let coordinator = f.coordinator()
+        await coordinator.start(); await coordinator.setEnabled(true)
+        let epoch = try #require(coordinator.epoch)
+        f.transport.fetch = { journal in
+            try await f.stage(.init(id: local.id, createdAt: local.createdAt,
+                tombstone: .init(version: .init(counter: 50, deviceID: UUID()), deletedAt: .now)), journal: journal)
+        }
+        let before = f.transport.fetches
+        let pass = Task { await coordinator.syncNow() }
+        // Browser cleanup suspends after the last receipt scan in applyRemote.
+        await cleanup.waitUntilEntered()
+        defer { cleanup.release() }
+        let late = CloudProfileDocument(id: UUID(), createdAt: .now,
+            fields: .init(label: .init(value: "late", version: .init(counter: 51, deviceID: UUID()))))
+        try await f.stage(late, journal: f.journal)
+        let sent = CloudTransportEvent(owner: f.owner, epoch: epoch, value: .sent([]))
+        f.transport.emit(sent) // Consume a waiting iterator before filling its buffer.
+        f.transport.emit(.init(owner: f.owner, epoch: epoch, value: .received))
+        if dropHint {
+            var dropped = false
+            for _ in 0..<17 {
+                if case .dropped(let event) = f.transport.continuation.yield(sent), case .received = event.value { dropped = true }
+            }
+            #expect(dropped)
+        }
+        f.transport.emit(.init(owner: f.owner, epoch: epoch, value: .status(.waitingForKey("marker"))))
+        let deadline = ContinuousClock.now + .seconds(2)
+        while coordinator.issue != .keychain, ContinuousClock.now < deadline { await Task.yield() }
+        #expect(coordinator.issue == .keychain) // Listener has handled everything before the marker.
+        cleanup.release()
+        await pass.value
+        #expect(try f.store.loadProfiles().map(\.id) == [late.id])
+        #expect(try f.journal.catalogState().receipts.isEmpty)
+        #expect(f.transport.fetches == before + 1)
+        await coordinator.stop()
     }
 
     @Test func pendingReceiptReplaysOnRestartUsingMergedJournalNotRawEnvelope() async throws {
@@ -1034,6 +1172,7 @@ private final class CoordinatorJournalFault: @unchecked Sendable {
 
 @MainActor private final class CoordinatorDataService: PlusProfileDataServing {
     var refreshGate: StartupCloudGate?
+    var removalGate: StartupCloudGate?
     var refreshCalls = 0
     func refreshProfile(_ profile: PlusProfile) async throws -> PlusProfileRefreshResult {
         refreshCalls += 1
@@ -1047,7 +1186,7 @@ private final class CoordinatorJournalFault: @unchecked Sendable {
     func waitForChromeSignInToFinish(for profile: PlusProfile) async -> Bool { false }
     func closeChromeSignIn(for profile: PlusProfile) async {}
     func clearSession(for profile: PlusProfile) async throws {}
-    func removeProfileData(for profile: PlusProfile) async throws {}
+    func removeProfileData(for profile: PlusProfile) async throws { await removalGate?.wait() }
 }
 
 @MainActor private final class CoordinatorTransport: CloudSyncTransport {

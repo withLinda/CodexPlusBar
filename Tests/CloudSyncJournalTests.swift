@@ -56,7 +56,7 @@ struct CloudSyncJournalTests {
         let envelope = try await journal.receive(recordName: Self.record, ciphertext: Data([4]), transportManaged: true)
         try await journal.transaction { try $0.beginApplying(envelope.id, postProjection: .init(profiles: []), documents: [:]) }
         try await journal.transaction { _ = try $0.replay(envelope.id, catalog: .trusted(.init(profiles: []))) }
-        let counter = CompactionRenameCounter()
+        let counter = JournalOperationCounter()
         let failing = CloudSyncJournal(root: f.root, owner: Self.owner, io: .init { event, name in
             if name == "journal.json", event == .rename, counter.next() == 2 { throw POSIXError(.EIO) }
         })
@@ -116,6 +116,106 @@ struct CloudSyncJournalTests {
     private static let id = CloudSyncTestSupport.profileID
     private static let device = CloudSyncTestSupport.deviceA
     private static let record = CloudJournalState.profileRecordName(id)
+
+    @Test func unchangedTransactionsReadLatestCommitWithoutReplacingIt() async throws {
+        let f = try JournalFixture(); defer { f.cleanUp() }
+        let renames = JournalOperationCounter()
+        let journal = CloudSyncJournal(root: f.root, owner: Self.owner, io: .init { event, name in
+            if event == .rename, name == "journal.json" { _ = renames.next() }
+        })
+        // A first transaction still materializes the partition, even with the default state.
+        try await journal.transaction { _ in }
+        #expect(try journal.existingCatalogState() != nil)
+        let other = CloudSyncJournal(root: f.root, owner: Self.owner)
+        let envelope = try await other.receive(recordName: Self.record, ciphertext: Data([1]), engineState: Data([7]))
+        let result = try await journal.transaction { state in
+            state.acknowledge(.init(recordName: Self.record, generation: 1, payloadDigest: Data()))
+            return state.engineState
+        }
+        #expect(result == Data([7]))
+        #expect(renames.value == 1)
+        try await journal.receive(id: envelope.id, recordName: Self.record, ciphertext: Data([1]), engineState: Data([7]))
+        #expect(renames.value == 1)
+        // The same envelope can still carry a real cursor or transport-order change.
+        try await journal.receive(id: envelope.id, recordName: Self.record, ciphertext: Data([1]),
+                                  engineState: Data([8]), transportManaged: true)
+        #expect(renames.value == 2)
+        let updated = try await other.load()
+        #expect(updated.engineState == Data([8]))
+        #expect(updated.transport?.inboxOrder == [envelope.id])
+    }
+
+    @Test func metadataCommitDoesNotResyncPreviouslyPublishedAssets() async throws {
+        let f = try JournalFixture(); defer { f.cleanUp() }
+        let setup = CloudSyncJournal(root: f.root, owner: Self.owner)
+        var envelopes: [CloudReceivedEnvelope] = []
+        for index in 0..<8 {
+            envelopes.append(try await setup.receive(recordName: "session.\(index)", ciphertext: Data([UInt8(index)])))
+        }
+        let assetSyncs = JournalOperationCounter()
+        let journal = CloudSyncJournal(root: f.root, owner: Self.owner, io: .init { event, name in
+            if event == .recoverySync, name.hasSuffix(".asset") { _ = assetSyncs.next() }
+        })
+        try await journal.transaction { $0.engineState = Data([4]) }
+        #expect(assetSyncs.value == 0)
+        let committed = try Data(contentsOf: f.journal)
+        try Data([0xFF]).write(to: f.asset(envelopes[3]))
+        await #expect(throws: CloudJournalError.assetMismatch) { try await journal.transaction { _ in } }
+        await #expect(throws: CloudJournalError.assetMismatch) { try await journal.transaction { $0.engineState = nil } }
+        #expect(try Data(contentsOf: f.journal) == committed)
+    }
+
+    @Test func newReferenceToAnOrphanRequiresDurableBytesEvenInAGenericTransaction() async throws {
+        let f = try JournalFixture(); defer { f.cleanUp() }
+        let normal = CloudSyncJournal(root: f.root, owner: Self.owner)
+        try await normal.transaction { $0.engineState = Data([1]) }
+        let id = UUID(), bytes = Data([9])
+        let fileName = id.uuidString.lowercased() + ".asset"
+        let envelope = CloudReceivedEnvelope(id: id, recordName: Self.record, metadata: Data(), systemFields: Data(),
+            asset: .init(fileName: fileName, byteCount: 1, digest: Data(SHA256.hash(data: bytes))))
+        let interrupted = CloudSyncJournal(root: f.root, owner: Self.owner, io: .init { event, name in
+            if event == .directorySync, name == fileName { throw POSIXError(.EIO) }
+        })
+        await #expect(throws: CloudJournalError.commitUncertain(fileName)) {
+            try await interrupted.receive(id: id, recordName: Self.record, ciphertext: bytes)
+        }
+        let retry = CloudSyncJournal(root: f.root, owner: Self.owner, io: .init { event, name in
+            if event == .recoverySync, name == fileName { throw POSIXError(.EIO) }
+        })
+        await #expect(throws: CloudJournalError.commitUncertain(fileName)) {
+            try await retry.transaction { state in
+                state.receivedEnvelopes[id] = envelope
+                state.receipts[id] = .init(phase: .received)
+                state.engineState = Data([2])
+            }
+        }
+        let state = try await normal.load()
+        #expect(state.receivedEnvelopes.isEmpty)
+        #expect(state.engineState == Data([1]))
+    }
+
+    @Test func damageWhileStagingAnAssetDoesNotAdvanceTheCursor() async throws {
+        let f = try JournalFixture(); defer { f.cleanUp() }
+        let normal = CloudSyncJournal(root: f.root, owner: Self.owner)
+        let old = try await normal.receive(recordName: "session.old", ciphertext: Data([1]), engineState: Data([1]))
+        let before = try Data(contentsOf: f.journal)
+        let damaged = CloudSyncJournal(root: f.root, owner: Self.owner, io: .init { event, name in
+            if event == .directorySync, name.hasSuffix(".asset") { try Data([0]).write(to: f.asset(old)) }
+        })
+        await #expect(throws: CloudJournalError.assetMismatch) {
+            try await damaged.receive(recordName: "session.new", ciphertext: Data([2]), engineState: Data([2]))
+        }
+        #expect(try Data(contentsOf: f.journal) == before)
+    }
+
+    @Test func unchangedTransactionRejectsDamageDuringItsBody() async throws {
+        let f = try JournalFixture(); defer { f.cleanUp() }
+        let journal = CloudSyncJournal(root: f.root, owner: Self.owner)
+        let envelope = try await journal.receive(recordName: "session.old", ciphertext: Data([1]))
+        await #expect(throws: CloudJournalError.assetMismatch) {
+            try await journal.transaction { _ in try Data([0]).write(to: f.asset(envelope)) }
+        }
+    }
 
     @Test func committedCatalogEditIsRecoveredBeforeEnqueue() async throws {
         let f = try JournalFixture(); defer { f.cleanUp() }
@@ -492,6 +592,7 @@ struct CloudSyncJournalTests {
             if event == .recoverySync { throw POSIXError(.EIO) }
         })
         await #expect(throws: CloudJournalError.commitUncertain("journal.json")) { try await failing.load() }
+        await #expect(throws: CloudJournalError.commitUncertain("journal.json")) { try await failing.transaction { _ in } }
         await #expect(throws: CloudJournalError.commitUncertain("journal.json")) {
             try await failing.transaction { $0.engineState = Data([9]) }
         }
@@ -679,8 +780,9 @@ struct CloudSyncJournalTests {
     }
 }
 
-private final class CompactionRenameCounter: @unchecked Sendable {
+private final class JournalOperationCounter: @unchecked Sendable {
     private let lock = NSLock()
     private var count = 0
+    var value: Int { lock.withLock { count } }
     func next() -> Int { lock.withLock { count += 1; return count } }
 }

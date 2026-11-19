@@ -64,6 +64,13 @@ struct CloudRecordCodec: Sendable {
         return record
     }
 
+    /// System-field archives can vary across deliveries of the same revision.
+    /// Compare CloudKit's version, not the private representation of the archive.
+    static func isSameServerRevision(_ record: CKRecord, as fields: Data) -> Bool {
+        guard let tag = record.recordChangeTag, !tag.isEmpty, let prior = try? restoredRecord(fields) else { return false }
+        return prior.recordID == record.recordID && prior.recordType == record.recordType && prior.recordChangeTag == tag
+    }
+
     func encode(_ body: CloudRecordBody, owner: CloudOwner, key: CloudEncryptionKey, systemFields: Data? = nil) throws -> CloudEncodedRecord {
         try Self.validate(body)
         let name = Self.recordName(for: body)

@@ -19,12 +19,19 @@ actor CloudKitEngineDriver: CloudEngineDriving {
         let container = try availability.withContainer(environment: owner.environment, factory: makeContainer)
         guard try await container.accountStatus() == .available,
               try await container.userRecordID().recordName == owner.userRecordName else { throw CloudTransportError.accountChanged }
-        let serialization = try state.map { try JSONDecoder().decode(CKSyncEngine.State.Serialization.self, from: $0) }
+        let serialization = try state.map(Self.decodeState)
         let delegate = CloudKitEngineDelegate(owner: owner, callbacks: callbacks)
         let database = container.privateCloudDatabase
         let configuration = CKSyncEngine.Configuration(database: database, stateSerialization: serialization, delegate: delegate)
         self.delegate = delegate
         engine = CKSyncEngine(configuration)
+    }
+
+    /// Thrown only before an engine is constructed, while reading its opaque checkpoint.
+    struct UnreadableCheckpoint: Error {}
+    static func decodeState(_ bytes: Data) throws(UnreadableCheckpoint) -> CKSyncEngine.State.Serialization {
+        do { return try JSONDecoder().decode(CKSyncEngine.State.Serialization.self, from: bytes) }
+        catch { throw UnreadableCheckpoint() }
     }
 
     func setPending(_ changes: [CKSyncEngine.PendingRecordZoneChange]) {

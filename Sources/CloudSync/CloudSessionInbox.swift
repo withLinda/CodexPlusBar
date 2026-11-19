@@ -31,6 +31,11 @@ extension CloudJournalState {
             object["envelope." + id.uuidString] = try CloudJournalCoding.encode(envelope)
         }
         object["digests"] = try CloudJournalCoding.encode(transport?.sessionDigests ?? [:])
+        object["localDigests"] = try CloudJournalCoding.encode(payloadDigests.filter { $0.key.hasPrefix("session.") })
+        let applied = receivedEnvelopes.values.compactMap { envelope in
+            envelope.recordName.hasPrefix("session.") && receipts[envelope.id]?.phase == .applied ? envelope.id.uuidString : nil
+        }
+        object["applied"] = try CloudJournalCoding.encode(applied.sorted())
         object["deleted"] = try CloudJournalCoding.encode((transport?.deletedSessions ?? []).sorted())
         object["local"] = try CloudJournalCoding.encode(sessions.filter { $0.value.profileID == profileID })
         object["profile"] = try CloudJournalCoding.encode(profiles[Self.profileRecordName(profileID)])
@@ -70,22 +75,23 @@ actor CloudSessionInbox {
         let stamp = try state.sessionInboxStamp(for: profile.id)
         var decoded: [CloudSessionCandidate] = []
         var highest: [String: UInt64] = [:]
-        for stored in state.receivedEnvelopes.values where stored.recordName.hasPrefix("session.") {
+        for envelope in state.receivedEnvelopes.values where envelope.recordName.hasPrefix("session.") {
             do {
-                guard let (fresh, envelope, bytes) = try await journal.pendingInboxItem(stored.id), Self.available(profile.id, in: fresh),
-                      fresh.transport?.deletedSessions.contains(envelope.recordName) != true else { continue }
+                try Task.checkCancellation()
+                guard state.receipts[envelope.id]?.phase != .applied,
+                      state.transport?.deletedSessions.contains(envelope.recordName) != true else { continue }
                 let routing = try JSONDecoder().decode(CloudRecordRouting.self, from: envelope.metadata)
                 guard routing.kind == "session", routing.profileID == profile.id,
                       let key = try await keys.key(id: routing.keyID, owner: journal.owner) else { continue }
                 let encrypted = CloudRecordEnvelope(id: envelope.id, recordName: envelope.recordName, routing: routing,
-                    ciphertext: bytes, systemFields: envelope.systemFields)
+                    ciphertext: try await journal.ciphertext(fromSnapshot: envelope), systemFields: envelope.systemFields)
                 guard case .session(let document) = try codec.decode(encrypted, owner: journal.owner, key: key),
                       document.revision > 0, document.sourceName.utf8.count <= 1_024 else { continue }
                 let source = "\(document.sourceDeviceID).\(document.kind.rawValue)"
                 highest[source] = max(highest[source] ?? 0, document.revision)
-                if let expected = fresh.transport?.sessionDigests[envelope.recordName],
+                if let expected = state.transport?.sessionDigests[envelope.recordName],
                    expected != CloudJournalCoding.digest(try CloudJournalCoding.encode(document)) { continue }
-                if let expected = fresh.payloadDigests[envelope.recordName],
+                if let expected = state.payloadDigests[envelope.recordName],
                    expected != CloudJournalCoding.digest(try CloudJournalCoding.encode(CloudRecordBody.session(document))) { continue }
                 let payload = try JSONDecoder().decode(CloudSessionPayload.self, from: document.payload).validated()
                 guard payload.kind == document.kind else { continue }

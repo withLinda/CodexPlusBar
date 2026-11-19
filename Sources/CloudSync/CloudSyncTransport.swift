@@ -13,7 +13,8 @@ struct CloudTransportEvent: Sendable {
     let epoch: UUID
     let value: Value
     enum Value: Sendable {
-        case received([CloudRecordEnvelope])
+        /// Wake the coordinator to read committed changes from the journal.
+        case received
         case sent([CloudSentRevision])
         case accountChanged
         case status(CloudTransportStatus)

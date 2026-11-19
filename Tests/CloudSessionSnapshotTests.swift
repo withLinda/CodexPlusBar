@@ -3,6 +3,62 @@ import Testing
 @testable import CodexPlusBar
 
 @MainActor struct CloudSessionSnapshotTests {
+    @Test func alreadyApprovedCapturesDoNotPrepareNewDocumentsOrSignalPendingWork() async throws {
+        let payload = try CloudSessionPayload.desktop(signIn: CodexSignIn(data: CodexSignInFixture.data()), consumed: [])
+        let provider = SessionProviderState(payload)
+        let f = try SessionFixture(snapshots: .init(providers: [{ _ in try provider.read() }], revision: { 0 }))
+        defer { f.clean() }
+        var preparations = 0
+        f.sourceName = { preparations += 1; return "Synthetic Mac" }
+        let rows = (0..<8).map { _ in CodexSignInFixture.profile() }
+        try f.store.saveProfiles(rows)
+        await f.coordinator.start(); await f.coordinator.setEnabled(true)
+        let before = try f.journal.catalogState()
+        try #require(before.transport?.validatedSessionRecords?.count == rows.count)
+        preparations = 0
+        #expect(await !f.coordinator.captureSavedSessions())
+        #expect(preparations == 0)
+        #expect(try f.journal.catalogState() == before)
+
+        // Re-approve retained bodies without re-staging their bytes or allocating revisions.
+        try f.journal.catalogTransaction { $0.transport?.validatedSessionRecords = [] }
+        #expect(await f.coordinator.captureSavedSessions())
+        #expect(preparations == 0)
+        #expect(try f.journal.catalogState() == before)
+        await f.coordinator.stop()
+    }
+
+    @Test func bufferedCaptureCannotRepublishAReplacedGeneration() async throws {
+        let old = try CloudSessionPayload.desktop(signIn: CodexSignIn(data: CodexSignInFixture.data(refresh: "old")), consumed: [])
+        let fresh = try CloudSessionPayload.desktop(signIn: CodexSignIn(data: CodexSignInFixture.data(refresh: "fresh")), consumed: [])
+        let provider = SessionProviderState(old)
+        var visit: (@MainActor (PlusProfile) throws -> Void)?
+        let f = try SessionFixture(snapshots: .init(providers: [{ profile in try visit?(profile); return try provider.read() }], revision: { 0 }))
+        defer { f.clean() }
+        let rows = [f.profile, CodexSignInFixture.profile()]
+        try f.store.saveProfiles(rows)
+        await f.coordinator.start(); await f.coordinator.setEnabled(true)
+        var first: UUID?
+        visit = { profile in
+            guard let id = first else { first = profile.id; return }
+            guard profile.id != id else { return }
+            visit = nil
+            // A second writer rotates the first store and publishes it while this
+            // pass is reading another profile. No process-local signal is assumed.
+            provider.current = fresh
+            let row = try #require(rows.first { $0.id == id })
+            let admission = try #require(f.coordinator.sessionAdmission(for: id))
+            try f.coordinator.commitCapturedSession(sessionDocument(profile: row, payload: fresh, source: f.device, revision: 2),
+                admission: admission)
+        }
+        _ = await f.coordinator.captureSavedSessions()
+        let id = try #require(first)
+        let item = try #require(try f.journal.catalogState().sessions.values.first { $0.profileID == id })
+        #expect(item.revision == 2)
+        #expect(try JSONDecoder().decode(CloudSessionPayload.self, from: item.payload).digest() == fresh.digest())
+        await f.coordinator.stop()
+    }
+
     @Test func repeatedCapturesExceedHistoricalJournalCapacityButKeepCurrentBodySmall() async throws {
         let f = try SessionFixture(); defer { f.clean() }
         await f.coordinator.start(); await f.coordinator.setEnabled(true)
@@ -479,10 +535,11 @@ func stageProfile(_ profile: PlusProfile, in journal: CloudSyncJournal, deleted:
     let suite = "CloudSessionTests.\(UUID())"
     let owner = CloudOwner(container: "iCloud.com.linda.CodexPlusBar", environment: .development, userRecordName: "synthetic-session-owner")
     var currentOwner: CloudOwner?
+    var sourceName: @MainActor () -> String = { "Synthetic Mac" }
     var nativeAdoption: @MainActor (CloudSessionAdoptionAuthorization) -> CloudNativeSessionAdoption = { .init(authorization: $0) }
     lazy var coordinator = CloudSyncCoordinator(profiles: profiles, preferences: preferences,
         availability: { .development }, identity: { [self] _ in currentOwner ?? owner }, snapshots: snapshots,
-        nativeAdoption: { [self] in nativeAdoption($0) },
+        sourceName: { [self] in sourceName() }, nativeAdoption: { [self] in nativeAdoption($0) },
         makeSessionInbox: { [self] journal in .init(journal: journal, keys: inboxKeys ?? CloudKeyStore(journal: journal)) },
         makeTransport: { [self] journal in transport.journal = journal; return transport })
     init(snapshots: CloudSessionSnapshotService? = nil, inboxKeys: (any CloudKeyStoring)? = nil,

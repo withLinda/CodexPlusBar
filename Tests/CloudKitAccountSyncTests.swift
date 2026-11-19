@@ -1,9 +1,155 @@
 import CloudKit
 import Foundation
+import os
 import Testing
 @testable import CodexPlusBar
 
 struct CloudKitAccountSyncTests {
+    @Test func settledSessionHistoryCostsNoPerRecordJournalReloadsOnRedelivery() async throws {
+        let reads = OSAllocatedUnfairLock(initialState: 0)
+        let f = try await CloudTransportFixture(io: .init { op, name in
+            if op == .recoverySync, name == "journal.json" { reads.withLock { $0 += 1 } }
+        })
+        defer { f.disk.cleanUp() }
+        try await f.start()
+        let records = try (1...12).map { revision in
+            try f.record(.session(.init(profileID: UUID(), sourceDeviceID: UUID(), sourceName: "test",
+                kind: .desktop, revision: UInt64(revision), capturedAt: .distantPast, payload: Data([1]))))
+        }
+        defer { records.forEach { $0.lease.release() } }
+        let fetched = CloudEngineEvent.fetched(records: records.map(\.record), deletions: [])
+        await f.driver.emit(fetched)
+        let before = try await f.journal.load()
+        try #require(before.transport?.sessionEvidenceChecked?.count == 12)
+        reads.withLock { $0 = 0 }
+        await f.driver.emit(fetched)
+        let journalReads = reads.withLock { $0 }
+        #expect(journalReads <= 4, "A duplicate batch must not do a full journal read for each settled item")
+        #expect(try await f.journal.load() == before)
+        await f.transport.stop()
+    }
+
+    @Test func oneMissingKeyDoesNotCausePerReceiptJournalScans() async throws {
+        let reads = OSAllocatedUnfairLock(initialState: 0)
+        let f = try await CloudTransportFixture(io: .init { op, name in
+            if op == .recoverySync, name == "journal.json" { reads.withLock { $0 += 1 } }
+        })
+        defer { f.disk.cleanUp() }
+        let missing = try CloudCryptoFixture.key()
+        try await f.start()
+        let items = try (0..<8).map { _ in try f.record(.profile(.init(id: UUID(), createdAt: .distantPast)), key: missing) }
+        defer { items.forEach { $0.lease.release() } }
+        await f.driver.emit(.fetched(records: items.map(\.record), deletions: []))
+        let lookups = await f.keys.lookups
+        reads.withLock { $0 = 0 }
+        await f.driver.emit(.fetched(records: [], deletions: []))
+        let journalReads = reads.withLock { $0 }
+        #expect(journalReads <= 3)
+        #expect(await f.keys.lookups == lookups + 1)
+        await f.keys.deliver(missing)
+        await f.driver.emit(.fetched(records: [], deletions: []))
+        #expect(try await f.journal.load().transport?.processedInbox.count == 8)
+        await f.transport.stop()
+    }
+
+    @Test func replayCoalescesHintsForUnappliedCatalogReceipts() async throws {
+        let f = try await CloudTransportFixture()
+        defer { f.disk.cleanUp() }
+        try await f.start()
+        let records = try (0..<3).map { _ in try f.record(.profile(.init(id: UUID(), createdAt: .distantPast))) }
+        defer { records.forEach { $0.lease.release() } }
+        await f.driver.emit(.fetched(records: records.map(\.record), deletions: []))
+        // A missed hint can be recovered on the next pass, without an event per receipt.
+        await f.driver.emit(.fetched(records: [], deletions: []))
+        await f.driver.emit(.fetchStarted)
+        var hints = 0
+        var events = f.transport.events.makeAsyncIterator()
+        _ = await events.next() // initial .syncing from start()
+        while let event = await events.next() {
+            if case .received = event.value { hints += 1 }
+            if case .status(.syncing) = event.value { break }
+        }
+        #expect(hints == 2)
+        #expect(try await f.journal.load().transport?.processedInbox.count == 3)
+        await f.transport.stop()
+    }
+
+    @Test func resolvedRecordDoesNotKeepRetryingWhenItsSaveWasSuperseded() async throws {
+        let f = try await CloudTransportFixture(); defer { f.disk.cleanUp() }
+        let superseded = try await f.localProfile(), stillPending = try await f.localProfile()
+        try await f.startReady()
+        try await f.journal.transaction {
+            $0.dirtyGenerations.removeValue(forKey: superseded)
+            $0.transport?.retryAfter = [superseded: .distantPast, stillPending: .distantFuture]
+        }
+        try await f.transport.syncNow()
+        let state = try await f.journal.load()
+        #expect(state.transport?.retryAfter == [stillPending: .distantFuture])
+        await f.transport.stop()
+    }
+
+    @Test func sessionListChecksHistoryWithoutReloadingTheJournalForEveryRevision() async throws {
+        let reads = OSAllocatedUnfairLock(initialState: 0)
+        let f = try await CloudTransportFixture(io: .init { op, name in
+            if op == .recoverySync, name == "journal.json" { reads.withLock { $0 += 1 } }
+        })
+        defer { f.disk.cleanUp() }
+        let profile = CodexSignInFixture.profile(), source = UUID()
+        try await stageProfile(profile, in: f.journal)
+        try await f.start()
+        let payload = try CloudSessionPayload.desktop(signIn: CodexSignIn(data: CodexSignInFixture.data()), consumed: [])
+        for revision in 1...6 {
+            let stored = try f.record(.session(sessionDocument(profile: profile, payload: payload, source: source, revision: UInt64(revision))))
+            defer { stored.lease.release() }
+            await f.driver.emit(.fetched(records: [stored.record], deletions: []))
+        }
+        reads.withLock { $0 = 0 }
+        let list = try await CloudSessionInbox(journal: f.journal, keys: f.keys).summaries(for: profile)
+        #expect(list.map(\.revision) == [6])
+        let journalReads = reads.withLock { $0 }
+        #expect(journalReads <= 2)
+        await f.transport.stop()
+    }
+
+    @Test func fetchedPendingReceiptWithoutTransportOrderStillEntersReplay() async throws {
+        let f = try await CloudTransportFixture(); defer { f.disk.cleanUp() }
+        let record = try f.record(.profile(.init(id: UUID(), createdAt: .distantPast)))
+        defer { record.lease.release() }
+        let envelope = try f.codec.envelope(from: record.record)
+        try await f.journal.receive(id: envelope.id, recordName: envelope.recordName,
+            metadata: CloudJournalCoding.encode(envelope.routing), systemFields: envelope.systemFields,
+            ciphertext: envelope.ciphertext)
+        try await f.start()
+        await f.driver.emit(.fetched(records: [record.record], deletions: []))
+        #expect(try await f.journal.load().transport?.processedInbox == [envelope.id])
+        await f.transport.stop()
+    }
+
+    @Test func redeliveryOfSameServerRevisionWithDifferentArchiveBytesIsNotANewReceipt() async throws {
+        let f = try await CloudTransportFixture(); defer { f.disk.cleanUp() }
+        let saved = try f.record(.session(.init(profileID: UUID(), sourceDeviceID: UUID(), sourceName: "test",
+            kind: .desktop, revision: 1, capturedAt: .distantPast, payload: Data([1]))))
+        defer { saved.lease.release() }
+        let record = try CloudSyntheticServerRecord.withChangeTag(saved.record)
+        let received = try f.codec.envelope(from: record)
+        let plist = try PropertyListSerialization.propertyList(from: received.systemFields, format: nil)
+        let olderFields = try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
+        try #require(olderFields != received.systemFields)
+        // Older clients included the exact archived bytes in the receipt ID.
+        var identity = Data(received.recordName.utf8)
+        identity.append(try CloudJournalCoding.encode(received.routing))
+        identity.append(CloudJournalCoding.digest(received.ciphertext))
+        identity.append(CloudJournalCoding.digest(olderFields))
+        let oldID = CloudJournalCoding.digest(identity).withUnsafeBytes { UUID(uuid: $0.loadUnaligned(as: uuid_t.self)) }
+        try await f.journal.receive(id: oldID, recordName: received.recordName,
+            metadata: CloudJournalCoding.encode(received.routing), systemFields: olderFields,
+            ciphertext: received.ciphertext, transportManaged: true)
+        try await f.start()
+        await f.driver.emit(.fetched(records: [record], deletions: []))
+        #expect(try await f.journal.load().transport?.inboxOrder == [oldID])
+        await f.transport.stop()
+    }
+
     @Test(arguments: ["storage", "token", "network", "account"])
     func delegateTriggeredEngineWorkDoesNotInheritCallbackTaskContext(reason: String) async throws {
         let sleeper = CloudTransportSleeper(), clock = CloudTransportClock()
@@ -583,8 +729,10 @@ struct CloudKitAccountSyncTests {
     @Test func manualReconciliationDiskFailureClosesEpochBeforeLaterStateUpdate() async throws {
         let fault = CloudTransportFault()
         let f = try await CloudTransportFixture(io: .init { op, name in try fault.check(op, name) }); defer { f.disk.cleanUp() }
-        _ = try await f.localProfile()
+        let name = try await f.localProfile()
         try await f.startReady()
+        // Manual reconciliation now writes only if there is a block to clear.
+        try await f.journal.transaction { $0.transport?.blockedRecords[name] = .quota }
         fault.enable()
         await #expect(throws: (any Error).self) { try await f.transport.syncNow() }
         fault.disable()
@@ -930,6 +1078,63 @@ struct CloudKitAccountSyncTests {
         await f.transport.stop()
     }
 
+    @Test func undecodableEngineStateRestartsOnceWithDurableFullFetchGate() async throws {
+        let f = try await CloudTransportFixture(); defer { f.disk.cleanUp() }
+        let name = try await f.localProfile()
+        try await f.journal.transaction {
+            $0.engineState = Data("truncated JSON".utf8)
+            $0.transport = .init(); $0.transport?.initialized = true; $0.transport?.zoneEstablished = true
+        }
+        var expected = try await f.journal.load()
+        expected.engineState = nil; expected.transport?.initialized = false
+        let journal = f.journal
+        await f.driver.setStartupCheck { bytes in
+            if let bytes { _ = try CloudKitEngineDriver.decodeState(bytes) }
+            else {
+                let checkpoint = try journal.catalogState()
+                #expect(checkpoint.engineState == nil)
+                #expect(checkpoint.transport?.initialized == false)
+            }
+        }
+        try await f.start()
+        #expect(await f.driver.starts == 2)
+        #expect(try await journal.load() == expected)
+        try await f.transport.syncNow() // No zone-completion event.
+        #expect(await f.driver.batch() == nil)
+        await f.driver.emit(.zoneFetched(error: nil))
+        #expect(await f.driver.batch()?.recordsToSave.map(\.recordID.recordName) == [name])
+        await f.transport.stop()
+    }
+
+    @Test func unrelatedStartupDecodeFailureDoesNotResetEngineState() async throws {
+        let f = try await CloudTransportFixture(); defer { f.disk.cleanUp() }
+        try await f.journal.transaction { $0.engineState = Data([7]) }
+        let before = try await f.journal.load()
+        await f.driver.setStartupCheck { _ in
+            throw DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "unrelated failure"))
+        }
+        await #expect(throws: DecodingError.self) { try await f.start() }
+        #expect(await f.driver.starts == 1)
+        #expect(try await f.journal.load() == before)
+        await f.transport.stop()
+    }
+
+    @Test func failedCheckpointResetDoesNotOpenFreshEngine() async throws {
+        let fault = CloudTransportFault()
+        let f = try await CloudTransportFixture(io: .init { op, name in try fault.check(op, name) }); defer { f.disk.cleanUp() }
+        try await f.journal.transaction { $0.engineState = Data([7]) }
+        let before = try await f.journal.load()
+        await f.driver.setStartupCheck { bytes in
+            if let bytes { _ = try CloudKitEngineDriver.decodeState(bytes) }
+        }
+        fault.enable()
+        await #expect(throws: POSIXError.self) { try await f.start() }
+        fault.disable()
+        #expect(await f.driver.starts == 1)
+        #expect(try await f.journal.load() == before)
+        await f.transport.stop()
+    }
+
     @Test func diskFailureBeforeCursorInvalidatesEpochAndRestartUsesLastDurableState() async throws {
         let fault = CloudTransportFault()
         let f = try await CloudTransportFixture(io: .init { op, name in try fault.check(op, name) }); defer { f.disk.cleanUp() }
@@ -1079,9 +1284,12 @@ actor CloudFakeEngineDriver: CloudEngineDriving {
     private var holdStart = false
     private var startup: CheckedContinuation<Void, Never>?
     private var startupWaiter: CheckedContinuation<Void, Never>?
+    private var startupCheck: (@Sendable (Data?) throws -> Void)?
+    func setStartupCheck(_ check: @escaping @Sendable (Data?) throws -> Void) { startupCheck = check }
     func start(owner: CloudOwner, state: Data?, callbacks: CloudEngineCallbacks) async throws {
         inspectContext("start")
         self.loadedState = state; self.callbacks = callbacks; starts += 1
+        try startupCheck?(state)
         accountDelegate = CloudKitEngineDelegate(owner: owner, callbacks: callbacks)
         operations = CloudEngineOperationDrain()
         if let waiter = startWaiter, starts >= waiter.0 { startWaiter = nil; waiter.1.resume() }

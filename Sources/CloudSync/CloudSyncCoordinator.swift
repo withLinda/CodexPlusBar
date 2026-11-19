@@ -1,6 +1,7 @@
 import CloudKit
 import Foundation
 import Observation
+import OSLog
 
 enum CloudSyncStatus: Equatable { case off, unavailable, needsConsent, syncing, upToDate, paused, pending, failed }
 
@@ -191,8 +192,15 @@ struct CloudSessionAdmission: Equatable, Sendable {
                 $0.transport?.catalogPublicationPaused = true
                 $0.transport?.includeSavedSessions = saved.preferences.includesSessions(for: current)
                 $0.transport?.validatedSessionRecords = []
-                $0.transport?.initialized = false
-                $0.engineState = nil
+                // Resume a completed zone fetch with its cursor. A successful
+                // incremental fetch need not deliver another per-zone callback.
+                // Explicit enablement (including restore) still gets a full fetch.
+                if explicit || firstUnion || $0.engineState == nil || $0.transport?.initialized != true ||
+                    $0.transport?.zoneEstablished != true || $0.transport?.zoneCreationRequested == true ||
+                    $0.transport?.zoneLost == true {
+                    $0.transport?.initialized = false
+                    $0.engineState = nil
+                }
             }
             owner = current; epoch = newEpoch; self.bridge = bridge; bridge.attach()
             includesSessions = saved.preferences.includesSessions(for: current)
@@ -202,7 +210,7 @@ struct CloudSessionAdmission: Equatable, Sendable {
             bridge.onCommit = { [weak self] in
                 guard let self else { return }
                 self.status = .pending
-                Task { [weak self] in await self?.syncNow() }
+                Task { [weak self] in await self?.syncNow(reason: "catalog") }
             }
             listener = Task { [weak self] in
                 for await event in engine.events {
@@ -216,7 +224,7 @@ struct CloudSessionAdmission: Equatable, Sendable {
                 try await real.createZoneForFirstUse()
             }
             guard intent == admission else { return }
-            await syncNow()
+            await syncNow(reason: "startup")
         } catch {
             guard intent == admission else { return }
             issue = CloudSyncIssue(error)
@@ -239,11 +247,14 @@ struct CloudSessionAdmission: Equatable, Sendable {
         } catch { issue = CloudSyncIssue(error); status = .failed }
     }
 
-    func syncNow() async {
+    func syncNow(reason: String = "manual") async {
         if let pass { await pass.value; return }
         guard isEnabled, let epoch, let owner, let engine = transport, let bridge else { return }
+        Logger(subsystem: "com.linda.CodexPlusBar", category: "CloudSync").info("Starting sync pass: \(reason, privacy: .public)")
         let task = Task { [weak self] in
             guard let self else { return }
+            // Release admission in the same actor turn as the final receipt check.
+            defer { if self.epoch == epoch { pass = nil } }
             do {
                 let current = try await identity(owner.environment)
                 guard self.epoch == epoch, isEnabled else { return }
@@ -280,9 +291,14 @@ struct CloudSessionAdmission: Equatable, Sendable {
                     guard self.epoch == epoch, isEnabled else { return }
                     try await bridge.applyRemote(profiles: [], order: nil, epoch: epoch)
                 }
+                guard self.epoch == epoch, isEnabled else { return }
                 verifiedPass = true
                 startLocalServicesIfReady()
-                try refreshStatus()
+                // The durable receipt survives a dropped stream hint. Recheck
+                // after every apply, including arrivals during browser cleanup.
+                while self.epoch == epoch, isEnabled, try refreshStatus() {
+                    try await bridge.applyRemote(profiles: [], order: nil, epoch: epoch)
+                }
             } catch {
                 guard self.epoch == epoch, isEnabled else { return }
                 verifiedPass = false
@@ -292,7 +308,6 @@ struct CloudSessionAdmission: Equatable, Sendable {
         }
         pass = task
         await task.value
-        if self.epoch == epoch { pass = nil }
     }
 
     private func receive(_ event: CloudTransportEvent) async {
@@ -300,11 +315,12 @@ struct CloudSessionAdmission: Equatable, Sendable {
         switch event.value {
         case .accountChanged: await accountChanged(nil)
         case .received:
+            // The active pass checks the durable receipt even if this hint is dropped.
             guard pass == nil, !needsInitialUnion, let bridge else { return }
             do {
-                try await bridge.applyRemote(profiles: [], order: nil, epoch: event.epoch)
-                guard isEnabled, event.epoch == epoch else { return }
-                try refreshStatus()
+                while isEnabled, event.epoch == epoch, pass == nil, try refreshStatus() {
+                    try await bridge.applyRemote(profiles: [], order: nil, epoch: event.epoch)
+                }
             } catch { if event.epoch == epoch { issue = CloudSyncIssue(error); status = .pending } }
         case .sent: break
         case .status(let value):
@@ -324,8 +340,9 @@ struct CloudSessionAdmission: Equatable, Sendable {
         }
     }
 
-    private func refreshStatus() throws {
-        guard let bridge, isEnabled else { return }
+    /// Returns whether this snapshot contains a catalog receipt ready for local application.
+    @discardableResult private func refreshStatus() throws -> Bool {
+        guard let bridge, isEnabled else { return false }
         let state = try bridge.journal.catalogState()
         lastSuccessfulSync = state.lastSuccess ?? lastSuccessfulSync
         // Authenticated saved sessions are synced once durably received. Import is
@@ -340,6 +357,10 @@ struct CloudSessionAdmission: Equatable, Sendable {
             state.transport?.blockedRecords.isEmpty != false && state.transport?.retryAfter.isEmpty != false &&
             state.transport?.pendingSessionDeletes.isEmpty != false
         status = clean ? .upToDate : .pending
+        return !receiptsSettled && state.transport?.processedInbox.contains(where: { id in
+            state.receipts[id]?.phase != .applied &&
+                state.receivedEnvelopes[id].map { !$0.recordName.hasPrefix("session.") } == true
+        }) == true
     }
 
     private func accountChanged(_ current: CloudOwner?) async {
@@ -421,17 +442,22 @@ struct CloudSessionAdmission: Equatable, Sendable {
         sessionAdmission(for: profileID) != nil && profiles.canBeginCloudSessionAdoption(for: profileID)
     }
 
+    private func matchesCaptureRow(_ row: PlusProfile, _ admission: CloudSessionAdmission) -> Bool {
+        row.id == admission.profileID && row.provider == .codex && row.webDataStoreID == admission.webDataStoreID &&
+            row.codexSignIn == admission.desktopIdentity && row.openCodeOpenAIAccount == admission.openChamberIdentity
+    }
+
     /// Capture/adoption services use this narrow final admission after their awaits.
     /// Neither a removed profile nor an old owner/session-inclusion epoch can queue.
-    func commitCapturedSession(_ document: CloudSessionDocument, admission: CloudSessionAdmission) throws {
+    @discardableResult func commitCapturedSession(_ document: CloudSessionDocument, admission: CloudSessionAdmission) throws -> Bool {
         guard isEnabled, includesSessions, !needsInitialUnion, admission.owner == owner, admission.epoch == epoch,
               document.profileID == admission.profileID, let bridge,
               document.sourceDeviceID == (try preferences.read()?.deviceID),
               admission.credentialRevision == snapshots.revision,
               profiles.cloudSessionCaptureAllowed(for: admission.profileID),
-              let row = try profiles.cloudCommittedRows().first(where: { $0.id == document.profileID }), row.provider == .codex,
-              row.webDataStoreID == admission.webDataStoreID, row.codexSignIn == admission.desktopIdentity,
-              row.openCodeOpenAIAccount == admission.openChamberIdentity else { throw CloudTransportError.notStarted }
+              let row = try profiles.cloudCommittedRows().first(where: { matchesCaptureRow($0, admission) }) else {
+            throw CloudTransportError.notStarted
+        }
         let payload = try JSONDecoder().decode(CloudSessionPayload.self, from: document.payload).validated()
         guard payload.kind == document.kind, document.revision > 0 else { throw CloudSessionError.invalidPayload }
         try payload.identity.validateBindings(of: row)
@@ -439,7 +465,7 @@ struct CloudSessionAdmission: Equatable, Sendable {
         guard try CloudJournalCoding.encode(CloudRecordBody.session(document)).count <= CloudPayloadCipher.maximumPlaintextBytes else {
             throw CloudPayloadError.tooLarge
         }
-        try bridge.journal.catalogTransaction { state in
+        let queued = try bridge.journal.catalogTransaction { state in
             guard state.restoreIntent == nil, !state.receipts.values.contains(where: { $0.phase == .applying }),
                   let profile = state.profiles[CloudJournalState.profileRecordName(document.profileID)],
                   profile.tombstone == nil else { throw CloudJournalError.invalidTransition }
@@ -448,13 +474,14 @@ struct CloudSessionAdmission: Equatable, Sendable {
             let previous = state.sessions.values.filter { $0.profileID == document.profileID && $0.sourceDeviceID == document.sourceDeviceID && $0.kind == document.kind }
                 .max { $0.revision < $1.revision }
             if let previous, let saved = try? JSONDecoder().decode(CloudSessionPayload.self, from: previous.payload), try saved.digest() == digest {
-                state.transport?.validatedSessionRecords?.insert(CloudRecordCodec.recordName(for: .session(previous)))
-                return
+                let previousName = CloudRecordCodec.recordName(for: .session(previous))
+                let approved = state.transport?.validatedSessionRecords?.insert(previousName).inserted == true
+                return approved && state.dirtyGenerations[previousName] != nil
             }
-            if state.adoptedSessionDigests?[Self.sessionOriginKey(document.profileID, document.kind)] == digest { return }
+            if state.adoptedSessionDigests?[Self.sessionOriginKey(document.profileID, document.kind)] == digest { return false }
             if let existing = state.sessions[name] {
                 guard existing == document else { throw CloudSyncModelError.conflictingVersion }
-                return
+                return false
             }
             guard document.revision > state.latestSessionRevision(profileID: document.profileID,
                 sourceDeviceID: document.sourceDeviceID, kind: document.kind) else { throw CloudSyncModelError.conflictingVersion }
@@ -472,8 +499,10 @@ struct CloudSessionAdmission: Equatable, Sendable {
                 }
             }
             state.compactLocalSessions()
+            return true
         }
-        status = .pending
+        if queued { status = .pending }
+        return queued
     }
 
     private static func sessionOriginKey(_ id: UUID, _ kind: CloudSessionKind) -> String { "\(id.uuidString).\(kind.rawValue)" }
@@ -491,9 +520,55 @@ struct CloudSessionAdmission: Equatable, Sendable {
                 guard self.epoch == epoch, !Task.isCancelled else { return }
                 if let pass { await pass.value }
                 guard self.epoch == epoch, !Task.isCancelled else { return }
-                if await captureSavedSessions() { await syncNow() }
+                if await captureSavedSessions() { await syncNow(reason: "session change") }
                 if counter == sessionChangeCounter { return }
             } while self.epoch == epoch && !Task.isCancelled
+        }
+    }
+
+    private struct SavedCapture {
+        let admission: CloudSessionAdmission
+        let kind: CloudSessionKind
+        let digest: Data // Canonical validated payload, including consumption evidence.
+    }
+
+    /// Reconcile identical retained payloads together, after the provider awaits.
+    /// For a mismatch return only the prospective revision, never a stale credential.
+    private func reconcileSavedCaptures(_ captures: [SavedCapture], rows: [PlusProfile], device: UUID,
+                                        journal: CloudSyncJournal) throws -> (Bool, [UUID: [CloudSessionKind: UInt64]]) {
+        try journal.catalogTransaction { state in
+            guard state.restoreIntent == nil, !state.receipts.values.contains(where: { $0.phase == .applying }) else {
+                throw CloudJournalError.invalidTransition
+            }
+            state.compactLocalSessions()
+            var retained: [String: CloudSessionDocument] = [:]
+            for saved in state.sessions.values where saved.sourceDeviceID == device {
+                retained[Self.sessionOriginKey(saved.profileID, saved.kind)] = saved
+            }
+            var approvedDirty = false
+            var changed: [UUID: [CloudSessionKind: UInt64]] = [:]
+            for capture in captures {
+                let a = capture.admission, id = a.profileID
+                guard a.owner == owner, a.epoch == epoch, a.credentialRevision == snapshots.revision,
+                      profiles.cloudSessionCaptureAllowed(for: id), rows.contains(where: { matchesCaptureRow($0, a) }),
+                      let profile = state.profiles[CloudJournalState.profileRecordName(id)], profile.tombstone == nil else { continue }
+                let key = Self.sessionOriginKey(id, capture.kind)
+                guard let saved = retained[key], CloudJournalCoding.digest(saved.payload) == capture.digest else {
+                    // If there is a local body, let commit's canonical comparison
+                    // run before the adopted-digest shortcut (legacy encodings).
+                    if retained[key] == nil, state.adoptedSessionDigests?[key] == capture.digest { continue }
+                    let source = CloudJournalState.sessionSourceKey(id, device, capture.kind)
+                    let previous = state.sessionRevisionHighWater?[source] ?? 0 // Includes all retained bodies after compaction.
+                    if previous < UInt64.max { changed[id, default: [:]][capture.kind] = previous + 1 }
+                    continue
+                }
+                let name = CloudRecordCodec.recordName(for: .session(saved))
+                guard saved.revision < UInt64.max, state.transport?.validatedSessionRecords?.contains(name) == false,
+                      try CloudJournalCoding.encode(CloudRecordBody.session(saved)).count <= CloudPayloadCipher.maximumPlaintextBytes else { continue }
+                state.transport?.validatedSessionRecords?.insert(name)
+                if state.dirtyGenerations[name] != nil { approvedDirty = true }
+            }
+            return (approvedDirty, changed)
         }
     }
 
@@ -506,26 +581,34 @@ struct CloudSessionAdmission: Equatable, Sendable {
             capturing = false
             if epoch != captureEpoch, isEnabled { requestSessionCapture() }
         }
-        var published = false
+        var captures: [SavedCapture] = []
         for row in rows {
-            guard let admission = sessionAdmission(for: row.id) else { continue }
+            guard !Task.isCancelled, epoch == captureEpoch else { break }
+            guard let admission = sessionAdmission(for: row.id), matchesCaptureRow(row, admission) else { continue }
             do {
                 for payload in try await snapshots.capture(for: row) {
-                    guard let bridge, admission.epoch == epoch,
-                          let device = try preferences.read()?.deviceID else { continue }
-                    let state = try bridge.journal.catalogState()
-                    let previous = state.latestSessionRevision(profileID: row.id, sourceDeviceID: device, kind: payload.kind)
-                    let (revision, overflow) = previous.addingReportingOverflow(1)
-                    guard !overflow else { throw CloudSyncModelError.counterOverflow }
+                    captures.append(.init(admission: admission, kind: payload.kind, digest: try payload.digest()))
+                }
+            } catch { continue }
+        }
+        guard !captures.isEmpty, !Task.isCancelled, isEnabled, includesSessions, !needsInitialUnion, captureEpoch == epoch,
+              let bridge, let device = try? preferences.read()?.deviceID, let current = try? profiles.cloudCommittedRows(),
+              let (approved, changed) = try? reconcileSavedCaptures(captures, rows: current, device: device, journal: bridge.journal) else { return false }
+        var published = approved
+        if approved { status = .pending }
+        // Only changed profiles need their providers again. The proposed revision
+        // is checked under flock at commit; a newer writer cannot be overwritten.
+        for row in current {
+            guard !Task.isCancelled, captureEpoch == epoch else { break }
+            guard let kinds = changed[row.id], let admission = sessionAdmission(for: row.id), matchesCaptureRow(row, admission) else { continue }
+            do {
+                for payload in try await snapshots.capture(for: row) {
+                    guard !Task.isCancelled, let revision = kinds[payload.kind] else { continue }
                     let name = sourceName().trimmingCharacters(in: .whitespacesAndNewlines)
                     let document = CloudSessionDocument(profileID: row.id, sourceDeviceID: device,
                         sourceName: name.isEmpty ? "Mac" : String(name.unicodeScalars.prefix(240)),
                         kind: payload.kind, revision: revision, capturedAt: .now, payload: try payload.encoded())
-                    try commitCapturedSession(document, admission: admission)
-                    let after = try bridge.journal.catalogState()
-                    let newlyApproved = (after.transport?.validatedSessionRecords ?? []).subtracting(state.transport?.validatedSessionRecords ?? [])
-                    let changed = after.sessions.count > state.sessions.count || newlyApproved.contains { after.dirtyGenerations[$0] != nil }
-                    published = published || changed
+                    if try commitCapturedSession(document, admission: admission) { published = true }
                 }
             } catch { continue }
         }

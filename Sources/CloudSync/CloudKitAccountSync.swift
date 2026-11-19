@@ -49,8 +49,7 @@ actor CloudKitAccountSync: CloudSyncTransport {
          }) {
         self.journal = journal; self.keys = keys; codec = CloudRecordCodec(assets: assets); self.makeDriver = makeDriver
         self.now = now; self.sleep = sleep
-        // The durable inbox is the replay source. A slow/absent UI consumer must not
-        // retain an unbounded number of 16 MiB ciphertext events in memory.
+        // The durable inbox is the replay source. Events contain no ciphertext.
         let stream = AsyncStream<CloudTransportEvent>.makeStream(bufferingPolicy: .bufferingNewest(16))
         events = stream.stream; continuation = stream.continuation
     }
@@ -97,7 +96,21 @@ actor CloudKitAccountSync: CloudSyncTransport {
             return try? await self.work.run { await self.batch(scope: scope, pending: pending, token: newToken) }
         })
         do {
-            try await engine.start(owner: state.owner, state: state.engineState, callbacks: callbacks)
+            do {
+                try await engine.start(owner: state.owner, state: state.engineState, callbacks: callbacks)
+            } catch is CloudKitEngineDriver.UnreadableCheckpoint where state.engineState != nil {
+                try checkIntent(intent)
+                // The adapter failed before creating an engine. Close the durable
+                // send gate before starting once without the unusable checkpoint.
+                try await journal.transaction { current in
+                    guard current.engineState == state.engineState else { throw CloudTransportError.notStarted }
+                    guard current.transport?.zoneLost != true else { throw CloudTransportError.zoneLost }
+                    current.engineState = nil
+                    current.transport?.initialized = false
+                }
+                try checkIntent(intent)
+                try await engine.start(owner: state.owner, state: nil, callbacks: callbacks)
+            }
             try checkIntent(intent)
             try await work.run { try await self.replayInbox(token: newToken) }
             try checkIntent(intent)
@@ -214,9 +227,10 @@ actor CloudKitAccountSync: CloudSyncTransport {
             case .state(let bytes):
                 try await journal.transaction { $0.engineState = bytes }
             case .fetched(let records, let deletions):
+                let known = records.isEmpty ? KnownDeliveries() : try await knownDeliveries()
                 for record in records where record.recordID.zoneID == CloudRecordCodec.zoneID {
                     try check(expected)
-                    try await receive(record, token: expected)
+                    try await receive(record, known: known, token: expected)
                 }
                 for id in deletions where id.zoneID == CloudRecordCodec.zoneID {
                     try await journal.transaction { state in
@@ -292,7 +306,7 @@ actor CloudKitAccountSync: CloudSyncTransport {
                     guard inFlight[name] != nil else { continue }
                     if failure.error.code == .serverRecordChanged, let server = failure.error.serverRecord,
                        server.recordID == failure.record.recordID {
-                        try await receive(server, token: expected)
+                        try await receive(server, known: knownDeliveries(), token: expected)
                         try await replayInbox(token: expected)
                         attempted.remove(name)
                     } else { await processNetworkError(failure.error, recordName: name, token: expected) }
@@ -317,7 +331,24 @@ actor CloudKitAccountSync: CloudSyncTransport {
         }
     }
 
-    private func receive(_ record: CKRecord, token expected: UUID) async throws {
+    private struct KnownDeliveries {
+        var ids: Set<UUID> = []
+        var sessions: [String: CloudReceivedEnvelope] = [:]
+    }
+
+    private func knownDeliveries() async throws -> KnownDeliveries {
+        let state = try await journal.load()
+        var known = KnownDeliveries(ids: Set(state.transport?.inboxOrder ?? []))
+        for (id, receipt) in state.receipts where receipt.phase == .applied { known.ids.insert(id) }
+        if let completed = state.completedCatalogReceipts { known.ids.formUnion(completed.values) }
+        for (name, id) in state.transport?.sessionReceipts ?? [:] {
+            known.sessions[name] = state.receivedEnvelopes[id]
+        }
+        return known
+    }
+
+    private func receive(_ record: CKRecord, known: KnownDeliveries, token expected: UUID) async throws {
+        try check(expected)
         let envelope: CloudRecordEnvelope
         do { envelope = try codec.envelope(from: record) }
         catch {
@@ -335,52 +366,61 @@ actor CloudKitAccountSync: CloudSyncTransport {
             return
         }
         try check(expected)
-        // An applied receipt may have had its ciphertext cleaned. A duplicate fetch must
-        // not recreate that receipt or infer another local edit.
-        let state = try await journal.load()
-        if state.receipts[envelope.id]?.phase == .applied || state.completedCatalogReceipts?[envelope.recordName] == envelope.id { return }
+        // IDs cover routing, system fields and ciphertext. A previously durable
+        // delivery needs no rewrite; replay below still handles unfinished work.
+        if known.ids.contains(envelope.id) { return }
+        let metadata = try CloudJournalCoding.encode(envelope.routing)
+        if let prior = known.sessions[envelope.recordName], prior.metadata == metadata,
+           prior.asset.digest == CloudJournalCoding.digest(envelope.ciphertext),
+           CloudRecordCodec.isSameServerRevision(record, as: prior.systemFields) { return }
         try await journal.receive(id: envelope.id, recordName: envelope.recordName,
-            metadata: CloudJournalCoding.encode(envelope.routing), systemFields: envelope.systemFields,
+            metadata: metadata, systemFields: envelope.systemFields,
             ciphertext: envelope.ciphertext, transportManaged: true)
     }
 
     private func replayInbox(token expected: UUID) async throws {
-        let state = try await journal.load()
+        let plan = try await replayPlan()
         var waiting: Set<String> = []
-        for id in state.transport?.inboxOrder ?? [] {
+        var unavailableKeys: Set<UUID> = []
+        var notify = plan.catalogPending
+        for item in plan.pending {
             try check(expected)
+            let id = item.id
+            guard !waiting.contains(item.recordName) else { continue }
+            let routing = try JSONDecoder().decode(CloudRecordRouting.self, from: item.metadata)
+            guard routing.schemaVersion == 1 else {
+                waiting.insert(item.recordName); emit(.status(.quarantined(item.recordName))); continue
+            }
+            if unavailableKeys.contains(routing.keyID) {
+                waiting.insert(item.recordName); continue
+            }
+            let key = try? await keys.key(id: routing.keyID, owner: journal.owner)
+            try check(expected)
+            guard let key else {
+                unavailableKeys.insert(routing.keyID)
+                waiting.insert(item.recordName); emit(.status(.waitingForKey(item.recordName))); continue
+            }
+            // Only open ciphertext for actionable items. Compaction or application
+            // may have completed while the key was being delivered.
             guard let (state, stored, ciphertext) = try await journal.pendingInboxItem(id) else { continue }
-            let routing = try JSONDecoder().decode(CloudRecordRouting.self, from: stored.metadata)
             let envelope = CloudRecordEnvelope(id: id, recordName: stored.recordName, routing: routing,
                 ciphertext: ciphertext, systemFields: stored.systemFields)
             if state.receipts.values.contains(where: { $0.phase == .applying }) || state.restoreIntent != nil {
                 waiting.insert(stored.recordName); continue
             }
             if state.transport?.processedInbox.contains(id) == true,
-               routing.kind != "session" || state.transport?.sessionEvidenceChecked?.contains(id) == true {
-                if routing.kind != "session" || state.transport?.sessionReceipts[stored.recordName] == id {
-                    emit(.received([envelope]))
-                }
+                routing.kind != "session" || state.transport?.sessionEvidenceChecked?.contains(id) == true {
+                if routing.kind != "session" { notify = true }
                 continue
             }
-            guard routing.schemaVersion == 1 else {
-                waiting.insert(stored.recordName); emit(.status(.quarantined(stored.recordName))); continue
-            }
-            let key: CloudEncryptionKey?
-            do { key = try await keys.key(id: routing.keyID, owner: state.owner) }
-            catch { waiting.insert(stored.recordName); emit(.status(.waitingForKey(stored.recordName))); continue }
             try check(expected)
-            guard let key else { waiting.insert(stored.recordName); emit(.status(.waitingForKey(stored.recordName))); continue }
-            // Keep arrival order for each record. A missing older tombstone cannot be
-            // bypassed by a decryptable newer update to that same UUID.
-            guard !waiting.contains(stored.recordName) else { continue }
             let body: CloudRecordBody
             do { body = try codec.decode(envelope, owner: state.owner, key: key) }
             catch { waiting.insert(stored.recordName); emit(.status(.quarantined(stored.recordName))); continue }
             do {
                 let publish = try await journal.transaction { state in try Self.mergeReceived(body, envelope: envelope, into: &state) }
                 try check(expected)
-                if publish { emit(.received([envelope])) }
+                if publish { notify = true }
             } catch let error as CloudSyncModelError {
                 if error == .conflictingVersion {
                     waiting.insert(stored.recordName); emit(.status(.quarantined(stored.recordName))); continue
@@ -391,8 +431,31 @@ actor CloudKitAccountSync: CloudSyncTransport {
             }
             try check(expected)
         }
+        try check(expected)
+        if notify { emit(.received) }
         waitingRecords = waiting
         if !waiting.isEmpty { scheduleRetry(after: 30, token: expected) }
+    }
+
+    /// Retained session history is available for explicit adoption. Once its
+    /// evidence is committed it never needs to be read or announced on replay.
+    /// Only unresolved metadata crosses the await into per-item locked revalidation.
+    private func replayPlan() async throws -> (pending: [CloudReceivedEnvelope], catalogPending: Bool) {
+        let state = try await journal.load()
+        guard let transport = state.transport else { return ([], false) }
+        var pending: [CloudReceivedEnvelope] = []
+        var catalogPending = false
+        for id in transport.inboxOrder {
+            guard state.receipts[id]?.phase != .applied, let stored = state.receivedEnvelopes[id] else { continue }
+            if !transport.processedInbox.contains(id) {
+                pending.append(stored)
+            } else if !stored.recordName.hasPrefix("session.") {
+                catalogPending = true
+            } else if transport.sessionEvidenceChecked?.contains(id) != true {
+                pending.append(stored) // pre-evidence journal
+            }
+        }
+        return (pending, catalogPending)
     }
 
     private static func mergeReceived(_ remote: CloudRecordBody, envelope: CloudRecordEnvelope, into state: inout CloudJournalState) throws -> Bool {
@@ -459,13 +522,26 @@ actor CloudKitAccountSync: CloudSyncTransport {
 
     private func updatePending(token expected: UUID) async throws {
         try check(expected)
-        let state = try await journal.load()
+        var state = try await journal.load()
+        // Compaction can supersede a session save before CloudKit acknowledges
+        // it. Its old per-record retry would otherwise wake sync every 30s.
+        if state.transport?.retryAfter.keys.contains(where: { Self.retryIsObsolete($0, in: state) }) == true {
+            state = try await journal.transaction { current in
+                let obsolete = current.transport?.retryAfter.keys.filter { Self.retryIsObsolete($0, in: current) } ?? []
+                for name in obsolete { current.transport?.retryAfter.removeValue(forKey: name) }
+                return current
+            }
+        }
         try check(expected)
         let deleting = state.transport?.pendingSessionDeletes ?? []
         let saves = state.dirtyGenerations.keys.filter { !deleting.contains($0) }.sorted()
             .map { CKSyncEngine.PendingRecordZoneChange.saveRecord(CloudRecordCodec.recordID($0)) }
         let deletes = deleting.sorted().map { CKSyncEngine.PendingRecordZoneChange.deleteRecord(CloudRecordCodec.recordID($0)) }
         await driver?.setPending(saves + deletes)
+    }
+
+    private static func retryIsObsolete(_ name: String, in state: CloudJournalState) -> Bool {
+        !name.isEmpty && state.dirtyGenerations[name] == nil && state.transport?.pendingSessionDeletes.contains(name) != true
     }
 
     /// A fetched deletion, successful delete and unknown-item response are the same

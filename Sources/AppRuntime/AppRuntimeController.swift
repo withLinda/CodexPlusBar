@@ -160,7 +160,7 @@ final class AppRuntimeController {
     private func configureCloudNotifications() {
         for name in [NSApplication.didBecomeActiveNotification, CodexCloudNotifications.received, CodexCloudNotifications.accountChanged] {
             observers.append(NotificationSubscription(name, queue: .main) { [weak self] in
-                Task { @MainActor in await self?.cloudSync.syncNow() }
+                Task { @MainActor in await self?.cloudSync.syncNow(reason: name.rawValue) }
             })
         }
         observers.append(NotificationSubscription(CodexCloudNotifications.registrationFailed, queue: .main) { [weak self] in

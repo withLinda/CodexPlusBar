@@ -51,6 +51,11 @@ import Foundation
 
     func committed(_ change: CloudCatalogCommit) {
         guard active, change.origin != .remote else { return }
+        // Usage refreshes persist local timestamps and sign-in status per row.
+        // Only an edit to synced fields/order or an explicit deletion needs a
+        // cloud pass. A failed/queued commit must still get a chance to drain.
+        if change.trustedPreimage, failure == nil, queued.isEmpty, change.explicitDeletedIDs.isEmpty,
+           Self.projection(change.before) == Self.projection(change.after) { return }
         queued.append(change)
         guard !localAdmissionPaused else {
             do {
