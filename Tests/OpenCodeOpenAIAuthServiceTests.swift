@@ -43,6 +43,49 @@ struct OpenCodeOpenAIAuthServiceTests {
         let runtime = try await OpenCodeLocalRuntime.discover()
         #expect(runtime.authURL.lastPathComponent == "auth.json")
         #expect(runtime.authURL.isFileURL)
+        let client = try #require(runtime.credentials as? OpenCodeCredentialClient)
+        #expect(try await client.supportsStoredCredentials())
+        // Same read-only preflight as the bulk check; never print credentials or refresh accounts.
+        _ = try await client.inventory()
+    }
+
+    @Test(arguments: ["Contents/MacOS/OpenChamber", "Contents/Resources/new layout/renamed-server",
+                      "Contents/Resources/opencode-cli/opencode"])
+    func discoversRegisteredOrLegacyServer(relativePath: String) throws {
+        let bundle = "/Test Apps/OpenChamber.app"
+        let legacy = relativePath.hasSuffix("/opencode")
+        let location = try OpenCodeLocalRuntime.locate(
+            processTable: " 10 1 \(bundle)/Contents/MacOS/OpenChamber\n 11 10 \(bundle)/\(relativePath)\n 12 10 \(bundle)/Contents/MacOS/OpenChamber",
+            desktops: [10: bundle], registration: { pid in
+                pid == 11 && !legacy ? .init(pid: 11, ownerPid: 10, runtime: "desktop", port: 4567) : nil
+            }, argumentsForPID: { pid in
+                #expect(pid == 11)
+                return (["launcher", "serve", "--hostname", "127.0.0.1", "--port", "4567"], ["HOME": "/test"])
+            })
+        #expect(location.pid == 11)
+        #expect(location.baseURL.absoluteString == "http://127.0.0.1:4567")
+        #expect(location.allowsLegacyHealth == legacy)
+    }
+
+    @Test(arguments: ["outside-bundle", "wrong-parent", "wrong-owner", "stale-pid", "web", "port",
+                      "nonlocal", "unregistered", "second-registered", "shared-store"])
+    func refusesUnverifiedOrAmbiguousServer(problem: String) {
+        let bundle = "/Test Apps/OpenChamber.app"
+        let executable = problem == "outside-bundle" ? "/other/launcher" : bundle + "/Contents/MacOS/OpenChamber"
+        var rows = "10 1 \(bundle)/Contents/MacOS/OpenChamber\n11 \(problem == "wrong-parent" ? 20 : 10) \(executable)"
+        if problem == "second-registered" { rows += "\n12 10 \(executable)" }
+        if problem == "shared-store" { rows += "\n12 1 /other/opencode" }
+        let ambiguous = ["second-registered", "shared-store"].contains(problem)
+        #expect(throws: ambiguous ? OpenCodeOpenAIAuthError.ambiguousInstance : .runtimeUnavailable) {
+            try OpenCodeLocalRuntime.locate(processTable: rows, desktops: [10: bundle], registration: { pid in
+                problem == "unregistered" ? nil : .init(pid: problem == "stale-pid" ? 100 : pid,
+                    ownerPid: problem == "wrong-owner" ? 99 : 10, runtime: problem == "web" ? "web" : "desktop",
+                    port: problem == "port" ? 4555 : 4567)
+            }, argumentsForPID: { _ in
+                (["launcher", "serve", "--hostname", problem == "nonlocal" ? "0.0.0.0" : "127.0.0.1",
+                  "--port", "4567"], ["HOME": "/test"])
+            })
+        }
     }
 
     @Test func roundTripKeepsOtherProvidersAndLatestRefreshTokens() async throws {

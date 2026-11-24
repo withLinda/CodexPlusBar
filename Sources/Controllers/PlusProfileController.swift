@@ -868,7 +868,9 @@ final class PlusProfileController {
                 // Keep completed results and show the remaining unchecked count.
             } catch {
                 openChamberCheckError = (error as? SelectorControlError)?.localizedDescription
-                    ?? "Check unavailable. Open local OpenChamber and retry."
+                    ?? (error as? OpenCodeOpenAIAuthError)?.localizedDescription
+                    ?? (error as? OpenCodeCredentialError)?.localizedDescription
+                    ?? "The OpenChamber sign-in check could not finish. Try again."
             }
         }
         openChamberCheckTask = task

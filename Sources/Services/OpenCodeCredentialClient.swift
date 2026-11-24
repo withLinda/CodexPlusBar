@@ -4,8 +4,8 @@ enum OpenCodeCredentialError: LocalizedError, Equatable {
     case unavailable, invalidResponse, unsupportedMethod
     var errorDescription: String? {
         switch self {
-        case .unavailable: "OpenChamber’s native account service is unavailable. Open a supported local OpenChamber instance."
-        case .invalidResponse: "OpenChamber’s account list could not be verified. Sync will retry."
+        case .unavailable: "CodexPlusBar could not access OpenChamber’s local account service. Check that both apps are up to date, then retry."
+        case .invalidResponse: "OpenChamber’s account list could not be verified. Try again when the list is ready."
         case .unsupportedMethod: "An OpenChamber sign-in uses an unsupported login method. Automatic removal is paused."
         }
     }
@@ -131,7 +131,17 @@ actor OpenCodeCredentialClient: OpenCodeCredentialServing {
 
     func inventory() async throws -> OpenCodeCredentialInventory {
         try await capabilities()
-        let integration: Envelope<Integration> = try await get("api/integration/openai")
+        let integration: Envelope<Integration>
+        do {
+            let bytes = try await send("api/integration/openai", detectColdLocation: true)
+            integration = try decode(Envelope<Integration>.self, bytes)
+        } catch is MissingOpenAIIntegration {
+            // A new location can answer 404 before its built-in OpenAI plugin is ready.
+            // Wait on the same readiness routes as the V2 client, then retry the GET once.
+            _ = try await send("api/plugin")
+            _ = try await send("api/integration")
+            integration = try await get("api/integration/openai")
+        }
         let credentials: Envelope<[OpenCodeStoredCredential]> = try await get("api/credential")
         guard integration.data.id == "openai" else { throw OpenCodeCredentialError.invalidResponse }
         let ids = try integration.data.connections.filter { $0.type == "credential" }.map {
@@ -219,7 +229,11 @@ actor OpenCodeCredentialClient: OpenCodeCredentialServing {
         guard let value = try? JSONDecoder().decode(type, from: data) else { throw OpenCodeCredentialError.invalidResponse }
         return value
     }
-    private func send(_ path: String, method: String = "GET", body: Data? = nil, status: Int = 200) async throws -> Data {
+    private struct MissingOpenAIIntegration: Error {}
+    private struct IntegrationFailure: Decodable { let _tag: String; let integrationID: String }
+
+    private func send(_ path: String, method: String = "GET", body: Data? = nil, status: Int = 200,
+                      detectColdLocation: Bool = false) async throws -> Data {
         try Task.checkCancellation()
         var req = URLRequest(url: baseURL.appendingPathComponent(path))
         req.httpMethod = method; req.httpBody = body
@@ -227,13 +241,18 @@ actor OpenCodeCredentialClient: OpenCodeCredentialServing {
         req.setValue("application/json", forHTTPHeaderField: "Accept")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue(directory, forHTTPHeaderField: "x-opencode-directory")
-        do {
-            let (data, response) = try await request(req)
-            guard response.statusCode == status else { throw OpenCodeCredentialError.unavailable }
-            return data
-        } catch is CancellationError { throw CancellationError() }
+        let data: Data, response: HTTPURLResponse
+        do { (data, response) = try await request(req) }
+        catch is CancellationError { throw CancellationError() }
         catch let error as OpenCodeCredentialError { throw error }
         catch { throw OpenCodeCredentialError.unavailable }
+        if detectColdLocation, response.statusCode == 404,
+           let failure = try? JSONDecoder().decode(IntegrationFailure.self, from: data),
+           failure._tag == "IntegrationNotFoundError", failure.integrationID == "openai" {
+            throw MissingOpenAIIntegration()
+        }
+        guard response.statusCode == status else { throw OpenCodeCredentialError.unavailable }
+        return data
     }
     private struct Envelope<T: Decodable>: Decodable { let data: T }
     private struct Integration: Decodable {

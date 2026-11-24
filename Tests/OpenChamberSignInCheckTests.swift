@@ -258,7 +258,7 @@ actor CountingCheckVerifier: OpenCodeOpenAICredentialVerifying {
         await checker.setUnavailable()
         await controller.checkAllOpenChamberSignIns()
         #expect(controller.openChamberSignInCheckMessage?.contains("2 not checked") == true)
-        #expect(controller.openChamberCheckError != nil)
+        #expect(controller.openChamberCheckError == OpenCodeCredentialError.unavailable.localizedDescription)
     }
 
     @Test func rejectionPersistsAcrossReloadAndNetworkFailureUntilManualRepair() async throws {

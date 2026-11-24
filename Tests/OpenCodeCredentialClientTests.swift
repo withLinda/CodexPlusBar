@@ -3,6 +3,31 @@ import Testing
 @testable import CodexPlusBar
 
 struct OpenCodeCredentialClientTests {
+    @Test func coldLocationFinishesLoadingBeforeRetryingOpenAIInventory() async throws {
+        actor ColdLocation {
+            var loadedPlugins = false
+            var ready = false
+            func reply(_ request: URLRequest) throws -> (Data, HTTPURLResponse) {
+                #expect(request.httpMethod == "GET")
+                switch request.url?.path {
+                case "/openapi.json": return (nativeCapabilityFixture(), nativeResponse(request, 200))
+                case "/api/plugin": loadedPlugins = true
+                case "/api/integration": ready = loadedPlugins
+                case "/api/integration/openai":
+                    if !ready { return (Data(#"{"_tag":"IntegrationNotFoundError","integrationID":"openai"}"#.utf8), nativeResponse(request, 404)) }
+                    return (Data(#"{"data":{"id":"openai","connections":[]}}"#.utf8), nativeResponse(request, 200))
+                case "/api/credential": break
+                default: throw URLError(.unsupportedURL)
+                }
+                return (Data(#"{"data":[]}"#.utf8), nativeResponse(request, 200))
+            }
+        }
+        let server = ColdLocation()
+        let client = OpenCodeCredentialClient(baseURL: URL(string: "http://127.0.0.1:4321")!, authorization: nil,
+                                              request: { try await server.reply($0) })
+        _ = try await client.inventory()
+    }
+
     @Test func nativeCapabilityCheckDistinguishesOlderAPIsFromFailures() async throws {
         let base = URL(string: "http://127.0.0.1:1234")!
         let old = OpenCodeCredentialClient(baseURL: base, authorization: nil, request: { request in

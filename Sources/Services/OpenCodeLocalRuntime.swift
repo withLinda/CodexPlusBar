@@ -1,3 +1,4 @@
+import AppKit
 import Darwin
 import Foundation
 
@@ -16,7 +17,13 @@ struct OpenCodeLocalRuntime: Sendable {
     static func discover() async throws -> Self {
         // ps/sysctl are blocking system calls; keep them off the main actor and
         // return only the few fields needed to verify this local backend.
-        let discovered = try await Task.detached { try discoverProcess() }.value
+        let desktops = await MainActor.run {
+            NSRunningApplication.runningApplications(withBundleIdentifier: "dev.openchamber.desktop")
+                .reduce(into: [Int32: String]()) { apps, app in
+                    apps[app.processIdentifier] = app.bundleURL?.resolvingSymlinksInPath().path
+                }
+        }
+        let discovered = try await Task.detached { try discoverProcess(desktops: desktops) }.value
         try Task.checkCancellation()
         let configuration = URLSessionConfiguration.ephemeral
         configuration.connectionProxyDictionary = [:]
@@ -35,6 +42,8 @@ struct OpenCodeLocalRuntime: Sendable {
                     baseURL: discovered.baseURL, authorization: discovered.authorization
                 ), credentials: OpenCodeCredentialClient(baseURL: discovered.baseURL, authorization: discovered.authorization))
             }
+            // Only the old bundled CLI ever supported the V1 auth-file fallback.
+            guard discovered.allowsLegacyHealth else { throw OpenCodeOpenAIAuthError.runtimeUnavailable }
             request.url = discovered.baseURL.appendingPathComponent("global/health")
             let (data, response) = try await session.data(for: request)
             guard (response as? HTTPURLResponse)?.statusCode == 200,
@@ -73,17 +82,25 @@ struct OpenCodeLocalRuntime: Sendable {
         return URL(fileURLWithPath: dataHome, isDirectory: true).appendingPathComponent("opencode/auth.json")
     }
 
-    private struct ProcessLocation: Sendable {
+    struct ProcessLocation: Sendable {
         let pid: Int32
         let authURL: URL
         let baseURL: URL
         let authorization: String?
+        let allowsLegacyHealth: Bool
     }
 
-    private static func discoverProcess() throws -> ProcessLocation {
+    struct Registration: Decodable {
+        let pid: Int32
+        let ownerPid: Int32
+        let runtime: String
+        let port: Int
+    }
+
+    private static func discoverProcess(desktops: [Int32: String]) throws -> ProcessLocation {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/ps")
-        process.arguments = ["-axo", "pid=,comm="]
+        process.arguments = ["-axo", "pid=,ppid=,comm="]
         let pipe = Pipe()
         process.standardOutput = pipe
         process.standardError = FileHandle.nullDevice
@@ -91,20 +108,47 @@ struct OpenCodeLocalRuntime: Sendable {
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
         guard process.terminationStatus == 0 else { throw OpenCodeOpenAIAuthError.runtimeUnavailable }
-        let rows = String(decoding: data, as: UTF8.self).split(separator: "\n").compactMap { line -> (Int32, String)? in
-            let parts = line.split(maxSplits: 1, whereSeparator: \.isWhitespace)
-            guard parts.count == 2, let pid = Int32(parts[0]) else { return nil }
-            let command = String(parts[1]).trimmingCharacters(in: .whitespaces)
-            guard URL(fileURLWithPath: command).lastPathComponent == "opencode" else { return nil }
-            return (pid, command)
+        let registry = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".config/openchamber/managed-opencode", isDirectory: true)
+        return try locate(processTable: String(decoding: data, as: UTF8.self), desktops: desktops, registration: { pid in
+            let url = registry.appendingPathComponent("\(pid).json")
+            do { return try JSONDecoder().decode(Registration.self, from: Data(contentsOf: url)) }
+            catch CocoaError.fileReadNoSuchFile { return nil }
+            catch { throw OpenCodeOpenAIAuthError.runtimeUnavailable }
+        }, argumentsForPID: processArguments)
+    }
+
+    /// The registry is a hint, not authority to connect: the OS must put the child inside
+    /// the owning desktop bundle, its launch port must agree, and /api/info must echo its PID.
+    static func locate(processTable: String, desktops: [Int32: String],
+                       registration: (Int32) throws -> Registration?,
+                       argumentsForPID: (Int32) throws -> ([String], [String: String])) throws -> ProcessLocation {
+        var candidates: [(pid: Int32, port: Int?, legacy: Bool)] = []
+        var cliPIDs: [Int32] = []
+        for line in processTable.split(separator: "\n") {
+            let parts = line.split(maxSplits: 2, whereSeparator: \.isWhitespace)
+            guard parts.count == 3, let pid = Int32(parts[0]), let parent = Int32(parts[1]) else { continue }
+            let path = String(parts[2]).trimmingCharacters(in: .whitespaces)
+            let legacy = path.hasSuffix("/OpenChamber.app/Contents/Resources/opencode-cli/opencode")
+            if path.hasSuffix("/opencode") { cliPIDs.append(pid) }
+            if let bundle = desktops[parent], path.hasPrefix(bundle + "/Contents/"),
+               let record = try registration(pid) {
+                guard record.runtime == "desktop", record.pid == pid, record.ownerPid == parent else {
+                    throw OpenCodeOpenAIAuthError.runtimeUnavailable
+                }
+                candidates.append((pid, record.port, legacy))
+            } else if legacy {
+                candidates.append((pid, nil, true))
+            }
         }
-        let managed = rows.filter { $0.1.hasSuffix("OpenChamber.app/Contents/Resources/opencode-cli/opencode") }
-        guard !managed.isEmpty else { throw OpenCodeOpenAIAuthError.localInstanceRequired }
-        guard managed.count == 1 else { throw OpenCodeOpenAIAuthError.ambiguousInstance }
-        let (arguments, environment) = try processArguments(pid: managed[0].0)
+        guard let selected = candidates.first else {
+            throw desktops.isEmpty ? OpenCodeOpenAIAuthError.localInstanceRequired : .runtimeUnavailable
+        }
+        guard candidates.count == 1 else { throw OpenCodeOpenAIAuthError.ambiguousInstance }
+        let (arguments, environment) = try argumentsForPID(selected.pid)
         let auth = try authURL(environment: environment)
-        for other in rows where other.0 != managed[0].0 {
-            let (_, otherEnvironment) = try processArguments(pid: other.0)
+        for other in cliPIDs where other != selected.pid {
+            let (_, otherEnvironment) = try argumentsForPID(other)
             if try authURL(environment: otherEnvironment) == auth { throw OpenCodeOpenAIAuthError.ambiguousInstance }
         }
         func argument(_ key: String) -> String? {
@@ -113,7 +157,8 @@ struct OpenCodeLocalRuntime: Sendable {
         }
         guard arguments.contains("serve"),
               ["127.0.0.1", "localhost", "::1"].contains(argument("--hostname") ?? ""),
-              let portText = argument("--port"), let port = Int(portText), (1...65535).contains(port) else {
+              let portText = argument("--port"), let port = Int(portText), (1...65535).contains(port),
+              selected.port == nil || selected.port == port else {
             throw OpenCodeOpenAIAuthError.runtimeUnavailable
         }
         var components = URLComponents()
@@ -125,7 +170,8 @@ struct OpenCodeLocalRuntime: Sendable {
         let authorization = environment["OPENCODE_SERVER_PASSWORD"].map {
             "Basic " + Data("\(environment["OPENCODE_SERVER_USERNAME"] ?? "opencode"):\($0)".utf8).base64EncodedString()
         }
-        return ProcessLocation(pid: managed[0].0, authURL: auth, baseURL: baseURL, authorization: authorization)
+        return ProcessLocation(pid: selected.pid, authURL: auth, baseURL: baseURL, authorization: authorization,
+                               allowsLegacyHealth: selected.legacy)
     }
 
     /// KERN_PROCARGS2 preserves argument boundaries and paths with spaces, unlike ps eww.
