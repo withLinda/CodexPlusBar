@@ -54,15 +54,15 @@ Finish active work before desktop switching: it closes and reopens the app. Brow
 
 ### Install from the DMG
 
-1. [Download CodexPlusBar.dmg](https://github.com/withLinda/CodexPlusBar/releases/latest/download/CodexPlusBar.dmg). The same download supports Apple silicon and Intel Macs running macOS 14 or later.
-2. If you are updating, quit CodexPlusBar first. Open the downloaded DMG and drag **CodexPlusBar.app** onto the **Applications** shortcut. Choose **Replace** if Finder asks.
-3. Eject the disk image, then open **CodexPlusBar** from Applications. Confirm macOS's first-open prompt if shown. The app appears in the **menu bar**, not the Dock.
+1. [Download the signed CodexPlusBar 1.7.12 DMG (build 35)](https://github.com/withLinda/CodexPlusBar/releases/download/v1.7.12/CodexPlusBar.dmg). It runs on Apple silicon and Intel Macs with macOS 14 or later.
+2. If CodexPlusBar is running, quit it first. Open the DMG and drag **CodexPlusBar.app** onto the **Applications** shortcut. Choose **Replace** to update an existing copy.
+3. Eject the DMG. In **Applications**, look for the new **Queue** icon: an orange disc on pine green. Open CodexPlusBar and confirm the first-open prompt if shown. Once running, the app lives in the **menu bar**.
 
-**OpenChamber is running but you see “Check unavailable”?** Install the [signed and notarized CodexPlusBar 1.7.11 DMG (build 34)](https://github.com/withLinda/CodexPlusBar/releases/download/v1.7.11/CodexPlusBar.dmg) using the steps above. Leave OpenChamber open, then choose **Check sign-ins** in CodexPlusBar. This release recognizes OpenChamber 2.8.0’s local server even though its launcher changed. “Not checked” does not mean you need to sign in again.
+**OpenChamber is running but you see “Check unavailable”?** Update using the DMG above. Leave OpenChamber open, then choose **Check sign-ins** in CodexPlusBar. Version 1.7.12 includes the OpenChamber 2.8.0 launcher fix from 1.7.11. “Not checked” does not mean you need to sign in again.
 
-The [1.7.11 release](https://github.com/withLinda/CodexPlusBar/releases/tag/v1.7.11) also includes a fresh [Account Priority 0.3.0 ZIP](https://github.com/withLinda/CodexPlusBar/releases/download/v1.7.11/expiry-selector.zip) and [SHA256SUMS](https://github.com/withLinda/CodexPlusBar/releases/download/v1.7.11/SHA256SUMS). To verify both downloads, put all three files in one folder and run `shasum -a 256 -c SHA256SUMS` there. Both filenames should report `OK`.
+The [1.7.12 release](https://github.com/withLinda/CodexPlusBar/releases/tag/v1.7.12) also includes a fresh [Account Priority 0.3.0 ZIP](https://github.com/withLinda/CodexPlusBar/releases/download/v1.7.12/expiry-selector.zip) and [SHA256SUMS](https://github.com/withLinda/CodexPlusBar/releases/download/v1.7.12/SHA256SUMS). To verify both downloads, put all three files in one folder and run `shasum -a 256 -c SHA256SUMS` there. Both filenames should report `OK`.
 
-**New to automatic switching?** The DMG installs CodexPlusBar; the ZIP installs Account Priority inside OpenChamber. Follow [the extension installation steps](#install-or-update-the-extension-zip) if you want automatic switching. If you already have Account Priority 0.3.0, only the DMG is needed for this fix.
+**New to automatic switching?** The DMG installs CodexPlusBar; the ZIP installs Account Priority inside OpenChamber. Follow [the extension installation steps](#install-or-update-the-extension-zip) if you want automatic switching. If you already have Account Priority 0.3.0, only the DMG needs updating.
 
 ### Add your first account
 

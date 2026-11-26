@@ -1,5 +1,13 @@
 # CodexPlusBar App Icon Brief
 
+## Queue in pine — 1.7.12
+
+The official macOS icon is [`Resources/AppIcon.icon`](../../../Resources/AppIcon.icon).
+One orange disc represents the active account; two smaller discs represent the accounts waiting behind it.
+Xcode compiles the three layers as `AppIcon`. The menu bar continues to show live account status.
+
+## Archived brief — August 2026
+
 - Surface: macOS desktop and menu bar.
 - Source of truth: `sketch/AppIcon-master.svg`, edited by the user on 2026-08-17 at 13:57 WIB.
 - Purpose: help people choose and manage the right Codex or Claude account from the menu bar.
